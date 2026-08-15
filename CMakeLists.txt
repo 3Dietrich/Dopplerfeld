@@ -39,7 +39,12 @@ target_sources(Dopplerfeld
         Source/Physics/PropagationPath.cpp
         Source/Physics/DopplerEngine.cpp
         Source/UI/HeadSymbol.cpp
-        Source/UI/FieldComponent.cpp)
+        Source/UI/FieldComponent.cpp
+        Source/UI/CollapsiblePanel.cpp
+        Source/UI/EnginePanel.cpp
+        Source/UI/SamplePanel.cpp
+        Source/UI/MotionPanel.cpp
+        Source/UI/FieldPanel.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 
