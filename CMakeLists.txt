@@ -32,7 +32,8 @@ target_sources(Dopplerfeld
         Source/Motion/OnePoleSmoother.cpp
         Source/Motion/CriticallyDampedSpring.cpp
         Source/Motion/SlewLimiter.cpp
-        Source/Motion/OneEuroSmoother.cpp)
+        Source/Motion/OneEuroSmoother.cpp
+        Source/Physics/RetardedTimeSolver.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 
@@ -49,3 +50,16 @@ target_link_libraries(Dopplerfeld
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
+
+# Solver-Prüfprogramm ohne JUCE-Audio, nur zum Rechnen (Plan Abschnitt 6, H4:
+# Abnahme gegen die geschlossene Lösung aus Plan 2.5). `ctest` fasst es an,
+# damit ein künftiger Regressions-Check nicht am solver_check vorbeigeht.
+add_executable(solver_check
+    Tests/solver_check.cpp
+    Source/Physics/RetardedTimeSolver.cpp
+    Source/Physics/SourceTrajectory.cpp)
+target_include_directories(solver_check PRIVATE Source)
+target_compile_features(solver_check PRIVATE cxx_std_20)
+
+enable_testing()
+add_test(NAME solver_check COMMAND solver_check)
