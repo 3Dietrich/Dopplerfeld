@@ -34,15 +34,27 @@ void CriticallyDampedSpring::tick (Vec3& outPos, Vec3& outVel)
 {
     assert (dt > 0.0);   // prepare() muss vor dem ersten Tick gelaufen sein
 
-    const Vec3 accel = (target - pos) * (omega * omega) - vel * (2.0 * omega);
-
     // Semi-implizites (symplektisches) Euler statt explizites Euler: erst v
-    // mit dem neuen a fortschreiben, dann p mit dem NEUEN v - bei größerem
-    // ω·dt (kleines τ oder grobe Tickrate) bleibt das System damit stabil
-    // kritisch gedämpft, wo explizites Euler (p und v beide mit den alten
-    // Werten) anfangen würde aufzuschwingen.
-    vel += accel * dt;
-    pos += vel * dt;
+    // mit dem neuen a fortschreiben, dann p mit dem NEUEN v - deutlich
+    // stabiler als explizites Euler (dort beide mit den alten Werten), aber
+    // NICHT unconditional stabil: bei ω·dt ≳ 1 kippt auch dieses Schema um
+    // (Determinante der Iterationsmatrix verlässt den Einheitskreis). Genau
+    // dieser Fall ist über Params::smootherTau real erreichbar (Minimum
+    // 1 ms bei 1000-Hz-Trajektorienrate, Plan 3.11/2.10 => ω·dt = 1). Deshalb
+    // pro Tick in so viele gleich große Teilschritte zerlegen, dass jeder
+    // Teilschritt komfortabel im stabilen Bereich bleibt (Grenze empirisch
+    // bei ω·dt_sub = 0,5) - für den Normalfall (kleines ω·dt) bleibt es bei
+    // genau einem Schritt, also unverändertes Verhalten.
+    const double omegaDt = omega * dt;
+    const int steps = std::max (1, (int) std::ceil (omegaDt / 0.5));
+    const double subDt = dt / (double) steps;
+
+    for (int i = 0; i < steps; ++i)
+    {
+        const Vec3 accel = (target - pos) * (omega * omega) - vel * (2.0 * omega);
+        vel += accel * subDt;
+        pos += vel * subDt;
+    }
 
     outPos = pos;
     outVel = vel;

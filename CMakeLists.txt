@@ -28,7 +28,11 @@ target_sources(Dopplerfeld
         Source/Physics/SourceTrajectory.cpp
         Source/Physics/SourceSignalBuffer.cpp
         Source/Motion/MotionRecorder.cpp
-        Source/Motion/MotionPlayer.cpp)
+        Source/Motion/MotionPlayer.cpp
+        Source/Motion/OnePoleSmoother.cpp
+        Source/Motion/CriticallyDampedSpring.cpp
+        Source/Motion/SlewLimiter.cpp
+        Source/Motion/OneEuroSmoother.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 
