@@ -34,7 +34,8 @@ target_sources(Dopplerfeld
         Source/Motion/SlewLimiter.cpp
         Source/Motion/OneEuroSmoother.cpp
         Source/Physics/RetardedTimeSolver.cpp
-        Source/Sources/EngineGenerator.cpp)
+        Source/Sources/EngineGenerator.cpp
+        Source/Sources/SampleSource.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 
