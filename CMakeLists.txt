@@ -24,7 +24,9 @@ target_sources(Dopplerfeld
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
-        Source/Params.cpp)
+        Source/Params.cpp
+        Source/Physics/SourceTrajectory.cpp
+        Source/Physics/SourceSignalBuffer.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 

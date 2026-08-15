@@ -23,25 +23,26 @@ T catmullRom (const T& p0, const T& p1, const T& p2, const T& p3, double t)
             + (p1 * 3.0 - p0 - p2 * 3.0 + p3) * t3) * 0.5;
 }
 
-// Lagrange-Interpolation 4. Ordnung (5 Stützstellen, Grad-4-Polynom) durch
-// y0..y4 an den ganzzahligen Stellen -2..+2. frac in [0,1] liegt zwischen
-// y2 (Stelle 0) und y3 (Stelle 1) - zwei Stützstellen vor und zwei danach,
-// symmetrisch um das Zielintervall (Plan 3.3: "Lagrange 4. Ordnung" fürs
-// Auslesen von SourceSignalBuffer). Linear wäre hier zu dumpf, siehe Plan
-// 3.3.
+// 4-Punkt-Lagrange-Interpolation (kubisch, Grad-3-Polynom) durch y0..y3 an
+// den ganzzahligen Stellen -1..+2. frac in [0,1] liegt zwischen y1 (Stelle
+// 0) und y2 (Stelle 1) - ein Stützpunkt davor, zwei danach. In der
+// Audio-DSP-Praxis als "Lagrange 4. Ordnung" bezeichnet (4 benutzte Punkte,
+// nicht der Polynomgrad) - genau dieser günstigere 4-Punkt-Interpolator ist
+// in Plan 3.3 für SourceSignalBuffer::readAt gemeint, das pro Sample läuft.
+// Linear wäre hier zu dumpf, siehe Plan 3.3.
 template <typename T>
-T lagrange4 (T y0, T y1, T y2, T y3, T y4, double frac)
+T lagrange4 (T y0, T y1, T y2, T y3, double frac)
 {
-    const T y[5] = { y0, y1, y2, y3, y4 };
-    const double node[5] = { -2.0, -1.0, 0.0, 1.0, 2.0 };
+    const T y[4] = { y0, y1, y2, y3 };
+    const double node[4] = { -1.0, 0.0, 1.0, 2.0 };
 
     T result{};
 
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i < 4; ++i)
     {
         double basis = 1.0;
 
-        for (int j = 0; j < 5; ++j)
+        for (int j = 0; j < 4; ++j)
         {
             if (j == i)
                 continue;
