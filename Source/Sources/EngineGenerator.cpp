@@ -1,0 +1,221 @@
+#include "EngineGenerator.h"
+#include <cmath>
+
+EngineGenerator::EngineGenerator()
+{
+    // Default-Verhältnisse bewusst leicht schief (Plan 3.10): exakt
+    // ganzzahlige Teiltöne klingen elektronisch, nicht mechanisch.
+    harmonics[0].ratio = 1.000f;
+    harmonics[0].levelDb = 0.0f;
+
+    harmonics[1].ratio = 2.017f;
+    harmonics[1].levelDb = -6.0f;
+
+    harmonics[2].ratio = 2.981f;
+    harmonics[2].levelDb = -12.0f;
+
+    harmonics[3].ratio = 4.043f;
+    harmonics[3].levelDb = -18.0f;
+}
+
+void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
+{
+    currentSampleRate = sampleRate;
+
+    juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) maxBlockSize, 1 };
+
+    noiseFilter.prepare (spec);
+    noiseFilter.setType (juce::dsp::StateVariableTPTFilterType::bandpass);
+
+    jitterFilter.prepare (spec);
+    jitterFilter.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
+
+    reset();
+}
+
+void EngineGenerator::reset()
+{
+    for (auto& h : harmonics)
+        h.phase = 0.0;
+
+    halfPhase = 0.0;
+
+    noiseFilter.reset();
+    jitterFilter.reset();
+}
+
+double EngineGenerator::polyBlep (double phase, double phaseInc)
+{
+    // Standardform: an der steigenden Flanke (phase nahe 0) und an der
+    // fallenden Flanke (phase nahe 1) je ein quadratisches Korrekturstück,
+    // das die Sprungstelle des rohen Sägezahns bandbegrenzt.
+    if (phase < phaseInc)
+    {
+        const double t = phase / phaseInc;
+        return t + t - t * t - 1.0;
+    }
+
+    if (phase > 1.0 - phaseInc)
+    {
+        const double t = (phase - 1.0) / phaseInc;
+        return t * t + t + t + 1.0;
+    }
+
+    return 0.0;
+}
+
+void EngineGenerator::renderMono (float* out, int numSamples)
+{
+    // --- Block-Snapshot der Reglerwerte (Plan/Codebase-Konvention: wie
+    // apvts-Parameter in granular/PluginProcessor.cpp einmal pro Block lesen,
+    // nicht pro Sample - RPM-Änderungen per Automation sind langsam genug). ---
+    const double rpmTarget = (double) rpm.load();
+    const double u = juce::jlimit (0.0, 1.0, rpmTarget / rpmMaxForNormalisation);
+
+    const double fBaseNominal = rpmTarget / 60.0;
+    lastDominantFrequency.store (fBaseNominal);
+
+    // Rauschband: Mittenfrequenz und Pegel wandern mit u (Plan 3.10).
+    const double fcLo = juce::jmax (1.0, (double) noiseFcLo.load());
+    const double fcHi = juce::jmax (fcLo, (double) noiseFcHi.load());
+    const double fcNoise = juce::jlimit (20.0, currentSampleRate * 0.49, fcLo * std::pow (fcHi / fcLo, u));
+    const double gLoDb = (double) noiseGainLoDb.load();
+    const double gHiDb = (double) noiseGainHiDb.load();
+    const double gNoiseDb = gLoDb + (gHiDb - gLoDb) * std::pow (u, 1.5);
+    const double noiseGain = juce::Decibels::decibelsToGain (gNoiseDb);
+
+    noiseFilter.setCutoffFrequency ((float) fcNoise);
+    noiseFilter.setResonance (juce::jmax (0.05f, noiseQ.load()));
+
+    // Jitter: Tiefpass 3-15 Hz aus jitterRateHz, Tiefe j = j0 * u.
+    const double jitterCutoff = juce::jlimit (0.5, currentSampleRate * 0.49, (double) jitterRateHz.load());
+    jitterFilter.setCutoffFrequency ((float) jitterCutoff);
+    jitterFilter.setResonance (1.0f / (float) std::sqrt (2.0));   // Standard-12dB/Okt-Tiefpass, keine Resonanzüberhöhung nötig
+
+    // Tiefpass-gefiltertes weißes Rauschen verliert einen Großteil seiner
+    // Energie (Bandbreite fc gegenüber sampleRate/2), sonst würde "j" kaum
+    // hörbar wirken. Kompensation über die Wurzel des Bandbreitenverhältnisses,
+    // danach hart auf ±1 geklemmt, damit der Hub wirklich ±j Prozent bleibt.
+    const double jitterGainCompensation = std::sqrt (juce::jmax (1.0, (currentSampleRate * 0.5) / jitterCutoff));
+    const double jitterDepthPercent = (double) jitterAmountPercent.load() * u;
+
+    const double imbalance = (double) imbalanceAmount.load();
+    const double halfPhaseInc = (fBaseNominal * 0.5) / currentSampleRate;
+
+    struct HarmSnapshot
+    {
+        double coeff;         // r_i * (RPM_ref/60) * 2^(d_i/1200), konstant für den Block
+        double trackAmount;   // t_i
+        double levelGain;
+    };
+
+    std::array<HarmSnapshot, numHarmonics> snap;
+
+    for (int i = 0; i < numHarmonics; ++i)
+    {
+        auto& h = harmonics[(size_t) i];
+        const double ratio = (double) h.ratio.load();
+        const double detuneCents = (double) h.detuneCents.load();
+        const double trackAmount = (double) h.trackAmount.load();
+        const double levelDb = (double) h.levelDb.load();
+
+        snap[(size_t) i].coeff = ratio * (rpmRef / 60.0) * std::pow (2.0, detuneCents / 1200.0);
+        snap[(size_t) i].trackAmount = trackAmount;
+        snap[(size_t) i].levelGain = juce::Decibels::decibelsToGain (levelDb);
+    }
+
+    for (int n = 0; n < numSamples; ++n)
+    {
+        // Jitter-Quelle: eigenes Rauschen durch den Tiefpass, normiert und geklemmt.
+        const double jitterNoiseSample = (double) jitterRandom.nextFloat() * 2.0 - 1.0;
+        const double jitterFiltered = (double) jitterFilter.processSample (0, (float) jitterNoiseSample);
+        const double jitterNorm = juce::jlimit (-1.0, 1.0, jitterFiltered * jitterGainCompensation);
+
+        // f_base wird um ±j Prozent moduliert, indem die RPM selbst dafür
+        // instantan verschoben wird - das zieht die Track-Formel aller
+        // Teiltöne konsistent mit, statt nur die Grundfrequenz zu wackeln.
+        double rpmJit = rpmTarget * (1.0 + (jitterDepthPercent / 100.0) * jitterNorm);
+        rpmJit = juce::jmax (0.0, rpmJit);
+
+        double harmonicSum = 0.0;
+
+        for (int i = 0; i < numHarmonics; ++i)
+        {
+            auto& h = harmonics[(size_t) i];
+            const auto& s = snap[(size_t) i];
+
+            const double freq = s.coeff * std::pow (rpmJit / rpmRef, s.trackAmount);
+            const double phaseInc = juce::jlimit (0.0, 0.45, freq / currentSampleRate);
+
+            double saw = 0.0;
+
+            if (phaseInc > 0.0)
+                saw = 2.0 * h.phase - 1.0 - polyBlep (h.phase, phaseInc);
+
+            harmonicSum += saw * s.levelGain;
+
+            h.phase += phaseInc;
+
+            while (h.phase >= 1.0)
+                h.phase -= 1.0;   // Wrap per Subtraktion, nicht fmod/Clamp (Plan-Vorgabe)
+        }
+
+        // Motorband-Rauschen durch das RPM-abhängige Bandpassfilter.
+        const double noiseSample = (double) noiseRandom.nextFloat() * 2.0 - 1.0;
+        const double noiseFiltered = (double) noiseFilter.processSample (0, (float) noiseSample);
+
+        // Unwucht: Amplitudenkomponente bei f_base/2 (Zündtakt-Charakter).
+        const double imbalanceFactor = 1.0 + imbalance * std::sin (juce::MathConstants<double>::twoPi * halfPhase);
+
+        halfPhase += halfPhaseInc;
+
+        while (halfPhase >= 1.0)
+            halfPhase -= 1.0;
+
+        out[n] = (float) ((harmonicSum + noiseFiltered * noiseGain) * imbalanceFactor);
+    }
+}
+
+double EngineGenerator::dominantFrequencyHz() const
+{
+    return lastDominantFrequency.load();
+}
+
+void EngineGenerator::setRpm (float rpmValue)
+{
+    rpm.store (rpmValue);
+}
+
+void EngineGenerator::setHarmonic (int index, float ratio, float detuneCents, float trackAmount, float levelDb)
+{
+    jassert (index >= 0 && index < numHarmonics);
+
+    if (index < 0 || index >= numHarmonics)
+        return;
+
+    auto& h = harmonics[(size_t) index];
+    h.ratio.store (ratio);
+    h.detuneCents.store (detuneCents);
+    h.trackAmount.store (trackAmount);
+    h.levelDb.store (levelDb);
+}
+
+void EngineGenerator::setNoiseParams (float fcLoHz, float fcHiHz, float gainLoDb, float gainHiDb, float q)
+{
+    noiseFcLo.store (fcLoHz);
+    noiseFcHi.store (fcHiHz);
+    noiseGainLoDb.store (gainLoDb);
+    noiseGainHiDb.store (gainHiDb);
+    noiseQ.store (q);
+}
+
+void EngineGenerator::setJitter (float amountPercent, float rateHz)
+{
+    jitterAmountPercent.store (amountPercent);
+    jitterRateHz.store (rateHz);
+}
+
+void EngineGenerator::setImbalance (float amount)
+{
+    imbalanceAmount.store (amount);
+}
