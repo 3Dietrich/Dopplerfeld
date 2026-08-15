@@ -26,7 +26,9 @@ target_sources(Dopplerfeld
         Source/PluginEditor.cpp
         Source/Params.cpp
         Source/Physics/SourceTrajectory.cpp
-        Source/Physics/SourceSignalBuffer.cpp)
+        Source/Physics/SourceSignalBuffer.cpp
+        Source/Motion/MotionRecorder.cpp
+        Source/Motion/MotionPlayer.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 
