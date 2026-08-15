@@ -37,7 +37,9 @@ target_sources(Dopplerfeld
         Source/Sources/EngineGenerator.cpp
         Source/Sources/SampleSource.cpp
         Source/Physics/PropagationPath.cpp
-        Source/Physics/DopplerEngine.cpp)
+        Source/Physics/DopplerEngine.cpp
+        Source/UI/HeadSymbol.cpp
+        Source/UI/FieldComponent.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 
