@@ -44,7 +44,9 @@ target_sources(Dopplerfeld
         Source/UI/EnginePanel.cpp
         Source/UI/SamplePanel.cpp
         Source/UI/MotionPanel.cpp
-        Source/UI/FieldPanel.cpp)
+        Source/UI/FieldPanel.cpp
+        Source/Util/Crossfader.cpp
+        Source/Sources/SoundSourceHolder.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 
