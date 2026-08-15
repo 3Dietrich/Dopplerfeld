@@ -1,18 +1,11 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Params.h"
 
 DopplerfeldProcessor::DopplerfeldProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts (*this, nullptr, "PARAMETERS", createParameterLayout())
+      apvts (*this, nullptr, "PARAMETERS", Params::createParameterLayout())
 {
-}
-
-juce::AudioProcessorValueTreeState::ParameterLayout DopplerfeldProcessor::createParameterLayout()
-{
-    // H1: bewusst leer. Das vollständige Layout (Feld/Quelle/Hörer/Motor/
-    // Sample/Bewegung/Physik/Crossfade/Ausgang, siehe Plan Abschnitt 3.11)
-    // kommt mit H2 in eine eigene Params.cpp.
-    return {};
 }
 
 void DopplerfeldProcessor::prepareToPlay (double, int)

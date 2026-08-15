@@ -37,9 +37,5 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
 private:
-    // Platzhalter-Layout für H1. Wird durch Params::createParameterLayout()
-    // aus Source/Params.cpp ersetzt, sobald H2 steht.
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DopplerfeldProcessor)
 };

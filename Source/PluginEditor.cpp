@@ -1,7 +1,7 @@
 #include "PluginEditor.h"
 
 DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p), dopplerfeldProcessor (p)
 {
     setSize (700, 400);
 }

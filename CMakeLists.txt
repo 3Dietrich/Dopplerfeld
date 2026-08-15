@@ -18,12 +18,13 @@ juce_add_plugin(Dopplerfeld
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD    FALSE)
 
-# H1: nur das Gerüst. Weitere Quellen kommen Häppchen für Häppchen dazu
-# (Params, Physics, Motion, Sources, Util, UI - siehe dopplerfeld-plan.md).
+# Weitere Quellen kommen Häppchen für Häppchen dazu
+# (Physics, Motion, Sources, Util, UI - siehe dopplerfeld-plan.md).
 target_sources(Dopplerfeld
     PRIVATE
         Source/PluginProcessor.cpp
-        Source/PluginEditor.cpp)
+        Source/PluginEditor.cpp
+        Source/Params.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 

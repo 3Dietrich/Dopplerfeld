@@ -1,0 +1,166 @@
+#include "Params.h"
+
+namespace
+{
+    // Kleine Fabrik, damit `juce::ParameterID { id, 1 }` und die Attribute
+    // nicht bei jedem der ~60 Regler ausgeschrieben werden müssen. Der
+    // Versionshint bleibt bei 1, solange noch keine Version veröffentlicht
+    // wurde, die ihn hochzählen müsste.
+    std::unique_ptr<juce::AudioParameterFloat> floatParam (const char* id,
+                                                             const juce::String& name,
+                                                             juce::NormalisableRange<float> range,
+                                                             float defaultValue,
+                                                             const juce::String& label = {})
+    {
+        return std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { id, 1 },
+            name,
+            std::move (range),
+            defaultValue,
+            juce::AudioParameterFloatAttributes().withLabel (label));
+    }
+
+    std::unique_ptr<juce::AudioParameterBool> boolParam (const char* id, const juce::String& name, bool defaultValue)
+    {
+        return std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id, 1 }, name, defaultValue);
+    }
+
+    std::unique_ptr<juce::AudioParameterChoice> choiceParam (const char* id,
+                                                               const juce::String& name,
+                                                               const juce::StringArray& choices,
+                                                               int defaultIndex)
+    {
+        return std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { id, 1 }, name, choices, defaultIndex);
+    }
+
+    // Eine normierte 0..1-Range braucht weder Skew noch Einheit; eigener
+    // Kurzname, weil sie an mehreren Stellen (Positionen, Loop-Punkte) auftaucht.
+    juce::NormalisableRange<float> unitRange()
+    {
+        return { 0.0f, 1.0f };
+    }
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayout()
+{
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+
+    // --- Feld ---
+    {
+        // Skew auf 100 m als Mitte: die meisten Szenen spielen sich zwischen
+        // wenigen und ein paar hundert Metern ab, der Regler soll dort fein sein.
+        auto range = juce::NormalisableRange<float> (1.0f, 10000.0f);
+        range.setSkewForCentre (100.0f);
+        layout.add (floatParam (fieldMetres, "Field Size", range, 100.0f, "m"));
+    }
+    layout.add (floatParam (airTempC, "Air Temperature", { -20.0f, 40.0f, 0.1f }, 20.0f, "°C"));
+
+    // --- Quelle ---
+    layout.add (floatParam (srcX, "Source X", unitRange(), 0.5f));
+    layout.add (floatParam (srcY, "Source Y", unitRange(), 0.5f));
+
+    // --- Hörer ---
+    layout.add (floatParam (lisX, "Listener X", unitRange(), 0.5f));
+    layout.add (floatParam (lisY, "Listener Y", unitRange(), 0.5f));
+    layout.add (floatParam (lisYaw, "Listener Yaw", { -180.0f, 180.0f }, 0.0f, "°"));
+    layout.add (floatParam (earSpacing, "Ear Spacing", { 0.10f, 0.25f, 0.001f }, 0.17f, "m"));
+
+    // --- Motor ---
+    {
+        // Skew Richtung niedrige Werte: die Klangänderung beim Hochdrehen ist
+        // unten am dichtesten, dort soll der Regler die meiste Auflösung haben.
+        auto range = juce::NormalisableRange<float> (0.0f, 12000.0f);
+        range.setSkewForCentre (1000.0f);
+        layout.add (floatParam (rpm, "RPM", range, 1000.0f, "RPM"));
+    }
+
+    // Verhältnisse bewusst leicht schief (nicht 1/2/3/4), sonst klingt der
+    // Motor elektronisch statt mechanisch (Plan 3.10).
+    layout.add (floatParam (harmRatio1, "Harm 1 Ratio", { 0.1f, 16.0f, 0.001f }, 1.000f));
+    layout.add (floatParam (harmDetune1, "Harm 1 Detune", { -100.0f, 100.0f, 0.1f }, 0.0f, "ct"));
+    // Track < 1: dieser Teilton bleibt beim Hochdrehen leicht zurück ("Schlupf").
+    layout.add (floatParam (harmTrack1, "Harm 1 Track", unitRange(), 0.85f));
+    layout.add (floatParam (harmLevel1, "Harm 1 Level", { -60.0f, 6.0f, 0.1f }, 0.0f, "dB"));
+
+    layout.add (floatParam (harmRatio2, "Harm 2 Ratio", { 0.1f, 16.0f, 0.001f }, 2.017f));
+    layout.add (floatParam (harmDetune2, "Harm 2 Detune", { -100.0f, 100.0f, 0.1f }, 0.0f, "ct"));
+    layout.add (floatParam (harmTrack2, "Harm 2 Track", unitRange(), 1.0f));
+    layout.add (floatParam (harmLevel2, "Harm 2 Level", { -60.0f, 6.0f, 0.1f }, -6.0f, "dB"));
+
+    layout.add (floatParam (harmRatio3, "Harm 3 Ratio", { 0.1f, 16.0f, 0.001f }, 2.981f));
+    layout.add (floatParam (harmDetune3, "Harm 3 Detune", { -100.0f, 100.0f, 0.1f }, 0.0f, "ct"));
+    layout.add (floatParam (harmTrack3, "Harm 3 Track", unitRange(), 1.0f));
+    layout.add (floatParam (harmLevel3, "Harm 3 Level", { -60.0f, 6.0f, 0.1f }, -12.0f, "dB"));
+
+    layout.add (floatParam (harmRatio4, "Harm 4 Ratio", { 0.1f, 16.0f, 0.001f }, 4.043f));
+    layout.add (floatParam (harmDetune4, "Harm 4 Detune", { -100.0f, 100.0f, 0.1f }, 0.0f, "ct"));
+    layout.add (floatParam (harmTrack4, "Harm 4 Track", unitRange(), 1.0f));
+    layout.add (floatParam (harmLevel4, "Harm 4 Level", { -60.0f, 6.0f, 0.1f }, -18.0f, "dB"));
+
+    {
+        auto lo = juce::NormalisableRange<float> (20.0f, 5000.0f);
+        lo.setSkewForCentre (500.0f);
+        layout.add (floatParam (noiseFcLo, "Noise Fc Lo", lo, 400.0f, "Hz"));
+
+        auto hi = juce::NormalisableRange<float> (20.0f, 10000.0f);
+        hi.setSkewForCentre (2000.0f);
+        layout.add (floatParam (noiseFcHi, "Noise Fc Hi", hi, 3000.0f, "Hz"));
+    }
+    layout.add (floatParam (noiseGainLo, "Noise Gain Lo", { -60.0f, 0.0f, 0.1f }, -24.0f, "dB"));
+    layout.add (floatParam (noiseGainHi, "Noise Gain Hi", { -60.0f, 0.0f, 0.1f }, -6.0f, "dB"));
+    layout.add (floatParam (noiseQ, "Noise Q", { 0.1f, 10.0f, 0.01f }, 1.2f));
+    layout.add (floatParam (jitterAmount, "Jitter Amount", { 0.0f, 20.0f, 0.01f }, 1.5f, "%"));
+    layout.add (floatParam (jitterRateHz, "Jitter Rate", { 3.0f, 15.0f, 0.01f }, 8.0f, "Hz"));
+    layout.add (floatParam (imbalance, "Imbalance", unitRange(), 0.0f));
+
+    // --- Sample ---
+    layout.add (floatParam (sampleGain, "Sample Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+    layout.add (floatParam (samplePitch, "Sample Pitch", { -24.0f, 24.0f, 0.01f }, 0.0f, "st"));
+    // Loop-Punkte normiert (0..1 der geladenen Datei), weil die Länge des
+    // Samples zum Zeitpunkt des Layouts noch nicht bekannt ist.
+    layout.add (floatParam (loopStart, "Loop Start", unitRange(), 0.0f));
+    layout.add (floatParam (loopEnd, "Loop End", unitRange(), 1.0f));
+    layout.add (floatParam (loopXfadeMs, "Loop Crossfade", { 2.0f, 20.0f, 0.1f }, 10.0f, "ms"));
+    layout.add (floatParam (eqLowGain, "EQ Low", { -24.0f, 24.0f, 0.1f }, 0.0f, "dB"));
+    layout.add (floatParam (eqMidGain, "EQ Mid", { -24.0f, 24.0f, 0.1f }, 0.0f, "dB"));
+    {
+        auto range = juce::NormalisableRange<float> (100.0f, 8000.0f);
+        range.setSkewForCentre (1000.0f);
+        layout.add (floatParam (eqMidFreq, "EQ Mid Freq", range, 1000.0f, "Hz"));
+    }
+    layout.add (floatParam (eqHighGain, "EQ High", { -24.0f, 24.0f, 0.1f }, 0.0f, "dB"));
+
+    // --- Bewegung ---
+    // Reihenfolge muss zu MotionSmoother-Implementierungen aus Plan 3.8 passen.
+    layout.add (choiceParam (smootherType, "Smoother", { "One-Pole", "Critically Damped Spring", "Slew Limiter", "One Euro" }, 1));
+    layout.add (floatParam (smootherTau, "Smoother Tau", { 0.001f, 2.0f, 0.0f, 0.4f }, 0.05f, "s"));
+    {
+        auto vmax = juce::NormalisableRange<float> (0.1f, 1000.0f);
+        vmax.setSkewForCentre (50.0f);
+        layout.add (floatParam (slewVmax, "Slew Vmax", vmax, 50.0f, "m/s"));
+
+        auto amax = juce::NormalisableRange<float> (0.1f, 5000.0f);
+        amax.setSkewForCentre (200.0f);
+        layout.add (floatParam (slewAmax, "Slew Amax", amax, 200.0f, "m/s²"));
+    }
+    layout.add (floatParam (playSpeed, "Play Speed", { 0.25f, 4.0f, 0.0f }, 1.0f, "x"));
+    // Catmull-Rom ist der Default, weil der Pfad damit C1-stetig ist und ohne
+    // Nachschalten des Smoothers direkt gesetzt werden kann (Plan 3.9).
+    layout.add (choiceParam (playInterp, "Play Interp", { "Linear", "Catmull-Rom" }, 1));
+    layout.add (boolParam (playLoop, "Play Loop", false));
+
+    // --- Physik ---
+    layout.add (floatParam (boomLimitDb, "Boom Limit", { 0.0f, 60.0f, 0.1f }, 30.0f, "dB"));
+    layout.add (floatParam (airAbsorbAmount, "Air Absorption", unitRange(), 1.0f));
+    layout.add (std::make_unique<juce::AudioParameterInt> (juce::ParameterID { solverStride, 1 }, "Solver Stride", 1, 16, 1));
+
+    // --- Crossfade ---
+    layout.add (boolParam (fadeAuto, "Fade Auto", true));
+    layout.add (floatParam (fadeManualMs, "Fade Manual", { 5.0f, 500.0f, 0.1f }, 50.0f, "ms"));
+
+    // --- Ausgang ---
+    layout.add (floatParam (outputGain, "Output Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+    layout.add (boolParam (limiterOn, "Limiter", true));
+
+    return layout;
+}
