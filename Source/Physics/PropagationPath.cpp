@@ -226,16 +226,28 @@ void PropagationPath::process (const SourceTrajectory&   traj,
     const Vec3 recvPos0 = applyPathTransform (transform, receiverPos);
     const Vec3 recvVel  = applyPathTransformVelocity (transform, receiverVel);
 
-    const double c            = medium.speedOfSound();
-    const double blockEndTime = blockStartTime + (double) numSamples / sr;
+    const double c = medium.speedOfSound();
 
     solver.setMinScanStep (trajGridSeconds);
 
-    // Überschall im Fenster -> feineres Solver-Raster (Plan 2.11), weil M_r
-    // dort innerhalb weniger Samples umschlägt. Der Test ist O(1) (monotone
-    // Deque in SourceTrajectory).
-    const double maxSpeed = traj.maxSpeedInWindow (traj.oldestTime(), blockEndTime);
-    const int    stride   = (maxSpeed > c) ? supersonicStride : baseStride;
+    // Überschall JETZT (nicht irgendwann in den letzten bis zu 40s) ->
+    // feineres Solver-Raster (Plan 2.11), weil M_r dort innerhalb weniger
+    // Samples umschlägt. Bewusst recentMaxSpeed() statt maxSpeedInWindow():
+    // Stride ist eine reine Zeitraster-Entscheidung - ob JETZT fein
+    // aufgelöst werden muss, nicht ob es das je einmal musste. Ein
+    // Überschall-Moment vor 30s braucht keine 8-fach so oft aufgerufene
+    // Löserkette mehr, dessen M_r ändert sich nicht mehr schnell. Die
+    // korrektheitskritische Vollfenster-Suche nach eventuell noch
+    // eintreffenden alten Wurzeln (verspätete Booms aus großer Distanz,
+    // Plan 2.6/2.10) bleibt im Löser selbst unverändert auf dem vollen
+    // Fenster - hier geht es nur darum, wie oft er gerufen wird, nicht was
+    // er dabei findet. (Ursache des von @dpa beobachteten "Aussetzer nach
+    // schnellem Bewegen": stride blieb bis zu 40s lang auf 8 hängen, macht
+    // pro Solver-Punkt ~8x mehr Aufrufe plus - über den Vollfenster-Löser
+    // selbst - einen gröberen/teureren Scan durch den dadurch aufgeblähten
+    // Lipschitz-Bound.)
+    const double recentMaxSpeed = traj.recentMaxSpeed (2.0);
+    const int    stride         = (recentMaxSpeed > c) ? supersonicStride : baseStride;
 
     // Zusammenhängende Zeitachse? Ein halbes Sample Toleranz reicht, weil der
     // Aufrufer die Blockzeit aus einem ganzzahligen Sample-Zähler bildet.

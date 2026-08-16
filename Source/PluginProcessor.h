@@ -100,6 +100,11 @@ public:
     float consumeOutputPeakL() { return outPeakL.exchange (0.0f, std::memory_order_relaxed); }
     float consumeOutputPeakR() { return outPeakR.exchange (0.0f, std::memory_order_relaxed); }
 
+    // Geglättete CPU-Auslastung des Audiothreads in Prozent des Echtzeit-
+    // Budgets (@dpa-Feedback: "CPU-Echtzeit-Anzeige"). >100% heißt: der Block
+    // hat länger gebraucht, als er Audiozeit lieferte - hörbar als Aussetzer.
+    float cpuLoadPercent() const { return cpuLoad.load (std::memory_order_relaxed); }
+
     // Lädt die Datei im Message-Thread (Pflicht, siehe SampleSource) und
     // schaltet bei Erfolg weich auf die Sample-Quelle um.
     bool loadSampleFile (const juce::File& file);
@@ -278,6 +283,7 @@ private:
     std::atomic<bool>  playbackActive  { false };
     std::atomic<float> outPeakL { 0.0f };
     std::atomic<float> outPeakR { 0.0f };
+    std::atomic<float> cpuLoad  { 0.0f };   // siehe cpuLoadPercent()
     std::atomic<int>  recordedFrames  { 0 };
 
     std::atomic<bool> useSampleSource { false };

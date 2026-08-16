@@ -547,6 +547,11 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     if (numSamples <= 0 || sr <= 0.0 || monoScratch.getNumSamples() <= 0)
         return;
 
+    // CPU-Anzeige (@dpa-Feedback): Wanduhrzeit für den kompletten DSP-Teil
+    // dieses Blocks gegen die Audiozeit, die er liefert - >100% heißt hörbar
+    // zu langsam, nicht nur ein abstrakter Prozentwert.
+    const auto blockStartTicks = juce::Time::getHighResolutionTicks();
+
     applyParameters();
     handlePendingRequests();
 
@@ -579,6 +584,16 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
 
     applyOutputStage (buffer);
+
+    const double elapsedSeconds = juce::Time::highResolutionTicksToSeconds (
+        juce::Time::getHighResolutionTicks() - blockStartTicks);
+    const double budgetSeconds  = (double) numSamples / sr;
+    const double loadPercent    = 100.0 * elapsedSeconds / std::max (1.0e-9, budgetSeconds);
+
+    // Leicht geglättet (Ein-Pol, ~10 Blöcke Zeitkonstante) - der rohe Wert
+    // springt block für block stark, das wäre als Zahl kaum ablesbar.
+    const float prev = cpuLoad.load (std::memory_order_relaxed);
+    cpuLoad.store (prev + 0.1f * ((float) loadPercent - prev), std::memory_order_relaxed);
 }
 
 //======================================================================

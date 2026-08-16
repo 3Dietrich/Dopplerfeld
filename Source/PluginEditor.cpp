@@ -129,6 +129,12 @@ juce::String DopplerfeldEditor::statusText() const
     text << "M  x " << juce::String (snapshot.sourcePos.x, 1)
          << " m   y " << juce::String (snapshot.sourcePos.y, 1) << " m";
 
+    // @dpa-Feedback: CPU-Echtzeit-Anzeige (Wanduhrzeit/Audiozeit, geglättet -
+    // siehe cpuLoadPercent()). Über 100% färbt paint() die ganze Statuszeile
+    // rot (siehe dort) - reiner Text reicht hier, kein eigener Meter nötig.
+    const float cpu = dopplerfeldProcessor.cpuLoadPercent();
+    text << "      CPU " << juce::String (cpu, 0) << " %";
+
     for (int i = 0; i < snapshot.pathCount; ++i)
     {
         const auto& info = snapshot.paths[(size_t) i];
@@ -155,7 +161,12 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     g.setFont (13.0f);
     g.drawText ("dopplerfeld", margin, margin, 100, topBarHeight, juce::Justification::centredLeft);
 
-    g.setColour (juce::Colours::white.withAlpha (0.6f));
+    // CPU über 100% ist hörbar (Aussetzer) - die ganze Statuszeile färbt sich
+    // dafür rot, statt nur die Zahl selbst hervorzuheben. Einfacher als ein
+    // gemischtfarbiger Text und im Zweifel eher zu auffällig als übersehen.
+    const bool overBudget = dopplerfeldProcessor.cpuLoadPercent() > 100.0f;
+    g.setColour (overBudget ? juce::Colours::orangered.withAlpha (0.85f)
+                            : juce::Colours::white.withAlpha (0.6f));
     g.setFont (12.0f);
     g.drawFittedText (statusText(),
                       margin, getHeight() - statusHeight, fieldWidth, statusHeight,

@@ -169,6 +169,24 @@ double SourceTrajectory::maxSpeedInWindow (double t0, double /*t1*/) const
     return speedDeque.empty() ? 0.0 : speedDeque.front().second;
 }
 
+double SourceTrajectory::recentMaxSpeed (double windowSeconds) const
+{
+    if (writeIndex < capacity)
+        return 0.0;   // noch nicht initialisiert (siehe sampleAt)
+
+    const std::int64_t upper     = writeIndex - 1;
+    const std::int64_t lower     = writeIndex - capacity;
+    const std::int64_t stepsBack = (std::int64_t) std::ceil (windowSeconds / gridDt);
+    const std::int64_t from      = std::max (lower, upper - stepsBack);
+
+    float maxSpeed = 0.0f;
+
+    for (std::int64_t i = from; i <= upper; ++i)
+        maxSpeed = std::max (maxSpeed, ring[(size_t) ringSlot (i)].speed);
+
+    return (double) maxSpeed;
+}
+
 double SourceTrajectory::oldestTime() const
 {
     return ring[(size_t) ringSlot (writeIndex - capacity)].t;
