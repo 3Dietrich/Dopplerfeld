@@ -29,6 +29,15 @@ double wrapToPi (double a)
 // Host bekäme sie hart geclippt. Unterhalb der Kniestelle bleibt das Signal
 // unverändert, darüber läuft es über tanh gegen 1 - die Kennlinie ist an der
 // Kniestelle stetig und hat dort auch dieselbe Steigung, knickt also nicht.
+// Lock-freies Maximum: mehrere Aufrufe pro Abrufintervall dürfen ihr jeweils
+// größtes Sample eintragen, ohne dass sich Audiothread und Message-Thread
+// gegenseitig blockieren (siehe consumeOutputPeakL/R in PluginProcessor.h).
+void updatePeak (std::atomic<float>& peak, float v)
+{
+    float cur = peak.load (std::memory_order_relaxed);
+    while (v > cur && ! peak.compare_exchange_weak (cur, v, std::memory_order_relaxed)) {}
+}
+
 double softClip (double x)
 {
     constexpr double knee = 0.7;
@@ -516,6 +525,10 @@ void DopplerfeldProcessor::applyOutputStage (juce::AudioBuffer<float>& buffer)
                 x = softClip (x);
 
             data[ch][i] = (float) x;
+
+            // Levelmeter (@dpa-Feedback): NACH Gain+Limiter messen, damit die
+            // Anzeige das zeigt, was tatsächlich rausgeht.
+            updatePeak (ch == 0 ? outPeakL : outPeakR, (float) std::abs (x));
         }
     }
 }

@@ -92,6 +92,14 @@ public:
     bool isPlayingMotion() const { return playbackActive.load(); }
     int  recordedFrameCount() const { return recordedFrames.load(); }
 
+    // Linearer Spitzenwert seit dem letzten Abruf (Levelmeter, @dpa-Feedback).
+    // exchange() statt load(): der Editor pollt mit ~30Hz, dazwischen laufen
+    // viele Audioblöcke - ohne Zurücksetzen gingen Spitzen zwischen zwei
+    // Abrufen verloren, mit exchange() bekommt jeder Abruf das echte Maximum
+    // seit dem vorigen.
+    float consumeOutputPeakL() { return outPeakL.exchange (0.0f, std::memory_order_relaxed); }
+    float consumeOutputPeakR() { return outPeakR.exchange (0.0f, std::memory_order_relaxed); }
+
     // Lädt die Datei im Message-Thread (Pflicht, siehe SampleSource) und
     // schaltet bei Erfolg weich auf die Sample-Quelle um.
     bool loadSampleFile (const juce::File& file);
@@ -266,8 +274,10 @@ private:
     std::atomic<bool> sourceSwitchRequest { false };
 
     // Audiothread -> Message-Thread, nur zur Anzeige.
-    std::atomic<bool> recordingActive { false };
-    std::atomic<bool> playbackActive  { false };
+    std::atomic<bool>  recordingActive { false };
+    std::atomic<bool>  playbackActive  { false };
+    std::atomic<float> outPeakL { 0.0f };
+    std::atomic<float> outPeakR { 0.0f };
     std::atomic<int>  recordedFrames  { 0 };
 
     std::atomic<bool> useSampleSource { false };

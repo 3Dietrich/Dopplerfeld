@@ -52,6 +52,10 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
                                 "faengt Uberschall-Spitzen ab, ohne sie hart zu clippen.");
     addAndMakeVisible (limiterOnButton);
     limiterOnAttachment = std::make_unique<ButtonAttachment> (apvts, Params::limiterOn, limiterOnButton);
+
+    levelMeter.setTooltip ("Ausgangspegel (nach Gain+Limiter). Weisser Strich = -6dB. "
+                           "Rote LED oben = Clipping, haelt 500ms.");
+    addAndMakeVisible (levelMeter);
 }
 
 void FieldPanel::resized()
@@ -72,4 +76,9 @@ void FieldPanel::resized()
         layoutKnob (*k, knobRow.removeFromLeft (knobW));
         knobRow.removeFromLeft (4);
     }
+
+    // Levelmeter direkt neben Output Gain, gleiche Höhe wie die Regler
+    // (ohne die Beschriftungszeile, die braucht das Meter nicht).
+    knobRow.removeFromLeft (4);
+    levelMeter.setBounds (knobRow.removeFromLeft (24));
 }

@@ -110,6 +110,13 @@ void DopplerfeldEditor::timerCallback()
                                                                            : "Quelle: Motor");
     motionPanel.setPlaying (dopplerfeldProcessor.isPlayingMotion());
 
+    // 30Hz-Timer = ~33ms zwischen zwei Aufrufen (siehe startTimerHz weiter
+    // unten) - fest verdrahtet statt gemessen, das Levelmeter braucht nur
+    // eine grobe Zeitbasis für Decay/Clip-Halt, keine exakte.
+    fieldPanel.pushLevels (dopplerfeldProcessor.consumeOutputPeakL(),
+                           dopplerfeldProcessor.consumeOutputPeakR(),
+                           1000.0 / 30.0);
+
     // Statuszeile neu zeichnen, nicht das ganze Fenster - die Panels darüber
     // ändern sich nur bei Bedienung.
     repaint (margin, getHeight() - statusHeight, fieldWidth, statusHeight);

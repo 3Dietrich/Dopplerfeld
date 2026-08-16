@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Params.h"
+#include "LevelMeter.h"
 #include "RoundedSlider.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -16,6 +17,13 @@ public:
     ~FieldPanel() override = default;
 
     void resized() override;
+
+    // Weiterleitung an das Levelmeter (@dpa-Feedback) - der Aufrufer
+    // (Editor-Timer) kennt den Processor, dieses Panel nicht.
+    void pushLevels (float peakLLinear, float peakRLinear, double callIntervalMs)
+    {
+        levelMeter.pushLevels (peakLLinear, peakRLinear, callIntervalMs);
+    }
 
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
@@ -34,6 +42,9 @@ private:
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     Knob fieldMetresKnob, boomLimitKnob, airAbsorbKnob, fadeManualKnob, outputGainKnob;
+
+    // Neben Output Gain: -6dB-Marke, Clip-Anzeige mit 500ms-Halt (@dpa).
+    LevelMeter levelMeter;
 
     juce::ToggleButton fadeAutoButton   { "Fade Auto" };
     juce::ToggleButton limiterOnButton  { "Limiter" };
