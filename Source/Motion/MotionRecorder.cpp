@@ -11,7 +11,10 @@ void MotionRecorder::prepare (double controlRateHzIn, double maxSecondsIn)
     // damit während der Aufnahme kein Realloc im Audio-/Controlpfad passiert.
     maxFrameCount = (size_t) std::max (0.0, controlRateHz * maxSeconds);
 
-    recordedFrames.clear();
+    // KEIN clear() hier: der Host ruft prepare() bei jeder Blockgrößen-/
+    // Samplerate-Änderung erneut auf (@dpa-Repro: Buffergröße in den Audio-
+    // Settings ändern löschte eine fertige Aufnahme). reserve() wächst nur
+    // bei Bedarf und ist sonst ein No-op, bestehende Frames bleiben erhalten.
     recordedFrames.reserve (maxFrameCount);
     recording = false;
 }

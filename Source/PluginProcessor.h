@@ -241,6 +241,12 @@ private:
     MotionRecorder motionRecorder;
     MotionPlayer   motionPlayer;
 
+    // Die Kapazitäts-Vorwärmung in prepareToPlay() darf nur beim allerersten
+    // Mal laufen - prepareToPlay() wird vom Host bei jeder Blockgrößen-/
+    // Samplerate-Änderung erneut gerufen, ein zweites Mal würde eine bereits
+    // geladene/aufgenommene Bewegung mit einem leeren Clip überschreiben.
+    bool motionPlayerCapacityWarmed = false;
+
     // Mono-Zwischenpuffer für die Quellstufe. Die Engine schreibt ihn nicht,
     // sie liest ihn nur - deshalb genau einer, unabhängig von der Pfadanzahl.
     juce::AudioBuffer<float> monoScratch;

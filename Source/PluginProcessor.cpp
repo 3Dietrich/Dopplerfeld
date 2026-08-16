@@ -243,13 +243,17 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     // Kapazität des Players einmal vorwärmen: der Clip wird später im
     // Audiothread übernommen (siehe handlePendingRequests), und eine
     // Zuweisung an einen Vector mit ausreichender Kapazität kommt ohne neue
-    // Allokation aus.
+    // Allokation aus. Nur beim allerersten prepareToPlay() - siehe
+    // motionPlayerCapacityWarmed in PluginProcessor.h.
+    if (! motionPlayerCapacityWarmed)
     {
         const size_t maxFrames = (size_t) std::ceil (motionRecordRateHz * 120.0);
 
         std::vector<Vec3> warmup (maxFrames);
         motionPlayer.setClip (warmup, motionRecordRateHz);
         motionPlayer.setClip ({}, motionRecordRateHz);
+
+        motionPlayerCapacityWarmed = true;
     }
 
     // Parameterstand einlesen, BEVOR die Engine ihre Anfangsgeometrie
