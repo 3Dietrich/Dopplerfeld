@@ -90,6 +90,14 @@ cmake --build build --target Dopplerfeld_Standalone -j 4
 cd build && ctest --output-on-failure     # solver_check + load_check
 ```
 
+Ohne ausdrückliche Angabe baut CMake hier **Release** (`-O3 -DNDEBUG`,
+in CMakeLists gesetzt). Das ist kein Schönheitsdetail: ohne
+`CMAKE_BUILD_TYPE` erzeugt CMake einen Bau ganz ohne `-O`-Schalter, und
+JUCEs `juce_recommended_config_flags` hängen ihre Optimierung an
+`$<CONFIG:Release>`, greifen dann also auch nicht - der Löser lief damit
+unoptimiert im Audiothread. Zum Debuggen ausdrücklich
+`-DCMAKE_BUILD_TYPE=Debug` angeben.
+
 `solver_check`: Physik-Löser gegen geschlossene Lösung (Plan 2.5), muss bei
 jeder Änderung an `RetardedTimeSolver`/`PropagationPath` grün bleiben.
 `load_check`: Processor offline durchgefahren (n=200 und n=10000, inkl.
@@ -130,22 +138,65 @@ weniger CPU-Zeit für einen ohnehin knappen Prozess", nicht separat untersucht.
 Ein erster Fix (`SourceTrajectory::recentMaxSpeed`, siehe Commit "Stride-
 Hangover-Fix") behebt einen TEIL-Mechanismus (ein kurzer Ausreißer hielt den
 Löser bisher bis zu 40s im teuren Modus), hilft aber NICHT bei dauerhaft
-nahe/über Mach 1 gehaltener Bewegung - dort bleibt der Vollfenster-Scan im
-Löser selbst (Plan 2.10, bei Stride 8) grundsätzlich teuer, unabhängig davon
-wie lange er anhält.
+nahe/über Mach 1 gehaltener Bewegung.
+
+**Update Löser-Performance (erledigt, Stand 2026-08-16):** Der Löser ist
+jetzt echtzeitfähig mit reichlich Puffer. `load_check`, Block-Mittel vom
+Echtzeit-Budget bei 48 kHz / 512 Samples; "vorher" ist der Zustand, wie er
+tatsächlich lief (also unoptimiert gebaut, siehe Punkt 1 darunter):
+
+| Szenario                | vorher  | jetzt |
+|-------------------------|---------|-------|
+| Normalfall n=200        | 14,9 %  | 1,4 % |
+| Realistisch nahe Mach1  | 208,1 % | 8,9 % |
+| Extrem, Mach ~3         | 328,0 % | 17,3 % |
+| Extrem, Umkehr          | 458,5 % | 22,8 % |
+| Extrem, Feldwechsel     |  28,9 % | 3,1 % |
+
+Im Zielszenario "Realistisch nahe Mach1" bleibt vom Budget also gut 90 %
+für Klangquelle und andere Prozessoren übrig; der schlechteste Einzelblock
+liegt bei rund 2,2 ms von 10,7 ms. Drei Ursachen, in dieser Reihenfolge:
+
+1. **Bauart.** Ohne `CMAKE_BUILD_TYPE` baute alles unoptimiert, auch die
+   Standalone-App, mit der gehört wird (208 % -> 40 %). Siehe "Build & Test".
+2. **Suchfenster.** Der Scan lief über die komplette Puffer-Historie, die
+   nach der größten Feldgröße bemessen ist (rund 42 s), obwohl auf einem
+   150-m-Feld die längste mögliche Laufzeit unter einer Sekunde liegt. Jede
+   Wurzel erfüllt `c*(t_h - t_e) = R(t_e) <= |L| + max|M(t)|`, das Fenster
+   beginnt deshalb bei `t_h - R_max/c` (40 % -> 34 %). Der Fall "verspäteter
+   Boom aus großer Distanz" bleibt dabei per Konstruktion vollständig drin -
+   ein jetzt eintreffender Boom hat genau `t_e = t_h - R(t_e)/c`.
+3. **Kosten einer einzelnen Auswertung.** `SourceTrajectory::sampleAt()`
+   suchte den Stützpunkt per Binärsuche über den ganzen Ringpuffer - rund
+   16 Sprünge quer durch ein Megabyte pro Auswertung des Residuums, und
+   das ist die häufigste Einzeloperation des Audiothreads. Das Raster ist
+   gleichförmig, der Index wird jetzt direkt gerechnet; dazu eine
+   positionsonly-Abtastung, weil F die Geschwindigkeit gar nicht braucht
+   (34 % -> 9 %).
+
+**Was am Scan nicht half** (gemessen, wieder verworfen - damit es niemand
+ein zweites Mal versucht): eine lokal statt global bestimmte
+Lipschitz-Schrittweite (streng, über eine Schranke des Catmull-Rom-
+Interpolanten) war im Unterschall etwas schneller, im Überschall aber
+langsamer, unterm Strich ein Nullsummenspiel. Ebenso wirkungslos: ein
+exakter Frühabbruch des Rückwärts-Scans nach K gefundenen Wurzeln, und
+eine gelockerte Brent-Toleranz.
+
+Was übrig bleibt, ist die Struktur des Scans selbst: nahe der Mach-Front
+ist `F' = -c*(1 - M_r)` fast null, `F` bleibt dort über eine lange Strecke
+klein, und die Lipschitz-Schrittweite `|F|/Lip` kriecht entsprechend fein
+durch. Das ist der Grund, warum die künstlichen Mach-3-Szenarien mit
+10000-m-Feld bei 17-23 % liegen statt bei 9 %. Ein weiterer Sprung bräuchte
+eine Schranke zweiter Ordnung (Beschleunigung der Quelle) oder eine über
+Aufrufe hinweg gepflegte Faltungsstruktur der Ankunftszeitfunktion
+`A(t_e) = t_e + R(t_e)/c`; beides ist derzeit nicht nötig.
 
 **Offen / bekannt kaputt:**
-- **Löser-Performance (nächster großer Brocken, @dpa: "frischer/Opus-
-  Anlauf", ähnlich H4-Sorgfalt nötig).** Ziel: der Vollfenster-Scan-Algorithmus
-  in `RetardedTimeSolver::solve()` selbst muss günstiger werden (nicht nur
-  seltener aufgerufen), ohne die per `solver_check` verifizierte Korrektheit
-  zu verlieren (inkl. des physikalisch echten Falls "verspäteter Boom aus
-  großer Distanz", der einen Grund für das Vollfenster liefert - siehe
-  Kommentar bei `recentMaxSpeed()` in SourceTrajectory.h für die Falle, die
-  hier schon einmal drohte). Diagnose-Werkzeug dafür: neues load_check-
-  Szenario "Realistisch nahe Mach1" (Tests/load_check.cpp) reproduziert das
-  reale Problem offline, mit CPU-Aufschlüsselung (`cpuLoadPhysicsPercent()`/
-  `cpuLoadSourcePercent()` in PluginProcessor) als Fortschrittsmaß.
+- Ob der "Sound zerstückelt weg"-Komplex damit weg ist, muss @dpas Ohr
+  entscheiden - gemessen ist die Überlastung weg, gehört wurde seitdem
+  nicht. Falls Aussetzer bleiben, sind sie NICHT mehr mit CPU-Überlastung
+  zu erklären und die Spur geht zurück zum vergifteten Filterzustand
+  (`Branch::lpZ`, siehe oben) bzw. zum Fokusverlust-Trigger.
 - Motor-Klangfarbe verändert sich manchmal nach schnellem Maus-Drag,
   bleibt dann dauerhaft anders (unabhängig vom Doppler-Effekt selbst) -
   noch nicht untersucht. Könnte mit derselben CPU-Überlastung zusammenhängen
