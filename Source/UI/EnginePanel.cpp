@@ -1,14 +1,17 @@
 #include "EnginePanel.h"
 
 void EnginePanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                              const juce::String& paramID, const juce::String& labelText)
+                              const juce::String& paramID, const juce::String& labelText,
+                              const juce::String& tooltip)
 {
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
+    knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
     knob.label.setText (labelText, juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
+    knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
 
     // paramID kommt ausschliesslich aus Params.h-Konstanten (Aufrufer) - eine
@@ -25,7 +28,9 @@ void EnginePanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 
 EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
 {
-    setupKnob (rpmKnob, apvts, Params::rpm, "RPM");
+    setupKnob (rpmKnob, apvts, Params::rpm, "RPM",
+               "Drehzahl des Motors. Treibt die Grundfrequenz (f = RPM/60) und faerbt "
+               "Rauschband + Jitter mit ein - der zentrale Regler des Motorklangs.");
 
     const std::array<const char*, 4> ratioIds  { Params::harmRatio1,  Params::harmRatio2,  Params::harmRatio3,  Params::harmRatio4 };
     const std::array<const char*, 4> detuneIds { Params::harmDetune1, Params::harmDetune2, Params::harmDetune3, Params::harmDetune4 };
@@ -35,21 +40,41 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
     for (int i = 0; i < 4; ++i)
     {
         const juce::String n = juce::String (i + 1);
-        setupKnob (harmonics[(size_t) i].ratio,  apvts, ratioIds[(size_t) i],  "Ratio "  + n);
-        setupKnob (harmonics[(size_t) i].detune, apvts, detuneIds[(size_t) i], "Detune " + n);
-        setupKnob (harmonics[(size_t) i].track,  apvts, trackIds[(size_t) i],  "Track "  + n);
-        setupKnob (harmonics[(size_t) i].level,  apvts, levelIds[(size_t) i],  "Level "  + n);
+        setupKnob (harmonics[(size_t) i].ratio,  apvts, ratioIds[(size_t) i],  "Ratio "  + n,
+                   "Frequenzverhaeltnis dieses Sägezahn-Teiltons zur Grundfrequenz. Bewusst "
+                   "nicht ganzzahlig - exakt 1/2/3/4 klingt elektronisch statt mechanisch.");
+        setupKnob (harmonics[(size_t) i].detune, apvts, detuneIds[(size_t) i], "Detune " + n,
+                   "Feste Verstimmung dieses Teiltons in Cent, unabhaengig von der Drehzahl.");
+        setupKnob (harmonics[(size_t) i].track,  apvts, trackIds[(size_t) i],  "Track "  + n,
+                   "Wie stark dieser Teilton der RPM-Aenderung folgt. 100% = exakt "
+                   "proportional. Niedriger = er 'schleift hinterher', wodurch sich die "
+                   "Teiltoene beim Hochdrehen zueinander verschieben (mechanischer Schlupf).");
+        setupKnob (harmonics[(size_t) i].level,  apvts, levelIds[(size_t) i],  "Level "  + n,
+                   "Lautstaerke dieses Teiltons in dB.");
     }
 
-    setupKnob (noiseFcLoKnob,   apvts, Params::noiseFcLo,   "Noise Fc Lo");
-    setupKnob (noiseFcHiKnob,   apvts, Params::noiseFcHi,   "Noise Fc Hi");
-    setupKnob (noiseGainLoKnob, apvts, Params::noiseGainLo, "Noise Gain Lo");
-    setupKnob (noiseGainHiKnob, apvts, Params::noiseGainHi, "Noise Gain Hi");
-    setupKnob (noiseQKnob,      apvts, Params::noiseQ,      "Noise Q");
+    setupKnob (noiseFcLoKnob,   apvts, Params::noiseFcLo,   "Noise Fc Lo",
+               "Mittenfrequenz des Rauschbands bei niedriger Drehzahl (RPM = 0).");
+    setupKnob (noiseFcHiKnob,   apvts, Params::noiseFcHi,   "Noise Fc Hi",
+               "Mittenfrequenz des Rauschbands bei maximaler Drehzahl. Wirkt nur bei hohen "
+               "RPM hoerbar, dazwischen wird linear zwischen Fc Lo und Fc Hi ueberblendet.");
+    setupKnob (noiseGainLoKnob, apvts, Params::noiseGainLo, "Noise Gain Lo",
+               "Pegel des Rauschbands bei niedriger Drehzahl (dB).");
+    setupKnob (noiseGainHiKnob, apvts, Params::noiseGainHi, "Noise Gain Hi",
+               "Pegel des Rauschbands bei maximaler Drehzahl (dB) - mehr Drehzahl klingt "
+               "durch mehr Reibungs-/Luftgeraeusch heller und lauter.");
+    setupKnob (noiseQKnob,      apvts, Params::noiseQ,      "Noise Q",
+               "Guete (Schmalbandigkeit) des Rauschband-Filters. Hoeher = schmaler/toniger.");
 
-    setupKnob (jitterAmountKnob, apvts, Params::jitterAmount, "Jitter Amt");
-    setupKnob (jitterRateKnob,   apvts, Params::jitterRateHz, "Jitter Rate");
-    setupKnob (imbalanceKnob,    apvts, Params::imbalance,    "Imbalance");
+    setupKnob (jitterAmountKnob, apvts, Params::jitterAmount, "Jitter Amt",
+               "Staerke der langsamen Zufallsschwankung auf der Grundfrequenz (in %), "
+               "skaliert mit der Drehzahl - simuliert Lastschwankung/Unwucht statt eines "
+               "starren, toten Tons.");
+    setupKnob (jitterRateKnob,   apvts, Params::jitterRateHz, "Jitter Rate",
+               "Geschwindigkeit der Jitter-Schwankung in Hz (3-15 Hz, langsames Wackeln).");
+    setupKnob (imbalanceKnob,    apvts, Params::imbalance,    "Imbalance",
+               "Zusaetzliche Amplitudenmodulation bei der halben Grundfrequenz - simuliert "
+               "den Zuendtakt eines Viertakters. 0 = aus.");
 }
 
 void EnginePanel::resized()

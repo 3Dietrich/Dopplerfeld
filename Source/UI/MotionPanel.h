@@ -38,7 +38,8 @@ private:
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                     const juce::String& paramID, const juce::String& labelText);
+                     const juce::String& paramID, const juce::String& labelText,
+                     const juce::String& tooltip = {});
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     // Combo-Items werden aus der tatsaechlichen AudioParameterChoice-Liste

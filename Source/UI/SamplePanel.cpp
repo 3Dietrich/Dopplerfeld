@@ -1,14 +1,17 @@
 #include "SamplePanel.h"
 
 void SamplePanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                              const juce::String& paramID, const juce::String& labelText)
+                              const juce::String& paramID, const juce::String& labelText,
+                              const juce::String& tooltip)
 {
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
+    knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
     knob.label.setText (labelText, juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
+    knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
 
     knob.attachment = std::make_unique<SliderAttachment> (apvts, paramID, knob.slider);
@@ -22,16 +25,29 @@ void SamplePanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 
 SamplePanel::SamplePanel (juce::AudioProcessorValueTreeState& apvts)
 {
-    setupKnob (gainKnob,      apvts, Params::sampleGain,  "Gain");
-    setupKnob (pitchKnob,     apvts, Params::samplePitch, "Pitch");
-    setupKnob (loopStartKnob, apvts, Params::loopStart,   "Loop Start");
-    setupKnob (loopEndKnob,   apvts, Params::loopEnd,     "Loop End");
-    setupKnob (loopXfadeKnob, apvts, Params::loopXfadeMs, "Loop Xfade");
-    setupKnob (eqLowKnob,     apvts, Params::eqLowGain,   "EQ Low");
-    setupKnob (eqMidGainKnob, apvts, Params::eqMidGain,   "EQ Mid");
-    setupKnob (eqMidFreqKnob, apvts, Params::eqMidFreq,   "EQ Mid Freq");
-    setupKnob (eqHighKnob,    apvts, Params::eqHighGain,  "EQ High");
+    setupKnob (gainKnob,      apvts, Params::sampleGain,  "Gain",
+               "Lautstaerke des geladenen Samples (dB).");
+    setupKnob (pitchKnob,     apvts, Params::samplePitch, "Pitch",
+               "Tonhoehenverschiebung des Samples in Halbtoenen (Resampling).");
+    setupKnob (loopStartKnob, apvts, Params::loopStart,   "Loop Start",
+               "Loop-Anfang, normiert 0-1 der geladenen Datei.");
+    setupKnob (loopEndKnob,   apvts, Params::loopEnd,     "Loop End",
+               "Loop-Ende, normiert 0-1 der geladenen Datei.");
+    setupKnob (loopXfadeKnob, apvts, Params::loopXfadeMs, "Loop Xfade",
+               "Ueberblendzeit an der Loop-Naht (ms) - verhindert einen hoerbaren Klick "
+               "beim Sprung von Loop-Ende zurueck zu Loop-Anfang.");
+    setupKnob (eqLowKnob,     apvts, Params::eqLowGain,   "EQ Low",
+               "Bass-Anhebung/Absenkung (Low-Shelf, feste Eckfrequenz 200 Hz).");
+    setupKnob (eqMidGainKnob, apvts, Params::eqMidGain,   "EQ Mid",
+               "Anhebung/Absenkung im Mittenband (Glockenfilter).");
+    setupKnob (eqMidFreqKnob, apvts, Params::eqMidFreq,   "EQ Mid Freq",
+               "Mittenfrequenz des Glockenfilters (Hz).");
+    setupKnob (eqHighKnob,    apvts, Params::eqHighGain,  "EQ High",
+               "Hoehen-Anhebung/Absenkung (High-Shelf, feste Eckfrequenz 8 kHz).");
 
+    loadButton.setTooltip ("Audiodatei laden (WAV/AIFF/FLAC/MP3) - wird als endlos "
+                           "loopende Klangquelle verwendet, ersetzt bei Bedarf per "
+                           "Quelle-Knopf oben den Motor-Generator.");
     addAndMakeVisible (loadButton);
     loadButton.onClick = [this]
     {

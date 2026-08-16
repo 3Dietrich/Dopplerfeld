@@ -18,7 +18,8 @@
 // auftauchen darf: worldToScreen()/screenToWorld(). Jede andere Rechnung
 // hier (Nasenwinkel, Hit-Tests, Drag-Logik) leitet sich aus diesen beiden
 // Funktionen ab, statt die Umkehr ein zweites Mal zu implementieren.
-class FieldComponent : public juce::Component
+class FieldComponent : public juce::Component,
+                        public juce::SettableTooltipClient
 {
 public:
     FieldComponent();

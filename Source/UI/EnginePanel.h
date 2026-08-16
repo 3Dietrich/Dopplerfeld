@@ -31,7 +31,8 @@ private:
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                     const juce::String& paramID, const juce::String& labelText);
+                     const juce::String& paramID, const juce::String& labelText,
+                     const juce::String& tooltip = {});
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     Knob rpmKnob;

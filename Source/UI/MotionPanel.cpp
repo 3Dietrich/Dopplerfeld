@@ -1,14 +1,17 @@
 #include "MotionPanel.h"
 
 void MotionPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                              const juce::String& paramID, const juce::String& labelText)
+                              const juce::String& paramID, const juce::String& labelText,
+                              const juce::String& tooltip)
 {
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
+    knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
     knob.label.setText (labelText, juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
+    knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
 
     knob.attachment = std::make_unique<SliderAttachment> (apvts, paramID, knob.slider);
@@ -35,31 +38,50 @@ void MotionPanel::populateChoices (juce::ComboBox& combo, juce::AudioProcessorVa
 
 MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 {
-    setupKnob (smootherTauKnob, apvts, Params::smootherTau, "Tau");
-    setupKnob (slewVmaxKnob,    apvts, Params::slewVmax,    "Slew Vmax");
-    setupKnob (slewAmaxKnob,    apvts, Params::slewAmax,    "Slew Amax");
-    setupKnob (playSpeedKnob,   apvts, Params::playSpeed,   "Play Speed");
+    setupKnob (smootherTauKnob, apvts, Params::smootherTau, "Tau",
+               "Zeitkonstante der Bewegungsglaettung: so lange braucht die geglaettete "
+               "Position, um einer Zielaenderung zu folgen. Kleiner = direkter/schneller "
+               "(schon normale Mausbewegungen ueber wenige Meter koennen dann hohe "
+               "Geschwindigkeiten und starken Doppler erzeugen), groesser = traeger.");
+    setupKnob (slewVmaxKnob,    apvts, Params::slewVmax,    "Slew Vmax",
+               "Nur bei Glaettung 'Slew Limiter': maximale Geschwindigkeit in m/s.");
+    setupKnob (slewAmaxKnob,    apvts, Params::slewAmax,    "Slew Amax",
+               "Nur bei Glaettung 'Slew Limiter': maximale Beschleunigung in m/s^2.");
+    setupKnob (playSpeedKnob,   apvts, Params::playSpeed,   "Play Speed",
+               "Wiedergabegeschwindigkeit einer Aufnahme (0.25-4x). Skaliert die Bewegung "
+               "und damit den Doppler - schnelle Wiedergabe kann Ueberschall erzeugen.");
 
     smootherTypeLabel.setText ("Smoother", juce::dontSendNotification);
     smootherTypeLabel.setJustificationType (juce::Justification::centredLeft);
+    smootherTypeLabel.setTooltip ("Glaettungsverfahren fuer die Quell-/Hoererbewegung - "
+                                  "bestimmt, wie aus ruckartigen Mausbewegungen eine "
+                                  "'bewegte Maschine' statt einer 'digitalen Maus' wird.");
     addAndMakeVisible (smootherTypeLabel);
     populateChoices (smootherTypeCombo, apvts, Params::smootherType);
+    smootherTypeCombo.setTooltip (smootherTypeLabel.getTooltip());
     addAndMakeVisible (smootherTypeCombo);
     smootherTypeAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::smootherType, smootherTypeCombo);
 
     playInterpLabel.setText ("Play Interp", juce::dontSendNotification);
     playInterpLabel.setJustificationType (juce::Justification::centredLeft);
+    playInterpLabel.setTooltip ("Interpolation der Wiedergabe zwischen aufgezeichneten "
+                                "Punkten: Linear (einfach) oder Catmull-Rom (weich, "
+                                "ohne Tonhoehensprung an den Stuetzstellen).");
     addAndMakeVisible (playInterpLabel);
     populateChoices (playInterpCombo, apvts, Params::playInterp);
+    playInterpCombo.setTooltip (playInterpLabel.getTooltip());
     addAndMakeVisible (playInterpCombo);
     playInterpAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::playInterp, playInterpCombo);
 
+    playLoopButton.setTooltip ("Wiedergabe am Ende des Clips von vorn beginnen statt zu stoppen.");
     addAndMakeVisible (playLoopButton);
     playLoopAttachment = std::make_unique<ButtonAttachment> (apvts, Params::playLoop, playLoopButton);
 
+    recordButton.setTooltip ("Aufnahme der (geglaetteten) Quellbewegung starten/stoppen.");
     addAndMakeVisible (recordButton);
     recordButton.onClick = [this] { if (onRecordClicked != nullptr) onRecordClicked(); };
 
+    playButton.setTooltip ("Aufgezeichnete Bewegung abspielen bzw. stoppen.");
     addAndMakeVisible (playButton);
     playButton.onClick = [this] { if (onPlayClicked != nullptr) onPlayClicked(); };
 }

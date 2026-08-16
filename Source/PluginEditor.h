@@ -8,6 +8,7 @@
 #include "UI/FieldPanel.h"
 #include "UI/MotionPanel.h"
 #include "UI/SamplePanel.h"
+#include "UI/ToggleableTooltipWindow.h"
 
 #include "Util/FieldSnapshot.h"
 
@@ -66,6 +67,12 @@ private:
     // Quellwahl ist kein Parameter (siehe DopplerfeldProcessor), deshalb ein
     // gewöhnlicher Knopf statt eines Attachments.
     juce::TextButton sourceButton;
+
+    // @dpa-Feedback: Hilfehinweise für alle Regler, in den Einstellungen
+    // abschaltbar. Die Regler selbst tragen ihren Tooltip-Text bereits
+    // (setTooltip in den Panels) - hier sitzt nur der globale Schalter.
+    ToggleableTooltipWindow tooltipWindow { this };
+    juce::ToggleButton tooltipsButton { "Hilfehinweise" };
 
     // Inhaltshöhen der vier Panels: was ihr resized() an Reihen und Reglern
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines

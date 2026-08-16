@@ -68,11 +68,22 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
             dopplerfeldProcessor.triggerPlayback();
     };
 
+    sourceButton.setTooltip ("Klangquelle umschalten: Motor-Generator oder geladenes Sample.");
     sourceButton.onClick = [this]
     {
         dopplerfeldProcessor.selectSampleSource (! dopplerfeldProcessor.isUsingSampleSource());
     };
     addAndMakeVisible (sourceButton);
+
+    field.setTooltip ("Ziehen an M verschiebt die Schallquelle. Ziehen am Kopf verschiebt "
+                      "den Hoerer, Ziehen an der Nase dreht ihn.");
+
+    // @dpa-Feedback: Hilfehinweise abschaltbar. Start an, weil neue Regler
+    // ohne Erklaerung sonst raten heisst.
+    tooltipsButton.setToggleState (true, juce::dontSendNotification);
+    tooltipsButton.setTooltip ("Hilfehinweise beim Ueberfahren der Regler ein-/ausblenden.");
+    tooltipsButton.onClick = [this] { tooltipWindow.enabled = tooltipsButton.getToggleState(); };
+    addAndMakeVisible (tooltipsButton);
 
     setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
              margin * 2 + topBarHeight + 6 + fieldHeight + statusHeight);
@@ -151,6 +162,8 @@ void DopplerfeldEditor::resized()
     auto topBar = area.removeFromTop (topBarHeight);
     topBar.removeFromLeft (100);   // Platz für den Schriftzug links
     sourceButton.setBounds (topBar.removeFromLeft (130));
+    topBar.removeFromLeft (8);
+    tooltipsButton.setBounds (topBar.removeFromLeft (130));
 
     area.removeFromTop (6);
 
