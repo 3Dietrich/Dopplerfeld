@@ -254,10 +254,31 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
 
     const Residual F { traj, receiverPos, t_h, c, tOldest, tNewest };
 
-    // Fenster: bis zum ältesten Puffereintrag zurück (das ist die in Plan
-    // 2.12 dimensionierte T_max-Historie), oben durch t_h begrenzt - wegen
-    // |·| >= 0 liegt jede Wurzel bei t_e <= t_h, Kausalität ist eingebaut.
-    const double windowStart = tOldest;
+    // Fenster: oben durch t_h begrenzt - wegen |·| >= 0 liegt jede Wurzel bei
+    // t_e <= t_h, Kausalität ist eingebaut.
+    //
+    // Nach unten reicht die längste überhaupt mögliche Laufzeit. Jede Wurzel
+    // erfüllt c*(t_h - t_e) = R(t_e), und R ist durch
+    //   R(t) = |L - M(t)| <= |L| + max |M(t)|
+    // nach oben beschränkt (Dreiecksungleichung, max über das Fenster aus der
+    // Deque der Trajektorie). Für t_e < t_h - R_max/c ist deshalb
+    // F(t_e) = c*(t_h - t_e) - R(t_e) > 0, dort kann keine Wurzel liegen.
+    //
+    // Das ist keine Heuristik, sondern dieselbe Kausalität wie oben, nur von
+    // der anderen Seite: der Puffer ist nach der GRÖSSTEN Feldgröße bemessen
+    // (Plan 2.12, bei n = 10000 rund 42 s), gehört wird aber meist auf einem
+    // kleinen Feld, wo die längste Laufzeit unter einer Sekunde liegt. Der
+    // Scan lief bisher trotzdem jedes Mal über die vollen 42 s.
+    //
+    // Der physikalisch echte Fall "verspäteter Boom aus großer Distanz" bleibt
+    // dabei vollständig drin: ein Boom, der erst jetzt eintrifft, hat genau
+    // t_e = t_h - R(t_e)/c >= t_h - R_max/c, liegt also im Fenster. Nur der
+    // Bereich, in dem der Schall längst vorbeigezogen ist, fällt weg.
+    //
+    // Nebeneffekt: F(windowStart) >= 0 ist damit garantiert, solange der
+    // Puffer lang genug ist - genau die Randbedingung aus Plan 2.6.
+    const double rMax        = receiverPos.length() + traj.maxDistanceInWindow (tOldest);
+    const double windowStart = std::max (tOldest, t_h - rMax / c);
     const double windowEnd   = t_h;
 
     // Schritt 1, Schnelltest (Plan 2.10): O(1) über die monotone Deque. Die
@@ -265,7 +286,14 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
     // Vergangenheit also auch spätere Geschwindigkeiten mitzählen. Der Fehler
     // geht in die harmlose Richtung: lieber ein Vollscan zu viel als ein
     // übersehenes Wurzelpaar.
-    const double maxSpeed           = traj.maxSpeedInWindow (windowStart, t_h);
+    //
+    // Bewusst mit tOldest statt mit windowStart: die Abfrage eviktiert vorne
+    // (siehe SourceTrajectory), ein engeres t0 würde die alten Einträge
+    // endgültig verwerfen - und der zweite Empfangspunkt auf derselben
+    // Trajektorie bekäme danach eine zu kleine Schranke, also zu große
+    // Scan-Schritte. Über das ganze Fenster gefragt ist das Ergebnis
+    // konservativ und für alle Empfangspunkte gleich gültig.
+    const double maxSpeed           = traj.maxSpeedInWindow (tOldest, t_h);
     const bool   supersonicPossible = (maxSpeed > c);
     const double lip                = c + maxSpeed;   // |F'| <= c + |v_M|
 

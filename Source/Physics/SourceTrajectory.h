@@ -53,6 +53,19 @@ public:
     // benutzt (t1 == newestTime()); mit t0 wird zusätzlich vorne eviktiert.
     double maxSpeedInWindow (double t0, double t1) const;
 
+    // Größter Abstand |M(t)| zum Koordinatenursprung im Fenster [t0, jetzt],
+    // O(1) über eine zweite monotone Deque nach demselben Muster wie
+    // maxSpeedInWindow(). Damit lässt sich die maximal mögliche Laufzeit
+    // abschätzen: R(t) = |L - M(t)| <= |L| + max |M(t)|. Der Löser begrenzt
+    // darüber sein Suchfenster (siehe RetardedTimeSolver::solve).
+    //
+    // Wie maxSpeedInWindow() zieht die Abfrage den Vorderrand der Deque bis t0
+    // nach und ist deshalb NUR mit dem vollen Fensteranfang (oldestTime())
+    // aufzurufen - mit einem engeren t0 wären die alten Einträge unwiderruflich
+    // weg, und ein zweiter Empfangspunkt mit größerem |L| bekäme eine zu
+    // kleine Schranke und damit ein zu kurzes Fenster.
+    double maxDistanceInWindow (double t0) const;
+
     // Rein lesende Alternative für reine Performance-Entscheidungen (z.B.
     // PropagationPath: wie fein muss der Löser gerastert werden), die NICHT
     // mit maxSpeedInWindow() geteilt werden darf: dessen Deque eviktiert beim
@@ -71,6 +84,7 @@ public:
 private:
     void fillConstant (Vec3 pos, double newestSampleTime);
     void pushSpeedSample (double t, double speed);
+    void pushDistanceSample (double t, double distance);
     int  ringSlot (std::int64_t idx) const;
     const TrajectorySample& sampleAtClampedIndex (std::int64_t idx) const;
 
@@ -86,4 +100,7 @@ private:
     // mutable, weil maxSpeedInWindow() bei älterem t0 vorne eviktieren darf,
     // ohne den logischen (Puffer-)Zustand der Klasse zu ändern.
     mutable std::deque<std::pair<double, double>> speedDeque;
+
+    // (Zeit, |p|) nach demselben Muster wie speedDeque.
+    mutable std::deque<std::pair<double, double>> distDeque;
 };

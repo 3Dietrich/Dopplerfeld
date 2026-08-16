@@ -37,6 +37,14 @@ void SourceTrajectory::pushSpeedSample (double t, double speed)
     speedDeque.push_back ({ t, speed });
 }
 
+void SourceTrajectory::pushDistanceSample (double t, double distance)
+{
+    while (! distDeque.empty() && distDeque.back().second <= distance)
+        distDeque.pop_back();
+
+    distDeque.push_back ({ t, distance });
+}
+
 void SourceTrajectory::fillConstant (Vec3 pos, double newestSampleTime)
 {
     // Physisch immer die volle Kapazität beschreiben (analog zum
@@ -46,7 +54,10 @@ void SourceTrajectory::fillConstant (Vec3 pos, double newestSampleTime)
     // Geschwindigkeit 0, endend exakt auf dem Zeitraster bei
     // newestSampleTime (Plan 2.6).
     speedDeque.clear();
+    distDeque.clear();
     writeIndex = 0;
+
+    const double posNorm = pos.length();
 
     for (int i = 0; i < capacity; ++i)
     {
@@ -58,6 +69,7 @@ void SourceTrajectory::fillConstant (Vec3 pos, double newestSampleTime)
 
         ring[(size_t) ringSlot (writeIndex)] = s;
         pushSpeedSample (s.t, 0.0);
+        pushDistanceSample (s.t, posNorm);
         ++writeIndex;
     }
 }
@@ -91,14 +103,19 @@ void SourceTrajectory::push (Vec3 pos, double time)
 
     ring[(size_t) ringSlot (writeIndex)] = s;
     pushSpeedSample (s.t, (double) s.speed);
+    pushDistanceSample (s.t, pos.length());
     ++writeIndex;
 
     // Einträge verwerfen, die durch das Weiterrücken des Fensters gerade
     // aus der Historie fallen (amortisiert O(1): jeder Eintrag wird genau
     // einmal eingefügt und höchstens einmal entfernt).
     const double oldest = ring[(size_t) ringSlot (writeIndex - capacity)].t;
+
     while (! speedDeque.empty() && speedDeque.front().first < oldest)
         speedDeque.pop_front();
+
+    while (! distDeque.empty() && distDeque.front().first < oldest)
+        distDeque.pop_front();
 }
 
 const TrajectorySample& SourceTrajectory::sampleAtClampedIndex (std::int64_t idx) const
@@ -167,6 +184,14 @@ double SourceTrajectory::maxSpeedInWindow (double t0, double /*t1*/) const
         speedDeque.pop_front();
 
     return speedDeque.empty() ? 0.0 : speedDeque.front().second;
+}
+
+double SourceTrajectory::maxDistanceInWindow (double t0) const
+{
+    while (! distDeque.empty() && distDeque.front().first < t0)
+        distDeque.pop_front();
+
+    return distDeque.empty() ? 0.0 : distDeque.front().second;
 }
 
 double SourceTrajectory::recentMaxSpeed (double windowSeconds) const
