@@ -2,6 +2,16 @@ cmake_minimum_required(VERSION 3.22)
 
 project(Dopplerfeld VERSION 0.1.0)
 
+# Ohne CMAKE_BUILD_TYPE erzeugt CMake bei Makefile-/Ninja-Generatoren einen
+# Bau ganz ohne -O-Schalter. JUCEs juce_recommended_config_flags hängen ihre
+# Optimierung an $<CONFIG:Release>, greifen dann also auch nicht. Das Ergebnis
+# ist ein unoptimierter Löser im Audiothread - für dieses Plugin der
+# Unterschied zwischen echtzeitfähig und Aussetzern. Deshalb Release als
+# Vorgabe; wer debuggen will, gibt -DCMAKE_BUILD_TYPE=Debug ausdrücklich an.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Bauart" FORCE)
+endif()
+
 # JUCE liegt als Git-Klon daneben und wird eingebunden, nicht kopiert.
 add_subdirectory(/Users/dpa/Documents/JUCE JUCE)
 
