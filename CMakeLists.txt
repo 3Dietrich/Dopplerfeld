@@ -74,5 +74,34 @@ add_executable(solver_check
 target_include_directories(solver_check PRIVATE Source)
 target_compile_features(solver_check PRIVATE cxx_std_20)
 
+# Lasttest aus Plan Abschnitt 6 (H13): fährt den fertig verdrahteten Processor
+# offline, ohne Audiogerät. Hängt an der Plugin-Bibliothek selbst, damit
+# wirklich der ausgelieferte Code geprüft wird und keine Nachbildung davon.
+add_executable(load_check Tests/load_check.cpp)
+# Nur gegen Dopplerfeld linken, nicht zusätzlich gegen die juce::-Module: die
+# stecken bereits in dieser Bibliothek. Ein zweites Mal eingebunden würden sie
+# hier neu übersetzt, was den Testbau um die Fremdwarnungen aus den
+# JUCE-Drittbibliotheken (harfbuzz, VST3-SDK) ergänzen würde.
+# juce_recommended_warning_flags trägt nur Compiler-Schalter, keine Quellen -
+# der Test wird damit genauso streng geprüft wie das Plugin, ohne dass etwas
+# doppelt übersetzt wird.
+target_link_libraries(load_check
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+
+# Include-Pfade und Defines von der Plugin-Bibliothek übernehmen, statt die
+# juce::-Module ein zweites Mal einzubinden: die stecken dort bereits fertig
+# übersetzt drin, ein erneutes Einbinden würde sie für diesen Test noch einmal
+# komplett übersetzen (samt der Fremdwarnungen aus harfbuzz und VST3-SDK).
+target_include_directories(load_check PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(load_check PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>)
+target_compile_features(load_check PRIVATE cxx_std_20)
+
 enable_testing()
 add_test(NAME solver_check COMMAND solver_check)
+add_test(NAME load_check COMMAND load_check)

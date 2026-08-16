@@ -11,7 +11,9 @@
 
 #include "Sources/SoundSource.h"
 #include "Util/Crossfader.h"
+#include "Util/FieldSnapshot.h"
 
+#include <atomic>
 #include <cstdint>
 #include <vector>
 
@@ -53,8 +55,10 @@ public:
     void setFieldMetres (double metres);
     double getFieldMetres() const { return fieldMetres; }
 
-    // Ziel der Quellbewegung. TODO H13: hier gehört der MotionSmoother aus
-    // Plan 3.8 dazwischen; bis dahin geht das Ziel direkt in die Trajektorie.
+    // Bereits GEGLÄTTETE Quellposition (Plan 3.8): der MotionSmoother sitzt
+    // im Processor davor und tickt auf trajectoryRateHz, hier kommt nur noch
+    // sein Ergebnis an. Zwischen zwei Aufrufen zieht die Engine linear durch
+    // (siehe pushTrajectory), der Aufrufer ruft deshalb in kurzen Teilblöcken.
     void setSourceTarget (Vec3 posMetres) { sourceTarget = posMetres; }
     Vec3 getSourceTarget() const { return sourceTarget; }
 
@@ -71,26 +75,27 @@ public:
     void setAirAbsorptionAmount (double amount01);
 
     // Globaler Umschalter aus Plan 3.11 (fadeAuto/fadeManualMs), wirkt auf
-    // den nächsten Geometriewechsel.
-    // TODO H13: aus der APVTS speisen, zusammen mit dem gleichnamigen Setter
-    // im SoundSourceHolder - beide hängen am selben Parameterpaar.
+    // den nächsten Geometriewechsel. Denselben Setter hat der
+    // SoundSourceHolder - beide hängen am selben Parameterpaar.
     void setManualFade (bool shouldUseManual, double seconds);
 
-    // Der Mono-Strom der Quelle kommt von außen herein. TODO H13: hier steht
-    // dann der SoundSourceHolder des Processors; die Engine selbst rendert
-    // bewusst keine Quelle, damit der geteilte Signalpuffer genau einen
-    // Schreiber hat.
-    // sourceMono darf nullptr sein, dann wird Stille eingespeist.
+    // Der Mono-Strom der Quelle kommt von außen herein (im Plugin aus dem
+    // SoundSourceHolder des Processors); die Engine rendert bewusst keine
+    // Quelle selbst, damit der geteilte Signalpuffer genau einen Schreiber
+    // hat. sourceMono darf nullptr sein, dann wird Stille eingespeist.
     void process (juce::AudioBuffer<float>& stereoOut,
                   const float*              sourceMono,
                   const MediumState&        medium);
 
-    // TODO H11: hier dockt fillSnapshot (FieldSnapshot&) an - dezimierte
-    // Trajektorienpunkte, Wellenfront-Emissionszeiten, Ohrgeometrie und pro
-    // Pfad Verzögerung/Amplitude/M_r (Plan 3.12). Die Pfad-Getter unten
-    // liefern den Pfadanteil davon bereits lock-frei, und zwar vom hörbaren
-    // (aktiven) Satz - die Anzeige zeigt während eines Fades also die
-    // Geometrie, die überwiegend zu hören ist.
+    // Anzeigedaten für den Message-Thread (Plan 3.12). Der Audiothread legt
+    // den Snapshot am Blockende in einen von zwei Puffern und tauscht einen
+    // atomaren Index; hier wird aus dem veröffentlichten Puffer kopiert.
+    // Kein Lock, keine Allokation, keine Rückwirkung auf den Audiothread.
+    void fillSnapshot (FieldSnapshot& dest) const;
+
+    // Pfadanteil derselben Daten, lock-frei und einzeln abfragbar, und zwar
+    // vom hörbaren (aktiven) Satz - während eines Fades zeigt die Anzeige
+    // also die Geometrie, die überwiegend zu hören ist.
     int numPaths() const { return (int) geometry.active().paths.size(); }
     const PropagationPath& getPath (int index) const { return geometry.active().paths[(size_t) index]; }
 
@@ -140,6 +145,10 @@ private:
     };
 
     void pushTrajectory (double blockStart, double blockEnd);
+
+    // Schreibt den Anzeige-Snapshot in den gerade nicht veröffentlichten
+    // Puffer und tauscht ihn ein (Audiothread, am Blockende).
+    void publishSnapshot (const MediumState& medium);
 
     // Gemeinsamer Kern von Positionssprung und Feldgrößenwechsel.
     void startGeometrySwitch (Vec3 newPos, int fadeSamples);
@@ -192,4 +201,21 @@ private:
     std::int64_t nextTrajIndex = 0;
 
     std::vector<float> silence;   // Ersatz, wenn kein Quellsignal anliegt
+
+    // --- Anzeige-Snapshot (Plan 3.12) ---
+    //
+    // Zwei Puffer plus atomarer Index: der Schreiber füllt immer den, den der
+    // Leser gerade nicht liest. Die Generationszählung darüber deckt den
+    // einzigen verbleibenden Fall ab, den der Index allein nicht abdeckt -
+    // dass der Audiothread während einer laufenden Lesekopie zweimal
+    // veröffentlicht und dabei den gelesenen Puffer wieder einholt. Ungerade
+    // Generation heißt "Schreiben läuft"; fillSnapshot verwirft die Kopie
+    // dann und probiert es erneut, statt den Audiothread warten zu lassen.
+    static constexpr double snapshotIntervalSeconds = 1.0 / 60.0;
+
+    FieldSnapshot              snapshotBuffers[2];
+    std::atomic<int>           snapshotIndex { 0 };
+    std::atomic<unsigned int>  snapshotGeneration { 0 };
+    int                        snapshotWriteSlot = 1;
+    double                     lastSnapshotTime  = -1.0;
 };

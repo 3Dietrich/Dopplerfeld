@@ -156,6 +156,10 @@ void DopplerEngine::reset()
     prevTarget       = sourceTarget;
     queuedJumpPos    = sourceTarget;
     fieldChangeArmed = false;
+
+    // Nach einem Zeitsprung wäre die alte Marke in der Zukunft und der
+    // Snapshot bliebe stehen, bis die Uhr sie wieder eingeholt hat.
+    lastSnapshotTime = -1.0;
 }
 
 int DopplerEngine::fadeSamplesFor (FadeReason reason, double positionDeltaMetres) const
@@ -332,10 +336,11 @@ void DopplerEngine::pushTrajectory (double blockStart, double blockEnd)
     {
         const double t = (double) nextTrajIndex * grid;
 
-        // TODO H13: hier gehört der MotionSmoother aus Plan 3.8 hin. Bis
-        // dahin wird die Zielposition ungeglättet über den Block linear
-        // durchgezogen - der Verlauf ist damit stetig und liefert eine
-        // brauchbare Geschwindigkeit, aber er ist keine Glättung.
+        // Die Glättung sitzt im Processor (Plan 3.8) und tickt dort auf
+        // dieser Rasterrate; hier wird zwischen zwei bereits geglätteten
+        // Positionen linear durchgezogen. Der Aufrufer hält die Teilblöcke
+        // deshalb kurz - je länger die Strecke, desto gröber das Raster der
+        // Geschwindigkeit und damit des Dopplers.
         const double u   = (t - blockStart) / span;
         const Vec3   pos = follow ? prevTarget + (sourceTarget - prevTarget) * u
                                   : newest.lastPos;
@@ -352,6 +357,134 @@ void DopplerEngine::pushTrajectory (double blockStart, double blockEnd)
     }
 
     prevTarget = sourceTarget;
+}
+
+void DopplerEngine::publishSnapshot (const MediumState& medium)
+{
+    const double now = currentTime();
+
+    // Die Anzeige läuft mit ~30 Hz, ein Snapshot kostet aber gut hundert
+    // Trajektorien-Auswertungen. Bei 128-Sample-Teilblöcken käme das sonst
+    // mehrere hundert Mal pro Sekunde - die Obergrenze hier lässt der GUI
+    // Luft und hält die Anzeigearbeit im Audiothread trotzdem klein.
+    if (lastSnapshotTime >= 0.0 && now - lastSnapshotTime < snapshotIntervalSeconds)
+        return;
+
+    lastSnapshotTime = now;
+
+    // Der jüngste Satz, nicht der aktive: während eines Fades wandert die
+    // Quelle im pending()-Satz weiter, der aktive hält seine Position an.
+    // Alles im Snapshot kommt aus demselben Satz, sonst zeigten Spur und
+    // Pfadwerte zwei verschiedene Geometrien.
+    const PathSet& set = geometry.isFading() ? geometry.pending() : geometry.active();
+
+    FieldSnapshot& s = snapshotBuffers[snapshotWriteSlot];
+
+    snapshotGeneration.fetch_add (1, std::memory_order_release);   // ungerade: Schreiben läuft
+
+    s.now        = now;
+    s.sourcePos  = set.lastPos;
+    s.listener   = listener;
+
+    const double tNewest = std::min (now, set.trajectory.newestTime());
+    const double tOldest = set.trajectory.oldestTime();
+
+    // Spur: gleichmäßig über die letzten Sekunden abgetastet statt jeden
+    // Rasterpunkt zu kopieren (1 kHz Raster wären 3000 Punkte für dieselbe
+    // Linie). Am Anfang, wenn noch keine trailSeconds Historie existiert,
+    // klemmt der Startpunkt am ältesten bekannten Eintrag.
+    constexpr double trailSeconds = 3.0;
+
+    const double t0 = std::max (tOldest, tNewest - trailSeconds);
+
+    s.trailCount = 0;
+
+    if (tNewest > t0)
+    {
+        constexpr int wanted = FieldSnapshot::maxTrailPoints;
+
+        for (int i = 0; i < wanted; ++i)
+        {
+            const double t = t0 + (tNewest - t0) * (double) i / (double) (wanted - 1);
+
+            Vec3 p, v;
+
+            if (set.trajectory.sampleAt (t, p, v))
+                s.trail[(size_t) s.trailCount++] = p;
+        }
+    }
+
+    // Wellenfronten: der Editor zeichnet Kreise mit Radius c*(now - t_k) um
+    // M(t_k). Der Abstand der Emissionszeiten skaliert mit der Feldgröße -
+    // eine feste Schrittweite läge bei n = 1 m sofort außerhalb des Bildes
+    // und bei n = 10000 m alle Fronten aufeinander. Bezug ist die Zeit, die
+    // der Schall für die Feldbreite braucht.
+    const double c = medium.speedOfSound();
+
+    const double spacing = std::min (0.5,
+                                     std::max (0.02,
+                                               fieldMetres / (c * (double) FieldSnapshot::maxWavefronts)));
+
+    s.wavefrontCount = 0;
+
+    for (int i = 1; i <= FieldSnapshot::maxWavefronts; ++i)
+    {
+        const double tEmit = now - (double) i * spacing;
+
+        if (tEmit < tOldest)
+            break;   // weiter zurück reicht die Historie nicht
+
+        Vec3 p, v;
+
+        if (! set.trajectory.sampleAt (tEmit, p, v))
+            break;
+
+        s.wavefrontEmitTimes[(size_t) s.wavefrontCount] = tEmit;
+        s.wavefrontPositions[(size_t) s.wavefrontCount] = p;
+        ++s.wavefrontCount;
+    }
+
+    s.pathCount = 0;
+
+    for (size_t i = 0; i < set.paths.size() && i < pathEar.size()
+                       && s.pathCount < FieldSnapshot::maxPaths; ++i)
+    {
+        auto& info = s.paths[(size_t) s.pathCount];
+
+        info.ear            = pathEar[i];
+        info.activeBranches = set.paths[i].numActiveBranches();
+        info.delaySeconds   = set.paths[i].lastDelaySeconds();
+        info.machRadial     = set.paths[i].lastMachRadial();
+
+        ++s.pathCount;
+    }
+
+    snapshotIndex.store (snapshotWriteSlot, std::memory_order_release);
+    snapshotWriteSlot = 1 - snapshotWriteSlot;
+
+    snapshotGeneration.fetch_add (1, std::memory_order_release);   // gerade: fertig
+}
+
+void DopplerEngine::fillSnapshot (FieldSnapshot& dest) const
+{
+    // Vier Versuche: jeder gescheiterte bedeutet, dass der Audiothread genau
+    // während der Kopie veröffentlicht hat. Danach bleibt dest unverändert,
+    // die Anzeige zeigt also einen Frame länger den alten Stand - besser als
+    // den Message-Thread hier festzuhalten.
+    for (int attempt = 0; attempt < 4; ++attempt)
+    {
+        const unsigned int before = snapshotGeneration.load (std::memory_order_acquire);
+
+        if ((before & 1u) != 0u)
+            continue;
+
+        const int index = snapshotIndex.load (std::memory_order_acquire);
+
+        dest = snapshotBuffers[index];
+
+        if (snapshotGeneration.load (std::memory_order_acquire) == before)
+            return;
+    }
 }
 
 void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
@@ -433,4 +566,8 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
             stereoOut.clear (ch, maxBlock, numSamples - maxBlock);
 
     sampleClock += numSamples;
+
+    // Erst nach dem Fortschreiben der Uhr: der Snapshot soll den Zustand am
+    // Blockende zeigen, und genau bis dorthin reicht die Trajektorie.
+    publishSnapshot (medium);
 }

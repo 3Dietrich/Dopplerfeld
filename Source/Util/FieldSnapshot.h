@@ -34,6 +34,14 @@ struct FieldSnapshot
     // gestauchten Fronten vorne, bei Überschall bildet die Einhüllende den
     // Mach-Kegel von selbst (Plan 3.12).
     std::array<double, maxWavefronts> wavefrontEmitTimes {};
+
+    // Quellposition M(t_k) zur jeweiligen Emissionszeit, aus der Trajektorie
+    // geholt. Ohne sie müssten alle Kreise um die AKTUELLE Quellposition
+    // gezeichnet werden - dann fehlt genau der Versatz zwischen den Fronten,
+    // aus dem die gestauchte Vorderseite und bei Überschall die Einhüllende
+    // des Mach-Kegels überhaupt erst entstehen.
+    std::array<Vec3, maxWavefronts>   wavefrontPositions {};
+
     int    wavefrontCount = 0;
     double now = 0.0;
 

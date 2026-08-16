@@ -157,14 +157,10 @@ void FieldComponent::drawGrid (juce::Graphics& g) const
 
 void FieldComponent::drawWavefronts (juce::Graphics& g) const
 {
-    // Vereinfachung (H11): der Snapshot traegt bislang nur die AKTUELLE
-    // Quellposition, keine Positions-Historie pro Emissionszeit (siehe
-    // FieldSnapshot.h). Als Naeherung zeichnen wir die Kreise deshalb um die
-    // jetzige sourcePos statt um das echte M(t_k) - bei bewegter Quelle stimmt
-    // das nur fuer kleine (now - t_k) genau. TODO H13, sobald
-    // DopplerEngine::fillSnapshot echte Positionen pro Emissionszeit liefert:
-    // hier den passenden Punkt aus dieser Historie statt sourcePos einsetzen.
-    const auto centrePx = worldToScreen (snapshot.sourcePos);
+    // Jede Front sitzt an der Quellposition zum EIGENEN Emissionszeitpunkt
+    // M(t_k) (FieldSnapshot::wavefrontPositions), nicht an der aktuellen -
+    // erst dieser Versatz erzeugt die vorne gestauchten Fronten und bei
+    // Ueberschall die Einhuellende, die den Mach-Kegel bildet (Plan 3.12).
     const float pxPerM = pixelsPerMetre();
 
     for (int i = 0; i < snapshot.wavefrontCount; ++i)
@@ -177,6 +173,8 @@ void FieldComponent::drawWavefronts (juce::Graphics& g) const
         const float radiusPx = (float) (radiusM * pxPerM);
         if (radiusPx <= 0.5f || radiusPx > 4000.0f) // 4000px: grosszuegige Deckelung gegen Ausreisser, kein fachliches Limit
             continue;
+
+        const auto centrePx = worldToScreen (snapshot.wavefrontPositions[(size_t) i]);
 
         // Aeltere Fronten sind weiter aussen und blasser - macht die
         // Ausbreitungsrichtung sichtbar, ohne Pfeile zeichnen zu muessen.
