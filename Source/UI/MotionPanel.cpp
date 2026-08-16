@@ -64,6 +64,11 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     playButton.onClick = [this] { if (onPlayClicked != nullptr) onPlayClicked(); };
 }
 
+void MotionPanel::setPlaying (bool isPlaying)
+{
+    playButton.setButtonText (isPlaying ? "Stop" : "Play");
+}
+
 void MotionPanel::resized()
 {
     constexpr int knobW = 84;

@@ -86,6 +86,7 @@ public:
     // ausschließlich dem Audiothread.
     void toggleRecording() { recordToggleRequest.store (true); }
     void triggerPlayback() { playTriggerRequest.store (true); }
+    void stopPlayback()    { stopTriggerRequest.store (true); }
 
     bool isRecording() const { return recordingActive.load(); }
     bool isPlayingMotion() const { return playbackActive.load(); }
@@ -261,6 +262,7 @@ private:
 
     std::atomic<bool> recordToggleRequest { false };
     std::atomic<bool> playTriggerRequest  { false };
+    std::atomic<bool> stopTriggerRequest  { false };
     std::atomic<bool> sourceSwitchRequest { false };
 
     // Audiothread -> Message-Thread, nur zur Anzeige.

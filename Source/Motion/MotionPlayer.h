@@ -30,6 +30,13 @@ public:
     void setInterp (Interp interpIn) { interp = interpIn; }
 
     void trigger (double now);
+
+    // Bricht eine laufende Wiedergabe sofort ab (Plan-Lücke: bisher lief
+    // Play nur bis zum Clip-Ende oder Loop-Endlos-Betrieb ohne Ausstieg).
+    // Springt NICHT auf Frame 0 zurück - ein erneutes trigger() startet ohne
+    // hängengebliebene Kopfposition sauber von vorn.
+    void stop() { playing = false; }
+
     bool isPlaying() const { return playing; }
 
     // Rückt die interne Wiedergabeposition um dt*speed vor und liest die

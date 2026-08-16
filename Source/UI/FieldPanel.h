@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Params.h"
+#include "RoundedSlider.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -22,7 +23,7 @@ private:
 
     struct Knob
     {
-        juce::Slider slider;
+        RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
     };

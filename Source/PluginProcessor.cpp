@@ -421,6 +421,9 @@ void DopplerfeldProcessor::handlePendingRequests()
     if (playTriggerRequest.exchange (false))
         motionPlayer.trigger (dopplerEngine.currentTime());
 
+    if (stopTriggerRequest.exchange (false))
+        motionPlayer.stop();
+
     recordingActive.store (motionRecorder.isRecording());
     playbackActive.store (motionPlayer.isPlaying());
     recordedFrames.store (motionRecorder.numFrames());

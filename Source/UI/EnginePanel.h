@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Params.h"
+#include "RoundedSlider.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
 
@@ -24,7 +25,7 @@ private:
     // granular/Source/PluginEditor.h `gainAttachment`).
     struct Knob
     {
-        juce::Slider slider;
+        RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
     };

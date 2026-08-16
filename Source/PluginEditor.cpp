@@ -60,7 +60,13 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     };
 
     motionPanel.onRecordClicked = [this] { dopplerfeldProcessor.toggleRecording(); };
-    motionPanel.onPlayClicked   = [this] { dopplerfeldProcessor.triggerPlayback(); };
+    motionPanel.onPlayClicked   = [this]
+    {
+        if (dopplerfeldProcessor.isPlayingMotion())
+            dopplerfeldProcessor.stopPlayback();
+        else
+            dopplerfeldProcessor.triggerPlayback();
+    };
 
     sourceButton.onClick = [this]
     {
@@ -91,6 +97,7 @@ void DopplerfeldEditor::timerCallback()
 
     sourceButton.setButtonText (dopplerfeldProcessor.isUsingSampleSource() ? "Quelle: Sample"
                                                                            : "Quelle: Motor");
+    motionPanel.setPlaying (dopplerfeldProcessor.isPlayingMotion());
 
     // Statuszeile neu zeichnen, nicht das ganze Fenster - die Panels darüber
     // ändern sich nur bei Bedienung.

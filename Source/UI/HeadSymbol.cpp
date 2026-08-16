@@ -2,25 +2,29 @@
 
 namespace
 {
-    // Ohr als gebogener Strich (Vorlage-Skizze: ein Bogen, der von der
-    // Kopfkontur wegzeigt und leicht zurueckhoert wie ein Komma). side = +1
-    // oder -1 waehlt, auf welcher Seite der Blickrichtung das Ohr sitzt.
+    // Ohr als kleiner, nach vorne gekippter Haken direkt an der Kopfkontur.
+    // side = +1 oder -1 waehlt, auf welcher Seite der Blickrichtung das Ohr
+    // sitzt. Lokale Basis am Ansatzpunkt statt globaler Winkel: outward
+    // zeigt radial von der Kopfmitte weg, forward tangential in
+    // Blickrichtung (parallel zur Nase) - damit bleibt die Groesse des Ohrs
+    // unabhaengig vom Kopfradius klein und kontrollierbar, statt sich ueber
+    // einen grossen Kreisbogen bis zur Nase zu ziehen. Der Haken schwenkt
+    // von "radial nach aussen" auf "tangential nach vorne", die Spitze
+    // zeigt also zur Nase, nicht von ihr weg - genau umgekehrt zur
+    // fruaeheren, nach hinten weggeklappten Form.
     juce::Path buildEarPath (juce::Point<float> centre, float r, float noseAngle, float side)
     {
-        // ~99 Grad seitlich der Nase, nicht exakt 90 - in der Vorlage sitzen
-        // die Ohren leicht nach hinten versetzt, nicht auf der reinen Querachse.
-        const float baseAngle = noseAngle + side * (juce::MathConstants<float>::pi * 0.55f);
-        const juce::Point<float> baseDir { std::cos (baseAngle), std::sin (baseAngle) };
-        const float outAngle = baseAngle + side * 0.9f;
-        const juce::Point<float> outDir { std::cos (outAngle), std::sin (outAngle) };
+        const float sideAngle = noseAngle + side * (juce::MathConstants<float>::pi * 0.5f);
+        const juce::Point<float> outward { std::cos (sideAngle), std::sin (sideAngle) };
+        const juce::Point<float> forward { std::cos (noseAngle), std::sin (noseAngle) };
 
-        const auto start = centre + baseDir * (r * 0.85f);
-        const auto tip   = centre + baseDir * (r * 1.55f) + outDir * (r * 0.35f);
-        const auto hook  = centre + baseDir * (r * 1.15f) + outDir * (r * 0.85f);
+        const auto base = centre + outward * (r * 0.98f);
+        const auto ctrl = base + outward * (r * 0.30f) + forward * (r * 0.06f);
+        const auto tip  = base + outward * (r * 0.05f) + forward * (r * 0.30f);
 
         juce::Path p;
-        p.startNewSubPath (start);
-        p.quadraticTo (tip, hook);
+        p.startNewSubPath (base);
+        p.quadraticTo (ctrl, tip);
         return p;
     }
 }

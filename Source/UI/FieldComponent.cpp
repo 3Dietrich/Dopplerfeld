@@ -213,19 +213,15 @@ void FieldComponent::drawSource (juce::Graphics& g) const
     g.setColour (juce::Colours::yellow);
     g.fillEllipse (juce::Rectangle<float> (sourceRadiusPx * 2.0f, sourceRadiusPx * 2.0f).withCentre (centrePx));
 
-    // Schallwellen-Deko (Vorlage-Skizze "XY-Feld..."): ein paar konzentrische
-    // Boegen an M, rein symbolisch - die echten Wellenfronten zeichnet
-    // drawWavefronts() separat aus dem Snapshot.
-    g.setColour (juce::Colours::yellow.withAlpha (0.7f));
-    constexpr float centreAngle = -2.4f; // Radiant, feste Ausrichtung der Deko-Boegen (JUCE-Arc-Konvention: 0 = 12 Uhr, im Uhrzeigersinn)
-    constexpr float spread = 1.0f;
+    // Schallwellen-Deko: volle konzentrische Ringe um M, rein symbolisch -
+    // eine punktfoermige Quelle strahlt nach allen Seiten, nicht nur in eine
+    // Richtung (die echten Wellenfronten zeichnet drawWavefronts() separat
+    // aus dem Snapshot, mit der tatsaechlichen Emissionsgeometrie).
+    g.setColour (juce::Colours::yellow.withAlpha (0.55f));
     for (int ring = 1; ring <= 3; ++ring)
     {
         const float r = sourceRadiusPx + (float) ring * 5.0f;
-        juce::Path arc;
-        arc.addArc (centrePx.x - r, centrePx.y - r, r * 2.0f, r * 2.0f,
-                    centreAngle - spread, centreAngle + spread, true);
-        g.strokePath (arc, juce::PathStrokeType (1.4f));
+        g.drawEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (centrePx), 1.4f);
     }
 }
 

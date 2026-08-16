@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Params.h"
+#include "RoundedSlider.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -16,8 +17,13 @@ public:
 
     void resized() override;
 
+    // Beschriftung des Play-Knopfs auf "Play"/"Stop" umschalten - der Aufrufer
+    // kennt den tatsaechlichen Wiedergabezustand (MotionPlayer gehoert dem
+    // Audiothread), hier wird nur die Anzeige nachgefuehrt.
+    void setPlaying (bool isPlaying);
+
     std::function<void()> onRecordClicked;
-    std::function<void()> onPlayClicked;
+    std::function<void()> onPlayClicked;   // Aufrufer entscheidet: je nach Zustand trigger() oder stop()
 
 private:
     using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
@@ -26,7 +32,7 @@ private:
 
     struct Knob
     {
-        juce::Slider slider;
+        RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
     };
