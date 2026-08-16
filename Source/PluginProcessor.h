@@ -105,6 +105,13 @@ public:
     // hat länger gebraucht, als er Audiozeit lieferte - hörbar als Aussetzer.
     float cpuLoadPercent() const { return cpuLoad.load (std::memory_order_relaxed); }
 
+    // Aufschlüsselung (@dpa: "was zieht so stark?"): Quellrendern (Motor/
+    // Sample) getrennt von der Physik (DopplerEngine: Löser+Ausbreitung).
+    // Beide Anteile zusammen ergeben ungefähr cpuLoadPercent() (Rest ist
+    // Glättung/Ausgangsstufe, normalerweise vernachlässigbar).
+    float cpuLoadSourcePercent()  const { return cpuLoadSource.load (std::memory_order_relaxed); }
+    float cpuLoadPhysicsPercent() const { return cpuLoadPhysics.load (std::memory_order_relaxed); }
+
     // Lädt die Datei im Message-Thread (Pflicht, siehe SampleSource) und
     // schaltet bei Erfolg weich auf die Sample-Quelle um.
     bool loadSampleFile (const juce::File& file);
@@ -283,7 +290,9 @@ private:
     std::atomic<bool>  playbackActive  { false };
     std::atomic<float> outPeakL { 0.0f };
     std::atomic<float> outPeakR { 0.0f };
-    std::atomic<float> cpuLoad  { 0.0f };   // siehe cpuLoadPercent()
+    std::atomic<float> cpuLoad        { 0.0f };   // siehe cpuLoadPercent()
+    std::atomic<float> cpuLoadSource  { 0.0f };   // siehe cpuLoadSourcePercent()
+    std::atomic<float> cpuLoadPhysics { 0.0f };   // siehe cpuLoadPhysicsPercent()
     std::atomic<int>  recordedFrames  { 0 };
 
     std::atomic<bool> useSampleSource { false };

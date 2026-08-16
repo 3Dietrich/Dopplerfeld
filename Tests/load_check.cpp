@@ -207,6 +207,43 @@ int main()
     }
 
     //==================================================================
+    // 1b. Realistisch nahe Mach 1: kein extremer Testparameter, sondern das,
+    //     was ein normaler Maus-Drag mit Default-Tau (50ms) auf einem
+    //     kleinen Feld auslösen kann (@dpa-Diagnose: "näher an der
+    //     Schallgeschwindigkeit" tritt CPU>100% schon im normalen Gebrauch
+    //     auf, nicht nur bei künstlichem Mach-3-Test). Quelle springt alle
+    //     150ms zwischen zwei 40m entfernten Punkten - der Spring-Smoother
+    //     erreicht dabei Geschwindigkeiten im Bereich der Schallgeschw.,
+    //     DAUERHAFT statt als einzelner Ausreißer (das ist der Fall, den
+    //     der Stride-Fix NICHT adressiert, siehe Commit "Stride-Hangover").
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres, 150.0f);
+        setParam (proc, Params::smootherType, 1.0f);   // CriticallyDampedSpring, Default
+        setParam (proc, Params::smootherTau, 0.05f);   // Default aus Params.cpp
+        setParam (proc, Params::lisX, 0.5f);
+        setParam (proc, Params::lisY, 0.5f);
+        setParam (proc, Params::srcX, 0.1f);
+        setParam (proc, Params::srcY, 0.5f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        Stats stats;
+        render (proc, buffer, 8.0, stats, [&proc] (double t)
+        {
+            const bool half = std::fmod (t, 0.3) < 0.15;
+            setParam (proc, Params::srcX, half ? 0.1f : 0.9f);   // 40m Sprung alle 150ms
+        });
+
+        stats.report ("Realistisch nahe Mach1");
+        std::printf ("%-22s Physik %.1f%% / Quelle %.1f%% (vom Budget, letzter Block)\n",
+                     "", (double) proc.cpuLoadPhysicsPercent(), (double) proc.cpuLoadSourcePercent());
+    }
+
+    //==================================================================
     // 2. Extremfall: größtes Feld, Überschallflug quer hindurch, Umkehr,
     //    Feldgrößenwechsel.
     {

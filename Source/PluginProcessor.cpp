@@ -563,13 +563,21 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
     const int chunkSize = std::min (motionChunkSamples, monoScratch.getNumSamples());
 
+    // Aufschlüsselung fürs CPU-Feedback (@dpa: "was zieht so stark?"):
+    // Quellrendern (Motor/Sample) getrennt von der Physik (DopplerEngine:
+    // Löser + Ausbreitung) gemessen, damit die Statuszeile zeigt, welcher
+    // der beiden Blöcke gerade den Löwenanteil braucht.
+    double sourceTicks = 0.0, physicsTicks = 0.0;
+
     for (int start = 0; start < numSamples; )
     {
         const int n = std::min (chunkSize, numSamples - start);
 
         advanceMotion (n);
 
+        const auto t0 = juce::Time::getHighResolutionTicks();
         sourceHolder.renderMono (monoScratch.getWritePointer (0), n);
+        const auto t1 = juce::Time::getHighResolutionTicks();
 
         dopplerEngine.setSourceTarget (smoothedSourcePos);
         dopplerEngine.setListener (listenerState);
@@ -579,6 +587,10 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
                                         buffer.getNumChannels(), start, n);
 
         dopplerEngine.process (chunk, monoScratch.getReadPointer (0), medium);
+        const auto t2 = juce::Time::getHighResolutionTicks();
+
+        sourceTicks  += (double) (t1 - t0);
+        physicsTicks += (double) (t2 - t1);
 
         start += n;
     }
@@ -594,6 +606,17 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     // springt block für block stark, das wäre als Zahl kaum ablesbar.
     const float prev = cpuLoad.load (std::memory_order_relaxed);
     cpuLoad.store (prev + 0.1f * ((float) loadPercent - prev), std::memory_order_relaxed);
+
+    // Aufschlüsselung genauso geglättet, jeweils relativ zum selben Budget.
+    const double sourceSeconds  = juce::Time::highResolutionTicksToSeconds ((juce::int64) sourceTicks);
+    const double physicsSeconds = juce::Time::highResolutionTicksToSeconds ((juce::int64) physicsTicks);
+    const float  sourcePercent  = (float) (100.0 * sourceSeconds  / std::max (1.0e-9, budgetSeconds));
+    const float  physicsPercent = (float) (100.0 * physicsSeconds / std::max (1.0e-9, budgetSeconds));
+
+    const float prevSrc = cpuLoadSource.load (std::memory_order_relaxed);
+    cpuLoadSource.store (prevSrc + 0.1f * (sourcePercent - prevSrc), std::memory_order_relaxed);
+    const float prevPhys = cpuLoadPhysics.load (std::memory_order_relaxed);
+    cpuLoadPhysics.store (prevPhys + 0.1f * (physicsPercent - prevPhys), std::memory_order_relaxed);
 }
 
 //======================================================================

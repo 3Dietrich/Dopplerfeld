@@ -133,7 +133,9 @@ juce::String DopplerfeldEditor::statusText() const
     // siehe cpuLoadPercent()). Über 100% färbt paint() die ganze Statuszeile
     // rot (siehe dort) - reiner Text reicht hier, kein eigener Meter nötig.
     const float cpu = dopplerfeldProcessor.cpuLoadPercent();
-    text << "      CPU " << juce::String (cpu, 0) << " %";
+    text << "      CPU " << juce::String (cpu, 0) << " %"
+         << " (Physik " << juce::String (dopplerfeldProcessor.cpuLoadPhysicsPercent(), 0) << "%"
+         << " / Quelle " << juce::String (dopplerfeldProcessor.cpuLoadSourcePercent(), 0) << "%)";
 
     for (int i = 0; i < snapshot.pathCount; ++i)
     {
