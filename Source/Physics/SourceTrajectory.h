@@ -47,6 +47,12 @@ public:
     // wenn t außerhalb von [oldestTime(), newestTime()] liegt.
     bool sampleAt (double t, Vec3& outPos, Vec3& outVel) const;
 
+    // Wie sampleAt(), liefert aber nur die Position. Das Residuum des Lösers
+    // (F = c*(t_h - t) - |L - M(t)|) braucht die Geschwindigkeit nicht, und
+    // diese Auswertung ist die mit Abstand häufigste Operation im Audiothread
+    // - hier fällt eine ganze Catmull-Rom-Interpolation pro Aufruf weg.
+    bool samplePositionAt (double t, Vec3& outPos) const;
+
     // O(1) über eine intern gepflegte monotone Deque (Standardalgorithmus
     // "sliding window maximum"), gepflegt beim Schreiben in push()/reset().
     // Geht von einem an "jetzt" verankerten Fenster aus, wie es der Löser
@@ -87,6 +93,10 @@ private:
     void pushDistanceSample (double t, double distance);
     int  ringSlot (std::int64_t idx) const;
     const TrajectorySample& sampleAtClampedIndex (std::int64_t idx) const;
+
+    // Größter Index k mit t(k) <= t. Rechnet den Index aus dem gleichförmigen
+    // Raster direkt aus, statt ihn zu suchen (siehe .cpp).
+    std::int64_t indexBefore (double t) const;
 
     std::vector<TrajectorySample> ring;
     int    capacity = 0;

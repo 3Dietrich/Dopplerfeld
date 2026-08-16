@@ -44,10 +44,15 @@ struct Residual
             v = Vec3{};
     }
 
+    // Die Geschwindigkeit geht in F nicht ein, deshalb hier die
+    // positionsonly-Abtastung: das ist der heißeste Pfad des ganzen Lösers.
     double operator() (double t) const
     {
-        Vec3 p, v;
-        sample (t, p, v);
+        const double tc = std::min (std::max (t, tOldest), tNewest);
+
+        Vec3 p {};
+        traj.samplePositionAt (tc, p);
+
         return c * (t_h - t) - (listener - p).length();
     }
 };

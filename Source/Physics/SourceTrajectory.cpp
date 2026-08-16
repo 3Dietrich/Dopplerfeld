@@ -126,6 +126,60 @@ const TrajectorySample& SourceTrajectory::sampleAtClampedIndex (std::int64_t idx
     return ring[(size_t) ringSlot (idx)];
 }
 
+std::int64_t SourceTrajectory::indexBefore (double t) const
+{
+    const std::int64_t lower = writeIndex - capacity;
+    const std::int64_t upper = writeIndex - 1;
+
+    // Das Raster ist gleichförmig: fillConstant() legt es so an, und push()
+    // bekommt seine Zeiten aus einem ganzzahligen Rasterzähler (siehe
+    // DopplerEngine::pushTrajectory). Der Index lässt sich deshalb direkt
+    // ausrechnen, statt ihn über den ganzen Puffer zu suchen - bei 42 s
+    // Historie waren das rund 16 Binärsuchschritte, jeder mit einer
+    // Ganzzahldivision im Ringzugriff und einem Sprung an eine andere Stelle
+    // des Megabyte-Puffers. Das ist die häufigste Einzeloperation des Lösers.
+    const double tLower = ring[(size_t) ringSlot (lower)].t;
+
+    std::int64_t k = lower + (std::int64_t) std::floor ((t - tLower) / gridDt);
+    k = std::min (std::max (k, lower), upper);
+
+    // Korrektur für Rundung am Rasterpunkt - und Sicherheitsnetz, falls doch
+    // einmal ungleichmäßig geschrieben wurde. Zwei Schritte reichen für den
+    // gleichförmigen Fall; wer mehr braucht, bekommt die Binärsuche.
+    int guard = 0;
+
+    while (k > lower && ring[(size_t) ringSlot (k)].t > t && guard < 2)
+    {
+        --k;
+        ++guard;
+    }
+
+    while (k < upper && ring[(size_t) ringSlot (k + 1)].t <= t && guard < 2)
+    {
+        ++k;
+        ++guard;
+    }
+
+    if (guard >= 2)
+    {
+        std::int64_t lo = lower, hi = upper;
+
+        while (lo < hi)
+        {
+            const std::int64_t mid = lo + (hi - lo + 1) / 2;
+
+            if (ring[(size_t) ringSlot (mid)].t <= t)
+                lo = mid;
+            else
+                hi = mid - 1;
+        }
+
+        k = lo;
+    }
+
+    return k;
+}
+
 bool SourceTrajectory::sampleAt (double t, Vec3& outPos, Vec3& outVel) const
 {
     if (writeIndex < capacity)
@@ -134,22 +188,8 @@ bool SourceTrajectory::sampleAt (double t, Vec3& outPos, Vec3& outVel) const
     if (t < oldestTime() || t > newestTime())
         return false;
 
-    const std::int64_t lower = writeIndex - capacity;
     const std::int64_t upper = writeIndex - 1;
-
-    // Binärsuche über den fortlaufenden Index: die Zeit wächst mit dem
-    // Index monoton, solange push() nie mit fallender Zeit aufgerufen wird.
-    std::int64_t lo = lower, hi = upper;
-    while (lo < hi)
-    {
-        const std::int64_t mid = lo + (hi - lo + 1) / 2;
-        if (ring[(size_t) ringSlot (mid)].t <= t)
-            lo = mid;
-        else
-            hi = mid - 1;
-    }
-
-    const std::int64_t k = lo; // größter Index mit t(k) <= t
+    const std::int64_t k     = indexBefore (t);
 
     if (k >= upper)
     {
@@ -169,6 +209,35 @@ bool SourceTrajectory::sampleAt (double t, Vec3& outPos, Vec3& outVel) const
 
     outPos = catmullRom (s0.p, s1.p, s2.p, s3.p, frac);
     outVel = catmullRom (s0.v, s1.v, s2.v, s3.v, frac);
+    return true;
+}
+
+bool SourceTrajectory::samplePositionAt (double t, Vec3& outPos) const
+{
+    if (writeIndex < capacity)
+        return false;
+
+    if (t < oldestTime() || t > newestTime())
+        return false;
+
+    const std::int64_t upper = writeIndex - 1;
+    const std::int64_t k     = indexBefore (t);
+
+    if (k >= upper)
+    {
+        outPos = ring[(size_t) ringSlot (upper)].p;
+        return true;
+    }
+
+    const TrajectorySample& s0 = sampleAtClampedIndex (k - 1);
+    const TrajectorySample& s1 = sampleAtClampedIndex (k);
+    const TrajectorySample& s2 = sampleAtClampedIndex (k + 1);
+    const TrajectorySample& s3 = sampleAtClampedIndex (k + 2);
+
+    const double span = s2.t - s1.t;
+    const double frac = (span > 1.0e-12) ? (t - s1.t) / span : 0.0;
+
+    outPos = catmullRom (s0.p, s1.p, s2.p, s3.p, frac);
     return true;
 }
 
