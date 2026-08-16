@@ -350,6 +350,17 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
                 b.lpZ += coeff * (x * amp - b.lpZ);
 
+                // Ein einzelner nicht-endlicher Wert (Rand-/Sonderfall
+                // irgendwo in der Kette) würde diesen One-Pole sonst für
+                // immer vergiften - "+= coeff*(... - NaN)" bleibt NaN, egal
+                // was als Nächstes hereinkommt. Die Ausgangsstufe filtert nur
+                // noch das einzelne Sample, nicht diesen Zustand - ohne diese
+                // Selbstheilung bliebe der Zweig bis zum Neuladen des Plugins
+                // stumm (genau das beobachtete Verhalten: Ton weg, Neustart
+                // hilft).
+                if (! std::isfinite (b.lpZ))
+                    b.lpZ = 0.0;
+
                 // Envelope nach dem Filter: so ist der Zweig bei env = 0 exakt
                 // still und kann sofort freigegeben werden, ohne dass ein
                 // abgeschnittener Filterschwanz knackt.
