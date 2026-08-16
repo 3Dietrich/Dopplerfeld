@@ -113,33 +113,57 @@ vorne, Quellsymbol strahlte nur einseitig), fehlender Stop für die Bewegungs-
 Wiedergabe, Regleranzeige rundet jetzt dynamisch statt fest, deutsche
 Tooltips für alle Regler (abschaltbar).
 
+**Update (späterer Hördurchgang, selber Tag):** Der Sound-Ausfall ist mit
+hoher Wahrscheinlichkeit **CPU-Überlastung**, kein reiner Numerik-Edge-Case -
+gemessen und bestätigt (siehe Commit "CPU-Aufschlüsselung..."): schon ein
+Positionssprung von 40m alle 150ms bei Feldgröße 150m und Standard-Tau
+(50ms) - also realistischer Gebrauch, kein künstlicher Extremtest - erreicht
+dauerhaft nahe/über Mach 1 und treibt den Audiothread auf ~290% des
+Echtzeit-Budgets, davon 276% im Löser (`PropagationPath`/
+`RetardedTimeSolver`), nur 4% in der Klangquelle. Zerstückelter Ton und
+Totalausfall bei hoher Geschwindigkeit sind damit als Überlastungs-Symptom
+erklärt; @dpa bestätigt: Buffergrößen-Wechsel im Standalone bringt den Ton
+kurzzeitig zurück (klassisches Symptom für einen Audio-Geräte-Recovery nach
+Dropout). Der Fokusverlust-Trigger ist damit vermutlich einfach "noch etwas
+weniger CPU-Zeit für einen ohnehin knappen Prozess", nicht separat untersucht.
+
+Ein erster Fix (`SourceTrajectory::recentMaxSpeed`, siehe Commit "Stride-
+Hangover-Fix") behebt einen TEIL-Mechanismus (ein kurzer Ausreißer hielt den
+Löser bisher bis zu 40s im teuren Modus), hilft aber NICHT bei dauerhaft
+nahe/über Mach 1 gehaltener Bewegung - dort bleibt der Vollfenster-Scan im
+Löser selbst (Plan 2.10, bei Stride 8) grundsätzlich teuer, unabhängig davon
+wie lange er anhält.
+
 **Offen / bekannt kaputt:**
-- **Dauerhafter Sound-Ausfall**, auslösbar durch Feld-Resize UND durch
-  Fenster-Fokusverlust (z.B. Alt-Tab zu einer anderen App) - nur Neustart des
-  Plugins hilft. Ein Fix (isfinite-Guard auf `PropagationPath::Branch::lpZ`,
-  siehe Commit "Fix: dauerhafter Sound-Ausfall...") hat das Problem NICHT
-  vollständig gelöst - @dpa berichtet es danach sogar früher/reproduzierbarer.
-  Der Fokusverlust-Auslöser spricht dagegen, dass es ein reiner Physik-
-  Edge-Case ist; im Projekt selbst gibt es keinen fokus-abhängigen Code
-  (geprüft per grep). Vermutung: eher ein Threading-/Zustands-Problem als
-  reine Numerik. **Nächster Schritt laut @dpa:** Debug-/Aufnahme-Werkzeug
-  bauen (WAV-Export + Zustands-Log), damit sich das mit echten Daten statt
-  Vermutungen eingrenzen lässt, statt weiter blind im Code zu suchen.
+- **Löser-Performance (nächster großer Brocken, @dpa: "frischer/Opus-
+  Anlauf", ähnlich H4-Sorgfalt nötig).** Ziel: der Vollfenster-Scan-Algorithmus
+  in `RetardedTimeSolver::solve()` selbst muss günstiger werden (nicht nur
+  seltener aufgerufen), ohne die per `solver_check` verifizierte Korrektheit
+  zu verlieren (inkl. des physikalisch echten Falls "verspäteter Boom aus
+  großer Distanz", der einen Grund für das Vollfenster liefert - siehe
+  Kommentar bei `recentMaxSpeed()` in SourceTrajectory.h für die Falle, die
+  hier schon einmal drohte). Diagnose-Werkzeug dafür: neues load_check-
+  Szenario "Realistisch nahe Mach1" (Tests/load_check.cpp) reproduziert das
+  reale Problem offline, mit CPU-Aufschlüsselung (`cpuLoadPhysicsPercent()`/
+  `cpuLoadSourcePercent()` in PluginProcessor) als Fortschrittsmaß.
 - Motor-Klangfarbe verändert sich manchmal nach schnellem Maus-Drag,
   bleibt dann dauerhaft anders (unabhängig vom Doppler-Effekt selbst) -
-  noch nicht untersucht.
+  noch nicht untersucht. Könnte mit derselben CPU-Überlastung zusammenhängen
+  (Glitch in der Motor-Renderkette unter Zeitdruck?) - ungeprüft.
 - Überschall-Boom klingt laut @dpa noch nicht "richtig" (zu leise/kein
-  hörbarer Doppelschlag) - Ursache noch nicht untersucht, könnte an
-  `boomLimitDb`-Default oder an einer noch nicht geprüften Geometrieabhängig-
-  keit (waagerechte vs. andere Vorbeiflüge) liegen. Mach-Kegel-Visualisierung
-  im Feld ist ein offener Wunsch (aktuell nur Wellenfront-Kreise, keine
-  Kegel-Tangenten/Einhüllende explizit gezeichnet).
+  hörbarer Doppelschlag), auch bei waagerechten Vorbeiflügen prüfen - Ursache
+  noch nicht untersucht, könnte an `boomLimitDb`-Default liegen oder simpel
+  daran, dass die Löser-Überlastung die Boom-Phase selbst hörbar verzerrt.
+  Mach-Kegel-Visualisierung im Feld ist ein offener Wunsch (aktuell nur
+  Wellenfront-Kreise, keine Kegel-Tangenten/Einhüllende explizit gezeichnet).
 - Aufnahme/Debug-Export/Snapshots (wie im Schwesterprojekt `werkbank`) sind
-  gewünscht, aber noch nicht gebaut - siehe Punkt oben, hat jetzt Priorität
-  auch als Diagnosewerkzeug für den Sound-Ausfall-Bug.
-- Levelmeter neben Output Gain (-6dB-Marke, Clip-Anzeige ~500ms Hold) ist
-  angefragt, Umsetzungsstand siehe `git log` (ggf. nach diesem Dokument schon
-  erledigt - hier nicht nachpflegen, das übernimmt `git log`).
+  gewünscht, aber noch nicht gebaut - zurückgestellt, nachdem die CPU-Spur
+  sich als ergiebiger erwies. Snapshot-Speicherung ist auch im Standalone
+  möglich (kein Host nötig, JUCE-Apps dürfen ins Application-Support-
+  Verzeichnis schreiben), nur nicht automatisch wie die Host-Projektspeicherung.
+- Levelmeter (-6dB-Marke, Clip-Halt) und CPU-Echtzeit-Anzeige (Statuszeile,
+  rot über 100%, mit Physik/Quelle-Aufschlüsselung) sind bereits umgesetzt
+  (siehe `git log`).
 
 Chat-Verlauf mit der vollständigen Entstehungsgeschichte (inkl. aller
 Design-Entscheidungen aus dem Grill-Interview) liegt in der Claude-Code-
