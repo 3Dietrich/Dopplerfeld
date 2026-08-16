@@ -126,25 +126,30 @@ juce::String DopplerfeldEditor::statusText() const
 {
     juce::String text;
 
-    text << "M  x " << juce::String (snapshot.sourcePos.x, 1)
-         << " m   y " << juce::String (snapshot.sourcePos.y, 1) << " m";
+    // Feste Breite pro Zahl (printf-Padding), zusammen mit dem Monospace-Font
+    // in paint(): bei jedem Timer-Tick ändern sich diese Werte, ohne feste
+    // Breite verschiebt eine kürzer werdende Zahl (z.B. "9.3" -> "-9.3")
+    // allen nachfolgenden Text um ein wechselndes Stück - die ganze Zeile
+    // "wackelt". Mit fester Zeichenbreite bleiben Spalten stehen.
+    text << "M  x " << juce::String::formatted ("%7.1f", snapshot.sourcePos.x)
+         << " m   y " << juce::String::formatted ("%7.1f", snapshot.sourcePos.y) << " m";
 
     // @dpa-Feedback: CPU-Echtzeit-Anzeige (Wanduhrzeit/Audiozeit, geglättet -
     // siehe cpuLoadPercent()). Über 100% färbt paint() die ganze Statuszeile
     // rot (siehe dort) - reiner Text reicht hier, kein eigener Meter nötig.
     const float cpu = dopplerfeldProcessor.cpuLoadPercent();
-    text << "      CPU " << juce::String (cpu, 0) << " %"
-         << " (Physik " << juce::String (dopplerfeldProcessor.cpuLoadPhysicsPercent(), 0) << "%"
-         << " / Quelle " << juce::String (dopplerfeldProcessor.cpuLoadSourcePercent(), 0) << "%)";
+    text << "      CPU " << juce::String::formatted ("%4.0f", (double) cpu) << " %"
+         << " (Physik " << juce::String::formatted ("%4.0f", (double) dopplerfeldProcessor.cpuLoadPhysicsPercent()) << "%"
+         << " / Quelle " << juce::String::formatted ("%4.0f", (double) dopplerfeldProcessor.cpuLoadSourcePercent()) << "%)";
 
     for (int i = 0; i < snapshot.pathCount; ++i)
     {
         const auto& info = snapshot.paths[(size_t) i];
 
         text << "      " << (info.ear == 0 ? "L" : "R")
-             << " " << juce::String (info.delaySeconds * 1000.0, 1) << " ms"
-             << "  M_r " << juce::String (info.machRadial, 2)
-             << "  Zweige " << info.activeBranches;
+             << " " << juce::String::formatted ("%7.1f", info.delaySeconds * 1000.0) << " ms"
+             << "  M_r " << juce::String::formatted ("%5.2f", info.machRadial)
+             << "  Zweige " << juce::String::formatted ("%2d", info.activeBranches);
     }
 
     if (dopplerfeldProcessor.isRecording())
@@ -169,7 +174,10 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     const bool overBudget = dopplerfeldProcessor.cpuLoadPercent() > 100.0f;
     g.setColour (overBudget ? juce::Colours::orangered.withAlpha (0.85f)
                             : juce::Colours::white.withAlpha (0.6f));
-    g.setFont (12.0f);
+    // Monospace statt Proportionalschrift: nur bei fester Zeichenbreite pro
+    // Glyphe hält das Zahlen-Padding in statusText() die Spalten auch
+    // tatsaechlich stabil (siehe Kommentar dort).
+    g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain)));
     g.drawFittedText (statusText(),
                       margin, getHeight() - statusHeight, fieldWidth, statusHeight,
                       juce::Justification::topLeft, 2);
