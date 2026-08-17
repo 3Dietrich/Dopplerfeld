@@ -4,6 +4,7 @@
 //
 // exit 0 = alle Abnahmekriterien erfüllt, exit 1 = mindestens eines nicht.
 
+#include "Physics/PathTransform.h"
 #include "Physics/RetardedTimeSolver.h"
 
 #include <algorithm>
@@ -660,6 +661,114 @@ void testThrottledDiscovery()
     check (ratio < 0.75, "Drosselung spart messbar Loeserarbeit", buf);
 }
 
+// -------------------------------------------------------------- Test 7
+// Spiegelebenen (PathTransform). Reine Geometrie, aber genau die Geometrie,
+// auf der Boden- und Wandreflexion beruhen - ein Vorzeichenfehler hier wäre im
+// Klang nur als "irgendwie falscher Hall" hörbar und sonst nirgends messbar.
+void testMirrorPlanes()
+{
+    std::printf ("\nSpiegelebenen (Boden, Wand, beliebige Lage)\n");
+
+    char buf[256];
+
+    // 1. Der Boden muss weiterhin genau z umklappen.
+    {
+        const PathTransform ground = groundMirrorTransform();
+        const Vec3 p { 3.0, -7.0, 1.75 };
+        const Vec3 q = applyPathTransform (ground, p);
+        const Vec3 v = applyPathTransformVelocity (ground, Vec3 { 1.0, 2.0, 3.0 });
+
+        const double err = std::abs (q.x - 3.0) + std::abs (q.y + 7.0) + std::abs (q.z + 1.75)
+                         + std::abs (v.x - 1.0) + std::abs (v.y - 2.0) + std::abs (v.z + 3.0);
+
+        std::snprintf (buf, sizeof (buf), "Fehler %.3e", err);
+        check (err < 1.0e-12, "Boden klappt z um, x/y bleiben", buf);
+    }
+
+    // 2. Eine senkrechte Wand, deren Linie entlang y läuft (Azimut 90°), steht
+    //    bei x = w und muss x -> 2w - x abbilden.
+    {
+        const double w = 12.5;
+        const PathTransform wall = wallMirrorTransform (Vec3 { w, 40.0, 0.0 },
+                                                        3.14159265358979323846 * 0.5, 0.0);
+        const Vec3 q = applyPathTransform (wall, Vec3 { 2.0, -3.0, 1.75 });
+
+        const double err = std::abs (q.x - (2.0 * w - 2.0)) + std::abs (q.y + 3.0)
+                         + std::abs (q.z - 1.75);
+
+        std::snprintf (buf, sizeof (buf), "(%.3f, %.3f, %.3f), Fehler %.3e", q.x, q.y, q.z, err);
+        check (err < 1.0e-12, "Wand bei x = w bildet x auf 2w - x ab", buf);
+    }
+
+    // 3. Grenzfall: eine um 90° gekippte Wand mit Fußpunkt auf z = 0 IST die
+    //    Bodenebene. Trifft die allgemeine Formel diesen Fall nicht, stimmt die
+    //    Herleitung der Normalen nicht.
+    {
+        const PathTransform tilted = wallMirrorTransform (Vec3 { 5.0, -2.0, 0.0 }, 0.7,
+                                                          3.14159265358979323846 * 0.5);
+        const Vec3 p { 4.0, 9.0, 2.5 };
+        const Vec3 a = applyPathTransform (tilted, p);
+        const Vec3 b = applyPathTransform (groundMirrorTransform(), p);
+
+        const double err = std::abs (a.x - b.x) + std::abs (a.y - b.y) + std::abs (a.z - b.z);
+
+        std::snprintf (buf, sizeof (buf), "Fehler %.3e", err);
+        check (err < 1.0e-12, "um 90 Grad gekippte Wand == Bodenebene", buf);
+    }
+
+    // 4. Die tragende Eigenschaft der Methode: die Spiegelung ist eine
+    //    Isometrie, deshalb ist es gleichgültig, ob Empfänger oder Quelle
+    //    gespiegelt wird. Genau darauf beruht, dass alle Pfade dieselbe
+    //    Trajektorie lesen dürfen (siehe PathTransform.h).
+    {
+        const PathTransform t = wallMirrorTransform (Vec3 { -3.0, 11.0, 0.0 }, 1.1, 0.35);
+
+        double worst = 0.0;
+
+        for (int i = 0; i < 40; ++i)
+        {
+            const double u = (double) i;
+
+            const Vec3 L { 20.0 + u, -5.0 + 0.3 * u, 1.75 };
+            const Vec3 M { -8.0 + 0.7 * u, 14.0 - 0.2 * u, 3.0 + 0.1 * u };
+
+            const double lhs = (applyPathTransform (t, L) - M).length();
+            const double rhs = (L - applyPathTransform (t, M)).length();
+
+            worst = std::max (worst, std::abs (lhs - rhs));
+        }
+
+        std::snprintf (buf, sizeof (buf), "max |dR| = %.3e m", worst);
+        check (worst < 1.0e-9, "Empfaenger spiegeln == Quelle spiegeln", buf);
+    }
+
+    // 5. Zweimal gespiegelt ist wieder der Ausgangspunkt - sonst wäre die
+    //    Normale nicht normiert oder der Ebenenabstand falsch gesetzt.
+    {
+        const PathTransform t = wallMirrorTransform (Vec3 { 7.0, 3.0, 0.0 }, -0.4, 0.9);
+        const Vec3 p { 1.0, 2.0, 3.0 };
+        const Vec3 q = applyPathTransform (t, applyPathTransform (t, p));
+
+        const double err = (q - p).length();
+
+        std::snprintf (buf, sizeof (buf), "|dp| = %.3e m", err);
+        check (err < 1.0e-12, "zweimal gespiegelt ist die Identitaet", buf);
+    }
+
+    // 6. Ohne Normale (Direktschall) darf nichts passieren.
+    {
+        const PathTransform none;
+        const Vec3 p { 1.0, -2.0, 3.0 };
+        const Vec3 q = applyPathTransform (none, p);
+        const Vec3 v = applyPathTransformVelocity (none, p);
+
+        const double err = (q - p).length() + (v - p).length();
+
+        std::snprintf (buf, sizeof (buf), "Fehler %.3e", err);
+        check (err < 1.0e-15, "Direktschall bleibt die Identitaet", buf);
+    }
+}
+
 } // namespace
 
 int main()
@@ -675,6 +784,7 @@ int main()
     testCircularNoDropouts();
     testMachConeArrival();
     testThrottledDiscovery();
+    testMirrorPlanes();
 
     std::printf ("\n");
 
