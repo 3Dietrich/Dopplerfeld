@@ -88,8 +88,9 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   über eine volle Kommandoqueue (bewusste Vereinfachung, siehe Kommentar
   dort).
 - **`DopplerfeldEditor`** (PluginEditor) - `FieldComponent` (700x400) links,
-  die `CollapsiblePanel` mit den `XyzPanel`s rechts in einem Viewport (Motor,
-  Sample, Bewegung, Feld/Physik/Ausgang, Reflexionen/Wände). 30-Hz-Timer holt
+  die `CollapsiblePanel` mit den `XyzPanel`s rechts in einem Viewport
+  (Motorsteuerung, Motor, Sample, Bewegung, Feld/Physik/Ausgang, Reflexionen/
+  Wände, Schwarm/Klone) - alle standardmäßig zugeklappt. 30-Hz-Timer holt
   `FieldSnapshot` ab, aktualisiert Statuszeile/Button-Texte.
 
 ## Parameter
@@ -145,6 +146,56 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 (z.B. `-Wfloat-equal` bei absichtlichen Identitätsvergleichen) werden lokal
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
+
+## Stand 2026-08-17 (Nacht: Cockpit-Tempo, Motorsteuerung, Audio In, Nachlauf)
+
+Vier UI-/Quellen-Features aus einer Runde, `solver_check`+`load_check` grün,
+warnungsfrei. Alles ungehört - reine Umsetzung, kein Hördurchgang dazu.
+
+- **Cockpit-Tempoanzeige im Feld** (`FieldComponent::drawSpeedReadout()`):
+  dieselbe Einheit wie der `speedUnitButton` (km/h/m/s/Mach), oben rechts im
+  schwarzen Feld, ~140x50px, Alpha-Gelb `#ffff0055`, kontrastarmer Rahmen
+  (Sanfte-Rahmen-Konvention statt eines hellen). Läuft in beiden Ansichten
+  (Draufsicht + Perspektive). Formel/Einheiten-Zuordnung sitzt jetzt EINMAL
+  in `FieldComponent::formatSpeed()` (statisch), die Statuszeile
+  (`PluginEditor::statusText()`) ruft dieselbe Funktion statt einer zweiten
+  Kopie des Switch.
+- **"Motorsteuerung" als eigenes Panel**: RPM und Imbalance aus "Motor"
+  herausgezogen (`Source/UI/EngineControlPanel`) - das sind die Regler, die
+  man live/oft anfasst, während der Rest von "Motor" (Harmonische,
+  Rauschband, Jitter) Klangdesign ist. Eigenes Panel statt Extra-Abschnitt,
+  damit es ohne "Motor" aufzuklappen erreichbar ist.
+- **Alle Panels starten zugeklappt** (`CollapsiblePanel::expanded`-Default auf
+  `false` gedreht) - vorher stand "Motor" (und zeitweise "Feld/Physik/
+  Ausgang") beim Öffnen aufgeklappt da.
+- **"Audio In" als dritte Quelle** neben Motor und Sample
+  (`Source/Sources/AudioInSource`). `SoundSource` ist PULL-basiert
+  (`renderMono()` liest nur), der Host liefert Audio aber PUSH-artig einmal
+  pro `processBlock()` - `pushBlock()` ist die Brücke, vom Processor VOR dem
+  bisherigen `buffer.clear()` gerufen (der Kommentar dort - "Instrument ohne
+  Eingang" - gilt jetzt nur noch für den AUSGANG). Dafür bekam der Prozessor
+  erstmals einen Eingangsbus (`BusesProperties().withInput(..., mono, true)`,
+  `isBusesLayoutSupported()` erlaubt mono ODER deaktiviert). Die alte
+  bool-Quellwahl (`useSampleSource`) wurde zu einem 3-wertigen
+  `SourceKind`-Enum (`selectSourceKind()`/`currentSourceKind()`) - eine
+  Fallunterscheidung (`sourceForKind()`) statt der Bool-Prüfung an zwei
+  Stellen dupliziert. **Einschränkung:** `IS_SYNTH TRUE` bleibt unverändert;
+  ob ein Host einem so deklarierten Plugin überhaupt einen Audio-Eingang
+  anbietet, ist formatabhängig (VST3/Standalone ja, manche AU-Instrument-
+  Hosts bieten dafür keine Eingangsroutingoption an) - ungeprüft, "wenn
+  möglich" war die Vorgabe.
+- **Nachlauf nach `mouseUp()`** (`FieldComponent`): Quelle/Hörer laufen mit
+  der zuletzt gezogenen (leicht geglätteten) Geschwindigkeit noch kurz weiter
+  und bremsen exponentiell ab (Halbwertszeit 0,15 s als Modellkonstante),
+  statt abrupt stehenzubleiben. Läuft über einen `juce::Timer` (60 Hz), der
+  denselben `onSourceDragged`/`onListenerDragged`-Rückkanal wie ein echter
+  Drag bedient - keine neue Verdrahtung nötig, aus Sicht des Processors sieht
+  ein Nachlauf wie eine sehr feine Automation aus. Nur Positions-Drags in der
+  Draufsicht (Quelle, Hörerposition); Perspektive und Kopfdrehung bleiben
+  außen vor. Ein neuer Griff (`mouseDown`) bricht einen laufenden Nachlauf
+  sofort ab. Zu-/abschaltbar über den Kopfzeilen-Knopf "Nachlauf"
+  (`FieldComponent::setCoastEnabled()`), Default an - reines
+  Bedienungsgefühl, kein Parameter, wie `tooltipsButton`.
 
 ## Stand 2026-08-17 (Abend: Slew-Regler ausgrauen, Fly Approach entkoppelt, Stille-Diagnose)
 
