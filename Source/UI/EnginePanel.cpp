@@ -28,10 +28,6 @@ void EnginePanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 
 EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
 {
-    setupKnob (rpmKnob, apvts, Params::rpm, "RPM",
-               "Drehzahl des Motors. Treibt die Grundfrequenz (f = RPM/60) und faerbt "
-               "Rauschband + Jitter mit ein - der zentrale Regler des Motorklangs.");
-
     const std::array<const char*, 4> ratioIds  { Params::harmRatio1,  Params::harmRatio2,  Params::harmRatio3,  Params::harmRatio4 };
     const std::array<const char*, 4> detuneIds { Params::harmDetune1, Params::harmDetune2, Params::harmDetune3, Params::harmDetune4 };
     const std::array<const char*, 4> trackIds  { Params::harmTrack1,  Params::harmTrack2,  Params::harmTrack3,  Params::harmTrack4 };
@@ -72,9 +68,6 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
                "starren, toten Tons.");
     setupKnob (jitterRateKnob,   apvts, Params::jitterRateHz, "Jitter Rate",
                "Geschwindigkeit der Jitter-Schwankung in Hz (3-15 Hz, langsames Wackeln).");
-    setupKnob (imbalanceKnob,    apvts, Params::imbalance,    "Imbalance",
-               "Zusaetzliche Amplitudenmodulation bei der halben Grundfrequenz - simuliert "
-               "den Zuendtakt eines Viertakters. 0 = aus.");
 }
 
 void EnginePanel::resized()
@@ -82,10 +75,6 @@ void EnginePanel::resized()
     constexpr int knobW = 84;
     constexpr int knobH = 82;
     auto area = getLocalBounds().reduced (8);
-
-    // RPM oben, allein - der zentrale Parameter des Motors.
-    layoutKnob (rpmKnob, area.removeFromTop (knobH).removeFromLeft (knobW));
-    area.removeFromTop (6);
 
     // 4 Harmonische als Spalten, je Spalte Ratio/Detune/Track/Level
     // untereinander (Plan 3.11: "pro Teilton" vier Werte).
@@ -110,9 +99,9 @@ void EnginePanel::resized()
     }
     area.removeFromTop (6);
 
-    // Jitter/Unwucht als letzte Reihe.
+    // Jitter als letzte Reihe.
     auto miscRow = area.removeFromTop (knobH);
-    for (auto* k : { &jitterAmountKnob, &jitterRateKnob, &imbalanceKnob })
+    for (auto* k : { &jitterAmountKnob, &jitterRateKnob })
     {
         layoutKnob (*k, miscRow.removeFromLeft (knobW));
         miscRow.removeFromLeft (4);

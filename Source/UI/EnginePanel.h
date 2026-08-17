@@ -35,10 +35,11 @@ private:
                      const juce::String& tooltip = {});
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
-    Knob rpmKnob;
-
     // Je Harmonische: Verhaeltnis, Verstimmung, Tracking, Pegel - siehe
     // Params.h "--- Motor ---" (harmRatioN/harmDetuneN/harmTrackN/harmLevelN).
+    // RPM und Imbalance sitzen NICHT hier, sondern im eigenen EngineControlPanel
+    // ("Motorsteuerung", @dpa-Feedback) - das sind die live/oft angefassten
+    // Regler, hier bleibt das Klang-DESIGN (Harmonische, Rauschband, Jitter).
     struct HarmonicKnobs
     {
         Knob ratio, detune, track, level;
@@ -46,7 +47,7 @@ private:
     std::array<HarmonicKnobs, 4> harmonics;
 
     Knob noiseFcLoKnob, noiseFcHiKnob, noiseGainLoKnob, noiseGainHiKnob, noiseQKnob;
-    Knob jitterAmountKnob, jitterRateKnob, imbalanceKnob;
+    Knob jitterAmountKnob, jitterRateKnob;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EnginePanel)
 };

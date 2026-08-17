@@ -53,11 +53,13 @@ target_sources(Dopplerfeld
         Source/Physics/RetardedTimeSolver.cpp
         Source/Sources/EngineGenerator.cpp
         Source/Sources/SampleSource.cpp
+        Source/Sources/AudioInSource.cpp
         Source/Physics/PropagationPath.cpp
         Source/Physics/DopplerEngine.cpp
         Source/UI/HeadSymbol.cpp
         Source/UI/FieldComponent.cpp
         Source/UI/CollapsiblePanel.cpp
+        Source/UI/EngineControlPanel.cpp
         Source/UI/EnginePanel.cpp
         Source/UI/SamplePanel.cpp
         Source/UI/MotionPanel.cpp
