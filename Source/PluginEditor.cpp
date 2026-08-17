@@ -153,15 +153,16 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     };
     addAndMakeVisible (speedUnitButton);
 
-    engineResetButton.setTooltip ("Audiomotor neu anlassen: setzt die Physik-Engine "
-                                  "zurueck (Trajektorie, Ausbreitungswege, deren Filter "
-                                  "und Einblendungen), falls nach einer CPU-Spitze kein "
-                                  "Ton mehr kommt. Keine Neuallokation, kein Aussetzer "
-                                  "durch den Reset selbst.");
-    engineResetButton.setButtonText ("Engine Reset");
+    engineResetButton.setTooltip ("Audiomotor neu anlassen: kompletter prepareToPlay()-"
+                                  "Durchlauf wie bei einem Wechsel der Audio-Puffergroesse "
+                                  "(Klangquelle, Ausbreitungswege und beide Positions-"
+                                  "glaetter neu aufgesetzt), falls nach einer CPU-Spitze "
+                                  "kein Ton mehr kommt. Haelt processBlock() kurz an, "
+                                  "kein Datenrennen mit dem Audiothread.");
+    engineResetButton.setButtonText ("Engine Restart");
     engineResetButton.setColour (juce::TextButton::buttonColourId,
                                  juce::Colours::orangered.withAlpha (0.35f));
-    engineResetButton.onClick = [this] { dopplerfeldProcessor.resetEngine(); };
+    engineResetButton.onClick = [this] { dopplerfeldProcessor.restartEngine(); };
     addAndMakeVisible (engineResetButton);
 
     tooltipsButton.setToggleState (true, juce::dontSendNotification);

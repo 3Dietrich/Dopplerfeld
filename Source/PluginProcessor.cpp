@@ -331,6 +331,27 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     outputGainLinear.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (pp.outputGain->load()));
 }
 
+void DopplerfeldProcessor::restartEngine()
+{
+    // @dpa-Feedback: ein blosses dopplerEngine.reset() half nicht
+    // zuverlaessig, verlaesslich half bisher nur ein Wechsel der Audio-
+    // Puffergroesse - der loest naemlich einen echten prepareToPlay()-Lauf
+    // aus. suspendProcessing() haelt processBlock() waehrenddessen an (kein
+    // Datenrennen mit dem Audiothread), genau wie es ein Host beim Aendern
+    // der Puffergroesse ohnehin tut - vom Nachrichten-Thread aus, weil
+    // prepareToPlay() allokieren darf (sein Vertrag), im Audiothread waere
+    // das verboten.
+    const double sr = getSampleRate();
+    const int    bs = getBlockSize();
+
+    if (sr <= 0.0 || bs <= 0)
+        return;   // noch nie prepareToPlay()-initialisiert, nichts zu tun
+
+    suspendProcessing (true);
+    prepareToPlay (sr, bs);
+    suspendProcessing (false);
+}
+
 bool DopplerfeldProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
@@ -596,15 +617,6 @@ void DopplerfeldProcessor::handlePendingRequests()
 
         activeRealClones.store (0);
         activeCheapClones.store (0);
-    }
-
-    if (engineResetRequest.exchange (false))
-    {
-        // "Audiomotor neu anlassen": setzt Trajektorie, Pfade und deren
-        // Filter-/Envelope-Zustand zurueck (siehe dopplerEngine.reset()),
-        // ohne Puffer neu zu allokieren. Quell-/Hoererziel bleiben die
-        // zuletzt gesetzten Parameterwerte, kein Sprung auf einen anderen Ort.
-        dopplerEngine.reset();
     }
 
     if (sourceSwitchRequest.exchange (false))

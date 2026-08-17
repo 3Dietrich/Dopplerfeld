@@ -113,15 +113,18 @@ public:
     // Parameter zurueck, damit die Schalter zeigen, was passiert ist.
     void panicToMinimal() { panicRequest.store (true); }
 
-    // "Audiomotor neu anlassen" (@dpa-Feedback): anders als panicToMinimal()
-    // (schaltet nur Zusatzlast ab) setzt das die Engine selbst zurueck -
-    // Trajektorie, Pfade, deren Luftdaempfungsfilter und Anti-Klick-
-    // Envelopes. Die bekannte Schwachstelle "ein einzelner nicht-endlicher
-    // Wert vergiftet den Filterzustand fuer immer" (siehe ARCHITEKTUR.md)
-    // laesst sich damit ohne Plugin-Neustart beheben, falls der Ton nach
-    // einer CPU-Spitze aus bleibt. Reine Physik, keine Neuallokation - anders
-    // als prepareToPlay() knackt das nicht.
-    void resetEngine() { engineResetRequest.store (true); }
+    // "Audiomotor neu anlassen" (@dpa-Feedback): ein blosses
+    // dopplerEngine.reset() reichte nachweislich nicht - verlaesslich half
+    // bisher nur ein Wechsel der Audio-Puffergroesse, weil der einen echten
+    // prepareToPlay()-Durchlauf ausloest (setzt zusaetzlich Klangquelle
+    // (engineGenerator/sampleSource/sourceHolder) und beide Positions-
+    // glaetter zurueck - Stellen, die dopplerEngine.reset() gar nicht
+    // beruehrt). restartEngine() macht deshalb genau das: haelt processBlock()
+    // an (suspendProcessing), ruft prepareToPlay() mit den aktuellen Werten
+    // erneut auf, gibt wieder frei - vom Nachrichten-Thread aus, nicht aus
+    // handlePendingRequests() heraus, weil prepareToPlay() selbst allokieren
+    // darf (das ist sein Vertrag), im Audiothread waere das verboten.
+    void restartEngine();
     int  recordedFrameCount() const { return recordedFrames.load(); }
 
     // Linearer Spitzenwert seit dem letzten Abruf (Levelmeter, @dpa-Feedback).
@@ -412,7 +415,6 @@ private:
     std::atomic<bool> flyTriggerRequest   { false };
     std::atomic<bool> flyStopRequest      { false };
     std::atomic<bool> panicRequest        { false };
-    std::atomic<bool> engineResetRequest  { false };
 
     // Audiothread -> Message-Thread, nur zur Anzeige.
     std::atomic<bool>  recordingActive { false };
