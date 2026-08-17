@@ -146,6 +146,46 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (N-Wellen-Synthese)
+
+Backlog-Punkt "Druckwellen-/N-Wellen-Synthese" ist gebaut, nach @dpas Vorgabe
+als **zusätzliche Schicht** oben auf dem bestehenden, unveränderten
+Amplituden-Mechanismus - kein Ersatz der Formel.
+
+- **Ausgelöst** pro Zweig in `PropagationPath`, wenn dessen M_r die 1
+  durchquert: der Moment, in dem die Mach-Front genau diesen Hörweg
+  überstreicht. Ein frisch geborener Zweig löst nicht aus (kein gültiger
+  Vorwert), sonst käme bei jeder Kegelankunft gleich ein Paar.
+- **Echte N-Form**, kein Abkling-Impuls: steiler Anstieg auf +A, linearer
+  Abfall durch null, steiler Rücksprung von −A auf null.
+- Die Stoßfronten haben eine endliche Anstiegszeit, und das ist selbst Physik
+  statt Anti-Aliasing-Kosmetik: eine Stoßfront verbreitert sich auf ihrem Weg
+  durch die Luft. Deshalb wächst die Anstiegszeit mit der Entfernung - nah ein
+  Peitschenschlag, fern ein dumpfes Grollen.
+- **Regler "N-Wave Size"** (Größe/Masse in Metern) steuert die Pulsdauer:
+  zweimal die Zeit, die der Schall braucht, um den Körper der Länge nach zu
+  durchlaufen. Dazu ein **eigener An/Aus-Schalter, Default aus**.
+- **Sauber getrennt** von den beiden Nachbarn, mit denen man das verwechseln
+  könnte: "Boom Limit" bleibt eine reine Amplitudendeckelung über eps ohne
+  jede Pulsform, der Limiter am Ausgang ist der Master-Softclip. Die N-Welle
+  hängt an keinem von beiden und hat ihr eigenes 1/R statt des
+  regularisierten Fokussierungsfaktors.
+
+`load_check` prüft zweierlei, und das zweite ist das wichtigere: ein
+Mach-2-Vorbeiflug muss sich messbar ändern (Spitze 0,108 → 0,142), ein
+Unterschall-Vorbeiflug muss **bitgleich** bleiben. Ohne Machfront gibt es
+keinen Auslöser, also darf sich kein einziges Sample unterscheiden - das ist
+die prüfbare Fassung der Zusicherung "additive Zusatzschicht".
+
+Damit das überhaupt prüfbar ist, bekommen die Zufallsgeneratoren des Motors
+feste Startwerte statt der Uhrzeit-Aussaat von `juce::Random`. Ohne das
+schwankt der Spitzenpegel zweier identischer Durchläufe um ein paar Promille
+und jede Aussage der Form "das ändert den Ausgang nicht" wäre nicht prüfbar.
+
+Ob die Welle richtig **klingt**, hat @dpas Ohr nicht beurteilt. Der
+Spitzendruck (Modellkonstante) und die Verbreiterung der Stoßfront mit der
+Entfernung sind Modellentscheidungen, keine gemessenen Größen.
+
 ## Stand 2026-08-17 (Vorbeiflug-Generatoren)
 
 Backlog-Punkt "zwei neue Bewegungsgeneratoren" ist gebaut:
@@ -379,17 +419,12 @@ den Höhen), sind Modellentscheidungen, die sein Ohr noch bestätigen muss.
 Aus derselben Grill-Session mit @dpa. Alles hier ist besprochen und gewollt,
 aber jeweils ein eigener Lauf - nicht vergessen, nur nicht dran.
 
-1. **Druckwellen-/N-Wellen-Synthese für den Überschallknall**, mit eigenem
-   Regler "Größe/Masse" der Quelle. Der Knall entsteht heute allein aus der
-   Überlagerung mehrerer Wurzelzweige; eine echte N-Welle hätte eine eigene
-   Wellenform, deren Länge von der Ausdehnung des Körpers abhängt. Hängt mit
-   dem offenen Punkt "Boom klingt noch nicht richtig" unten zusammen.
-2. **Mehrfach-M / "Schrot"-Quellen:** bis zu 3 unterschiedliche Quellen plus
+1. **Mehrfach-M / "Schrot"-Quellen:** bis zu 3 unterschiedliche Quellen plus
    bis zu 20 günstige Klone davon. Dazu ein CPU-Meter, ein manueller Regler
    für die Anzahl und ein Reset-Knopf - die Klone sind der Grund für den
    Regler: die Löserlast skaliert linear mit der Pfadanzahl, und @dpa will
    sehen, was er sich gerade einkauft, statt einen stillen Deckel zu bekommen.
-3. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
+2. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
    mit exponentiell wachsendem Feld-Blick. Erst mit z als echter Achse
    überhaupt sinnvoll; die heutige Feldanzeige zeigt z gar nicht an.
 
