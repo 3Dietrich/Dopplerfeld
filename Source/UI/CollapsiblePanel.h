@@ -48,7 +48,12 @@ private:
     juce::String panelTitle;
     juce::TextButton headerButton;
     juce::Component* contentComponent = nullptr;
-    bool expanded = true;
+
+    // @dpa-Feedback: alle Panels starten zugeklappt, damit die Spalte beim
+    // Oeffnen nicht sofort voll steht - der Aufrufer muss also NICHT mehr pro
+    // Panel explizit setExpanded(false) rufen, nur noch fuer eine bewusste
+    // Ausnahme setExpanded(true).
+    bool expanded = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CollapsiblePanel)
 };
