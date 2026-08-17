@@ -49,9 +49,13 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
 - **`PropagationPath`** (Physics/) - eine Ausbreitungsstrecke Quelle→Empfänger.
   Enthält den Löser, pro Wurzelzweig ein Luftdämpfungsfilter (`Branch::lpZ`,
   One-Pole) und einen Anti-Klick-Envelope. Beliebig oft instanziierbar - die
-  Bodenspiegelung ist genau das und kein Sonderweg: dieselbe Klasse mit
-  `PathTransform{scale.z = -1}`, dazu ein zweiter, streckenunabhängiger
+  Boden- und Wandspiegelung sind genau das und kein Sonderweg: dieselbe
+  Klasse mit einem anderen `PathTransform` (Spiegelung an einer beliebigen
+  Ebene, siehe `PathTransform.h`), dazu ein zweiter, streckenunabhängiger
   Dämpfungsgrad (`setReflectionDamping`) für die Reflexionsfläche.
+  Der Löser trennt **Nachführen** (jeder Solver-Punkt) vom **Entdecken**
+  (Vollscan, höchstens alle 0,5 ms, `setDiscoveryIntervalSeconds`) - siehe
+  Stand-Abschnitt zur Löser-Last.
   **Bekannte Schwachstelle:** `lpZ` ist
   persistenter Filterzustand - ein einzelner nicht-endlicher Wert würde ihn
   für immer vergiften (siehe `git log` Commit "Fix: dauerhafter Sound-Ausfall"
@@ -60,11 +64,15 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   auch beim Verlust des Fensterfokus auf, was gegen einen reinen Physik-
   Edge-Case spricht).
 - **`DopplerEngine`** (Physics/) - hält Quellsignal-Ringpuffer
-  (`SourceSignalBuffer`), Quell-Trajektorie, und vier `PropagationPath` pro
-  `PathSet`: Direktschall auf L/R plus die Bodenspiegelung auf L/R
-  (`pathEar`/`pathMirror`). Die Spiegelpfade liegen dauerhaft bereit und
-  werden bei abgeschalteter Bodenreflexion übersprungen - Umschalten
-  allokiert damit nichts, und ausgeschaltet kosten sie keine Löserzeit.
+  (`SourceSignalBuffer`), Quell-Trajektorie und **ein Pfadpaar (L/R) je
+  reflektierender Fläche**: `Surface` 0 ist der Direktschall (keine
+  Spiegelung, immer an), 1 der Boden, 2 und 3 die frei platzierbaren Wände -
+  also acht `PropagationPath` pro `PathSet` (`pathEar`/`pathSurface`). Jede
+  Fläche trägt ihre Abbildung, ihren Schalter und ihre Dämpfung; die Pfade
+  holen sich beides vor jedem Block, weil eine Wand sich bewegen darf. Alle
+  Pfade liegen dauerhaft bereit und werden bei abgeschalteter Fläche
+  übersprungen - Umschalten allokiert damit nichts, und ausgeschaltet kosten
+  sie keine Löserzeit.
   Ein `PathSet` ist ein kompletter Geometriesatz;
   bei Positionssprüngen/Feldgrößenänderungen laufen zwei `PathSet`
   gegeneinander gecrossfadet (`DualPathCrossfader<PathSet>`, Member
@@ -80,8 +88,9 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   über eine volle Kommandoqueue (bewusste Vereinfachung, siehe Kommentar
   dort).
 - **`DopplerfeldEditor`** (PluginEditor) - `FieldComponent` (700x400) links,
-  vier `CollapsiblePanel` mit den vier `XyzPanel`s rechts in einem Viewport.
-  30-Hz-Timer holt `FieldSnapshot` ab, aktualisiert Statuszeile/Button-Texte.
+  die `CollapsiblePanel` mit den `XyzPanel`s rechts in einem Viewport (Motor,
+  Sample, Bewegung, Feld/Physik/Ausgang, Reflexionen/Wände). 30-Hz-Timer holt
+  `FieldSnapshot` ab, aktualisiert Statuszeile/Button-Texte.
 
 ## Parameter
 
@@ -114,10 +123,16 @@ unoptimiert im Audiothread. Zum Debuggen ausdrücklich
 `solver_check`: Physik-Löser gegen geschlossene Lösung (Plan 2.5), muss bei
 jeder Änderung an `RetardedTimeSolver`/`PropagationPath` grün bleiben.
 `load_check`: Processor offline durchgefahren (n=200 und n=10000, inkl.
-Mach-3-Querung), prüft auf NaN/Inf und grobe CPU-Plausibilität. Enthält auch
-das Bodenreflexions-Szenario: derselbe Vorbeiflug mit und ohne Spiegelpfade,
-und die Prüfung, dass die Reflexion den Ausgang überhaupt verändert (ein nie
-gerechneter Spiegelpfad würde sonst stumm durchrutschen).
+Mach-3-Querung), prüft auf NaN/Inf, auf **Aussetzer** (längste
+zusammenhängende Stille) und auf **Löser-Auswertungen pro Block**. Die
+Reflexions-Szenarien fahren denselben Vorbeiflug mit und ohne Spiegelpfade und
+prüfen, dass die Reflexion den Ausgang überhaupt verändert - ein nie
+gerechneter Spiegelpfad würde sonst stumm durchrutschen.
+
+Kriterien hängen ausdrücklich **nicht** an der Wanduhr: die schwankt auf einem
+beschäftigten Rechner um Faktor zwei, ein Test darauf wäre ein Würfelspiel und
+Regressionen verschwänden im Rauschen. Die Wanduhrzahlen werden gedruckt, aber
+nichts scheitert an ihnen.
 
 Zu bauen ist die komplette Konfiguration, nicht nur die Standalone: die
 Testbinaries hängen an denselben Quellen, `--target Dopplerfeld_Standalone`
@@ -130,6 +145,43 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 (z.B. `-Wfloat-equal` bei absichtlichen Identitätsvergleichen) werden lokal
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
+
+## Stand 2026-08-17 (Wände als frei platzierbare Ebenen)
+
+Backlog-Punkt "frei platzierbare Wände" ist gebaut, `solver_check` und
+`load_check` sind grün, der Bau bleibt warnungsfrei.
+
+- **`PathTransform` spiegelt jetzt an einer beliebigen Ebene** statt nur
+  achsenparallel: die Ebene steht als `{ x : normal·x = planeOffset }`,
+  gespiegelt wird nach Householder. Normale der Länge 0 heißt "keine
+  Spiegelung" und ist der Direktschall; der Boden ist der Sonderfall
+  `normal = ẑ` und rechnet bitgleich wie vorher.
+- **Zwei feste Wandplätze**, keine dynamische Liste - die Pfade müssen im
+  Audiothread allokationsfrei bereitliegen. Je Wand: Schalter, Fußpunkt X/Y
+  (normiert wie alle Feldpositionen), Winkel der Wandlinie in der Draufsicht,
+  Neigung um genau diese Linie und Dämpfung. Bei ±90° Neigung fällt die Wand
+  mit der Bodenebene zusammen - das ist die Kontrolle, an der die Herleitung
+  der Normalen hängt, und `solver_check` prüft genau das.
+- **Kosten**: eine Wand kostet exakt so viel wie der Direktpfad, zwei Wände
+  zusammen das Dreifache (174 → 538 Löser-Auswertungen pro Block im
+  Vorbeiflug-Szenario). Deshalb Default aus, wie beim Boden.
+- **Notaus "Alle Reflexionen aus"** im selben Panel: zurück auf nur noch den
+  Direktpfad pro Ohr. Läuft über die Parameter, nicht über einen Direktgriff
+  in die Engine - so sieht man am Schalter, was passiert ist, der Host bekommt
+  es mit, und es steht im gespeicherten Zustand. (@dpa hat heute Nacht live
+  danach gefragt, als der Ton bei einer CPU-Spitze wegblieb und kein Weg
+  zurück da war außer Neustart.)
+- **Im Feld** werden eingeschaltete Wände als Linie über den Bildrand hinaus
+  gezeichnet; begrenzt gezeichnet würden sie eine Kante suggerieren, die es
+  nicht gibt. Die Neigung steckt in der Strichstärke.
+
+Die Reglerwerte schreiben wie überall nur Ziele; gefolgt wird ihnen über
+denselben One-Pole wie beim Yaw, weil eine springende Spiegelebene eine
+springende Laufzeit und damit einen Klick bedeutet.
+
+Gehört hat @dpa das noch nicht - insbesondere die 2500 Hz Eckfrequenz der
+Wanddämpfung (härter als der Boden mit 800 Hz) ist eine Modellentscheidung,
+die sein Ohr bestätigen muss.
 
 ## Stand 2026-08-17 (Löser-Last bei Bodenreflexion + hoher Geschwindigkeit)
 
@@ -248,30 +300,25 @@ den Höhen), sind Modellentscheidungen, die sein Ohr noch bestätigen muss.
 Aus derselben Grill-Session mit @dpa. Alles hier ist besprochen und gewollt,
 aber jeweils ein eigener Lauf - nicht vergessen, nur nicht dran.
 
-1. **Frei platzierbare Wände**, auch als unendliche Ebenen. Architektonisch
-   derselbe Griff wie die Bodenreflexion: ein weiterer `PropagationPath` mit
-   passendem `PathTransform` (Wand bei x = w heißt `scale.x = -1`,
-   `offset.x = 2w`, siehe `PathTransform.h`). Offen ist vor allem die UI -
-   wie platziert und orientiert man eine Ebene im 700x400-Feld.
-2. **Mehrfach-Reflexionen / Feedback zwischen Flächen.** Bewusst
+1. **Mehrfach-Reflexionen / Feedback zwischen Flächen.** Bewusst
    zurückgestellt, weil es ein Stabilitätsthema ist (Spiegelquellen zweiter
    und höherer Ordnung wachsen kombinatorisch, und ein Rückkopplungsweg
    zwischen zwei Flächen braucht eine Abbruchbedingung, die weder klickt noch
    aufschaukelt).
-3. **Druckwellen-/N-Wellen-Synthese für den Überschallknall**, mit eigenem
+2. **Druckwellen-/N-Wellen-Synthese für den Überschallknall**, mit eigenem
    Regler "Größe/Masse" der Quelle. Der Knall entsteht heute allein aus der
    Überlagerung mehrerer Wurzelzweige; eine echte N-Welle hätte eine eigene
    Wellenform, deren Länge von der Ausdehnung des Körpers abhängt. Hängt mit
    dem offenen Punkt "Boom klingt noch nicht richtig" unten zusammen.
-4. **Mehrfach-M / "Schrot"-Quellen:** bis zu 3 unterschiedliche Quellen plus
+3. **Mehrfach-M / "Schrot"-Quellen:** bis zu 3 unterschiedliche Quellen plus
    bis zu 20 günstige Klone davon. Dazu ein CPU-Meter, ein manueller Regler
    für die Anzahl und ein Reset-Knopf - die Klone sind der Grund für den
    Regler: die Löserlast skaliert linear mit der Pfadanzahl, und @dpa will
    sehen, was er sich gerade einkauft, statt einen stillen Deckel zu bekommen.
-5. **Zwei neue Bewegungsgeneratoren:** geradlinig durch den Bildschirm und
+4. **Zwei neue Bewegungsgeneratoren:** geradlinig durch den Bildschirm und
    waagerecht querend, jeweils mit zwei Startvarianten - kontinuierlich
    einfahrend oder mit abruptem Knall-Start.
-6. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
+5. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
    mit exponentiell wachsendem Feld-Blick. Erst mit z als echter Achse
    überhaupt sinnvoll; die heutige Feldanzeige zeigt z gar nicht an.
 
