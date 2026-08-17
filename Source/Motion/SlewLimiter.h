@@ -5,12 +5,13 @@
 // Slew-Limiter mit getrennten Grenzen für Geschwindigkeit und Beschleunigung
 // (Plan 3.8) - entspricht am ehesten einer bewegten Maschine mit Trägheit:
 // sie kann nicht beliebig schnell anfahren und nicht beliebig schnell
-// bremsen. Anders als CriticallyDampedSpring plant der Limiter keine
-// Bremsstrecke voraus, er fährt schlicht mit v_max auf das Ziel zu und
-// bremst erst, sobald es fast erreicht ist - dabei kann er kurz übers Ziel
-// hinauslaufen, wenn a_max das Abbremsen nicht rechtzeitig zulässt. Das ist
-// gewollt (reales Trägheitsverhalten) und gut geeignet, wenn v_max gezielt
-// Überschall erreichen soll.
+// bremsen. Die Zielgeschwindigkeit ist Richtung target geklemmt auf das, was
+// sich mit a_max noch rechtzeitig auf 0 abbremsen lässt (Bremskurve aus
+// v² = 2*a*d) - ohne diese Vorausplanung würde der Limiter bis zuletzt mit
+// vollem v_max aufs Ziel zufahren, zwangsläufig drüber hinausschießen und
+// nie zur Ruhe kommen. Ein minimaler Überschwinger bleibt möglich (letzter
+// Diskretisierungsschritt, sich bewegendes Ziel), aber kein Dauerschwingen.
+// Gut geeignet, wenn v_max gezielt Überschall erreichen soll.
 //
 // Defaults hier sind bewusst identisch zu den Parameter-Defaults von
 // Params::slewVmax/slewAmax (Source/Params.cpp), damit ein frisch angelegter

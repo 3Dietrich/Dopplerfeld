@@ -32,15 +32,23 @@ void SlewLimiter::tick (Vec3& outPos, Vec3& outVel)
 {
     assert (dt > 0.0);   // prepare() muss vor dem ersten Tick gelaufen sein
 
-    // Zielgeschwindigkeit: mit vollem Betrag v_max Richtung target. Nahe am
-    // Ziel (dist ~ 0) ist die Richtung nicht mehr sinnvoll bestimmbar, dann
-    // bleibt die Zielgeschwindigkeit 0 - der Limiter bremst.
+    // Zielgeschwindigkeit: Richtung target, Betrag geklemmt auf das, was sich
+    // mit a_max noch rechtzeitig auf 0 abbremsen lässt (v² = 2*a*d, nach v
+    // aufgelöst). Ohne diese Bremskurve zielte der Limiter bis zum letzten
+    // Moment mit vollem v_max aufs Ziel, schoss zwangsläufig drüber hinaus
+    // und krachte auf dem Rückweg mit derselben Wucht wieder dagegen -
+    // ungedämpfte Dauerschwingung um das Ziel statt des in der Klassen-
+    // beschreibung gemeinten einmaligen, abklingenden Überschwingers
+    // (@dpa-Repro: bei Slew Limiter oszillierten M/L sobald man sie anfasst).
     const Vec3 toTarget = target - pos;
     const double dist = toTarget.length();
 
     Vec3 desiredVel;
     if (dist > 1.0e-9)
-        desiredVel = toTarget.normalised() * vMax;
+    {
+        const double brakingSpeed = std::sqrt (2.0 * aMax * dist);
+        desiredVel = toTarget.normalised() * std::min (vMax, brakingSpeed);
+    }
 
     // a auf a_max begrenzt: erst den ungebremsten Beschleunigungswunsch
     // bilden, dann dessen LÄNGE klemmen statt einzelne Achsen einzeln zu
