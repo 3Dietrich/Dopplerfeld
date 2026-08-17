@@ -146,6 +146,53 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (Klone, "Schrot"-Muster)
+
+Vom Backlog-Punkt "Mehrfach-M / Schrot-Quellen" ist der Klon-Teil gebaut, samt
+dem, worum es @dpa dabei vor allem ging: sichtbar machen und steuern, was man
+sich einkauft. Der Teil "3 unterschiedliche M mit eigenem Sound" bleibt im
+Backlog, Begründung steht dort.
+
+**Echte Klone** sind zusätzliche Pfadpaare mit einer verschobenen
+Empfängerabbildung. Sie brauchen weder eigene Trajektorie noch eigenen
+Signalpuffer: eine um s verschobene *Quelle* ist dasselbe wie ein um −s
+verschobener *Empfänger*, und Empfänger verschieben ist genau das, was
+`PathTransform` ohnehin tut. Ein Klon kostet damit exakt ein Pfadpaar -
+gemessen kosten zehn echte Klone das 11,8-fache des Direktschalls (166 → 1957
+Löser-Auswertungen pro Block), also linear in der Anzahl. Die Versätze werden
+deterministisch aus dem Index gebildet (goldener Winkel, Betrag mit der Wurzel
+des Index), nicht gewürfelt - derselbe Reglerweg muss zweimal dasselbe ergeben.
+Klone laufen nur über den Direktschall; sie zusätzlich über alle Flächen zu
+spiegeln stünde in keinem Verhältnis zum Hörgewinn.
+
+**Billige Klone** stehen in `Source/Util/CloneSpray` - und dass die Klasse
+nicht in `Source/Physics/` steht, ist die Aussage: das ist keine Physik. Es
+sind leicht versetzte, in der Verzögerung langsam wandernde Kopien des fertigen
+Signals. Die wandernde Verzögerung erzeugt die Tonhöhenabweichung von selbst
+(eine Leseposition, die sich mit dv/dt durch den Puffer schiebt, verstimmt um
+genau diesen Faktor), ein eigener Tonhöhenparameter wäre doppelt gemoppelt.
+Gemessen kosten zehn billige Klone **null** Löserauswertungen - 166 pro Block,
+exakt dieselbe Zahl wie ohne. `load_check` prüft das ohne Toleranz: jede
+einzelne zusätzliche Auswertung würde heißen, dass da doch ein Löser läuft.
+
+**Panel "Schwarm / Klone"** trägt Gesamtzahl, "davon echt", Streuung, Pegel der
+billigen und eine Automatik - und aus demselben Grund auch den CPU-Balken (bis
+150 % mit Marke bei 100 %; ein Balken, der bei 100 anschlägt, verschweigt genau
+das Interessante) und darunter, was tatsächlich gerechnet wird. Bei
+eingeschalteter Automatik weicht das vom Regler ab, und genau das soll ablesbar
+sein statt still zu wirken. Die Automatik ist ausdrücklich nur ein Angebot und
+nicht der Standard; sie arbeitet mit Hysterese und getrennten Haltezeiten
+(runter schnell, hoch zögerlich), sonst pendelt sie im Takt ihrer eigenen
+Wirkung.
+
+**Notaus** liegt jetzt hier statt bei den Wänden, weil er inzwischen mehr
+abdeckt als Reflexionen: Boden, Wände, Mehrfachreflexion und Klone auf einen
+Schlag. Er wirkt auf zwei Wegen, absichtlich beiden - der Processor schaltet im
+Audiothread beim nächsten Block ab (das ist der Knopf für den Fall, dass es
+gerade klemmt und der Message-Thread nicht durchkommt), und zusätzlich werden
+die Parameter zurückgesetzt, damit die Schalter zeigen, was passiert ist.
+Gemessen sinkt die Löserlast nach dem Druck von 1957 auf 166 pro Block.
+
 ## Stand 2026-08-17 (N-Wellen-Synthese)
 
 Backlog-Punkt "Druckwellen-/N-Wellen-Synthese" ist gebaut, nach @dpas Vorgabe
@@ -419,11 +466,18 @@ den Höhen), sind Modellentscheidungen, die sein Ohr noch bestätigen muss.
 Aus derselben Grill-Session mit @dpa. Alles hier ist besprochen und gewollt,
 aber jeweils ein eigener Lauf - nicht vergessen, nur nicht dran.
 
-1. **Mehrfach-M / "Schrot"-Quellen:** bis zu 3 unterschiedliche Quellen plus
-   bis zu 20 günstige Klone davon. Dazu ein CPU-Meter, ein manueller Regler
-   für die Anzahl und ein Reset-Knopf - die Klone sind der Grund für den
-   Regler: die Löserlast skaliert linear mit der Pfadanzahl, und @dpa will
-   sehen, was er sich gerade einkauft, statt einen stillen Deckel zu bekommen.
+1. **Bis zu 3 unterschiedliche M mit eigenem Sound.** Die Klone aus demselben
+   Wunsch sind gebaut (siehe Stand-Abschnitt), dieser Teil nicht. Ein Klon ist
+   billig, weil er dieselbe Trajektorie und denselben Signalpuffer liest und
+   nur eine verschobene Empfängerabbildung bekommt. Eine wirklich EIGENE
+   Quelle mit eigenem Klang teilt beides nicht: sie braucht ihren eigenen
+   `SourceSignalBuffer` (bei n_max zweistellige MB), ihre eigene Trajektorie
+   samt Glätterkette und ihren eigenen Satz Motor-/Sample-Parameter - also
+   drei Motor-Panels statt einem. Das ist kein Physikproblem, sondern ein
+   Zustands- und UI-Umbau, und in einen Lauf mit fünf anderen Punkten passt er
+   nicht ohne Pfusch. Der billige Weg, es doch zu tun (dieselbe Quelle mit
+   großem Versatz), wäre kein zweites M, sondern ein weit gestreuter Klon -
+   und den gibt es schon.
 2. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
    mit exponentiell wachsendem Feld-Blick. Erst mit z als echter Achse
    überhaupt sinnvoll; die heutige Feldanzeige zeigt z gar nicht an.
