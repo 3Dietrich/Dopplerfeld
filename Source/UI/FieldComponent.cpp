@@ -56,6 +56,30 @@ void FieldComponent::setSpeedOfSound (double metresPerSecond)
     repaint();
 }
 
+void FieldComponent::setSpeedUnit (SpeedUnit unit)
+{
+    if (speedUnit == unit)
+        return;
+
+    speedUnit = unit;
+    repaint();
+}
+
+juce::String FieldComponent::formatSpeed (double sourceSpeedMps, double speedOfSoundMps, SpeedUnit unit)
+{
+    double value = 0.0;
+    const char* label = "";
+
+    switch (unit)
+    {
+        case SpeedUnit::KmH:  value = sourceSpeedMps * 3.6;                                    label = "km/h"; break;
+        case SpeedUnit::Ms:   value = sourceSpeedMps;                                          label = "m/s";  break;
+        case SpeedUnit::Mach: value = sourceSpeedMps / juce::jmax (1.0, speedOfSoundMps);       label = "Mach"; break;
+    }
+
+    return juce::String (value, 1) + " " + label;
+}
+
 // ---- Koordinatenumrechnung -------------------------------------------------
 // Einzige Stelle mit dem Welt<->Bildschirm-Vorzeichenwechsel (Plan 2.1).
 // Alles andere in dieser Datei (Nasenwinkel, Hit-Tests) geht ueber diese
@@ -122,6 +146,7 @@ void FieldComponent::paint (juce::Graphics& g)
     if (viewMode == ViewMode::Perspective)
     {
         drawPerspective (g);
+        drawSpeedReadout (g);
         return;
     }
 
@@ -133,6 +158,33 @@ void FieldComponent::paint (juce::Graphics& g)
     drawFlyByPreview (g);
     drawSource (g);
     drawListener (g);
+    drawSpeedReadout (g);
+}
+
+void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
+{
+    // Cockpit-Tempoanzeige (@dpa-Feedback: "wie im Cockpit, aber nicht
+    // uebertrieben") - dieselbe Einheit wie die Statuszeile, hier aber gross
+    // und direkt im schwarzen Feld statt nur klein unten im Text. Alpha-Gelb
+    // #ffff0055, oben rechts, ~140x50px. Kontrastarmer Rahmen statt eines
+    // hellen (siehe Sanfte-Rahmen-Konvention) - das soll ins Bild einsinken,
+    // nicht draufkleben.
+    constexpr int w = 140;
+    constexpr int h = 50;
+    const juce::Rectangle<int> box (getWidth() - w - 10, 10, w, h);
+
+    const juce::Colour hudYellow (0xffffff00);
+
+    g.setColour (hudYellow.withAlpha (0.06f));
+    g.fillRoundedRectangle (box.toFloat(), 4.0f);
+    g.setColour (hudYellow.withAlpha (0.22f));
+    g.drawRoundedRectangle (box.toFloat().reduced (0.5f), 4.0f, 1.0f);
+
+    const juce::String text = formatSpeed (snapshot.sourceSpeed, snapshot.speedOfSound, speedUnit);
+
+    g.setColour (hudYellow.withAlpha (0x55 / 255.0f));
+    g.setFont (juce::Font (juce::FontOptions (26.0f, juce::Font::bold)));
+    g.drawFittedText (text, box.reduced (6), juce::Justification::centred, 1);
 }
 
 void FieldComponent::drawWalls (juce::Graphics& g) const
@@ -883,18 +935,101 @@ void FieldComponent::reportNormalisedDrag (Vec3 worldPos, bool isSource) const
 
 void FieldComponent::mouseDown (const juce::MouseEvent& e)
 {
+    // Ein neuer Griff unterbricht einen laufenden Nachlauf sofort - der
+    // Nutzer hat die Kontrolle wieder uebernommen.
+    stopCoast();
+
     dragTarget = dragTargetAt (e.position);
+    haveDragVelocity = false;
+
     if (dragTarget != DragTarget::none)
+    {
         handleDragTo (e.position);
+
+        if (viewMode == ViewMode::TopDown
+            && (dragTarget == DragTarget::source || dragTarget == DragTarget::listenerHead))
+        {
+            lastDragWorldPos = screenToWorld (e.position);
+            lastDragTimeMs   = juce::Time::getMillisecondCounterHiRes();
+        }
+    }
 }
 
 void FieldComponent::mouseDrag (const juce::MouseEvent& e)
 {
-    if (dragTarget != DragTarget::none)
-        handleDragTo (e.position);
+    if (dragTarget == DragTarget::none)
+        return;
+
+    handleDragTo (e.position);
+
+    // Geschwindigkeit nur fuer die Ziele schaetzen, die der Nachlauf ueberhaupt
+    // unterstuetzt (siehe setCoastEnabled-Kommentar in FieldComponent.h) -
+    // Perspektive und Kopfdrehung bleiben aussen vor.
+    if (viewMode != ViewMode::TopDown
+        || (dragTarget != DragTarget::source && dragTarget != DragTarget::listenerHead))
+        return;
+
+    const Vec3   pos = screenToWorld (e.position);
+    const double now = juce::Time::getMillisecondCounterHiRes();
+    const double dt  = (now - lastDragTimeMs) * 0.001;
+
+    if (dt > 1.0e-4)   // gegen Division durch (fast) null bei mehreren Events in derselben ms
+    {
+        const Vec3 instantVelocity = (pos - lastDragWorldPos) * (1.0 / dt);
+
+        // Leicht geglaettet statt der rohen letzten Momentaufnahme - ein
+        // einzelnes sehr kurzes/zittriges Mausereignis soll die
+        // Nachlauf-Anfangsgeschwindigkeit nicht allein bestimmen.
+        dragVelocityEstimate = haveDragVelocity
+            ? dragVelocityEstimate + (instantVelocity - dragVelocityEstimate) * 0.6
+            : instantVelocity;
+        haveDragVelocity = true;
+    }
+
+    lastDragWorldPos = pos;
+    lastDragTimeMs   = now;
 }
 
 void FieldComponent::mouseUp (const juce::MouseEvent&)
 {
+    const DragTarget released = dragTarget;
     dragTarget = DragTarget::none;
+
+    if (coastEnabled && haveDragVelocity
+        && (released == DragTarget::source || released == DragTarget::listenerHead)
+        && dragVelocityEstimate.lengthSquared() > coastMinSpeedSquared)
+    {
+        coastTarget   = released;
+        coastPos      = lastDragWorldPos;
+        coastVelocity = dragVelocityEstimate;
+        coastTimer.startTimerHz (60);
+    }
+
+    haveDragVelocity = false;
+}
+
+void FieldComponent::setCoastEnabled (bool shouldCoast)
+{
+    coastEnabled = shouldCoast;
+
+    if (! coastEnabled)
+        stopCoast();
+}
+
+void FieldComponent::tickCoast()
+{
+    constexpr double dt = 1.0 / 60.0;
+
+    // Exponentieller Abfall statt linearer Bremsrampe - fuehlt sich wie
+    // Reibung an, nicht wie eine harte Bremse zu festem Zeitpunkt (siehe
+    // coastHalfLifeSeconds-Kommentar in FieldComponent.h).
+    const double decay = std::pow (0.5, dt / coastHalfLifeSeconds);
+
+    coastPos      = coastPos + coastVelocity * dt;
+    coastVelocity = coastVelocity * decay;
+
+    reportNormalisedDrag (coastPos, coastTarget == DragTarget::source);
+
+    if (coastVelocity.lengthSquared() < coastMinSpeedSquared)
+        stopCoast();
 }

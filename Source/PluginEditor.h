@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 
 #include "UI/CollapsiblePanel.h"
+#include "UI/EngineControlPanel.h"
 #include "UI/EnginePanel.h"
 #include "UI/FieldComponent.h"
 #include "UI/FieldPanel.h"
@@ -64,6 +65,7 @@ private:
     juce::Viewport  panelViewport;
     juce::Component panelHolder;
 
+    CollapsiblePanel engineControlPanelBox { "Motorsteuerung" };
     CollapsiblePanel enginePanelBox { "Motor" };
     CollapsiblePanel samplePanelBox { "Sample" };
     CollapsiblePanel motionPanelBox { "Bewegung" };
@@ -71,6 +73,7 @@ private:
     CollapsiblePanel wallPanelBox   { "Reflexionen / Waende" };
     CollapsiblePanel swarmPanelBox  { "Schwarm / Klone" };
 
+    EngineControlPanel engineControlPanel;
     EnginePanel enginePanel;
     SamplePanel samplePanel;
     MotionPanel motionPanel;
@@ -88,14 +91,21 @@ private:
     ToggleableTooltipWindow tooltipWindow { this };
     juce::ToggleButton tooltipsButton { "Hilfehinweise" };
 
+    // Nachlauf nach mouseUp() (@dpa-Feedback) - reines Bedienungsgefuehl, kein
+    // Parameter, siehe FieldComponent::setCoastEnabled().
+    juce::ToggleButton coastButton { "Nachlauf" };
+
     // Umschalter Draufsicht <-> perspektivische Ansicht. Kein Parameter: das
     // ist eine Frage der Ansicht, nicht des Klangs, und gehoert damit nicht in
     // den gespeicherten Zustand des Hosts.
     juce::TextButton viewButton;
 
-    // Tempo-Anzeige in der Statuszeile (@dpa-Feedback), Einheit umschaltbar.
-    // Ebenfalls kein Parameter - reine Anzeigefrage wie die Ansicht oben.
-    enum class SpeedUnit { KmH, Ms, Mach };
+    // Tempo-Anzeige in der Statuszeile UND im Cockpit-Display im Feld
+    // (@dpa-Feedback), Einheit umschaltbar. Ebenfalls kein Parameter - reine
+    // Anzeigefrage wie die Ansicht oben. Enum lebt in FieldComponent (das
+    // Cockpit-Display braucht sie dort fuer formatSpeed()), hier nur ein
+    // Alias statt einer zweiten Definition.
+    using SpeedUnit = FieldComponent::SpeedUnit;
     SpeedUnit speedUnit = SpeedUnit::KmH;
     juce::TextButton speedUnitButton;
 
@@ -109,7 +119,8 @@ private:
     // Inhaltshöhen der vier Panels: was ihr resized() an Reihen und Reglern
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines
     // CollapsiblePanel setzen kann.
-    static constexpr int engineContentHeight = 608;
+    static constexpr int engineControlContentHeight = 98;   // eine Reihe (RPM, Imbalance)
+    static constexpr int engineContentHeight = 520;         // 608 minus die ausgelagerte RPM-Reihe
     static constexpr int sampleContentHeight = 220;
     static constexpr int motionContentHeight = 384;
     static constexpr int fieldContentHeight  = 218;

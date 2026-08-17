@@ -45,6 +45,27 @@ public:
     void setViewMode (ViewMode mode);
     ViewMode getViewMode() const { return viewMode; }
 
+    // Tempo-Einheit fuer das Cockpit-Display (@dpa-Feedback), dieselbe Auswahl
+    // wie der speedUnitButton in der Statuszeile - der Editor haelt die
+    // Auswahl (kein Parameter, reine Anzeigefrage), reicht sie hier nur durch.
+    enum class SpeedUnit { KmH, Ms, Mach };
+    void setSpeedUnit (SpeedUnit unit);
+
+    // Textdarstellung eines Tempos in der gewaehlten Einheit - gemeinsam
+    // genutzt von der Statuszeile (PluginEditor::statusText()) und dem
+    // Cockpit-Display hier, damit es nur eine Formel/Einheiten-Zuordnung gibt.
+    static juce::String formatSpeed (double sourceSpeedMps, double speedOfSoundMps, SpeedUnit unit);
+
+    // Nachlauf nach mouseUp() (@dpa-Feedback): Quelle/Hoerer laufen mit der
+    // zuletzt gezogenen Geschwindigkeit noch kurz weiter und bremsen dann ab,
+    // statt abrupt stehenzubleiben - "realer als nur STOP". Nur fuer
+    // Positions-Drags in der Draufsicht (Quelle, Hoererposition); die
+    // Perspektive und die Kopfdrehung bleiben aussen vor, siehe .cpp.
+    // Reines Bedienungsgefuehl, keine Szenenphysik - deshalb zu-/abschaltbar
+    // und kein Parameter.
+    void setCoastEnabled (bool shouldCoast);
+    bool isCoastEnabled() const { return coastEnabled; }
+
     // Feldbreite in Metern (Params::fieldMetres), fuer Gitter-Skalierung und
     // Umrechnung normierte <-> Meter-Koordinaten.
     void setFieldMetres (double metresIn);
@@ -130,6 +151,12 @@ private:
     void drawSource (juce::Graphics& g) const;
     void drawListener (juce::Graphics& g) const;
 
+    // Cockpit-Tempoanzeige oben rechts im Feld (@dpa-Feedback: "wie im
+    // Cockpit"). Laeuft in beiden Ansichten (Draufsicht + Perspektive), weil
+    // sie ein reines Anzeige-Overlay ist und nichts mit der Projektion zu tun
+    // hat.
+    void drawSpeedReadout (juce::Graphics& g) const;
+
     // Screen-Blickwinkel des Hoerers: aus zwei mit worldToScreen projizierten
     // Punkten (Kopf, Kopf+Nasenrichtung) statt eines zweiten, redundanten
     // Vorzeichenwechsels - siehe Klassenkommentar oben.
@@ -140,6 +167,39 @@ private:
     DragTarget dragTargetAt (juce::Point<float> screenPx) const;
     void handleDragTo (juce::Point<float> screenPx);
     void reportNormalisedDrag (Vec3 worldPos, bool isSource) const;
+
+    // -- Nachlauf nach mouseUp() (@dpa-Feedback, siehe setCoastEnabled) --
+    void tickCoast();
+    void stopCoast() { coastTimer.stopTimer(); }
+
+    struct CoastTimer : public juce::Timer
+    {
+        explicit CoastTimer (FieldComponent& o) : owner (o) {}
+        void timerCallback() override { owner.tickCoast(); }
+        FieldComponent& owner;
+    };
+    CoastTimer coastTimer { *this };
+
+    bool coastEnabled = true;
+
+    // Waehrend eines Drags fortlaufend geschaetzt (leicht geglaettet, siehe
+    // mouseDrag()) - das ist die Anfangsgeschwindigkeit eines Nachlaufs.
+    Vec3   lastDragWorldPos;
+    double lastDragTimeMs      = 0.0;
+    Vec3   dragVelocityEstimate;
+    bool   haveDragVelocity    = false;
+
+    // Zustand waehrend des Nachlaufs selbst.
+    DragTarget coastTarget = DragTarget::none;   // source oder listenerHead
+    Vec3       coastPos;
+    Vec3       coastVelocity;
+
+    // Exponentieller Geschwindigkeitsabfall statt linearer Bremsrampe - fuehlt
+    // sich wie Reibung an, nicht wie eine harte Bremse zu festem Zeitpunkt.
+    // Modellkonstanten, kein Regler (das waere Uebertechnisierung fuer ein
+    // reines Bedienungsgefuehl-Detail).
+    static constexpr double coastHalfLifeSeconds  = 0.15;
+    static constexpr double coastMinSpeedSquared  = 0.05 * 0.05;   // m/s, quadriert
 
     FieldSnapshot snapshot;
     double fieldMetres = 100.0;
@@ -152,6 +212,7 @@ private:
     DragTarget dragTarget = DragTarget::none;
 
     ViewMode viewMode = ViewMode::TopDown;
+    SpeedUnit speedUnit = SpeedUnit::KmH;
 
     // Naheste Tiefe, die noch abgebildet wird. Alles davor waechst ins
     // Unendliche und gehoert nicht ins Bild.

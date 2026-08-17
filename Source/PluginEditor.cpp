@@ -6,6 +6,7 @@
 DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     : AudioProcessorEditor (&p),
       dopplerfeldProcessor (p),
+      engineControlPanel (p.apvts),
       enginePanel (p.apvts),
       samplePanel (p.apvts),
       motionPanel (p.apvts),
@@ -43,6 +44,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         setParameter (Params::lisYaw, juce::radiansToDegrees (yawRadians));
     };
 
+    engineControlPanelBox.setContent (&engineControlPanel);
     enginePanelBox.setContent (&enginePanel);
     samplePanelBox.setContent (&samplePanel);
     motionPanelBox.setContent (&motionPanel);
@@ -50,16 +52,11 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     wallPanelBox.setContent (&wallPanel);
     swarmPanelBox.setContent (&swarmPanel);
 
-    // Motor aufgeklappt (die Default-Quelle), der Rest zugeklappt - sonst
-    // steht die Spalte beim Öffnen sofort voll.
-    samplePanelBox.setExpanded (false);
-    motionPanelBox.setExpanded (false);
-    fieldPanelBox.setExpanded (true);
-    wallPanelBox.setExpanded (false);
-    swarmPanelBox.setExpanded (false);
+    // Alle Panels starten zugeklappt (CollapsiblePanel-Default, @dpa-Feedback)
+    // - sonst steht die Spalte beim Oeffnen sofort voll.
 
-    for (auto* box : { &enginePanelBox, &samplePanelBox, &motionPanelBox, &fieldPanelBox,
-                       &wallPanelBox, &swarmPanelBox })
+    for (auto* box : { &engineControlPanelBox, &enginePanelBox, &samplePanelBox, &motionPanelBox,
+                       &fieldPanelBox, &wallPanelBox, &swarmPanelBox })
     {
         box->onExpandedChanged = [this] { layoutPanels(); };
         panelHolder.addAndMakeVisible (box);
@@ -110,10 +107,16 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
             dopplerfeldProcessor.triggerPlayback();
     };
 
-    sourceButton.setTooltip ("Klangquelle umschalten: Motor-Generator oder geladenes Sample.");
+    sourceButton.setTooltip ("Klangquelle umschalten: Motor-Generator, geladenes Sample oder "
+                             "Audio-Eingang (live, sofern der Host/das Format einen bereitstellt).");
     sourceButton.onClick = [this]
     {
-        dopplerfeldProcessor.selectSampleSource (! dopplerfeldProcessor.isUsingSampleSource());
+        using Kind = DopplerfeldProcessor::SourceKind;
+
+        const auto next = dopplerfeldProcessor.currentSourceKind() == Kind::Motor   ? Kind::Sample
+                         : dopplerfeldProcessor.currentSourceKind() == Kind::Sample  ? Kind::AudioIn
+                                                                                     : Kind::Motor;
+        dopplerfeldProcessor.selectSourceKind (next);
     };
     addAndMakeVisible (sourceButton);
 
@@ -170,6 +173,16 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     tooltipsButton.onClick = [this] { tooltipWindow.enabled = tooltipsButton.getToggleState(); };
     addAndMakeVisible (tooltipsButton);
 
+    // @dpa-Feedback: Quelle/Hoerer laufen nach dem Loslassen noch kurz mit der
+    // zuletzt gezogenen Geschwindigkeit weiter und bremsen ab, statt abrupt
+    // stehenzubleiben. Reines Bedienungsgefuehl, deshalb hier zu-/abschaltbar
+    // statt eines Parameters (wie tooltipsButton).
+    coastButton.setToggleState (field.isCoastEnabled(), juce::dontSendNotification);
+    coastButton.setTooltip ("Nach dem Loslassen von Quelle/Hoerer noch kurz mit Schwung "
+                            "weiterlaufen und abbremsen, statt abrupt zu stoppen.");
+    coastButton.onClick = [this] { field.setCoastEnabled (coastButton.getToggleState()); };
+    addAndMakeVisible (coastButton);
+
     setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
              margin * 2 + topBarHeight + 6 + fieldHeight + statusHeight);
 
@@ -194,10 +207,20 @@ void DopplerfeldEditor::refreshDisplay()
     dopplerfeldProcessor.fillFieldSnapshot (snapshot);
 
     field.setFieldMetres ((double) *dopplerfeldProcessor.apvts.getRawParameterValue (Params::fieldMetres));
+    field.setSpeedUnit (speedUnit);
     field.setSnapshot (snapshot);
 
-    sourceButton.setButtonText (dopplerfeldProcessor.isUsingSampleSource() ? "Quelle: Sample"
-                                                                           : "Quelle: Motor");
+    {
+        using Kind = DopplerfeldProcessor::SourceKind;
+
+        switch (dopplerfeldProcessor.currentSourceKind())
+        {
+            case Kind::Sample:  sourceButton.setButtonText ("Quelle: Sample");   break;
+            case Kind::AudioIn: sourceButton.setButtonText ("Quelle: Audio In"); break;
+            case Kind::Motor:
+            default:            sourceButton.setButtonText ("Quelle: Motor");    break;
+        }
+    }
     motionPanel.setPlaying (dopplerfeldProcessor.isPlayingMotion());
     motionPanel.setFlying (dopplerfeldProcessor.isFlyingBy());
 
@@ -233,19 +256,11 @@ juce::String DopplerfeldEditor::statusText() const
     // Mach kommt aus derselben Momentangeschwindigkeit, nicht aus M_r (das ist
     // radial zum jeweiligen Ohr, hier geht es um die Quelle selbst).
     {
-        double value = 0.0;
-        const char* unit = "";
-
-        switch (speedUnit)
-        {
-            case SpeedUnit::KmH:  value = snapshot.sourceSpeed * 3.6;  unit = "km/h"; break;
-            case SpeedUnit::Ms:   value = snapshot.sourceSpeed;        unit = "m/s";  break;
-            case SpeedUnit::Mach: value = snapshot.sourceSpeed
-                                          / juce::jmax (1.0, snapshot.speedOfSound);
-                                   unit = "Mach"; break;
-        }
-
-        text << "   " << juce::String::formatted ("%7.1f", value) << " " << unit;
+        // Wert und Einheit kommen aus FieldComponent::formatSpeed() (auch vom
+        // Cockpit-Display im Feld genutzt) - hier nur auf feste Breite
+        // gebracht, damit die Statuszeile nicht wackelt (siehe Kommentar oben).
+        const juce::String formatted = FieldComponent::formatSpeed (snapshot.sourceSpeed, snapshot.speedOfSound, speedUnit);
+        text << "   " << formatted.paddedLeft (' ', 11);
     }
 
     // @dpa-Feedback: L-M-Abstand immer sichtbar, nicht nur bei Vorbeiflug.
@@ -335,9 +350,11 @@ void DopplerfeldEditor::resized()
 
     auto topBar = area.removeFromTop (topBarHeight);
     topBar.removeFromLeft (100);   // Platz für den Schriftzug links
-    sourceButton.setBounds (topBar.removeFromLeft (130));
+    sourceButton.setBounds (topBar.removeFromLeft (150));   // "Quelle: Audio In" ist der laengste Text
     topBar.removeFromLeft (8);
     tooltipsButton.setBounds (topBar.removeFromLeft (130));
+    topBar.removeFromLeft (8);
+    coastButton.setBounds (topBar.removeFromLeft (100));
     topBar.removeFromLeft (8);
     viewButton.setBounds (topBar.removeFromLeft (170));
     topBar.removeFromLeft (8);
@@ -363,6 +380,7 @@ void DopplerfeldEditor::layoutPanels()
     struct Entry { CollapsiblePanel* box; int contentHeight; };
 
     const Entry entries[] {
+        { &engineControlPanelBox, engineControlContentHeight },
         { &enginePanelBox, engineContentHeight },
         { &samplePanelBox, sampleContentHeight },
         { &motionPanelBox, motionContentHeight },
