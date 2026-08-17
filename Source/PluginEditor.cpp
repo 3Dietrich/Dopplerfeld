@@ -173,15 +173,11 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     tooltipsButton.onClick = [this] { tooltipWindow.enabled = tooltipsButton.getToggleState(); };
     addAndMakeVisible (tooltipsButton);
 
-    // @dpa-Feedback: Quelle/Hoerer laufen nach dem Loslassen noch kurz mit der
-    // zuletzt gezogenen Geschwindigkeit weiter und bremsen ab, statt abrupt
-    // stehenzubleiben. Reines Bedienungsgefuehl, deshalb hier zu-/abschaltbar
-    // statt eines Parameters (wie tooltipsButton).
-    coastButton.setToggleState (field.isCoastEnabled(), juce::dontSendNotification);
-    coastButton.setTooltip ("Nach dem Loslassen von Quelle/Hoerer noch kurz mit Schwung "
-                            "weiterlaufen und abbremsen, statt abrupt zu stoppen.");
-    coastButton.onClick = [this] { field.setCoastEnabled (coastButton.getToggleState()); };
-    addAndMakeVisible (coastButton);
+    // @dpa-Feedback: der Schalter sitzt im "Bewegung"-Panel (MotionPanel),
+    // nicht in der Kopfzeile - der Zustand selbst gehoert weiterhin der
+    // FieldComponent (die zieht ja). Kein Parameter, reines Bedienungsgefuehl.
+    motionPanel.setCoastEnabled (field.isCoastEnabled());
+    motionPanel.onCoastToggled = [this] (bool enabled) { field.setCoastEnabled (enabled); };
 
     setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
              margin * 2 + topBarHeight + 6 + fieldHeight + statusHeight);
@@ -353,8 +349,6 @@ void DopplerfeldEditor::resized()
     sourceButton.setBounds (topBar.removeFromLeft (150));   // "Quelle: Audio In" ist der laengste Text
     topBar.removeFromLeft (8);
     tooltipsButton.setBounds (topBar.removeFromLeft (130));
-    topBar.removeFromLeft (8);
-    coastButton.setBounds (topBar.removeFromLeft (100));
     topBar.removeFromLeft (8);
     viewButton.setBounds (topBar.removeFromLeft (170));
     topBar.removeFromLeft (8);

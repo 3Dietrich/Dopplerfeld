@@ -84,6 +84,11 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     addAndMakeVisible (playLoopButton);
     playLoopAttachment = std::make_unique<ButtonAttachment> (apvts, Params::playLoop, playLoopButton);
 
+    coastButton.setTooltip ("Nach dem Loslassen von Quelle/Hoerer im Feld noch kurz mit Schwung "
+                            "weiterlaufen und abbremsen, statt abrupt zu stoppen.");
+    coastButton.onClick = [this] { if (onCoastToggled != nullptr) onCoastToggled (coastButton.getToggleState()); };
+    addAndMakeVisible (coastButton);
+
     recordButton.setTooltip ("Aufnahme der (geglaetteten) Quellbewegung starten/stoppen.");
     addAndMakeVisible (recordButton);
     recordButton.onClick = [this] { if (onRecordClicked != nullptr) onRecordClicked(); };
@@ -162,6 +167,11 @@ void MotionPanel::setFlying (bool isFlying)
     flyButton.setButtonText (isFlying ? "Flug stoppen" : "Vorbeiflug");
 }
 
+void MotionPanel::setCoastEnabled (bool shouldCoast)
+{
+    coastButton.setToggleState (shouldCoast, juce::dontSendNotification);
+}
+
 void MotionPanel::resized()
 {
     constexpr int knobW = 84;
@@ -187,7 +197,10 @@ void MotionPanel::resized()
     playInterpCombo.setBounds (interpArea);
     area.removeFromTop (6);
 
-    playLoopButton.setBounds (area.removeFromTop (26));
+    auto loopRow = area.removeFromTop (26);
+    playLoopButton.setBounds (loopRow.removeFromLeft (100));
+    loopRow.removeFromLeft (12);
+    coastButton.setBounds (loopRow.removeFromLeft (120));
     area.removeFromTop (6);
 
     auto knobRow = area.removeFromTop (knobH);

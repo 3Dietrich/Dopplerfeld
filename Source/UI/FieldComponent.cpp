@@ -935,10 +935,6 @@ void FieldComponent::reportNormalisedDrag (Vec3 worldPos, bool isSource) const
 
 void FieldComponent::mouseDown (const juce::MouseEvent& e)
 {
-    // Ein neuer Griff unterbricht einen laufenden Nachlauf sofort - der
-    // Nutzer hat die Kontrolle wieder uebernommen.
-    stopCoast();
-
     dragTarget = dragTargetAt (e.position);
     haveDragVelocity = false;
 
@@ -999,10 +995,15 @@ void FieldComponent::mouseUp (const juce::MouseEvent&)
         && (released == DragTarget::source || released == DragTarget::listenerHead)
         && dragVelocityEstimate.lengthSquared() > coastMinSpeedSquared)
     {
-        coastTarget   = released;
-        coastPos      = lastDragWorldPos;
-        coastVelocity = dragVelocityEstimate;
-        coastTimer.startTimerHz (60);
+        // Integral von v0*exp(-t*ln(2)/halfLife) über t=0..unendlich =
+        // v0*halfLife/ln(2) - der Gesamtweg des gedachten Abklingens in EINEM
+        // Schritt statt ihn tickweise nachzubilden (siehe Klassenkommentar in
+        // FieldComponent.h, warum das die vorherige Fassung mit "Slew
+        // Limiter" kollidieren liess).
+        const Vec3 projected = lastDragWorldPos
+                              + dragVelocityEstimate * (coastHalfLifeSeconds / std::log (2.0));
+
+        reportNormalisedDrag (projected, released == DragTarget::source);
     }
 
     haveDragVelocity = false;
@@ -1011,25 +1012,4 @@ void FieldComponent::mouseUp (const juce::MouseEvent&)
 void FieldComponent::setCoastEnabled (bool shouldCoast)
 {
     coastEnabled = shouldCoast;
-
-    if (! coastEnabled)
-        stopCoast();
-}
-
-void FieldComponent::tickCoast()
-{
-    constexpr double dt = 1.0 / 60.0;
-
-    // Exponentieller Abfall statt linearer Bremsrampe - fuehlt sich wie
-    // Reibung an, nicht wie eine harte Bremse zu festem Zeitpunkt (siehe
-    // coastHalfLifeSeconds-Kommentar in FieldComponent.h).
-    const double decay = std::pow (0.5, dt / coastHalfLifeSeconds);
-
-    coastPos      = coastPos + coastVelocity * dt;
-    coastVelocity = coastVelocity * decay;
-
-    reportNormalisedDrag (coastPos, coastTarget == DragTarget::source);
-
-    if (coastVelocity.lengthSquared() < coastMinSpeedSquared)
-        stopCoast();
 }

@@ -30,6 +30,13 @@ public:
     void setFlying (bool isFlying);
     std::function<void()> onFlyClicked;
 
+    // Nachlauf nach mouseUp() im Feld (@dpa-Feedback) - lebt eigentlich in
+    // FieldComponent (das zieht ja), hier nur der Schalter dazu, weil er
+    // inhaltlich zur Bewegung gehoert. Kein Parameter, siehe FieldComponent::
+    // setCoastEnabled().
+    void setCoastEnabled (bool shouldCoast);
+    std::function<void (bool)> onCoastToggled;
+
 private:
     using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -86,6 +93,8 @@ private:
 
     juce::ToggleButton playLoopButton { "Loop" };
     std::unique_ptr<ButtonAttachment> playLoopAttachment;
+
+    juce::ToggleButton coastButton { "Nachlauf" };
 
     juce::TextButton recordButton { "Record" };
     juce::TextButton playButton   { "Play" };

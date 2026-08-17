@@ -169,37 +169,38 @@ private:
     void reportNormalisedDrag (Vec3 worldPos, bool isSource) const;
 
     // -- Nachlauf nach mouseUp() (@dpa-Feedback, siehe setCoastEnabled) --
-    void tickCoast();
-    void stopCoast() { coastTimer.stopTimer(); }
-
-    struct CoastTimer : public juce::Timer
-    {
-        explicit CoastTimer (FieldComponent& o) : owner (o) {}
-        void timerCallback() override { owner.tickCoast(); }
-        FieldComponent& owner;
-    };
-    CoastTimer coastTimer { *this };
-
+    //
+    // KEIN eigener Simulations-Timer (erste Fassung hatte einen, siehe
+    // git-history) - der lief 60x/s neu gegen den jeweils aktiven Smoother
+    // an und kollidierte bei "Slew Limiter" mit dessen EIGENER Bremskurve
+    // (siehe SlewLimiter::tick, sqrt(2*a_max*d)): der Limiter hing dem
+    // ständig neu gesetzten, nahen Nachlauf-Ziel so eng auf den Fersen,
+    // dass beim eigentlichen Stopp kein spuerbarer Restweg mehr uebrig war
+    // - "läuft ein Stück, bremst nicht, bleibt stehen" (@dpa-Repro).
+    //
+    // Stattdessen EINMALIG der analytisch integrierte Endpunkt eines
+    // exponentiell abklingenden Nachlaufs (Integral von v0*exp(-t/tau) über
+    // t = v0*tau) als neues Ziel - genau wie ein Dreh am Regler oder ein
+    // Automationswert. Welcher Smoother auch aktiv ist, er bekommt seine
+    // eigene, dafuer gebaute Anfahrt-/Bremskurve zu sehen (One-Pole:
+    // exponentiell, Critically Damped Spring: kein Ueberschwinger, Slew
+    // Limiter: dessen eigene Beschleunigungsrampe+Bremskurve, One Euro:
+    // Cutoff-Glaettung) - kein zweiter, konkurrierender Bremsmechanismus.
     bool coastEnabled = true;
 
     // Waehrend eines Drags fortlaufend geschaetzt (leicht geglaettet, siehe
-    // mouseDrag()) - das ist die Anfangsgeschwindigkeit eines Nachlaufs.
+    // mouseDrag()) - das ist die Anfangsgeschwindigkeit des Nachlaufs.
     Vec3   lastDragWorldPos;
     double lastDragTimeMs      = 0.0;
     Vec3   dragVelocityEstimate;
     bool   haveDragVelocity    = false;
 
-    // Zustand waehrend des Nachlaufs selbst.
-    DragTarget coastTarget = DragTarget::none;   // source oder listenerHead
-    Vec3       coastPos;
-    Vec3       coastVelocity;
-
-    // Exponentieller Geschwindigkeitsabfall statt linearer Bremsrampe - fuehlt
-    // sich wie Reibung an, nicht wie eine harte Bremse zu festem Zeitpunkt.
-    // Modellkonstanten, kein Regler (das waere Uebertechnisierung fuer ein
-    // reines Bedienungsgefuehl-Detail).
-    static constexpr double coastHalfLifeSeconds  = 0.15;
-    static constexpr double coastMinSpeedSquared  = 0.05 * 0.05;   // m/s, quadriert
+    // Halbwertszeit des gedachten Abklingens - bestimmt nur, WIE WEIT der
+    // projizierte Endpunkt liegt (Gesamtweg = v0*halfLife/ln(2)), nicht WIE
+    // die Bewegung dorthin aussieht (das macht der aktive Smoother). @dpa:
+    // "der Bremsweg könnte doppelt so lang sein" - entsprechend bemessen.
+    static constexpr double coastHalfLifeSeconds = 0.3;
+    static constexpr double coastMinSpeedSquared = 0.05 * 0.05;   // m/s, quadriert
 
     FieldSnapshot snapshot;
     double fieldMetres = 100.0;

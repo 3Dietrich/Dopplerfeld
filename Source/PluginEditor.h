@@ -91,10 +91,6 @@ private:
     ToggleableTooltipWindow tooltipWindow { this };
     juce::ToggleButton tooltipsButton { "Hilfehinweise" };
 
-    // Nachlauf nach mouseUp() (@dpa-Feedback) - reines Bedienungsgefuehl, kein
-    // Parameter, siehe FieldComponent::setCoastEnabled().
-    juce::ToggleButton coastButton { "Nachlauf" };
-
     // Umschalter Draufsicht <-> perspektivische Ansicht. Kein Parameter: das
     // ist eine Frage der Ansicht, nicht des Klangs, und gehoert damit nicht in
     // den gespeicherten Zustand des Hosts.
