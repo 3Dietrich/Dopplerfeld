@@ -16,6 +16,7 @@
 // synthetischen Puffern gefüttert, wie es ein Host täte.
 
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 #include "Params.h"
 
 #include <chrono>
@@ -213,19 +214,7 @@ int main()
         // Tests, keine Eigenschaft der Bahn.
         setParam (proc, Params::srcX, 0.05f);
         setParam (proc, Params::srcY, 0.5f + (float) (10.0 / (200.0 * DopplerfeldProcessor::fieldAspect)));
-
         proc.prepareToPlay (sampleRate, blockSize);
-
-        // Rauchtest der Oberfläche: einmal bauen, layouten und in ein Bild
-        // zeichnen. Ohne Fenster - es geht nur darum, dass Aufbau und
-        // Zeichnen mit einem echten Snapshot zusammenpassen.
-        {
-            std::unique_ptr<juce::AudioProcessorEditor> editor (proc.createEditor());
-
-            juce::Image image (juce::Image::ARGB, editor->getWidth(), editor->getHeight(), true);
-            juce::Graphics g (image);
-            editor->paintEntireComponent (g, true);
-        }
 
         Stats stats;
 
@@ -237,6 +226,63 @@ int main()
         {
             setParam (proc, Params::srcX, (float) (0.05 + 30.0 * t / 200.0));
         });
+
+        // Rauchtest der Oberfläche: einmal bauen, layouten und beide
+        // Feldansichten in ein Bild zeichnen. Ohne Fenster - es geht darum, dass
+        // Aufbau und Zeichnen mit einem ECHTEN Snapshot zusammenpassen.
+        //
+        // Die perspektivische Ansicht ist der Grund, warum das mehr als eine
+        // Formalie ist: sie rechnet eine Projektion mit einer Division durch die
+        // Tiefe, und Punkte hinter der Kamera sind dabei der Normalfall, nicht
+        // die Ausnahme - genau die Sorte Code, die still ein NaN in eine
+        // Zeichenroutine schiebt.
+        {
+            // Erst eine Lage herstellen, in der es etwas zu zeichnen gibt: eine
+            // Quelle über dem Boden (sonst zeigt die perspektivische Ansicht
+            // keine Höhe) und eine eingeschaltete Wand. Danach kurz rendern,
+            // damit ein Snapshot mit Spur und Wellenfronten vorliegt. Beides
+            // läuft nach der eigentlichen Messung und geht in eigene Zähler,
+            // damit die Zahlen des Normalfalls unberührt bleiben.
+            setParam (proc, Params::srcZ, 25.0f);
+            setParam (proc, Params::wall1On, 1.0f);
+
+            Stats displayWarmUp;
+            render (proc, buffer, 0.3, displayWarmUp, [] (double) {});
+
+            std::unique_ptr<juce::AudioProcessorEditor> editor (proc.createEditor());
+
+            // Anzeige einmal nachführen, wie es sonst der 30-Hz-Timer täte.
+            // Ohne das zeichnet die Feldanzeige einen genullten Snapshot, und
+            // dann läge in der Projektion jeder Punkt im Ursprung - geprüft wäre
+            // damit praktisch nichts. Eine Nachrichtenschleife läuft hier nicht,
+            // deshalb der direkte Aufruf.
+            if (auto* dopplerEditor = dynamic_cast<DopplerfeldEditor*> (editor.get()))
+                dopplerEditor->refreshDisplay();
+
+            auto paintOnce = [&editor]
+            {
+                juce::Image image (juce::Image::ARGB, editor->getWidth(), editor->getHeight(), true);
+                juce::Graphics g (image);
+                editor->paintEntireComponent (g, true);
+            };
+
+            paintOnce();
+
+            // Umschalten über den Knopf in der Kopfzeile: so wird der Weg
+            // geprüft, den ein Benutzer nimmt, und nicht nur die Zeichenroutine
+            // selbst. Der Rückruf wird direkt gerufen statt über
+            // triggerClick() - das stellt eine Nachricht in die Schlange, und
+            // hier läuft keine.
+            for (auto* child : editor->getChildren())
+                if (auto* button = dynamic_cast<juce::TextButton*> (child))
+                    if (button->getButtonText().startsWith ("Ansicht") && button->onClick)
+                        button->onClick();
+
+            paintOnce();
+
+            setParam (proc, Params::srcZ, 0.0f);
+            setParam (proc, Params::wall1On, 0.0f);
+        }
 
         stats.report ("Normalfall n=200");
 

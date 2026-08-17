@@ -6,6 +6,7 @@
 #include "../Physics/Listener.h"
 
 #include <functional>
+#include <vector>
 
 // Die 700x400-Feldanzeige (Plan 3.13): Gitter mit Meterbeschriftung,
 // Wellenfronten, Spur, Quelle M und Hoerer L als Kopfsymbol. Zeichnet
@@ -29,6 +30,20 @@ public:
     // klein und wertartig (FieldSnapshot.h), Kopieren ist hier unkritisch,
     // anders als im Audiothread.
     void setSnapshot (const FieldSnapshot& snapshotIn);
+
+    // Zwei Ansichten derselben Szene. Die Draufsicht ist die gewohnte
+    // 700x400-Flaeche; die perspektivische blickt in die Tiefe (Welt-y in den
+    // Bildschirm hinein) und macht damit die Hoehe z sichtbar, die in der
+    // Draufsicht gar nicht vorkommt. Sie ERSETZT die Draufsicht nicht, sie
+    // kommt per Umschalter dazu.
+    enum class ViewMode
+    {
+        TopDown,
+        Perspective
+    };
+
+    void setViewMode (ViewMode mode);
+    ViewMode getViewMode() const { return viewMode; }
 
     // Feldbreite in Metern (Params::fieldMetres), fuer Gitter-Skalierung und
     // Umrechnung normierte <-> Meter-Koordinaten.
@@ -54,6 +69,12 @@ public:
     std::function<void (double normX, double normY)> onListenerDragged;
     std::function<void (double yawRadians)> onListenerRotated;
 
+    // Nur in der perspektivischen Ansicht: dort bedeutet Ziehen nach oben
+    // "hoeher", nicht "weiter weg". Die Hoehe ist der einzige Freiheitsgrad,
+    // den die Draufsicht ueberhaupt nicht anfassen kann - deshalb ist das kein
+    // doppelter Weg zum selben Ziel, sondern der einzige mit der Maus.
+    std::function<void (double metres)> onSourceHeightDragged;
+
 private:
     // -- Koordinatenumrechnung (Plan 2.1: px = position_m/n*700, isotrop) --
     float pixelsPerMetre() const;
@@ -64,6 +85,40 @@ private:
     // -- Zeichenteile --
     void drawGrid (juce::Graphics& g) const;
     void drawWalls (juce::Graphics& g) const;
+
+    // -- Perspektivische Ansicht --
+    //
+    // Ergebnis einer Projektion. visible ist false, wenn der Punkt hinter der
+    // Kamera (oder zu dicht davor) liegt - dann ist px bedeutungslos. scale ist
+    // der Abbildungsmasstab an dieser Tiefe in Pixeln je Meter; damit werden
+    // Symbolgroessen mit der Entfernung kleiner, ohne dass jede Zeichenstelle
+    // die Projektion noch einmal von Hand nachrechnet.
+    struct Projected
+    {
+        juce::Point<float> px;
+        bool  visible = false;
+        float scale   = 0.0f;
+    };
+
+    Vec3  cameraPosition() const;
+    float focalPixels() const;
+    float horizonYPx() const;
+
+    Projected project (Vec3 worldMetres) const;
+
+    // Weltpunkte als Linienzug zeichnen, Teilstuecke hinter der Kamera
+    // auslassen. Jede perspektivische Linie laeuft hierueber, statt die
+    // Sichtbarkeitspruefung mehrfach hinzuschreiben.
+    void strokeWorldPath (juce::Graphics& g, const std::vector<Vec3>& points,
+                          juce::Colour colour, float thickness) const;
+
+    void drawPerspective (juce::Graphics& g) const;
+    void drawPerspectiveGround (juce::Graphics& g) const;
+    void drawPerspectiveWalls (juce::Graphics& g) const;
+    void drawPerspectiveWavefronts (juce::Graphics& g) const;
+    void drawPerspectiveTrail (juce::Graphics& g) const;
+    void drawPerspectiveSource (juce::Graphics& g) const;
+    void drawPerspectiveListener (juce::Graphics& g) const;
     void drawWavefronts (juce::Graphics& g) const;
     void drawTrail (juce::Graphics& g) const;
     void drawSource (juce::Graphics& g) const;
@@ -89,6 +144,12 @@ private:
     static constexpr float dragHitRadiusPx = 16.0f;
 
     DragTarget dragTarget = DragTarget::none;
+
+    ViewMode viewMode = ViewMode::TopDown;
+
+    // Naheste Tiefe, die noch abgebildet wird. Alles davor waechst ins
+    // Unendliche und gehoert nicht ins Bild.
+    static constexpr double nearPlaneMetres = 0.4;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FieldComponent)
 };

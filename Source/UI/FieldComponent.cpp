@@ -108,8 +108,23 @@ float FieldComponent::listenerScreenYaw() const
 
 // ---- Zeichnen ---------------------------------------------------------------
 
+void FieldComponent::setViewMode (ViewMode mode)
+{
+    if (mode == viewMode)
+        return;
+
+    viewMode = mode;
+    repaint();
+}
+
 void FieldComponent::paint (juce::Graphics& g)
 {
+    if (viewMode == ViewMode::Perspective)
+    {
+        drawPerspective (g);
+        return;
+    }
+
     g.fillAll (juce::Colours::black);
     drawGrid (g);
     drawWalls (g);
@@ -280,10 +295,448 @@ void FieldComponent::drawListener (juce::Graphics& g) const
     HeadSymbol::draw (g, centrePx, headRadiusPx, yaw, style);
 }
 
+// ---- Perspektivische Ansicht -------------------------------------------------
+//
+// Blick in die Tiefe: Welt-y zeigt in den Bildschirm hinein, Welt-z nach oben,
+// Welt-x nach rechts. Die optische Achse liegt waagerecht, deshalb laeuft die
+// Bodenebene z = 0 auf eine Horizontlinie zu - das ist das Fluchtpunkt-Trapez
+// "wie eine Strasse in die Ferne".
+//
+// Die Kamera steht hinter und ueber dem Hoerer, damit er selbst im Bild ist;
+// beide Abstaende wachsen mit der Feldgroesse, sonst waere die Ansicht bei
+// n = 10000 m ein Blick auf die eigene Schuhspitze und bei n = 5 m ein Blick
+// aus dem Weltall. Das sind Gestaltungswerte, keine gemessenen Groessen.
+
+Vec3 FieldComponent::cameraPosition() const
+{
+    const Vec3 head = snapshot.listener.head;
+
+    // Der Abstand nach hinten waechst mit der Feldgroesse: sonst waere die
+    // Ansicht bei n = 10000 m ein Blick auf die eigene Schuhspitze und bei
+    // n = 5 m einer aus dem Weltall.
+    const double back = 3.0 + 0.06 * fieldMetres;
+
+    // Die Kamerahoehe haengt fest am Abstand, nicht eigenstaendig an der
+    // Feldgroesse. Der Grund ist rein geometrisch: der Fusspunkt des Hoerers
+    // erscheint bei horizon + focal * camZ / back. Nur wenn camZ/back konstant
+    // ist, liegt er unabhaengig von der Feldgroesse immer an derselben Stelle im
+    // Bild - mit zwei unabhaengigen Formeln wandert er heraus.
+    const double height = 0.35 * back;
+
+    return { head.x, head.y - back, height };
+}
+
+float FieldComponent::focalPixels() const
+{
+    // Brennweite in Pixeln. 0,7 * Breite entspricht einem halben
+    // Oeffnungswinkel von rund 35 Grad - weit genug, dass ein Vorbeiflug seitlich
+    // noch ins Bild passt, und eng genug, dass die Tiefe nicht flach aussieht.
+    return 0.7f * (float) juce::jmax (1, getWidth());
+}
+
+float FieldComponent::horizonYPx() const
+{
+    // Horizont ueber der Bildmitte: unterhalb spielt sich der Boden ab, und der
+    // braucht mehr Platz als der leere Himmel darueber.
+    return 0.40f * (float) juce::jmax (1, getHeight());
+}
+
+FieldComponent::Projected FieldComponent::project (Vec3 worldMetres) const
+{
+    const Vec3   cam   = cameraPosition();
+    const double depth = worldMetres.y - cam.y;
+
+    Projected out;
+
+    if (depth < nearPlaneMetres)
+        return out;   // hinter der Kamera oder zu dicht davor
+
+    const float focal = focalPixels();
+    const float scale = (float) ((double) focal / depth);
+
+    out.px = { (float) getWidth() * 0.5f + scale * (float) (worldMetres.x - cam.x),
+               horizonYPx()               - scale * (float) (worldMetres.z - cam.z) };
+    out.visible = true;
+    out.scale   = scale;
+
+    return out;
+}
+
+void FieldComponent::strokeWorldPath (juce::Graphics& g, const std::vector<Vec3>& points,
+                                      juce::Colour colour, float thickness) const
+{
+    if (points.size() < 2)
+        return;
+
+    juce::Path path;
+    bool penDown = false;
+
+    for (const auto& p : points)
+    {
+        const auto pr = project (p);
+
+        if (! pr.visible)
+        {
+            // Teilstueck hinter der Kamera: Stift heben, statt quer durchs Bild
+            // zu einem falschen Punkt zu ziehen.
+            penDown = false;
+            continue;
+        }
+
+        if (! penDown)
+        {
+            path.startNewSubPath (pr.px);
+            penDown = true;
+        }
+        else
+        {
+            path.lineTo (pr.px);
+        }
+    }
+
+    if (path.isEmpty())
+        return;
+
+    // Bewusst OHNE curved-Verbindungen: die Linienzuege laufen hier auf den
+    // Fluchtpunkt zu, ihre letzten Teilstuecke sind kuerzer als ein Pixel, und
+    // eine glaettende Verbindung schiesst dort ueber das letzte Stueck hinaus -
+    // sichtbar als Linie, die ueber den Horizont hinausragt, wo eine Bodenlinie
+    // nichts zu suchen hat.
+    g.setColour (colour);
+    g.strokePath (path, juce::PathStrokeType (thickness));
+}
+
+void FieldComponent::drawPerspective (juce::Graphics& g) const
+{
+    // Himmel und Boden getrennt einfaerben, damit der Horizont auch ohne Gitter
+    // ablesbar ist.
+    const float horizon = horizonYPx();
+
+    g.setColour (juce::Colour (0xff05070c));
+    g.fillRect (0.0f, 0.0f, (float) getWidth(), horizon);
+
+    g.setColour (juce::Colour (0xff0b0b08));
+    g.fillRect (0.0f, horizon, (float) getWidth(), (float) getHeight() - horizon);
+
+    g.setColour (juce::Colours::white.withAlpha (0.25f));
+    g.drawLine (0.0f, horizon, (float) getWidth(), horizon, 1.0f);
+
+    drawPerspectiveGround (g);
+    drawPerspectiveWalls (g);
+    drawPerspectiveWavefronts (g);
+    drawPerspectiveTrail (g);
+    drawPerspectiveListener (g);
+    drawPerspectiveSource (g);
+}
+
+void FieldComponent::drawPerspectiveGround (juce::Graphics& g) const
+{
+    const Vec3  cam     = cameraPosition();
+    const float focal   = focalPixels();
+    const float horizon = horizonYPx();
+
+    // Exponentiell wachsende Tiefenstufen (1-2-5 je Dekade). Eine gleichmaessige
+    // Teilung waere hier nutzlos: in der Perspektive fallen alle gleich weit
+    // auseinanderliegenden Linien ab einer gewissen Entfernung auf denselben
+    // Pixel. Mit der 1-2-5-Stufung bleibt der Abstand zwischen zwei Linien im
+    // BILD ungefaehr gleich, und deshalb bleibt die Ferne lesbar.
+    const double farthest = juce::jmax (20.0, 3.0 * fieldMetres);
+
+    for (int decade = -1; decade <= 5; ++decade)
+    {
+        for (const double mantissa : { 1.0, 2.0, 5.0 })
+        {
+            const double depth = mantissa * std::pow (10.0, (double) decade);
+
+            if (depth < nearPlaneMetres || depth > farthest)
+                continue;
+
+            // Waagerechte Linie: Bodenpunkte in dieser Tiefe. z = 0, also
+            // ergibt sich die Bildhoehe direkt aus der Kamerahoehe.
+            const float y = horizon + (float) ((double) focal * cam.z / depth);
+
+            if (y < horizon || y > (float) getHeight())
+                continue;
+
+            const float alpha = 0.30f - 0.16f * (float) (std::log10 (depth) / 4.0);
+
+            g.setColour (juce::Colours::white.withAlpha (juce::jlimit (0.06f, 0.30f, alpha)));
+            g.drawLine (0.0f, y, (float) getWidth(), y, 1.0f);
+
+            g.setColour (juce::Colours::white.withAlpha (0.35f));
+            g.setFont (10.0f);
+            g.drawText (formatMetres (depth), 2, (int) y - 12, 60, 12, juce::Justification::left);
+        }
+    }
+
+    // Laengslinien, die zum Fluchtpunkt zusammenlaufen: das ist der Teil, der
+    // die Tiefe ueberhaupt als Tiefe lesbar macht. Sie liegen bei festen
+    // seitlichen Abstaenden zur Blickachse.
+    const double lateral[] { 0.0, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0 };
+
+    for (const double offset : lateral)
+    {
+        if (offset > farthest)
+            break;
+
+        for (const double sign : { -1.0, 1.0 })
+        {
+            if (offset == 0.0 && sign < 0.0)
+                continue;   // die Mittellinie nur einmal
+
+            std::vector<Vec3> line;
+
+            // Ein Linienzug statt zweier Endpunkte: so greift die
+            // Sichtbarkeitspruefung in strokeWorldPath() Stueck fuer Stueck.
+            for (int i = 0; i <= 24; ++i)
+            {
+                const double u     = (double) i / 24.0;
+                const double depth = nearPlaneMetres + u * u * (farthest - nearPlaneMetres);
+
+                line.push_back ({ cam.x + sign * offset, cam.y + depth, 0.0 });
+            }
+
+            const float alpha = offset == 0.0 ? 0.22f : 0.12f;
+            strokeWorldPath (g, line, juce::Colours::white.withAlpha (alpha), 1.0f);
+        }
+    }
+}
+
+void FieldComponent::drawPerspectiveWalls (juce::Graphics& g) const
+{
+    // Gezeichnet wird die Schnittlinie der Wand mit dem Boden plus ein paar
+    // senkrechte Rippen. Eine unendliche Ebene laesst sich nicht ausmalen, aber
+    // ihre Bodenlinie und ihre Aufrichtung genuegen, um zu sehen, wo sie steht.
+    for (const auto& wall : snapshot.walls)
+    {
+        if (! wall.on)
+            continue;
+
+        const Vec3 dir { std::cos (wall.azimuthRad), std::sin (wall.azimuthRad), 0.0 };
+
+        const double reach = juce::jmax (50.0, 3.0 * fieldMetres);
+
+        std::vector<Vec3> ground;
+
+        for (int i = 0; i <= 48; ++i)
+        {
+            const double u = -1.0 + 2.0 * (double) i / 48.0;
+            ground.push_back (wall.anchor + dir * (u * reach));
+        }
+
+        const float upright = (float) std::abs (std::cos (wall.tiltRad));
+
+        strokeWorldPath (g, ground,
+                         juce::Colours::skyblue.withAlpha (0.20f + 0.30f * upright),
+                         1.0f + 1.5f * upright);
+
+        // Rippen: die Wand nach oben andeuten. Bei einer flach liegenden Wand
+        // sind sie null lang, was genau richtig ist.
+        const double ribHeight = (2.0 + 0.05 * fieldMetres) * (double) upright;
+
+        for (int i = -8; i <= 8; ++i)
+        {
+            const Vec3 foot = wall.anchor + dir * ((double) i * reach / 8.0);
+
+            const std::vector<Vec3> rib { foot, { foot.x, foot.y, foot.z + ribHeight } };
+
+            strokeWorldPath (g, rib, juce::Colours::skyblue.withAlpha (0.14f), 1.0f);
+        }
+    }
+}
+
+void FieldComponent::drawPerspectiveWavefronts (juce::Graphics& g) const
+{
+    // Die Fronten sind Kugeln; gezeichnet wird ihr Schnitt mit der Bodenebene,
+    // also ein Kreis um den Fusspunkt der Emissionsstelle. In der Perspektive
+    // wird daraus eine Ellipse - deshalb nicht drawEllipse(), sondern ein
+    // projizierter Linienzug.
+    for (int i = 0; i < snapshot.wavefrontCount; ++i)
+    {
+        const double age = snapshot.now - snapshot.wavefrontEmitTimes[(size_t) i];
+
+        if (age <= 0.0)
+            continue;
+
+        const Vec3   emit    = snapshot.wavefrontPositions[(size_t) i];
+        const double sphereR = speedOfSound * age;
+
+        // Liegt die Emissionsstelle ueber dem Boden, schneidet die Kugel den
+        // Boden in einem kleineren Kreis - oder gar nicht.
+        const double h = emit.z;
+
+        if (sphereR <= std::abs (h))
+            continue;
+
+        const double radius = std::sqrt (sphereR * sphereR - h * h);
+
+        std::vector<Vec3> circle;
+
+        for (int k = 0; k <= 72; ++k)
+        {
+            const double a = 6.283185307179586 * (double) k / 72.0;
+            circle.push_back ({ emit.x + radius * std::cos (a),
+                                emit.y + radius * std::sin (a),
+                                0.0 });
+        }
+
+        const float alpha = juce::jmap ((float) i, 0.0f,
+                                        (float) juce::jmax (1, snapshot.wavefrontCount - 1),
+                                        0.45f, 0.07f);
+
+        strokeWorldPath (g, circle, juce::Colours::cyan.withAlpha (alpha), 1.2f);
+    }
+}
+
+void FieldComponent::drawPerspectiveTrail (juce::Graphics& g) const
+{
+    if (snapshot.trailCount < 2)
+        return;
+
+    std::vector<Vec3> trail;
+
+    for (int i = 0; i < snapshot.trailCount; ++i)
+        trail.push_back (snapshot.trail[(size_t) i]);
+
+    strokeWorldPath (g, trail, juce::Colours::orange.withAlpha (0.6f), 1.5f);
+
+    // Der Schatten der Spur auf dem Boden. Ohne ihn ist bei einer fliegenden
+    // Quelle nicht zu sehen, ob sie hoch und nah oder tief und fern ist - genau
+    // die Frage, fuer die es diese Ansicht gibt.
+    std::vector<Vec3> shadow;
+
+    for (const auto& p : trail)
+        shadow.push_back ({ p.x, p.y, 0.0 });
+
+    strokeWorldPath (g, shadow, juce::Colours::orange.withAlpha (0.18f), 1.0f);
+}
+
+void FieldComponent::drawPerspectiveSource (juce::Graphics& g) const
+{
+    const Vec3 pos = snapshot.sourcePos;
+
+    const auto pr = project (pos);
+
+    if (! pr.visible)
+    {
+        // Hinter der Kamera: nur ein Hinweis am Bildrand, dass die Quelle
+        // ueberhaupt existiert. Ohne den wirkt eine leere Ansicht wie ein
+        // Fehler, obwohl sie richtig ist.
+        g.setColour (juce::Colours::yellow.withAlpha (0.5f));
+        g.fillEllipse (juce::Rectangle<float> (8.0f, 8.0f)
+                           .withCentre ({ (float) getWidth() * 0.5f, (float) getHeight() - 6.0f }));
+        return;
+    }
+
+    // Ausserhalb des Bildes, aber vor der Kamera: Marke am Rand in der
+    // Richtung, in der die Quelle liegt. Auch das ist ein Hinweis und keine
+    // Verlegenheitsloesung - bei einem Vorbeiflug in 90 m seitlichem Abstand und
+    // 25 m Tiefe liegt sie schlicht ausserhalb des Blickfelds, und das soll man
+    // sehen statt es zu raten.
+    if (pr.px.x < 0.0f || pr.px.x > (float) getWidth()
+        || pr.px.y < 0.0f || pr.px.y > (float) getHeight())
+    {
+        const juce::Point<float> edge {
+            juce::jlimit (6.0f, (float) getWidth()  - 6.0f, pr.px.x),
+            juce::jlimit (6.0f, (float) getHeight() - 6.0f, pr.px.y)
+        };
+
+        g.setColour (juce::Colours::yellow.withAlpha (0.55f));
+        g.fillEllipse (juce::Rectangle<float> (9.0f, 9.0f).withCentre (edge));
+        g.setColour (juce::Colours::yellow.withAlpha (0.30f));
+        g.drawEllipse (juce::Rectangle<float> (16.0f, 16.0f).withCentre (edge), 1.2f);
+        return;
+    }
+
+    // Lotlinie auf den Boden plus Fusspunkt: das ist die Stelle, an der die
+    // Hoehe ablesbar wird.
+    const Vec3 foot { pos.x, pos.y, 0.0 };
+    const auto footPr = project (foot);
+
+    if (footPr.visible)
+    {
+        g.setColour (juce::Colours::yellow.withAlpha (0.35f));
+        g.drawLine (juce::Line<float> (pr.px, footPr.px), 1.0f);
+
+        g.setColour (juce::Colours::yellow.withAlpha (0.30f));
+        g.fillEllipse (juce::Rectangle<float> (7.0f, 3.0f).withCentre (footPr.px));
+    }
+
+    // Symbolgroesse mit der Entfernung, aber nach unten und oben begrenzt: eine
+    // punktfoermige Quelle hat keine Groesse, und ein Punkt, der beim Vorbeiflug
+    // das halbe Bild fuellt, sagt nichts mehr aus.
+    const float r = juce::jlimit (2.5f, 22.0f, pr.scale * 0.4f);
+
+    g.setColour (juce::Colours::yellow);
+    g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (pr.px));
+
+    g.setColour (juce::Colours::yellow.withAlpha (0.5f));
+
+    for (int ring = 1; ring <= 3; ++ring)
+    {
+        const float rr = r + (float) ring * 4.0f;
+        g.drawEllipse (juce::Rectangle<float> (rr * 2.0f, rr * 2.0f).withCentre (pr.px), 1.2f);
+    }
+}
+
+void FieldComponent::drawPerspectiveListener (juce::Graphics& g) const
+{
+    const Vec3 head = snapshot.listener.head;
+    const auto pr   = project (head);
+
+    if (! pr.visible)
+        return;
+
+    // Blickrichtung wie in der Draufsicht aus zwei projizierten Punkten, damit
+    // die Perspektive auch den Nasenwinkel uebernimmt statt ihn zu erfinden.
+    const auto nosePr = project (head + listenerNose (snapshot.listener));
+
+    const float yaw = nosePr.visible ? std::atan2 (nosePr.px.y - pr.px.y, nosePr.px.x - pr.px.x)
+                                     : -1.5707963267948966f;
+
+    const float r = juce::jlimit (6.0f, 40.0f, pr.scale * 0.35f);
+
+    HeadSymbol::Style style;
+    style.headColour = juce::Colours::white;
+    style.earColour  = juce::Colours::white;
+    style.fillColour = juce::Colours::white.withAlpha (0.08f);
+
+    HeadSymbol::draw (g, pr.px, r, yaw, style);
+
+    // Lotlinie auch beim Hoerer: seine Ohrhoehe ist ein Regler, und man soll
+    // sehen, dass er ueber dem Boden steht.
+    const auto footPr = project (Vec3 { head.x, head.y, 0.0 });
+
+    if (footPr.visible)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.22f));
+        g.drawLine (juce::Line<float> (pr.px, footPr.px), 1.0f);
+    }
+}
+
 // ---- Maus / Drag -------------------------------------------------------------
 
 FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> screenPx) const
 {
+    if (viewMode == ViewMode::Perspective)
+    {
+        // In der Perspektive gibt es nur ein Ziel: die Quelle. Den Hoerer dort
+        // zu verschieben waere zweideutig (waagerechte Mausbewegung koennte
+        // Seite ODER Tiefe heissen), und fuer seine Drehung fehlt der Bezug -
+        // beides bleibt der Draufsicht vorbehalten.
+        const auto pr = project (snapshot.sourcePos);
+
+        if (pr.visible)
+        {
+            const float r = juce::jlimit (2.5f, 22.0f, pr.scale * 0.4f);
+
+            if (screenPx.getDistanceFrom (pr.px) <= r + dragHitRadiusPx)
+                return DragTarget::source;
+        }
+
+        return DragTarget::none;
+    }
+
     const auto headPx = worldToScreen (snapshot.listener.head);
     const float yaw = listenerScreenYaw();
     const auto nosePx = HeadSymbol::noseTip (headPx, headRadiusPx, yaw);
@@ -305,6 +758,47 @@ FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> scre
 
 void FieldComponent::handleDragTo (juce::Point<float> screenPx)
 {
+    if (viewMode == ViewMode::Perspective)
+    {
+        if (dragTarget != DragTarget::source)
+            return;
+
+        // Umkehrung von project() bei FESTGEHALTENER Tiefe: waagerecht wird die
+        // Seitenlage, senkrecht die Hoehe gestellt. Die Tiefe bleibt, weil sie
+        // aus einem einzelnen Bildpunkt nicht hervorgeht - eine Maus hat zwei
+        // Achsen, der Raum drei.
+        //
+        // Damit ist diese Ansicht der einzige Weg, die Hoehe mit der Maus zu
+        // setzen; in der Draufsicht gibt es dafuer keine Achse.
+        const Vec3   cam   = cameraPosition();
+        const double depth = snapshot.sourcePos.y - cam.y;
+
+        if (depth < nearPlaneMetres)
+            return;
+
+        const double focal = (double) focalPixels();
+
+        const double worldX = cam.x + ((double) screenPx.x - (double) getWidth() * 0.5) * depth / focal;
+        const double worldZ = cam.z + ((double) horizonYPx() - (double) screenPx.y) * depth / focal;
+
+        const double normX = juce::jlimit (0.0, 1.0, worldX / juce::jmax (1.0e-6, fieldMetres));
+
+        if (onSourceDragged)
+        {
+            // Tiefe unveraendert weitermelden: der Rueckkanal ist normiert, und
+            // die y-Normierung haengt am Seitenverhaeltnis der Flaeche.
+            const double normY = juce::jlimit (0.0, 1.0,
+                                               snapshot.sourcePos.y
+                                               / juce::jmax (1.0e-6, fieldHeightMetres()));
+            onSourceDragged (normX, normY);
+        }
+
+        if (onSourceHeightDragged)
+            onSourceHeightDragged (juce::jmax (0.0, worldZ));
+
+        return;
+    }
+
     switch (dragTarget)
     {
         case DragTarget::source:

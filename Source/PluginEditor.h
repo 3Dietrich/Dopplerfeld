@@ -30,6 +30,14 @@ public:
     void paint (juce::Graphics& g) override;
     void resized() override;
 
+    // Holt den Anzeige-Snapshot aus dem Audiothread und fuehrt alle
+    // Anzeigeelemente nach. Der Timer ruft genau das - herausgezogen, damit es
+    // auch ohne laufende Nachrichtenschleife aufgerufen werden kann (der
+    // Rauchtest in load_check zeichnet sonst einen genullten Snapshot und
+    // prueft die Projektion der perspektivischen Ansicht praktisch nicht, weil
+    // alle Punkte im Ursprung laegen).
+    void refreshDisplay();
+
 private:
     void timerCallback() override;
 
@@ -79,6 +87,11 @@ private:
     // (setTooltip in den Panels) - hier sitzt nur der globale Schalter.
     ToggleableTooltipWindow tooltipWindow { this };
     juce::ToggleButton tooltipsButton { "Hilfehinweise" };
+
+    // Umschalter Draufsicht <-> perspektivische Ansicht. Kein Parameter: das
+    // ist eine Frage der Ansicht, nicht des Klangs, und gehoert damit nicht in
+    // den gespeicherten Zustand des Hosts.
+    juce::TextButton viewButton;
 
     // Inhaltshöhen der vier Panels: was ihr resized() an Reihen und Reglern
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines

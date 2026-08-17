@@ -30,6 +30,14 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         setParameter (Params::lisY, normY);
     };
 
+    // Nur in der perspektivischen Ansicht: dort ist Ziehen nach oben "hoeher".
+    // Das ist der einzige Weg, die Hoehe mit der Maus zu setzen - die
+    // Draufsicht hat dafuer keine Achse.
+    field.onSourceHeightDragged = [this] (double metres)
+    {
+        setParameter (Params::srcZ, metres);
+    };
+
     field.onListenerRotated = [this] (double yawRadians)
     {
         setParameter (Params::lisYaw, juce::radiansToDegrees (yawRadians));
@@ -114,6 +122,23 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
 
     // @dpa-Feedback: Hilfehinweise abschaltbar. Start an, weil neue Regler
     // ohne Erklaerung sonst raten heisst.
+    viewButton.setTooltip ("Zwischen Draufsicht und perspektivischem Blick in die Tiefe "
+                           "umschalten. Die perspektivische Ansicht zeigt die Hoehe z, die in "
+                           "der Draufsicht gar nicht vorkommt - und in ihr laesst sich die "
+                           "Quellhoehe auch mit der Maus ziehen (waagerecht = Seite, "
+                           "senkrecht = Hoehe, die Tiefe bleibt).");
+    viewButton.onClick = [this]
+    {
+        const bool toPerspective = field.getViewMode() == FieldComponent::ViewMode::TopDown;
+
+        field.setViewMode (toPerspective ? FieldComponent::ViewMode::Perspective
+                                         : FieldComponent::ViewMode::TopDown);
+
+        viewButton.setButtonText (toPerspective ? "Ansicht: Perspektive" : "Ansicht: Draufsicht");
+    };
+    viewButton.setButtonText ("Ansicht: Draufsicht");
+    addAndMakeVisible (viewButton);
+
     tooltipsButton.setToggleState (true, juce::dontSendNotification);
     tooltipsButton.setTooltip ("Hilfehinweise beim Ueberfahren der Regler ein-/ausblenden.");
     tooltipsButton.onClick = [this] { tooltipWindow.enabled = tooltipsButton.getToggleState(); };
@@ -134,6 +159,11 @@ void DopplerfeldEditor::setParameter (const char* paramID, double value)
 }
 
 void DopplerfeldEditor::timerCallback()
+{
+    refreshDisplay();
+}
+
+void DopplerfeldEditor::refreshDisplay()
 {
     dopplerfeldProcessor.fillFieldSnapshot (snapshot);
 
@@ -260,6 +290,8 @@ void DopplerfeldEditor::resized()
     sourceButton.setBounds (topBar.removeFromLeft (130));
     topBar.removeFromLeft (8);
     tooltipsButton.setBounds (topBar.removeFromLeft (130));
+    topBar.removeFromLeft (8);
+    viewButton.setBounds (topBar.removeFromLeft (170));
 
     area.removeFromTop (6);
 
