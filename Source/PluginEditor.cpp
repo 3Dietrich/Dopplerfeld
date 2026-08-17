@@ -39,6 +39,11 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         setParameter (Params::srcZ, metres);
     };
 
+    // Motor-Gating (@dpa-Feedback): reine Weiterleitung, die Entscheidung
+    // (ob/wie reagiert wird) trifft der Processor - siehe setMotorGateEnabled().
+    field.onSourceGrabbed  = [this] { dopplerfeldProcessor.notifySourceGrabbed(); };
+    field.onSourceReleased = [this] { dopplerfeldProcessor.notifySourceReleased(); };
+
     field.onListenerRotated = [this] (double yawRadians)
     {
         setParameter (Params::lisYaw, juce::radiansToDegrees (yawRadians));
@@ -178,6 +183,12 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     // FieldComponent (die zieht ja). Kein Parameter, reines Bedienungsgefuehl.
     motionPanel.setCoastEnabled (field.isCoastEnabled());
     motionPanel.onCoastToggled = [this] (bool enabled) { field.setCoastEnabled (enabled); };
+
+    engineControlPanel.setMotorGateEnabled (dopplerfeldProcessor.isMotorGateEnabled());
+    engineControlPanel.onMotorGateToggled = [this] (bool enabled)
+    {
+        dopplerfeldProcessor.setMotorGateEnabled (enabled);
+    };
 
     setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
              margin * 2 + topBarHeight + 6 + fieldHeight + statusHeight);

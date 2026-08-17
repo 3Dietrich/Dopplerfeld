@@ -189,6 +189,22 @@ public:
     void selectSourceKind (SourceKind kind);
     SourceKind currentSourceKind() const { return static_cast<SourceKind> (sourceKindSelected.load()); }
 
+    // Motor-Gating (@dpa-Feedback): bei aktiviertem Schalter klingt der Motor
+    // nur, waehrend/nachdem M gegriffen ist - Start beim Greifen, nach dem
+    // Loslassen erst positionstechnisch zur Ruhe kommen (Nachlauf zu Ende
+    // laufen lassen), DANN in Ruhe ausfaden. Wirkt nur auf die Motor-Quelle
+    // (Sample/Audio In liefern eigenen, oft schon fertigen Klang - "starten"
+    // ergibt dort keinen Sinn) und nur auf M, nicht auf L (der Hoerer klingt
+    // selbst nicht). Bewusst kein Parameter, wie Quellwahl/Nachlauf.
+    void setMotorGateEnabled (bool shouldGate);
+    bool isMotorGateEnabled() const { return motorGateEnabled.load(); }
+
+    // Von FieldComponent::onSourceGrabbed/onSourceReleased aufgerufen
+    // (Message-Thread) - setzt nur Anfrage-Flags, die eigentliche Umschaltung
+    // laeuft wie ueberall sonst im Audiothread (handlePendingRequests()).
+    void notifySourceGrabbed()  { sourceGrabRequest.store (true); }
+    void notifySourceReleased() { sourceReleaseRequest.store (true); }
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -392,6 +408,40 @@ private:
     double targetYawRadians   = 0.0;
     double smoothedYawRadians = 0.0;
 
+    // Motor-Gating (@dpa-Feedback), reiner Audiothread-Zustand - siehe
+    // setMotorGateEnabled()/applyMotorGate(). Sustaining = normaler Betrieb
+    // (Motor klingt), Idle = wartet auf den naechsten Griff (stumm),
+    // Attacking/Releasing = laufende Ein-/Ausblendung, AwaitingRest = M
+    // losgelassen, aber die Position ist noch in Bewegung (Nachlauf) - erst
+    // wenn sourceVel unter die Ruheschwelle faellt, beginnt das Ausfaden.
+    enum class MotorGateState { Sustaining, Attacking, AwaitingRest, Releasing, Idle };
+    MotorGateState motorGateState = MotorGateState::Sustaining;
+    float          motorGateGain  = 1.0f;
+
+    // Deckelt die Wartezeit in AwaitingRest - falls die Geschwindigkeit aus
+    // welchem Grund auch immer nie ganz unter die Schwelle faellt, faedet
+    // trotzdem irgendwann aus, statt den Motor fuer immer laut zu halten.
+    double motorGateAwaitSeconds = 0.0;
+    static constexpr double motorGateAwaitTimeoutSeconds = 6.0;
+
+    // Anfahrt schnell (Klick vermeiden), Ausfaden ausdruecklich langsam/ruhig
+    // (@dpa: "in aller Ruhe... extra 2..3s ausfaden").
+    static constexpr double motorGateAttackSeconds  = 0.03;
+    static constexpr double motorGateReleaseSeconds = 2.5;
+
+    // Ab wann "steht" - dieselbe Schwelle wie FieldComponent::
+    // coastMinSpeedSquared (0,05 m/s), damit "Ruhe" ueberall dasselbe meint.
+    static constexpr double motorGateRestSpeedThreshold = 0.05;
+
+    // Reine Audiothread-Verwaltung: ob M gerade tatsaechlich gegriffen ist
+    // (unabhaengig vom Gate-Zustand) und der zuletzt gesehene Wert von
+    // motorGateEnabled, um dessen Flankenwechsel zu erkennen (kein eigenes
+    // Anfrage-Flag noetig, ein einfacher Wertevergleich pro Block reicht).
+    bool motorGateHeld          = false;
+    bool motorGateEnabledShadow = false;
+
+    void applyMotorGate (float* mono, int numSamples);
+
     // Eigener Mitschrieb statt getSampleRate(): den setzt der Host, nicht
     // prepareToPlay - ein Offline-Treiber, der den Processor direkt fährt,
     // bekäme dort sonst 0 und die ganze Kette bliebe stumm.
@@ -472,6 +522,10 @@ private:
     std::atomic<bool> flyTriggerRequest   { false };
     std::atomic<bool> flyStopRequest      { false };
     std::atomic<bool> panicRequest        { false };
+
+    std::atomic<bool> motorGateEnabled    { false };
+    std::atomic<bool> sourceGrabRequest   { false };
+    std::atomic<bool> sourceReleaseRequest{ false };
 
     // Audiothread -> Message-Thread, nur zur Anzeige.
     std::atomic<bool>  recordingActive { false };

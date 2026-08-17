@@ -31,6 +31,21 @@ EngineControlPanel::EngineControlPanel (juce::AudioProcessorValueTreeState& apvt
     setupKnob (imbalanceKnob, apvts, Params::imbalance, "Imbalance",
                "Zusaetzliche Amplitudenmodulation bei der halben Grundfrequenz - simuliert "
                "den Zuendtakt eines Viertakters. 0 = aus.");
+
+    motorGateButton.setTooltip ("Motor klingt nur, waehrend/nachdem M gegriffen ist: Start beim "
+                                "Greifen, nach dem Loslassen erst zur Ruhe kommen (Nachlauf), "
+                                "dann in Ruhe ausfaden (~2,5s). Wirkt nur bei Quelle 'Motor'.");
+    motorGateButton.onClick = [this]
+    {
+        if (onMotorGateToggled != nullptr)
+            onMotorGateToggled (motorGateButton.getToggleState());
+    };
+    addAndMakeVisible (motorGateButton);
+}
+
+void EngineControlPanel::setMotorGateEnabled (bool shouldGate)
+{
+    motorGateButton.setToggleState (shouldGate, juce::dontSendNotification);
 }
 
 void EngineControlPanel::resized()
@@ -45,4 +60,7 @@ void EngineControlPanel::resized()
         layoutKnob (*k, row.removeFromLeft (knobW));
         row.removeFromLeft (4);
     }
+
+    area.removeFromTop (6);
+    motorGateButton.setBounds (area.removeFromTop (26).removeFromLeft (160));
 }

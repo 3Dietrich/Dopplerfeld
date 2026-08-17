@@ -115,7 +115,7 @@ private:
     // Inhaltshöhen der vier Panels: was ihr resized() an Reihen und Reglern
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines
     // CollapsiblePanel setzen kann.
-    static constexpr int engineControlContentHeight = 98;   // eine Reihe (RPM, Imbalance)
+    static constexpr int engineControlContentHeight = 130;   // Reihe (RPM, Imbalance) + Gate-Schalter
     static constexpr int engineContentHeight = 520;         // 608 minus die ausgelagerte RPM-Reihe
     static constexpr int sampleContentHeight = 220;
     static constexpr int motionContentHeight = 384;

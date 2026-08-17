@@ -18,6 +18,12 @@ public:
 
     void resized() override;
 
+    // Motor-Gating (@dpa-Feedback): Motor klingt nur, waehrend/nachdem M
+    // gegriffen ist. Lebt eigentlich im Processor (DopplerfeldProcessor::
+    // setMotorGateEnabled()), hier nur der Schalter dazu - kein Parameter.
+    void setMotorGateEnabled (bool shouldGate);
+    std::function<void (bool)> onMotorGateToggled;
+
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
 
@@ -34,6 +40,8 @@ private:
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     Knob rpmKnob, imbalanceKnob;
+
+    juce::ToggleButton motorGateButton { "Motor bei Griff" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EngineControlPanel)
 };

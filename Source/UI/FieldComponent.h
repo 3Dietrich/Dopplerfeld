@@ -96,6 +96,16 @@ public:
     // doppelter Weg zum selben Ziel, sondern der einzige mit der Maus.
     std::function<void (double metres)> onSourceHeightDragged;
 
+    // Nur fuer die Quelle M, ausdruecklich getrennt vom Positions-Rueckkanal
+    // oben (@dpa-Feedback: Motor-Gating - Klangfrage, nicht Positionsfrage,
+    // der Aufrufer entscheidet selbst, ob/wie er reagiert). Feuert genau
+    // einmal beim Greifen bzw. Loslassen von M, unabhaengig von Draufsicht/
+    // Perspektive und unabhaengig davon, ob ueberhaupt etwas "gegated" wird -
+    // FieldComponent kennt das Gating-Feature selbst nicht, sie meldet nur
+    // das Ereignis.
+    std::function<void()> onSourceGrabbed;
+    std::function<void()> onSourceReleased;
+
 private:
     // -- Koordinatenumrechnung (Plan 2.1: px = position_m/n*700, isotrop) --
     float pixelsPerMetre() const;

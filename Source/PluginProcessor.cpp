@@ -282,6 +282,51 @@ SoundSource* DopplerfeldProcessor::sourceForKind (SourceKind kind)
     }
 }
 
+void DopplerfeldProcessor::applyMotorGate (float* mono, int numSamples)
+{
+    if (mono == nullptr || numSamples <= 0)
+        return;
+
+    // Wirkt nur auf die Motor-Quelle - Sample/Audio In liefern eigenen,
+    // fremdbestimmten Klang, "starten" ergibt dort keinen Sinn (Header-
+    // Kommentar setMotorGateEnabled()).
+    if (currentSourceKind() != SourceKind::Motor)
+        return;
+
+    // Sustaining (normale Lautstaerke) und AwaitingRest (noch voll hoerbar,
+    // wartet nur auf die Ruheposition) brauchen keine Rampe.
+    if (motorGateState == MotorGateState::Sustaining
+        || motorGateState == MotorGateState::AwaitingRest)
+        return;
+
+    if (motorGateState == MotorGateState::Idle)
+    {
+        juce::FloatVectorOperations::clear (mono, numSamples);
+        return;
+    }
+
+    const double sr = currentSampleRate;
+    if (sr <= 0.0)
+        return;
+
+    const bool  attacking = (motorGateState == MotorGateState::Attacking);
+    const float target    = attacking ? 1.0f : 0.0f;
+    const float step      = (float) (1.0 / std::max (1.0e-3, (attacking ? motorGateAttackSeconds
+                                                                        : motorGateReleaseSeconds) * sr));
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        motorGateGain = attacking ? std::min (target, motorGateGain + step)
+                                  : std::max (target, motorGateGain - step);
+        mono[i] *= motorGateGain;
+    }
+
+    if (attacking && motorGateGain >= 1.0f)
+        motorGateState = MotorGateState::Sustaining;
+    else if (! attacking && motorGateGain <= 0.0f)
+        motorGateState = MotorGateState::Idle;
+}
+
 std::atomic<float>* DopplerfeldProcessor::raw (const char* paramID)
 {
     auto* value = apvts.getRawParameterValue (paramID);
@@ -676,6 +721,51 @@ void DopplerfeldProcessor::handlePendingRequests()
     if (sourceSwitchRequest.exchange (false))
         sourceHolder.switchTo (sourceForKind (currentSourceKind()));
 
+    // Motor-Gating (@dpa-Feedback): Flankenwechsel von motorGateEnabled zuerst
+    // (kein eigenes Anfrage-Flag, siehe Header), dann die diskreten Greif-/
+    // Loslass-Ereignisse - eine Reihenfolge, damit ein Griff, der genau in
+    // dem Block passiert, in dem das Gating gerade erst aktiviert wurde, den
+    // richtigen Startzustand sieht statt vom alten ueberschrieben zu werden.
+    {
+        const bool gateEnabledNow = motorGateEnabled.load();
+
+        if (gateEnabledNow != motorGateEnabledShadow)
+        {
+            motorGateEnabledShadow = gateEnabledNow;
+
+            // Aktiviert: sofort stumm, ausser M ist genau jetzt schon
+            // gegriffen (dann normal hoerbar weiterlaufen, bis losgelassen
+            // wird). Deaktiviert: sofort wieder normal hoerbar.
+            motorGateState = gateEnabledNow
+                ? (motorGateHeld ? MotorGateState::Sustaining : MotorGateState::Idle)
+                : MotorGateState::Sustaining;
+        }
+    }
+
+    if (sourceGrabRequest.exchange (false))
+    {
+        motorGateHeld = true;
+
+        if (motorGateEnabledShadow)
+        {
+            // Startet die Einblendung ab dem aktuellen Gain, nicht ab 0 -
+            // ein erneuter Griff mitten im Ausfaden (AwaitingRest/Releasing)
+            // faedet so von dort weiter ein, statt hart neu anzusetzen.
+            motorGateState = MotorGateState::Attacking;
+        }
+    }
+
+    if (sourceReleaseRequest.exchange (false))
+    {
+        motorGateHeld = false;
+
+        if (motorGateEnabledShadow && motorGateState != MotorGateState::Idle)
+        {
+            motorGateState        = MotorGateState::AwaitingRest;
+            motorGateAwaitSeconds = 0.0;
+        }
+    }
+
     if (recordToggleRequest.exchange (false))
     {
         if (motionRecorder.isRecording())
@@ -917,6 +1007,23 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
             clampStep (prevHeadPos,   listenerState.head);
         }
 
+        // Motor-Gating (@dpa-Feedback): nach dem Loslassen erst abwarten, bis
+        // die Quelle wirklich steht (Nachlauf zu Ende), dann erst ausfaden -
+        // "positionstechnisch zur Ruhe kommen, DANN in Ruhe ausfaden". Aus dem
+        // tatsaechlichen Positionsschritt gerechnet (nicht aus einem eigenen
+        // Geschwindigkeitswert), damit es unabhaengig davon funktioniert, ob
+        // gerade geglaettet oder eine Wiedergabe/ein Vorbeiflug lief.
+        if (motorGateState == MotorGateState::AwaitingRest)
+        {
+            motorGateAwaitSeconds += tickDt;
+
+            const double speed = (smoothedSourcePos - prevSourcePos).length() / tickDt;
+
+            if (speed < motorGateRestSpeedThreshold
+                || motorGateAwaitSeconds >= motorGateAwaitTimeoutSeconds)
+                motorGateState = MotorGateState::Releasing;
+        }
+
         if (bypassSmoothing)
         {
             // Alle vier internen Verfahren synchron mitführen (nicht nur das
@@ -1060,6 +1167,7 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
         const auto t0 = juce::Time::getHighResolutionTicks();
         sourceHolder.renderMono (monoScratch.getWritePointer (0), n);
+        applyMotorGate (monoScratch.getWritePointer (0), n);
         const auto t1 = juce::Time::getHighResolutionTicks();
 
         dopplerEngine.setSourceTarget (smoothedSourcePos);
@@ -1130,6 +1238,11 @@ void DopplerfeldProcessor::selectSourceKind (SourceKind kind)
 {
     sourceKindSelected.store (static_cast<int> (kind));
     sourceSwitchRequest.store (true);
+}
+
+void DopplerfeldProcessor::setMotorGateEnabled (bool shouldGate)
+{
+    motorGateEnabled.store (shouldGate);
 }
 
 juce::AudioProcessorEditor* DopplerfeldProcessor::createEditor()

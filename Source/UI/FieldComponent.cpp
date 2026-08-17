@@ -938,6 +938,9 @@ void FieldComponent::mouseDown (const juce::MouseEvent& e)
     dragTarget = dragTargetAt (e.position);
     haveDragVelocity = false;
 
+    if (dragTarget == DragTarget::source && onSourceGrabbed)
+        onSourceGrabbed();
+
     if (dragTarget != DragTarget::none)
     {
         handleDragTo (e.position);
@@ -1007,6 +1010,9 @@ void FieldComponent::mouseUp (const juce::MouseEvent&)
     }
 
     haveDragVelocity = false;
+
+    if (released == DragTarget::source && onSourceReleased)
+        onSourceReleased();
 }
 
 void FieldComponent::setCoastEnabled (bool shouldCoast)
