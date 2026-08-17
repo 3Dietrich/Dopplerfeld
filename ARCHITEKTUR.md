@@ -131,6 +131,78 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (Löser-Last bei Bodenreflexion + hoher Geschwindigkeit)
+
+@dpa hat live Bodenreflexion mit schneller Bewegung nahe Mach 1 kombiniert -
+der Ton setzte aus wie vor dem Löser-Fix. Kein Testszenario hatte diese
+Kombination gemessen: das Bodenszenario flog mit 30 m/s, das schnelle
+Szenario hatte keine Spiegelpfade.
+
+**Was die Messung ergibt** (neues `load_check`-Szenario "Mach1, Boden an"):
+
+- Der Spiegelpfad hat **keinen eigenen Defekt**. Er kostet exakt so viel wie
+  der Direktpfad, Faktor 2,00 in Löser-Auswertungen. Kein zu großes
+  Suchfenster, keine verlorenen Zweigidentitäten, kein Neusäen.
+- Es entgleist auch nichts: kein NaN, und - neu geprüft - **keine Stille im
+  Signal**. Der Ausfall ist damit reine CPU-Überlast und kein Rechenfehler.
+  Die bisherigen Kriterien konnten das gar nicht sehen: NaN-Zähler und
+  Gesamtspitze bleiben sauber, wenn das Plugin mittendrin sekundenlang
+  schweigt und danach weitermacht. `load_check` misst deshalb jetzt die
+  längste zusammenhängende Stille.
+
+**Neues Lastmaß.** Wanduhrzahlen schwanken auf einem beschäftigten Rechner um
+Faktor zwei - ein Kriterium darauf wäre ein Würfelspiel, und Regressionen
+verschwinden im Rauschen. Gezählt wird jetzt jede Auswertung des Residuums F
+(`RetardedTimeSolver::residualEvaluations`, durchgereicht bis zum Processor).
+Das ist die teuerste und häufigste Einzeloperation des Lösers und auf
+derselben Codebasis exakt reproduzierbar.
+
+**Drei Änderungen am Löser, keine am Klangmodell:**
+
+1. **Trajektorien-Abfragen ohne Eviktion.** `maxSpeedSince`/`maxDistanceSince`
+   suchen ihren Deque-Eintrag binär, statt den Vorderrand wegzuwerfen. Erst
+   dadurch darf jeder Empfangspunkt sein eigenes Fenster fragen - vorher hätte
+   der erste Frager dem zweiten die Einträge weggeworfen, weshalb der Löser
+   gezwungen war, über die volle Historie zu fragen.
+2. **Schranken aufs Suchfenster bezogen.** Lipschitz-Konstante und
+   Überschall-Entscheidung gelten jetzt für `[windowStart, t_h]` statt für die
+   ganze Historie. Das war die zweite Hälfte des Hangover-Problems: der
+   Stride-Fix rief den Löser nach einem Überschallmoment wieder seltener, aber
+   jeder einzelne Aufruf lief bis zu 40 s weiter im teuren Vollscan-Modus.
+   `recentMaxSpeed()` fällt dabei weg - es scannte pro Pfad und Teilblock 2000
+   Ringeinträge und räumte den Cache leer, den der Löser gleich danach braucht.
+3. **Entdecken vom Nachführen getrennt.** Bekannte Zweige werden weiter an
+   jedem Solver-Punkt nachgeführt; der Vollscan, der NEUE Zweige findet, läuft
+   höchstens alle 0,5 ms (`setDiscoveryIntervalSeconds`). Im Überschall lief er
+   bisher alle 167 µs, obwohl in dieser Zeit fast nie ein Zweig hinzukommt.
+   Bleibt kein Zweig übrig, wird immer voll gescannt - sonst wäre die
+   Alternative Stille.
+
+Löser-Auswertungen pro Block:
+
+| Szenario                | vorher | jetzt |
+|-------------------------|--------|-------|
+| Normalfall n=200        |    187 |   187 |
+| Boden an, srcZ=20m      |    362 |   362 |
+| Realistisch nahe Mach1  |   9263 |  3934 |
+| **Mach1 + Boden an**    |  17050 |  6670 |
+| Extrem, Mach ~3         |  19522 |  7857 |
+| Extrem, Umkehr          |  26704 | 11318 |
+
+Im Zielfall "Mach 1 mit Bodenreflexion" sind das gemessen 9,7 % vom
+Echtzeitbudget im Mittel und 34 % im schlechtesten Einzelblock, vorher 20 %
+und 78 %. Der Unterschall-Betrieb ändert sich nachweislich nicht (187 und 362
+unverändert) - dort liegt der Solver-Punktabstand ohnehin über dem
+Entdeckungsintervall.
+
+Die Entdeckungslatenz von 0,5 ms ist eine Modellkonstante und liegt weit unter
+der 3-ms-Toleranz, die `solver_check` seit jeher für die Kegelankunft ansetzt;
+gemessen sind 0,33 ms Verspätung. Ein eigener `solver_check`-Testfall fährt
+dieselbe Geometrie mit und ohne Drosselung und prüft, dass die Ankunft in der
+Toleranz bleibt, nie früher erkannt wird und die Ersparnis wirklich anfällt.
+
+Gehört hat @dpa auch das noch nicht.
+
 ## Stand 2026-08-17 (dritte Achse z, Bodenreflexion)
 
 Auslöser war @dpas Wunsch nach echter Höhe: sobald z ungleich 0 ist,
