@@ -146,6 +146,53 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (perspektivische Ansicht)
+
+Backlog-Punkt "zweite, perspektivische Ansicht" ist gebaut. Die Draufsicht
+bleibt unverändert, die neue Ansicht kommt per Umschalter in der Kopfzeile
+dazu (`FieldComponent::ViewMode`).
+
+Welt-y zeigt in den Bildschirm hinein, Welt-z nach oben, die optische Achse
+liegt waagerecht - deshalb läuft die Bodenebene z = 0 auf eine Horizontlinie
+zu, das Fluchtpunkt-Trapez "wie eine Straße in die Ferne".
+
+- **Tiefenlinien exponentiell** (1-2-5 je Dekade). Kein Schönheitsdetail: in
+  der Perspektive fallen gleich weit auseinanderliegende Linien ab einer
+  gewissen Entfernung auf denselben Pixel. Mit der 1-2-5-Stufung bleibt der
+  Abstand zweier Linien *im Bild* ungefähr gleich, und nur dadurch bleibt die
+  Ferne lesbar.
+- **Kamerageometrie**: hinter und über dem Hörer. Der Abstand nach hinten
+  wächst mit der Feldgröße, die Höhe hängt dagegen **fest am Abstand** und
+  nicht eigenständig an der Feldgröße. Rein geometrischer Grund: der Fußpunkt
+  des Hörers erscheint bei `horizon + focal * camZ / back`, und nur bei
+  konstantem `camZ/back` liegt er unabhängig von der Feldgröße an derselben
+  Stelle im Bild. Mit zwei unabhängigen Formeln wandert er unten heraus - so
+  war es im ersten Wurf.
+- **Gezeichnet** werden Horizont, beschriftetes Bodenraster, zum Fluchtpunkt
+  zusammenlaufende Längslinien, die Wände als Bodenlinie mit senkrechten
+  Rippen (eine flach liegende Wand hat null lange Rippen), die Wellenfronten
+  als Schnitt ihrer Kugel mit dem Boden (in der Perspektive eine Ellipse,
+  deshalb ein projizierter Linienzug statt `drawEllipse`), die Spur samt
+  Bodenschatten, und Quelle und Hörer jeweils mit Lotlinie zum Boden.
+- **Schatten und Lotlinien sind der eigentliche Zweck**: ohne sie ist bei
+  einer fliegenden Quelle nicht zu unterscheiden, ob sie hoch und nah oder
+  tief und fern ist - und z kommt in der Draufsicht überhaupt nicht vor.
+- **Ziehen** stellt hier waagerecht die Seitenlage und senkrecht die **Höhe**,
+  die Tiefe bleibt (eine Maus hat zwei Achsen, der Raum drei). Damit ist diese
+  Ansicht der einzige Weg, die Quellhöhe mit der Maus zu setzen. Hörer
+  verschieben und drehen bleibt der Draufsicht vorbehalten, dort ist es
+  eindeutig.
+
+Der Rauchtest in `load_check` zeichnet jetzt **beide** Ansichten mit einem
+echten Snapshot. Dafür ist die Anzeige-Aktualisierung aus dem 30-Hz-Timer in
+ein öffentliches `DopplerfeldEditor::refreshDisplay()` herausgezogen: im Test
+läuft keine Nachrichtenschleife, und ohne diesen Aufruf zeichnete die
+Feldanzeige einen genullten Snapshot - dann läge in der Projektion jeder Punkt
+im Ursprung und geprüft wäre praktisch nichts.
+
+Beurteilt hat @dpa die Ansicht noch nicht; Blickwinkel, Kamerahöhe und die
+Farbgebung sind Gestaltungsentscheidungen.
+
 ## Stand 2026-08-17 (Klone, "Schrot"-Muster)
 
 Vom Backlog-Punkt "Mehrfach-M / Schrot-Quellen" ist der Klon-Teil gebaut, samt
@@ -478,9 +525,6 @@ aber jeweils ein eigener Lauf - nicht vergessen, nur nicht dran.
    nicht ohne Pfusch. Der billige Weg, es doch zu tun (dieselbe Quelle mit
    großem Versatz), wäre kein zweites M, sondern ein weit gestreuter Klon -
    und den gibt es schon.
-2. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
-   mit exponentiell wachsendem Feld-Blick. Erst mit z als echter Achse
-   überhaupt sinnvoll; die heutige Feldanzeige zeigt z gar nicht an.
 
 ## Stand 2026-08-16 (Phase 1 fertig, erste Hördurchgänge)
 
@@ -563,6 +607,28 @@ Aufrufe hinweg gepflegte Faltungsstruktur der Ankunftszeitfunktion
 `A(t_e) = t_e + R(t_e)/c`; beides ist derzeit nicht nötig.
 
 **Offen / bekannt kaputt:**
+
+Zuerst zwei Vereinfachungen, die mit den Wänden vom 2026-08-17 neu dazukommen
+und bewusst nicht gelöst sind - sie gehören zusammen und wären ein eigener Lauf:
+
+- **Keine Verdeckung.** Eine Wand ist akustisch nur ein Spiegel, kein
+  Hindernis. Steht sie zwischen Quelle und Hörer, kommt der Direktschall
+  trotzdem ungehindert durch. Verdeckung richtig zu machen heißt Beugung an
+  der Kante, und eine unendliche Ebene hat keine.
+- **Keine Seitenprüfung der Reflexion.** Wandert die Quelle auf die andere
+  Seite einer Wand, wird die Spiegelung weiter gerechnet, obwohl es diesen Weg
+  physikalisch nicht gibt. Ein reiner Seitentest wäre billig, aber halb: ohne
+  Verdeckung würde er die Reflexion wegnehmen und den (dann falschen)
+  Direktschall stehen lassen. Deshalb erst zusammen mit dem Punkt darüber.
+- **Große Felder bei Mach 2 sind teuer.** Gemessen im
+  N-Wellen-Szenario (Feld 2000 m, Mach 2, Vorbeiflugabstand 300 m): rund 24000
+  Löser-Auswertungen pro Block, im Mittel 26 % vom Echtzeitbudget, einzelne
+  Blöcke über dem Budget. Ursache ist das lange Suchfenster auf großen Feldern,
+  nicht ein Defekt - auf einem 150-m-Feld liegt derselbe Fall bei 6700. Der
+  CPU-Balken und der Notaus im Schwarm-Panel sind die Antwort darauf; ein
+  weiterer Löser-Sprung wäre ein eigener Lauf (Ansätze siehe unten unter
+  "Was am Scan nicht half").
+
 - Ob der "Sound zerstückelt weg"-Komplex damit weg ist, muss @dpas Ohr
   entscheiden - gemessen ist die Überlastung weg, gehört wurde seitdem
   nicht. Falls Aussetzer bleiben, sind sie NICHT mehr mit CPU-Überlastung
