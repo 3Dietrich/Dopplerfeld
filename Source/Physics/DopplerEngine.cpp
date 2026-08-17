@@ -194,6 +194,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
 
     setBoomLimitDb (boomLimitDb);
     setAirAbsorptionAmount (airAbsorbAmount);
+    setNWave (nWaveOn, nWaveSizeM);
 
     reset();
 }
@@ -294,6 +295,7 @@ void DopplerEngine::configurePendingSet (Vec3 newPos, Vec3 preVelocity)
         p.reset();
         p.setBoomLimitDb (boomLimitDb);
         p.setAirAbsorptionAmount (airAbsorbAmount);
+        p.setNWave (nWaveOn, nWaveSizeM);
     }
 }
 
@@ -431,6 +433,16 @@ void DopplerEngine::setWall (int index, bool enabled, Vec3 anchorMetres,
     s.enabled   = enabled;
     s.damping   = damping01;
     s.transform = wallMirrorTransform (anchorMetres, azimuthRad, tiltRad);
+}
+
+void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres)
+{
+    nWaveOn    = shouldBeEnabled;
+    nWaveSizeM = sizeMetres;
+
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setNWave (shouldBeEnabled, sizeMetres);
 }
 
 void DopplerEngine::setSecondOrderEnabled (bool shouldBeEnabled)

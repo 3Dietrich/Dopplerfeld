@@ -85,6 +85,9 @@ public:
     void setBoomLimitDb (double dB);
     void setAirAbsorptionAmount (double amount01);
 
+    // Druckwellen-/N-Wellen-Schicht, siehe PropagationPath::setNWave().
+    void setNWave (bool shouldBeEnabled, double sizeMetres);
+
     // Reflektierende Flächen. Index 0 ist der Direktschall (immer an, keine
     // Spiegelung), Index 1 der Boden, danach die Wände.
     //
@@ -301,6 +304,9 @@ private:
     // Sätze müssen von Anfang an gleich eingestellt sein).
     double boomLimitDb    = 30.0;
     double airAbsorbAmount = 1.0;
+
+    bool   nWaveOn    = false;
+    double nWaveSizeM = 15.0;
 
     // Eckfrequenz der Bodendämpfung bei voller Stärke. Rund ein Kilohertz ist
     // die Gegend, in der eine streifende Reflexion an Gras/Erde ihre Höhen

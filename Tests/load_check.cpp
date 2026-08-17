@@ -772,6 +772,104 @@ int main()
     }
 
     //==================================================================
+    // 1h. N-Wellen-Schicht. Zwei Dinge sind hier zu zeigen, und das zweite ist
+    //     das wichtigere:
+    //
+    //     a) Bei einem Überschall-Vorbeiflug muss sie hörbar etwas beitragen -
+    //        sonst löst der M_r=1-Test nie aus und die ganze Schicht wäre tot.
+    //     b) Bei einem UNTERSCHALL-Vorbeiflug muss der Ausgang exakt
+    //        unverändert bleiben. Das ist die Zusicherung, dass es sich um eine
+    //        additive Zusatzschicht handelt und nicht um einen Eingriff in die
+    //        bestehende Amplitudenformel: ohne Machfront gibt es keine
+    //        Auslösung, also auch kein einziges verändertes Sample.
+    {
+        auto flight = [&] (bool nWaveEnabled, double speedMetresPerSecond, Stats& stats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 2000.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcZ, 200.0f);
+            setParam (proc, Params::limiterOn, 0.0f);
+
+            setParam (proc, Params::nWaveOn,   nWaveEnabled ? 1.0f : 0.0f);
+            setParam (proc, Params::nWaveSize, 15.0f);
+
+            setParam (proc, Params::flyKind,     1.0f);   // waagerecht querend
+            setParam (proc, Params::flyStart,    0.0f);   // kontinuierlich
+            setParam (proc, Params::flyDistance, 300.0f);
+            setParam (proc, Params::flySpeed,    (float) speedMetresPerSecond);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            Stats settle;
+            render (proc, buffer, 0.3, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            render (proc, buffer, 12.0, stats, [] (double) {});
+        };
+
+        Stats supersonicOff, supersonicOn, subsonicOff, subsonicOn;
+
+        flight (false, 700.0, supersonicOff);   // rund Mach 2
+        flight (true,  700.0, supersonicOn);
+        flight (false, 100.0, subsonicOff);
+        flight (true,  100.0, subsonicOn);
+
+        supersonicOff.report ("Mach2-Flug, N aus");
+        supersonicOn.report  ("Mach2-Flug, N an");
+        subsonicOn.report    ("100 m/s, N an");
+
+        const long long nonFinite = supersonicOn.nonFinite + subsonicOn.nonFinite;
+
+        if (nonFinite > 0)
+        {
+            std::printf ("FEHLGESCHLAGEN: NaN/Inf in der N-Wellen-Schicht\n");
+            failed = true;
+        }
+
+        // a) Im Überschall muss sich der Ausgang messbar ändern.
+        const double peakOff = supersonicOff.peak;
+        const double peakOn  = supersonicOn.peak;
+
+        std::printf ("%-22s Ueberschall: Spitze ohne %.4f, mit %.4f | Unterschall: %.6f / %.6f\n",
+                     "", peakOff, peakOn, subsonicOff.peak, subsonicOn.peak);
+
+        if (supersonicOn.maxMach <= 1.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Testflug erreicht keinen Ueberschall "
+                         "(M_r max %.2f) - der Fall greift nicht\n", supersonicOn.maxMach);
+            failed = true;
+        }
+        else if (std::abs (peakOn - peakOff) <= 1.0e-6 * std::max (peakOff, 1.0e-9))
+        {
+            std::printf ("FEHLGESCHLAGEN: N-Welle aendert den Ueberschallflug nicht "
+                         "(Spitze ohne %.6f, mit %.6f) - sie loest nie aus\n",
+                         peakOff, peakOn);
+            failed = true;
+        }
+
+        // b) Im Unterschall muss der Ausgang bitgleich sein. Bewusst ohne
+        //    Toleranz: ohne Machfront gibt es keinen Auslöser, und damit darf
+        //    sich kein einziges Sample unterscheiden.
+        if (std::abs (subsonicOn.peak - subsonicOff.peak) > 0.0
+            || std::abs (subsonicOn.sumSquares[0] - subsonicOff.sumSquares[0]) > 0.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: N-Welle veraendert den Unterschallfall "
+                         "(Spitze %.9f gegen %.9f) - sie ist keine reine Zusatzschicht\n",
+                         subsonicOff.peak, subsonicOn.peak);
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 2. Extremfall: größtes Feld, Überschallflug quer hindurch, Umkehr,
     //    Feldgrößenwechsel.
     {

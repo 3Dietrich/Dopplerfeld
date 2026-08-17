@@ -197,6 +197,9 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.groundReflectionOn = raw (Params::groundReflectionOn);
     pp.groundDampAmount   = raw (Params::groundDampAmount);
 
+    pp.nWaveOn   = raw (Params::nWaveOn);
+    pp.nWaveSize = raw (Params::nWaveSize);
+
     pp.reflect2ndOn = raw (Params::reflect2ndOn);
     pp.bounceGain   = raw (Params::bounceGain);
 
@@ -440,6 +443,18 @@ void DopplerfeldProcessor::applyParameters()
     {
         lastAirAbsorbAmount = airAbsorb;
         dopplerEngine.setAirAbsorptionAmount (airAbsorb);
+    }
+
+    // Wie oben: der Setter läuft über alle Pfade beider Geometriesätze,
+    // deshalb nur bei tatsächlicher Änderung.
+    const bool   nWaveEnabled = pp.nWaveOn->load() > 0.5f;
+    const double nWaveSize    = (double) pp.nWaveSize->load();
+
+    if (nWaveEnabled != lastNWaveOn || std::abs (nWaveSize - lastNWaveSize) > 1.0e-9)
+    {
+        lastNWaveOn   = nWaveEnabled;
+        lastNWaveSize = nWaveSize;
+        dopplerEngine.setNWave (nWaveEnabled, nWaveSize);
     }
 
     // Beides ist inzwischen billig: die Engine legt Schalter und Dämpfung an

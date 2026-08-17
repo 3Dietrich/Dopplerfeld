@@ -51,15 +51,22 @@ private:
     // ohne Höhenunterschied nichts zu tun hat.
     Knob groundDampKnob;
 
+    // Druckwellen-/N-Wellen-Schicht: eigener Schalter und eigene Groesse,
+    // bewusst neben (nicht in) Boom Limit - das eine ist eine Pulsform, das
+    // andere eine reine Amplitudendeckelung.
+    Knob nWaveSizeKnob;
+
     // Neben Output Gain: -6dB-Marke, Clip-Anzeige mit 500ms-Halt (@dpa).
     LevelMeter levelMeter;
 
     juce::ToggleButton fadeAutoButton   { "Fade Auto" };
     juce::ToggleButton limiterOnButton  { "Limiter" };
     juce::ToggleButton groundReflectionButton { "Bodenreflexion" };
+    juce::ToggleButton nWaveButton { "N-Welle" };
     std::unique_ptr<ButtonAttachment> fadeAutoAttachment;
     std::unique_ptr<ButtonAttachment> limiterOnAttachment;
     std::unique_ptr<ButtonAttachment> groundReflectionAttachment;
+    std::unique_ptr<ButtonAttachment> nWaveAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FieldPanel)
 };

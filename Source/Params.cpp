@@ -229,6 +229,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Gleichstromverstaerkung 1 und nimmt nur Hoehen.
     layout.add (floatParam (bounceGain, "Bounce Gain", { 0.0f, 0.95f, 0.01f }, 0.6f));
 
+    // N-Wellen-Schicht. Default aus - @dpa: "ohne Schalter/Regler sowieso
+    // bloed, immer drin wollen die wenigsten".
+    layout.add (boolParam (nWaveOn, "N-Wave", false));
+    {
+        // Groesse/Masse des Koerpers in Metern. Skew auf 15 m (Kampfjet-
+        // Groessenordnung), nach unten bis 0,5 m fuer knackige kleine Koerper
+        // und nach oben bis 200 m offen.
+        auto range = juce::NormalisableRange<float> (0.5f, 200.0f);
+        range.setSkewForCentre (15.0f);
+        layout.add (floatParam (nWaveSize, "N-Wave Size", range, 15.0f, "m"));
+    }
+
     // --- Crossfade ---
     layout.add (boolParam (fadeAuto, "Fade Auto", true));
     layout.add (floatParam (fadeManualMs, "Fade Manual", { 5.0f, 500.0f, 0.1f }, 50.0f, "ms"));

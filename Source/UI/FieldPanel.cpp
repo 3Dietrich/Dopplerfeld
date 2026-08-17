@@ -66,6 +66,21 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     addAndMakeVisible (groundReflectionButton);
     groundReflectionAttachment = std::make_unique<ButtonAttachment> (apvts, Params::groundReflectionOn, groundReflectionButton);
 
+    setupKnob (nWaveSizeKnob, apvts, Params::nWaveSize, "N-Wave Size",
+               "Groesse/Masse des Koerpers in Metern - sie bestimmt die Dauer der "
+               "Druckwelle. Groesser = tiefer und laenger (Verkehrsflugzeug), kleiner = "
+               "kuerzer und knackiger (Geschoss). Wirkt nur bei eingeschalteter N-Welle.");
+
+    nWaveButton.setTooltip (
+        "Echte N-Wellen-Druckwelle beim Ueberschallknall: steiler Anstieg, Nulldurchgang, "
+        "steiler Abfall. Ausgeloest pro Hoerweg in dem Moment, in dem die Mach-Front ihn "
+        "ueberstreicht (M_r durchquert 1). Kommt ADDITIV oben auf den normalen Klang, die "
+        "bestehende Amplitudenformel bleibt unveraendert. Nicht zu verwechseln mit 'Boom "
+        "Limit' (reine Amplitudendeckelung, keine Pulsform) und nicht mit dem Limiter am "
+        "Ausgang. Standardmaessig aus.");
+    addAndMakeVisible (nWaveButton);
+    nWaveAttachment = std::make_unique<ButtonAttachment> (apvts, Params::nWaveOn, nWaveButton);
+
     fadeAutoButton.setTooltip ("Ueberblendzeit bei Sprüngen automatisch aus der jeweiligen "
                                "Aenderung ableiten (Distanz/Klangfrequenz), statt eine feste "
                                "Zeit ('Fade Manual') zu benutzen.");
@@ -94,6 +109,8 @@ void FieldPanel::resized()
     limiterOnButton.setBounds (toggleRow.removeFromLeft (100));
     toggleRow.removeFromLeft (8);
     groundReflectionButton.setBounds (toggleRow.removeFromLeft (140));
+    toggleRow.removeFromLeft (8);
+    nWaveButton.setBounds (toggleRow.removeFromLeft (100));
     area.removeFromTop (6);
 
     auto knobRow = area.removeFromTop (knobH);
@@ -113,7 +130,7 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto geoRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob })
+    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &nWaveSizeKnob })
     {
         layoutKnob (*k, geoRow.removeFromLeft (knobW));
         geoRow.removeFromLeft (4);

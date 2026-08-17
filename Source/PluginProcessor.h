@@ -256,6 +256,9 @@ private:
         std::atomic<float>* wallTilt[DopplerEngine::maxWalls]  {};
         std::atomic<float>* wallDamp[DopplerEngine::maxWalls]  {};
 
+        std::atomic<float>* nWaveOn   = nullptr;
+        std::atomic<float>* nWaveSize  = nullptr;
+
         std::atomic<float>* reflect2ndOn = nullptr;
         std::atomic<float>* bounceGain   = nullptr;
 
@@ -315,6 +318,8 @@ private:
 
     double lastBoomLimitDb    = 30.0;
     double lastAirAbsorbAmount = 1.0;
+    bool   lastNWaveOn         = false;
+    double lastNWaveSize       = 15.0;
 
     // Geglättete Wandlage. Eine Wand ist eine Spiegelebene; springt sie, dann
     // springt der gespiegelte Empfänger und damit die Laufzeit des ganzen

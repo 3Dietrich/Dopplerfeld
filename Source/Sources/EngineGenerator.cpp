@@ -42,6 +42,20 @@ void EngineGenerator::reset()
 
     noiseFilter.reset();
     jitterFilter.reset();
+
+    // Feste Startwerte statt der Uhrzeit-Aussaat, die juce::Random von sich
+    // aus mitbringt. Zwei Läufe mit denselben Einstellungen liefern damit
+    // dasselbe Ergebnis - musikalisch macht das keinen Unterschied (Rauschen
+    // bleibt Rauschen), aber es ist die Voraussetzung dafür, dass sich zwei
+    // Renderings überhaupt vergleichen lassen. Ohne das schwankt schon der
+    // Spitzenpegel zweier identischer Durchläufe um ein paar Promille, und
+    // jede Aussage der Form "diese Änderung verändert den Ausgang nicht"
+    // wäre nicht prüfbar.
+    //
+    // Zwei verschiedene Zahlen, damit Rauschen und Jitter nicht dieselbe Folge
+    // durchlaufen und sich dadurch korrelieren.
+    noiseRandom.setSeed (0x5eed1234);
+    jitterRandom.setSeed (0x5eed4321);
 }
 
 double EngineGenerator::polyBlep (double phase, double phaseInc)

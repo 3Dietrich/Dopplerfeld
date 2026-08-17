@@ -62,6 +62,46 @@ void PropagationPath::setTrajectoryGridSeconds (double seconds)
     trajGridSeconds = std::max (1.0e-6, seconds);
 }
 
+void PropagationPath::setNWave (bool shouldBeEnabled, double sizeMetres)
+{
+    nWaveOn    = shouldBeEnabled;
+    nWaveSizeM = std::max (0.01, sizeMetres);
+}
+
+double PropagationPath::nWaveAt (const Branch& b)
+{
+    // Die klassische N-Welle: senkrechter Sprung auf +A, linearer Abfall durch
+    // null, senkrechter Rücksprung von -A auf 0. Zwei Stoßfronten, dazwischen
+    // eine Gerade - das ist die Form, die eine Überschallquelle wirklich
+    // abstrahlt, und nicht dasselbe wie ein abklingender Impuls.
+    //
+    // Die Fronten bekommen eine endliche Anstiegszeit. Das ist keine
+    // Bequemlichkeit gegen Aliasing, sondern selbst Physik: eine Stoßfront
+    // verbreitert sich auf ihrem Weg durch die Luft, und genau deshalb klingt
+    // ein Knall aus der Nähe wie ein Peitschenschlag und aus der Ferne wie ein
+    // dumpfes Grollen. nRise wächst deswegen mit der Entfernung (siehe
+    // Auslösestelle).
+    if (b.nPhase < 0.0 || b.nPhase > b.nDuration)
+        return 0.0;
+
+    const double t    = b.nPhase;
+    const double T    = b.nDuration;
+    const double rise = std::min (b.nRise, 0.4 * T);
+
+    // Linearer Rumpf von +1 nach -1 über die volle Dauer.
+    double shape = 1.0 - 2.0 * t / T;
+
+    // Vordere Front: aus der Ruhe auf +1 hochziehen.
+    if (t < rise)
+        shape *= t / rise;
+
+    // Hintere Front: von -1 zurück auf Ruhe.
+    if (t > T - rise)
+        shape *= (T - t) / rise;
+
+    return b.nAmp * shape;
+}
+
 void PropagationPath::setDiscoveryIntervalSeconds (double seconds)
 {
     discoverySeconds = std::max (0.0, seconds);
@@ -367,6 +407,42 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const double tau0 = b.tau;
             const double amp0 = b.amp;
 
+            // --- N-Wellen-Schicht: Auslösung ---
+            //
+            // Pro Zweig genau dann, wenn sein M_r die 1 durchquert - der
+            // Moment, in dem die Mach-Front diesen Hörweg überstreicht. Ein
+            // frisch geborener Zweig hat keinen Vorwert und löst deshalb nicht
+            // aus; sonst käme bei jeder Kegelankunft gleich ein ganzes Paar.
+            const double machNow = alive ? tg.mach : b.mach;
+
+            if (nWaveOn && b.machSeen && ((b.prevMach < 1.0) != (machNow < 1.0)))
+            {
+                // Pulsdauer aus der Ausdehnung des Körpers: die Zeit, die der
+                // Schall braucht, um ihn der Länge nach zu durchlaufen, mal
+                // zwei (Bug- und Heckstoß liegen nicht am selben Punkt). Damit
+                // heißt größer wirklich länger und tiefer, kleiner kürzer und
+                // knackiger - ohne dass hinter dem Regler eine Formel steckt,
+                // die niemand nachvollziehen kann.
+                b.nDuration = 2.0 * nWaveSizeM / std::max (1.0, c);
+
+                // Verbreiterung der Stoßfront mit der Entfernung, siehe
+                // nWaveAt(). Zwei Mikrosekunden je Meter sind eine
+                // Modellkonstante: in 100 m ergibt das 0,2 ms (Peitschenknall),
+                // in 3 km 6 ms (dumpfes Grollen).
+                b.nRise = 0.05 * b.nDuration + 2.0e-6 * b.R;
+
+                // Eigenes, gutartiges Abstandsgesetz statt des regularisierten
+                // Fokussierungsfaktors: die Druckwelle ist eine separate
+                // Schicht und soll nicht an demselben eps hängen, das "Boom
+                // Limit" für die Amplitudenformel deckelt.
+                b.nAmp = nWaveLevel / std::max (b.R, minRadius);
+
+                b.nPhase = 0.0;
+            }
+
+            b.prevMach = machNow;
+            b.machSeen = true;
+
             for (int i = 0; i < len; ++i)
             {
                 const double u  = (double) i / (double) len;
@@ -424,7 +500,26 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 else if (b.env > target)
                     b.env = std::max (target, b.env - envInc);
 
-                out[n0 + i] += (float) (y * b.env * gain);
+                // Die N-Welle kommt ADDITIV oben drauf und läuft bewusst NICHT
+                // durch die Filterkette der Amplitudenformel: sie ist eine
+                // eigene Schicht, ihre Entfernungsabhängigkeit steckt in
+                // nAmp und ihre Höhen in der Breite der Stoßfront. Der
+                // Anti-Klick-Envelope gilt trotzdem für beide - ein
+                // verschwindender Zweig darf auch seine Druckwelle nicht
+                // abschneiden.
+                double outSample = y;
+
+                if (b.nPhase >= 0.0)
+                {
+                    outSample += nWaveAt (b);
+
+                    b.nPhase += 1.0 / sr;
+
+                    if (b.nPhase > b.nDuration)
+                        b.nPhase = -1.0;
+                }
+
+                out[n0 + i] += (float) (outSample * b.env * gain);
             }
 
             b.tau     = tau1;

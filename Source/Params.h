@@ -125,6 +125,13 @@ namespace Params
     constexpr const char* reflect2ndOn = "reflect2ndOn";
     constexpr const char* bounceGain   = "bounceGain";
 
+    // Druckwellen-/N-Wellen-Schicht für den Überschallknall. Eigener Schalter
+    // (Default aus) und ein eigener Größenregler; beides ist ausdrücklich
+    // getrennt von boomLimitDb (reine Amplitudendeckelung) und vom
+    // Master-Softclip (limiterOn).
+    constexpr const char* nWaveOn   = "nWaveOn";
+    constexpr const char* nWaveSize = "nWaveSize";
+
     // --- Crossfade ---
     constexpr const char* fadeAuto     = "fadeAuto";
     constexpr const char* fadeManualMs = "fadeManualMs";

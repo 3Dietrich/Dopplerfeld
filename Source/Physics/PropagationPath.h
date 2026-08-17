@@ -120,6 +120,21 @@ public:
     // Crossfade - der würde den Knall wegmitteln, den man hören will.
     void setBranchRampSeconds (double seconds);
 
+    // Druckwellen-/N-Wellen-Schicht für den Überschallknall.
+    //
+    // Ausdrücklich ADDITIV und getrennt vom bestehenden Amplituden-Mechanismus:
+    // die Formel A = 1/(R·sqrt((1-M_r)²+eps²)) bleibt unangetastet, die N-Welle
+    // kommt oben drauf. Sie ist damit auch klar getrennt von "Boom Limit"
+    // (reine Amplitudendeckelung über eps, keine Pulsform) und vom
+    // Master-Softclip.
+    //
+    // Ausgelöst wird sie pro Zweig, wenn dessen M_r die 1 durchquert - das ist
+    // der Moment, in dem die Mach-Front diesen Hörweg überstreicht.
+    //
+    // sizeMetres ist die Ausdehnung des Körpers und bestimmt die Pulsdauer:
+    // größer = tiefer und länger, kleiner = kürzer und knackiger.
+    void setNWave (bool shouldBeEnabled, double sizeMetres);
+
     // Phase 2 (Plan 2.7 / Abschnitt 7). In Phase 1 ohne Wirkung, damit später
     // kein Aufrufer geändert werden muss.
     void setNearFieldEnabled (bool shouldBeEnabled) { nearFieldOn = shouldBeEnabled; }
@@ -170,7 +185,26 @@ private:
         double lpZ     = 0.0;   // Filterzustand - gehört zum Zweig (Plan 2.9)
         double refZ    = 0.0;   // Reflexionsdämpfung, ebenfalls je Zweig
         double env     = 0.0;   // Anti-Klick-Rampe, 0..1
+
+        // --- N-Wellen-Schicht, siehe setNWave() ---
+        //
+        // machSeen wird beim ersten Solver-Punkt eines Zweigs gesetzt; ohne
+        // einen gültigen Vorwert gibt es keine Durchquerung zu erkennen, und
+        // ein frisch geborener Zweig würde sonst bei jeder Geburt auslösen.
+        bool   machSeen  = false;
+        double prevMach  = 0.0;
+
+        // Laufzeit seit der Auslösung in Sekunden; negativ heißt "keine Welle".
+        double nPhase    = -1.0;
+        double nDuration = 0.0;
+        double nRise     = 0.0;
+        double nAmp      = 0.0;
     };
+
+    // Wert der N-Welle zum Phasenzeitpunkt: steiler Anstieg auf +A, linearer
+    // Abfall durch null, steiler Rücksprung von -A auf 0. Die klassische
+    // N-Form, nicht bloß ein abklingender Impuls.
+    static double nWaveAt (const Branch& b);
 
     // Zielzustand eines Zweigs am Ende des laufenden Solver-Segments.
     struct Target
@@ -238,6 +272,17 @@ private:
 
     bool   nearFieldOn     = false;
     double dominantFreqHz  = 0.0;
+
+    // N-Wellen-Schicht. Default aus - eine Druckwelle, die immer mitläuft,
+    // wollen die wenigsten.
+    bool   nWaveOn        = false;
+    double nWaveSizeM     = 15.0;
+
+    // Spitzendruck der N-Welle in einem Meter Abstand. Modellkonstante, kein
+    // Regler: die Regler sind An/Aus und Größe. Der Wert ist so gewählt, dass
+    // die Welle in typischer Vorbeiflug-Entfernung in derselben Größenordnung
+    // liegt wie der Direktschall - beurteilen muss ihn @dpas Ohr.
+    static constexpr double nWaveLevel = 8.0;
 
     pathdetail::DisplayValue<int>    dispBranches;
     pathdetail::DisplayValue<double> dispDelay;
