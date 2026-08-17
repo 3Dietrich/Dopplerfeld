@@ -256,8 +256,6 @@ juce::String DopplerfeldEditor::statusText() const
     // Breite verschiebt eine kürzer werdende Zahl (z.B. "9.3" -> "-9.3")
     // allen nachfolgenden Text um ein wechselndes Stück - die ganze Zeile
     // "wackelt". Mit fester Zeichenbreite bleiben Spalten stehen.
-    text << "M  x " << juce::String::formatted ("%7.1f", snapshot.sourcePos.x)
-         << " m   y " << juce::String::formatted ("%7.1f", snapshot.sourcePos.y) << " m";
 
     // @dpa-Feedback: Tempo der Quelle, Einheit per speedUnitButton umschaltbar.
     // Mach kommt aus derselben Momentangeschwindigkeit, nicht aus M_r (das ist
@@ -267,7 +265,7 @@ juce::String DopplerfeldEditor::statusText() const
         // Cockpit-Display im Feld genutzt) - hier nur auf feste Breite
         // gebracht, damit die Statuszeile nicht wackelt (siehe Kommentar oben).
         const juce::String formatted = FieldComponent::formatSpeed (snapshot.sourceSpeed, snapshot.speedOfSound, speedUnit);
-        text << "   " << formatted.paddedLeft (' ', 11);
+        text << formatted.paddedLeft (' ', 11);
     }
 
     // @dpa-Feedback: L-M-Abstand immer sichtbar, nicht nur bei Vorbeiflug.
@@ -277,53 +275,24 @@ juce::String DopplerfeldEditor::statusText() const
     // siehe cpuLoadPercent()). Über 100% färbt paint() die ganze Statuszeile
     // rot (siehe dort) - reiner Text reicht hier, kein eigener Meter nötig.
     const float cpu = dopplerfeldProcessor.cpuLoadPercent();
-    text << "      CPU " << juce::String::formatted ("%4.0f", (double) cpu) << " %"
-         << " (Physik " << juce::String::formatted ("%4.0f", (double) dopplerfeldProcessor.cpuLoadPhysicsPercent()) << "%"
-         << " / Quelle " << juce::String::formatted ("%4.0f", (double) dopplerfeldProcessor.cpuLoadSourcePercent()) << "%)";
+    text << "   CPU " << juce::String::formatted ("%4.0f", (double) cpu) << " %";
 
-    // Nur Direktschall und einfache Reflexionen einzeln auflisten. Mit beiden
-    // Wänden, Boden und Mehrfachreflexion wären es zwanzig Pfade - die Zeile
-    // wäre unlesbar und der Nutzen null, weil die Zweitordnungs-Pfade
-    // paarweise dasselbe erzählen. Ihre Anzahl steht stattdessen als Zahl
-    // dahinter, damit sichtbar bleibt, was gerade gerechnet wird.
+    // @dpa-Feedback: Einzelne Pfade (L/R, M_r, Zweige) sind zu klein und zu
+    // viel für die Statuszeile - nur die Anzahl aktiver Mehrfachreflexionen
+    // bleibt als grobe Andeutung, was gerade gerechnet wird.
     int higherOrder = 0;
 
     for (int i = 0; i < snapshot.pathCount; ++i)
-    {
-        const auto& info = snapshot.paths[(size_t) i];
-
-        if (info.order > 1)
-        {
+        if (snapshot.paths[(size_t) i].order > 1)
             ++higherOrder;
-            continue;
-        }
-
-        // Spiegelpfade sind an der Fläche markiert, aus der sie kommen (Boden
-        // als ', Wände durchnummeriert) - sonst stünden bei eingeschalteten
-        // Reflexionen mehrere gleich aussehende Blöcke da.
-        const char* surfaceMark = " ";
-
-        switch (info.order == 0 ? 0 : info.surface)
-        {
-            case 0:  surfaceMark = " "; break;   // Direktschall
-            case 1:  surfaceMark = "'"; break;   // Boden
-            case 2:  surfaceMark = "1"; break;   // Wand 1
-            default: surfaceMark = "2"; break;   // Wand 2
-        }
-
-        text << "      " << (info.ear == 0 ? "L" : "R") << surfaceMark
-             << " " << juce::String::formatted ("%7.1f", info.delaySeconds * 1000.0) << " ms"
-             << "  M_r " << juce::String::formatted ("%5.2f", info.machRadial)
-             << "  Zweige " << juce::String::formatted ("%2d", info.activeBranches);
-    }
 
     if (higherOrder > 0)
-        text << "      +" << higherOrder << " Mehrfachrefl.";
+        text << "   +" << higherOrder << " Mehrfachrefl.";
 
     if (dopplerfeldProcessor.isRecording())
-        text << "      Aufnahme " << dopplerfeldProcessor.recordedFrameCount() << " Frames";
+        text << "   Aufnahme " << dopplerfeldProcessor.recordedFrameCount() << " Frames";
     else if (dopplerfeldProcessor.isPlayingMotion())
-        text << "      Wiedergabe";
+        text << "   Wiedergabe";
 
     return text;
 }
@@ -345,10 +314,10 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     // Monospace statt Proportionalschrift: nur bei fester Zeichenbreite pro
     // Glyphe hält das Zahlen-Padding in statusText() die Spalten auch
     // tatsaechlich stabil (siehe Kommentar dort).
-    g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain)));
+    g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 16.0f, juce::Font::plain)));
     g.drawFittedText (statusText(),
                       margin, getHeight() - statusHeight, fieldWidth, statusHeight,
-                      juce::Justification::topLeft, 2);
+                      juce::Justification::centredLeft, 1);
 }
 
 void DopplerfeldEditor::resized()
