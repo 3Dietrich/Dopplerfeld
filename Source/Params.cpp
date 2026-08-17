@@ -177,6 +177,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (groundDampAmount, "Ground Damping", unitRange(), 0.5f));
     layout.add (std::make_unique<juce::AudioParameterInt> (juce::ParameterID { solverStride, 1 }, "Solver Stride", 1, 16, 1));
 
+    // Wände. Default aus und mit derselben Begründung wie beim Boden: jede
+    // eingeschaltete Fläche ist ein weiteres Pfadpaar und damit ein weiteres
+    // Mal Löserlast.
+    //
+    // Die Vorgabepositionen legen die beiden Wände einander gegenüber an den
+    // Rand des Feldes (y = 0,05 und y = 0,95), jeweils quer zur Blickrichtung.
+    // Wer sie einschaltet, ohne etwas zu verstellen, hört damit sofort etwas -
+    // eine Wand mitten durch den Hörer wäre der verwirrendere Startpunkt.
+    layout.add (boolParam  (wall1On,    "Wall 1", false));
+    layout.add (floatParam (wall1X,     "Wall 1 X",     unitRange(), 0.5f));
+    layout.add (floatParam (wall1Y,     "Wall 1 Y",     unitRange(), 0.95f));
+    layout.add (floatParam (wall1Angle, "Wall 1 Angle", { -180.0f, 180.0f, 0.1f }, 0.0f, "°"));
+    layout.add (floatParam (wall1Tilt,  "Wall 1 Tilt",  { -90.0f, 90.0f, 0.1f }, 0.0f, "°"));
+    layout.add (floatParam (wall1Damp,  "Wall 1 Damp",  unitRange(), 0.3f));
+
+    layout.add (boolParam  (wall2On,    "Wall 2", false));
+    layout.add (floatParam (wall2X,     "Wall 2 X",     unitRange(), 0.5f));
+    layout.add (floatParam (wall2Y,     "Wall 2 Y",     unitRange(), 0.05f));
+    layout.add (floatParam (wall2Angle, "Wall 2 Angle", { -180.0f, 180.0f, 0.1f }, 0.0f, "°"));
+    layout.add (floatParam (wall2Tilt,  "Wall 2 Tilt",  { -90.0f, 90.0f, 0.1f }, 0.0f, "°"));
+    layout.add (floatParam (wall2Damp,  "Wall 2 Damp",  unitRange(), 0.3f));
+
     // --- Crossfade ---
     layout.add (boolParam (fadeAuto, "Fade Auto", true));
     layout.add (floatParam (fadeManualMs, "Fade Manual", { 5.0f, 500.0f, 0.1f }, 50.0f, "ms"));

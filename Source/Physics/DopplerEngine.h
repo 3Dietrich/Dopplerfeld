@@ -74,18 +74,36 @@ public:
     void setBoomLimitDb (double dB);
     void setAirAbsorptionAmount (double amount01);
 
-    // Bodenreflexion an/aus. Die Spiegelpfade existieren immer (sie werden in
-    // prepare() mit angelegt), gerechnet werden sie nur im eingeschalteten
-    // Zustand - ein Umschalten allokiert also nichts und kostet ausgeschaltet
-    // auch keine Löserzeit. Beim Wiedereinschalten liegt ihr letzter
-    // Löserzeitpunkt in der Vergangenheit; PropagationPath sät sich daraufhin
-    // von selbst neu (Lückenerkennung in process()), und die Zweige rampen
-    // über den Anti-Klick-Envelope ein statt zu knacken.
+    // Reflektierende Flächen. Index 0 ist der Direktschall (immer an, keine
+    // Spiegelung), Index 1 der Boden, danach die Wände.
+    //
+    // Die Spiegelpfade existieren immer (sie werden in prepare() mit angelegt),
+    // gerechnet werden sie nur im eingeschalteten Zustand - ein Umschalten
+    // allokiert also nichts und kostet ausgeschaltet auch keine Löserzeit. Beim
+    // Wiedereinschalten liegt ihr letzter Löserzeitpunkt in der Vergangenheit;
+    // PropagationPath sät sich daraufhin von selbst neu (Lückenerkennung in
+    // process()), und die Zweige rampen über den Anti-Klick-Envelope ein statt
+    // zu knacken.
+    static constexpr int maxWalls    = 2;
+    static constexpr int surfaceCount = 2 + maxWalls;   // direkt, Boden, Wände
+
     void setGroundReflectionEnabled (bool shouldBeEnabled);
-    bool isGroundReflectionEnabled() const { return groundReflectionOn; }
+    bool isGroundReflectionEnabled() const { return surfaces[1].enabled; }
 
     // Höhendämpfung der Reflexion, 0..1. Wirkt nur auf die Spiegelpfade.
     void setGroundDampingAmount (double amount01);
+
+    // Eine Wand als unendliche Ebene: Fußpunkt, Richtung der Wandlinie in der
+    // Draufsicht und Neigung um genau diese Linie (siehe
+    // wallMirrorTransform()). Anders als der Boden darf sie sich bewegen -
+    // deshalb wird ihre Abbildung nicht einmalig gesetzt, sondern vor jedem
+    // Block aus diesen Werten gebildet. Der Aufrufer glättet sie, damit ein
+    // gezogener Regler den Spiegelempfänger nicht springen lässt.
+    void setWall (int index, bool enabled, Vec3 anchorMetres,
+                  double azimuthRad, double tiltRad, double damping01);
+
+    // Alles außer dem Direktschall aus - die minimale sichere Konfiguration.
+    void disableAllReflections();
 
     // Globaler Umschalter aus Plan 3.11 (fadeAuto/fadeManualMs), wirkt auf
     // den nächsten Geometriewechsel. Denselben Setter hat der
@@ -133,12 +151,25 @@ private:
     // seine ein (prevListener == listener, also Ohrgeschwindigkeit 0). Sonst
     // würde ein Feldgrößenwechsel, der ja auch den Hörer verschiebt, den
     // Sprung über die Ohrgeschwindigkeit in den alten Satz zurückholen.
+    // Eine reflektierende Fläche. Index 0 (Direktschall) trägt keine
+    // Spiegelung und ist immer aktiv; alle anderen sind es nur, wenn der
+    // Benutzer sie einschaltet.
+    struct Surface
+    {
+        PathTransform transform;      // Identität beim Direktschall
+        bool          enabled = true;
+        double        damping = 0.0;  // Höhenverlust an der Fläche, 0..1
+
+        // Eckfrequenz bei voller Dämpfung. Modellkonstante je Flächenart, kein
+        // Regler: der Regler ist die Stärke.
+        double        dampFcHz = 800.0;
+    };
+
     struct PathSet
     {
-        // mirror gibt je Pfad an, ob er der Direktschall (0) oder die
-        // Bodenspiegelung (1) ist; daraus folgt sein PathTransform. Die Länge
-        // des Vektors bestimmt die Pfadanzahl.
-        void prepare (double sampleRate, int maxBlockSize, const std::vector<int>& mirror,
+        // surface gibt je Pfad an, welche Fläche ihn erzeugt (Index in
+        // surfaces). Die Länge des Vektors bestimmt die Pfadanzahl.
+        void prepare (double sampleRate, int maxBlockSize, const std::vector<int>& surface,
                       double trajRateHz, double maxSeconds);
         void reset (Vec3 pos, double time, const ListenerState& l);
 
@@ -159,11 +190,11 @@ private:
         ListenerState prevListener;
 
         // Blockkontext, von der Engine vor jedem process() gesetzt.
-        const SourceSignalBuffer* signal     = nullptr;
-        const MediumState*        medium     = nullptr;
-        const std::vector<int>*   pathEar    = nullptr;
-        const std::vector<int>*   pathMirror = nullptr;
-        bool                      mirrorsOn      = false;
+        const SourceSignalBuffer* signal      = nullptr;
+        const MediumState*        medium      = nullptr;
+        const std::vector<int>*   pathEar     = nullptr;
+        const std::vector<int>*   pathSurface = nullptr;
+        const Surface*            surfaces    = nullptr;
         double                    blockStartTime = 0.0;
         double                    sr             = 0.0;
     };
@@ -185,7 +216,9 @@ private:
 
     SourceSignalBuffer signal;          // geteilt, genau ein Schreiber
     std::vector<int>   pathEar;         // welcher Pfad auf welchen Kanal
-    std::vector<int>   pathMirror;      // 0 = Direktschall, 1 = Bodenspiegelung
+    std::vector<int>   pathSurface;     // welche Fläche den Pfad erzeugt
+
+    Surface surfaces[surfaceCount];
 
     SoundSource* source = nullptr;
 
@@ -208,13 +241,22 @@ private:
     double boomLimitDb    = 30.0;
     double airAbsorbAmount = 1.0;
 
-    bool   groundReflectionOn = false;
-    double groundDampAmount   = 0.5;
-
-    // Eckfrequenz der Bodendämpfung bei voller Stärke. Modellkonstante, kein
-    // Regler: der Regler ist die Stärke. Rund ein Kilohertz ist die Gegend, in
-    // der eine streifende Reflexion an Gras/Erde ihre Höhen verliert.
+    // Eckfrequenz der Bodendämpfung bei voller Stärke. Rund ein Kilohertz ist
+    // die Gegend, in der eine streifende Reflexion an Gras/Erde ihre Höhen
+    // verliert. Eine Wand ist typischerweise härter und behält mehr davon.
     static constexpr double groundDampFcHz = 800.0;
+    static constexpr double wallDampFcHz   = 2500.0;
+
+    // Lage der Wände, für die Anzeige mitgeführt (die Abbildung selbst steht
+    // in surfaces[] und ist daraus nicht mehr ablesbar).
+    struct WallGeometry
+    {
+        Vec3   anchor;
+        double azimuthRad = 0.0;
+        double tiltRad    = 0.0;
+    };
+
+    WallGeometry wallGeometry[maxWalls];
 
     bool   useManualFade = false;
     double manualFadeSeconds = 0.05;

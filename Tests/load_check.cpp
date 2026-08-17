@@ -462,6 +462,104 @@ int main()
     }
 
     //==================================================================
+    // 1e. Wände: zwei frei platzierbare unendliche Ebenen, eine senkrecht und
+    //     eine geneigt. Geprüft wird dasselbe wie beim Boden - dass sie den
+    //     Ausgang überhaupt verändern (eine nie gerechnete Wand rutschte sonst
+    //     stumm durch), dass nichts entgleist, und dass sie nur das kosten, was
+    //     ein weiteres Pfadpaar eben kostet.
+    //
+    //     Die geneigte Wand ist der eigentliche Grund für diesen Fall: sie ist
+    //     die einzige Stelle, an der eine Spiegelebene weder achsenparallel
+    //     noch senkrecht steht, und damit der einzige Test der allgemeinen
+    //     Householder-Spiegelung im vollständigen Zusammenspiel.
+    {
+        auto flyBy = [&] (bool wallsOn, Stats& stats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 200.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcX, 0.05f);
+            setParam (proc, Params::srcY, 0.5f + (float) (10.0 / (200.0 * DopplerfeldProcessor::fieldAspect)));
+            setParam (proc, Params::srcZ, 5.0f);
+
+            // Boden aus, damit hier wirklich nur die Wände gemessen werden.
+            setParam (proc, Params::groundReflectionOn, 0.0f);
+
+            // Wand 1 senkrecht, quer hinter dem Hörer.
+            setParam (proc, Params::wall1On,    wallsOn ? 1.0f : 0.0f);
+            setParam (proc, Params::wall1X,     0.5f);
+            setParam (proc, Params::wall1Y,     0.9f);
+            setParam (proc, Params::wall1Angle, 0.0f);
+            setParam (proc, Params::wall1Tilt,  0.0f);
+            setParam (proc, Params::wall1Damp,  0.3f);
+
+            // Wand 2 schräg im Grundriss UND geneigt - die allgemeine Lage.
+            setParam (proc, Params::wall2On,    wallsOn ? 1.0f : 0.0f);
+            setParam (proc, Params::wall2X,     0.15f);
+            setParam (proc, Params::wall2Y,     0.15f);
+            setParam (proc, Params::wall2Angle, 37.0f);
+            setParam (proc, Params::wall2Tilt,  25.0f);
+            setParam (proc, Params::wall2Damp,  0.2f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            render (proc, buffer, 6.0, stats, [&proc] (double t)
+            {
+                setParam (proc, Params::srcX, (float) (0.05 + 30.0 * t / 200.0));
+            });
+        };
+
+        Stats without, with;
+
+        flyBy (false, without);
+        flyBy (true,  with);
+
+        without.report ("Waende aus");
+        with.report    ("Waende an (1 schraeg)");
+
+        if (with.nonFinite > 0 || with.peak <= 0.0)
+            failed = true;
+
+        if (with.worstSilenceSeconds > 0.05)
+        {
+            std::printf ("FEHLGESCHLAGEN: Ton setzt %.3f s lang aus (Wandreflexionen)\n",
+                         with.worstSilenceSeconds);
+            failed = true;
+        }
+
+        const double rmsWithout = std::sqrt (without.sumSquares[0] / ((double) without.samples * 0.5));
+        const double rmsWith    = std::sqrt (with.sumSquares[0]    / ((double) with.samples    * 0.5));
+
+        if (std::abs (rmsWith - rmsWithout) <= 1.0e-6 * std::max (rmsWithout, 1.0e-9))
+        {
+            std::printf ("FEHLGESCHLAGEN: Wände ändern den Ausgang nicht "
+                         "(RMS ohne %.6f, mit %.6f)\n", rmsWithout, rmsWith);
+            failed = true;
+        }
+
+        // Zwei Wände sind zwei zusätzliche Pfadpaare, also das Dreifache des
+        // Direktschalls. Deutlich mehr hieße, dass eine Wand ihren Löser
+        // teurer betreibt als der Direktpfad - genau die Sorte Fehler, die man
+        // sonst erst im Hörtest als Aussetzer bemerkt.
+        const double evalsWith    = with.blocks    > 0 ? (double) with.solverEvals    / with.blocks    : 0.0;
+        const double evalsWithout = without.blocks > 0 ? (double) without.solverEvals / without.blocks : 0.0;
+
+        if (evalsWithout > 0.0 && evalsWith > 3.75 * evalsWithout)
+        {
+            std::printf ("FEHLGESCHLAGEN: zwei Wände kosten %.1fx statt der erwarteten 3x "
+                         "(%.0f statt %.0f Löser-Auswertungen pro Block)\n",
+                         evalsWith / evalsWithout, evalsWith, evalsWithout);
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 2. Extremfall: größtes Feld, Überschallflug quer hindurch, Umkehr,
     //    Feldgrößenwechsel.
     {

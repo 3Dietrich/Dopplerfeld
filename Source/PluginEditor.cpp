@@ -9,7 +9,8 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
       enginePanel (p.apvts),
       samplePanel (p.apvts),
       motionPanel (p.apvts),
-      fieldPanel  (p.apvts)
+      fieldPanel  (p.apvts),
+      wallPanel   (p.apvts)
 {
     addAndMakeVisible (field);
 
@@ -37,14 +38,16 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     samplePanelBox.setContent (&samplePanel);
     motionPanelBox.setContent (&motionPanel);
     fieldPanelBox.setContent (&fieldPanel);
+    wallPanelBox.setContent (&wallPanel);
 
     // Motor aufgeklappt (die Default-Quelle), der Rest zugeklappt - sonst
     // steht die Spalte beim Öffnen sofort voll.
     samplePanelBox.setExpanded (false);
     motionPanelBox.setExpanded (false);
     fieldPanelBox.setExpanded (true);
+    wallPanelBox.setExpanded (false);
 
-    for (auto* box : { &enginePanelBox, &samplePanelBox, &motionPanelBox, &fieldPanelBox })
+    for (auto* box : { &enginePanelBox, &samplePanelBox, &motionPanelBox, &fieldPanelBox, &wallPanelBox })
     {
         box->onExpandedChanged = [this] { layoutPanels(); };
         panelHolder.addAndMakeVisible (box);
@@ -57,6 +60,17 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     samplePanel.onFileSelected = [this] (const juce::File& file)
     {
         dopplerfeldProcessor.loadSampleFile (file);
+    };
+
+    // Notaus: zurück auf die minimale sichere Konfiguration - nur noch der
+    // Direktpfad pro Ohr. Bewusst über die Parameter und nicht über einen
+    // Direktgriff in die Engine: so sieht man am Schalter, was passiert ist,
+    // der Host bekommt es mit, und es steht im gespeicherten Zustand.
+    wallPanel.onPanic = [this]
+    {
+        setParameter (Params::groundReflectionOn, 0.0);
+        setParameter (Params::wall1On, 0.0);
+        setParameter (Params::wall2On, 0.0);
     };
 
     motionPanel.onRecordClicked = [this] { dopplerfeldProcessor.toggleRecording(); };
@@ -146,9 +160,20 @@ juce::String DopplerfeldEditor::statusText() const
     {
         const auto& info = snapshot.paths[(size_t) i];
 
-        // Spiegelpfade mit ' markiert (L' / R'), sonst stünden bei
-        // eingeschalteter Bodenreflexion vier gleich aussehende Blöcke da.
-        text << "      " << (info.ear == 0 ? "L" : "R") << (info.mirrored ? "'" : " ")
+        // Spiegelpfade sind an der Fläche markiert, aus der sie kommen (Boden
+        // als ', Wände durchnummeriert) - sonst stünden bei eingeschalteten
+        // Reflexionen bis zu acht gleich aussehende Blöcke da.
+        const char* surfaceMark = " ";
+
+        switch (info.surface)
+        {
+            case 0:  surfaceMark = " "; break;   // Direktschall
+            case 1:  surfaceMark = "'"; break;   // Boden
+            case 2:  surfaceMark = "1"; break;   // Wand 1
+            default: surfaceMark = "2"; break;   // Wand 2
+        }
+
+        text << "      " << (info.ear == 0 ? "L" : "R") << surfaceMark
              << " " << juce::String::formatted ("%7.1f", info.delaySeconds * 1000.0) << " ms"
              << "  M_r " << juce::String::formatted ("%5.2f", info.machRadial)
              << "  Zweige " << juce::String::formatted ("%2d", info.activeBranches);
@@ -216,7 +241,8 @@ void DopplerfeldEditor::layoutPanels()
         { &enginePanelBox, engineContentHeight },
         { &samplePanelBox, sampleContentHeight },
         { &motionPanelBox, motionContentHeight },
-        { &fieldPanelBox,  fieldContentHeight  }
+        { &fieldPanelBox,  fieldContentHeight  },
+        { &wallPanelBox,   wallContentHeight   }
     };
 
     int y = 0;

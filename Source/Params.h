@@ -87,6 +87,30 @@ namespace Params
     constexpr const char* groundDampAmount   = "groundDampAmount";
     constexpr const char* solverStride    = "solverStride";   // nur Debug
 
+    // Wände: unendliche Ebenen, frei im Feld platzierbar. Zwei feste Plätze,
+    // keine dynamische Liste - die Pfade müssen im Audiothread allokationsfrei
+    // bereitliegen, und mehr als zwei zusätzliche Reflexionen kauft sich kaum
+    // jemand freiwillig ein (jede kostet ein weiteres Pfadpaar Löserlast).
+    //
+    // x/y sind wie alle Feldpositionen normiert (0..1) und geben den Fußpunkt
+    // an, durch den die Wand läuft. Angle ist die Richtung der Wandlinie in der
+    // Draufsicht, Tilt die Neigung um genau diese Linie (0 = senkrecht
+    // stehend, ±90 = flach liegend). Damp ist der Höhenverlust bei der
+    // Reflexion, wie beim Boden.
+    constexpr const char* wall1On    = "wall1On";
+    constexpr const char* wall1X     = "wall1X";
+    constexpr const char* wall1Y     = "wall1Y";
+    constexpr const char* wall1Angle = "wall1Angle";
+    constexpr const char* wall1Tilt  = "wall1Tilt";
+    constexpr const char* wall1Damp  = "wall1Damp";
+
+    constexpr const char* wall2On    = "wall2On";
+    constexpr const char* wall2X     = "wall2X";
+    constexpr const char* wall2Y     = "wall2Y";
+    constexpr const char* wall2Angle = "wall2Angle";
+    constexpr const char* wall2Tilt  = "wall2Tilt";
+    constexpr const char* wall2Damp  = "wall2Damp";
+
     // --- Crossfade ---
     constexpr const char* fadeAuto     = "fadeAuto";
     constexpr const char* fadeManualMs = "fadeManualMs";

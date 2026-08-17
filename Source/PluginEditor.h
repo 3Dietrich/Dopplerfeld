@@ -8,11 +8,12 @@
 #include "UI/FieldPanel.h"
 #include "UI/MotionPanel.h"
 #include "UI/SamplePanel.h"
+#include "UI/WallPanel.h"
 #include "UI/ToggleableTooltipWindow.h"
 
 #include "Util/FieldSnapshot.h"
 
-// Oberfläche nach Plan 3.13: links das Feld mit M und L, rechts die vier
+// Oberfläche nach Plan 3.13: links das Feld mit M und L, rechts die
 // einklappbaren Regler-Panels in einem Viewport.
 //
 // Der Timer holt den Anzeige-Snapshot aus dem Audiothread ab - der Editor
@@ -58,11 +59,13 @@ private:
     CollapsiblePanel samplePanelBox { "Sample" };
     CollapsiblePanel motionPanelBox { "Bewegung" };
     CollapsiblePanel fieldPanelBox  { "Feld / Physik / Ausgang" };
+    CollapsiblePanel wallPanelBox   { "Reflexionen / Waende" };
 
     EnginePanel enginePanel;
     SamplePanel samplePanel;
     MotionPanel motionPanel;
     FieldPanel  fieldPanel;
+    WallPanel   wallPanel;
 
     // Quellwahl ist kein Parameter (siehe DopplerfeldProcessor), deshalb ein
     // gewöhnlicher Knopf statt eines Attachments.
@@ -81,6 +84,7 @@ private:
     static constexpr int sampleContentHeight = 220;
     static constexpr int motionContentHeight = 214;
     static constexpr int fieldContentHeight  = 218;
+    static constexpr int wallContentHeight   = 268;
 
     // Das Feld bleibt exakt 700x400 (Plan 3.13). Die Größe ist nicht nur
     // Optik: FieldComponent rechnet die Feldhöhe in Metern aus seinem

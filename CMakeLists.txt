@@ -55,6 +55,7 @@ target_sources(Dopplerfeld
         Source/UI/SamplePanel.cpp
         Source/UI/MotionPanel.cpp
         Source/UI/FieldPanel.cpp
+        Source/UI/WallPanel.cpp
         Source/Util/Crossfader.cpp
         Source/Sources/SoundSourceHolder.cpp
         Source/UI/LevelMeter.cpp)

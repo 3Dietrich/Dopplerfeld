@@ -112,10 +112,52 @@ void FieldComponent::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colours::black);
     drawGrid (g);
+    drawWalls (g);
     drawWavefronts (g);
     drawTrail (g);
     drawSource (g);
     drawListener (g);
+}
+
+void FieldComponent::drawWalls (juce::Graphics& g) const
+{
+    // Eine Wand ist eine unendlich grosse Ebene; in der Draufsicht ist sie
+    // eine Gerade durch den Fusspunkt mit Richtung (cos a, sin a). Gezeichnet
+    // wird sie deshalb ueber das ganze Bild hinaus, nicht als Strecke - eine
+    // begrenzte Linie wuerde eine Kante suggerieren, die es nicht gibt.
+    //
+    // Die Neigung aendert an der Draufsicht nichts (eine gekippte Wand steht
+    // an derselben Stelle), macht die Reflexion aber schwaecher bis
+    // wirkungslos - deshalb wird sie als Strichstaerke sichtbar gemacht: eine
+    // flach liegende Wand faellt in der Draufsicht mit dem Boden zusammen und
+    // wird zur duennen Linie.
+    const double diagonal = std::hypot ((double) getWidth(), (double) getHeight());
+
+    for (const auto& wall : snapshot.walls)
+    {
+        if (! wall.on)
+            continue;
+
+        const Vec3 dir { std::cos (wall.azimuthRad), std::sin (wall.azimuthRad), 0.0 };
+
+        // Über die Bildecke hinaus verlaengern: die Umrechnung ist isotrop,
+        // deshalb reicht die Bilddiagonale in Metern.
+        const double reach = diagonal / (double) juce::jmax (1.0e-6f, pixelsPerMetre());
+
+        const auto a = worldToScreen (wall.anchor - dir * reach);
+        const auto b = worldToScreen (wall.anchor + dir * reach);
+
+        const float upright = (float) std::abs (std::cos (wall.tiltRad));
+
+        g.setColour (juce::Colours::skyblue.withAlpha (0.20f + 0.35f * upright));
+        g.drawLine (juce::Line<float> (a, b), 1.0f + 2.0f * upright);
+
+        // Fusspunkt markieren, sonst ist beim Ziehen nicht erkennbar, worauf
+        // sich X und Y beziehen.
+        const auto anchor = worldToScreen (wall.anchor);
+        g.setColour (juce::Colours::skyblue.withAlpha (0.55f));
+        g.fillEllipse (anchor.x - 2.5f, anchor.y - 2.5f, 5.0f, 5.0f);
+    }
 }
 
 void FieldComponent::drawGrid (juce::Graphics& g) const

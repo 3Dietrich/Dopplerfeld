@@ -229,6 +229,14 @@ private:
         std::atomic<float>* groundReflectionOn = nullptr;
         std::atomic<float>* groundDampAmount   = nullptr;
 
+        // Je Wand: an/aus, Fußpunkt (normiert), Richtung, Neigung, Dämpfung.
+        std::atomic<float>* wallOn[DopplerEngine::maxWalls]    {};
+        std::atomic<float>* wallX[DopplerEngine::maxWalls]     {};
+        std::atomic<float>* wallY[DopplerEngine::maxWalls]     {};
+        std::atomic<float>* wallAngle[DopplerEngine::maxWalls] {};
+        std::atomic<float>* wallTilt[DopplerEngine::maxWalls]  {};
+        std::atomic<float>* wallDamp[DopplerEngine::maxWalls]  {};
+
         std::atomic<float>* fadeAuto     = nullptr;
         std::atomic<float>* fadeManualMs = nullptr;
 
@@ -284,7 +292,24 @@ private:
 
     double lastBoomLimitDb    = 30.0;
     double lastAirAbsorbAmount = 1.0;
-    double lastGroundDampAmount = 0.5;
+
+    // Geglättete Wandlage. Eine Wand ist eine Spiegelebene; springt sie, dann
+    // springt der gespiegelte Empfänger und damit die Laufzeit des ganzen
+    // Reflexionspfades - man hörte einen Klick. Der Regler schreibt deshalb
+    // wie überall sonst nur ein Ziel, gefolgt wird ihm über denselben
+    // One-Pole wie beim Yaw (yawSmoothCoeff, aus smootherTau abgeleitet).
+    struct WallState
+    {
+        Vec3   anchor;
+        double azimuthRad = 0.0;
+        double tiltRad    = 0.0;
+        bool   on         = false;
+        double damping    = 0.3;
+    };
+
+    WallState wallTarget[DopplerEngine::maxWalls];
+    WallState wallSmoothed[DopplerEngine::maxWalls];
+    bool      wallStateInitialised = false;
 
     double motionTickAccum   = 0.0;   // Rest-Samples bis zum nächsten Glätter-Tick
     double recorderTickAccum = 0.0;   // dito für die 200-Hz-Aufzeichnung

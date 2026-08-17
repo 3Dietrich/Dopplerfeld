@@ -63,6 +63,7 @@ private:
 
     // -- Zeichenteile --
     void drawGrid (juce::Graphics& g) const;
+    void drawWalls (juce::Graphics& g) const;
     void drawWavefronts (juce::Graphics& g) const;
     void drawTrail (juce::Graphics& g) const;
     void drawSource (juce::Graphics& g) const;

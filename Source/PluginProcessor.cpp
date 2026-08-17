@@ -192,6 +192,29 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.groundReflectionOn = raw (Params::groundReflectionOn);
     pp.groundDampAmount   = raw (Params::groundDampAmount);
 
+    {
+        const char* const onIds[]    { Params::wall1On,    Params::wall2On };
+        const char* const xIds[]     { Params::wall1X,     Params::wall2X };
+        const char* const yIds[]     { Params::wall1Y,     Params::wall2Y };
+        const char* const angleIds[] { Params::wall1Angle, Params::wall2Angle };
+        const char* const tiltIds[]  { Params::wall1Tilt,  Params::wall2Tilt };
+        const char* const dampIds[]  { Params::wall1Damp,  Params::wall2Damp };
+
+        static_assert (DopplerEngine::maxWalls == 2,
+                       "Die ID-Listen oben sind je Wand von Hand geschrieben - eine dritte "
+                       "Wand braucht dort einen dritten Eintrag, sonst liest sie ins Leere.");
+
+        for (int w = 0; w < DopplerEngine::maxWalls; ++w)
+        {
+            pp.wallOn[w]    = raw (onIds[w]);
+            pp.wallX[w]     = raw (xIds[w]);
+            pp.wallY[w]     = raw (yIds[w]);
+            pp.wallAngle[w] = raw (angleIds[w]);
+            pp.wallTilt[w]  = raw (tiltIds[w]);
+            pp.wallDamp[w]  = raw (dampIds[w]);
+        }
+    }
+
     pp.fadeAuto     = raw (Params::fadeAuto);
     pp.fadeManualMs = raw (Params::fadeManualMs);
 
@@ -320,7 +343,9 @@ void DopplerfeldProcessor::applyParameters()
     targetYawRadians         = juce::degreesToRadians ((double) pp.lisYaw->load());
     listenerState.earSpacing = (double) pp.earSpacing->load();
 
-    if (std::abs (fieldMetresValue - lastFieldMetres) > 1.0e-9)
+    const bool fieldJustChanged = std::abs (fieldMetresValue - lastFieldMetres) > 1.0e-9;
+
+    if (fieldJustChanged)
     {
         lastFieldMetres = fieldMetresValue;
 
@@ -402,16 +427,32 @@ void DopplerfeldProcessor::applyParameters()
         dopplerEngine.setAirAbsorptionAmount (airAbsorb);
     }
 
-    // Der Schalter selbst ist billig (ein bool pro Block), die Dämpfung läuft
-    // wie oben über alle Pfade und deshalb nur bei echter Änderung.
+    // Beides ist inzwischen billig: die Engine legt Schalter und Dämpfung an
+    // ihrer Fläche ab und reicht sie vor jedem Block an die Pfade durch, statt
+    // dass hier über alle Pfade beider Geometriesätze gelaufen werden müsste.
     dopplerEngine.setGroundReflectionEnabled (pp.groundReflectionOn->load() > 0.5f);
+    dopplerEngine.setGroundDampingAmount ((double) pp.groundDampAmount->load());
 
-    const double groundDamp = (double) pp.groundDampAmount->load();
-
-    if (std::abs (groundDamp - lastGroundDampAmount) > 1.0e-9)
+    // Wände: nur die Ziele einsammeln, gefolgt wird ihnen in advanceMotion().
+    for (int w = 0; w < DopplerEngine::maxWalls; ++w)
     {
-        lastGroundDampAmount = groundDamp;
-        dopplerEngine.setGroundDampingAmount (groundDamp);
+        wallTarget[w].on         = pp.wallOn[w]->load() > 0.5f;
+        wallTarget[w].damping    = (double) pp.wallDamp[w]->load();
+        wallTarget[w].anchor     = metresFromNormalised ((double) pp.wallX[w]->load(),
+                                                         (double) pp.wallY[w]->load(), 0.0);
+        wallTarget[w].azimuthRad = juce::degreesToRadians ((double) pp.wallAngle[w]->load());
+        wallTarget[w].tiltRad    = juce::degreesToRadians ((double) pp.wallTilt[w]->load());
+    }
+
+    // Beim allerersten Durchgang (und nach einem Feldgrößenwechsel, der die
+    // Fußpunkte in Metern verschiebt) ohne Anlauf auf das Ziel setzen - sonst
+    // führe die Wand beim Start sichtbar und hörbar aus dem Ursprung heran.
+    if (! wallStateInitialised || fieldJustChanged)
+    {
+        for (int w = 0; w < DopplerEngine::maxWalls; ++w)
+            wallSmoothed[w] = wallTarget[w];
+
+        wallStateInitialised = true;
     }
 
     // --- Crossfade ---
@@ -512,6 +553,26 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
                                        + wrapToPi (targetYawRadians - smoothedYawRadians) * yawSmoothCoeff);
         listenerState.yaw  = smoothedYawRadians;
 
+        // Wände nach demselben Muster: an/aus und Dämpfung springen sofort
+        // (der Schalter blendet über den Anti-Klick-Envelope des Pfades ein,
+        // die Dämpfung ist ein Filterkoeffizient), Lage und Winkel werden
+        // gezogen. Ohne das Ziehen wäre ein gedrehter Wandregler ein Sprung
+        // der Spiegelebene und damit ein Sprung der Laufzeit - ein Klick.
+        for (int w = 0; w < DopplerEngine::maxWalls; ++w)
+        {
+            WallState&       s = wallSmoothed[w];
+            const WallState& t = wallTarget[w];
+
+            s.on      = t.on;
+            s.damping = t.damping;
+
+            s.anchor += (t.anchor - s.anchor) * yawSmoothCoeff;
+
+            s.azimuthRad = wrapToPi (s.azimuthRad
+                                     + wrapToPi (t.azimuthRad - s.azimuthRad) * yawSmoothCoeff);
+            s.tiltRad   += (t.tiltRad - s.tiltRad) * yawSmoothCoeff;
+        }
+
         // Aufgezeichnet wird die GEGLÄTTETE Position (Plan 3.9), sonst klänge
         // die Wiedergabe anders als die Live-Bewegung.
         recorderTickAccum += tickDt;
@@ -607,6 +668,13 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
         dopplerEngine.setSourceTarget (smoothedSourcePos);
         dopplerEngine.setListener (listenerState);
+
+        for (int w = 0; w < DopplerEngine::maxWalls; ++w)
+        {
+            const auto& wall = wallSmoothed[w];
+            dopplerEngine.setWall (w, wall.on, wall.anchor, wall.azimuthRad, wall.tiltRad,
+                                   wall.damping);
+        }
 
         // Fenster auf den Ausgabepuffer, keine Kopie und keine Allokation.
         juce::AudioBuffer<float> chunk (buffer.getArrayOfWritePointers(),

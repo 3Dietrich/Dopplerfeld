@@ -21,6 +21,7 @@ struct FieldSnapshot
     static constexpr int maxTrailPoints = 128;
     static constexpr int maxWavefronts  = 12;
     static constexpr int maxPaths       = 12;   // Plan 2.12: bis zu 12 Leser (2 Ohren + Spiegelquellen)
+    static constexpr int maxWalls       = 2;    // frei platzierbare Wände, siehe DopplerEngine
 
     // Quellposition, dezimierte Spur der letzten Sekunden.
     Vec3 sourcePos;
@@ -51,11 +52,28 @@ struct FieldSnapshot
     struct PathInfo
     {
         int    ear             = 0;       // 0 = links, 1 = rechts (Plan 3.6 pathEar)
-        bool   mirrored        = false;   // Bodenspiegelung statt Direktschall
+
+        // Welche Fläche diesen Pfad erzeugt: 0 = Direktschall, 1 = Boden,
+        // ab 2 die Wände (siehe DopplerEngine::Surface).
+        int    surface         = 0;
         int    activeBranches  = 0;
         double delaySeconds    = 0.0;
         double machRadial      = 0.0;
     };
     std::array<PathInfo, maxPaths> paths {};
     int pathCount = 0;
+
+    // Lage der Wände, damit die Feldanzeige sie zeichnen kann. Die Wand ist
+    // eine unendliche Ebene; in der Draufsicht ist sie eine Gerade durch
+    // anchor mit Richtung (cos azimuth, sin azimuth). Die Neigung ändert daran
+    // nichts - eine geneigte Wand steht in der Draufsicht an derselben Stelle,
+    // sie liegt nur anders im Raum.
+    struct WallInfo
+    {
+        bool   on         = false;
+        Vec3   anchor;
+        double azimuthRad = 0.0;
+        double tiltRad    = 0.0;
+    };
+    std::array<WallInfo, maxWalls> walls {};
 };
