@@ -28,6 +28,7 @@ public:
     void setSpeed (double speedIn);   // geklemmt auf 0.25 .. 4.0, siehe Params.h playSpeed
     void setLooping (bool shouldLoop);
     void setInterp (Interp interpIn) { interp = interpIn; }
+    Interp getInterp() const { return interp; }
 
     void trigger (double now);
 

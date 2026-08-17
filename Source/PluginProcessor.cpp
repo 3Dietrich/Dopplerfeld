@@ -598,6 +598,15 @@ void DopplerfeldProcessor::handlePendingRequests()
         activeCheapClones.store (0);
     }
 
+    if (engineResetRequest.exchange (false))
+    {
+        // "Audiomotor neu anlassen": setzt Trajektorie, Pfade und deren
+        // Filter-/Envelope-Zustand zurueck (siehe dopplerEngine.reset()),
+        // ohne Puffer neu zu allokieren. Quell-/Hoererziel bleiben die
+        // zuletzt gesetzten Parameterwerte, kein Sprung auf einen anderen Ort.
+        dopplerEngine.reset();
+    }
+
     if (sourceSwitchRequest.exchange (false))
         sourceHolder.switchTo (useSampleSource.load() ? static_cast<SoundSource*> (&sampleSource)
                                                        : static_cast<SoundSource*> (&engineGenerator));
@@ -734,16 +743,43 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
         // liefern nur ein ZIEL - geglättet, in die Trajektorie geschrieben und
         // gelöst wird danach für alle gleich (Plan 3.8/3.9).
         Vec3 target = sourceTargetMetres;
+        bool bypassSmoothing = false;
 
         if (flyBy.isRunning())
+        {
             target = flyBy.tick (tickDt);
+        }
         else if (motionPlayer.isPlaying())
+        {
             target = motionPlayer.tick (tickDt);
 
-        sourceSmoothers.setTarget (target);
+            // CatmullRom-Wiedergabe ist bereits C1-glatt (siehe MotionPlayer.h),
+            // ein zusätzlicher Glätter mit fester Zeitkonstante ist dafür nicht
+            // nötig - und bei hoher Play-Speed sogar schädlich: das Ziel
+            // wandert schneller durch den Clip, als die feste Zeitkonstante
+            // hinterherkommt, der Glätter schneidet Ecken und die Bewegung
+            // wird kleiner/runder statt schneller (@dpa-Repro: Play Speed
+            // hoch + Loop). Nur bei Linear (bloss C0-stetig) bleibt der
+            // Glätter Pflicht, siehe Klassenkommentar in MotionPlayer.h.
+            bypassSmoothing = (motionPlayer.getInterp() == MotionPlayer::Interp::CatmullRom);
+        }
 
-        Vec3 sourceVel;
-        sourceSmoothers.tick (smoothedSourcePos, sourceVel);
+        if (bypassSmoothing)
+        {
+            // Alle vier internen Verfahren synchron mitführen (nicht nur das
+            // aktive) - sonst setzt ein Wechsel zurück zu Maus/Automation nach
+            // dem Stop mit einem veralteten, "eingefrorenen" Zustand wieder
+            // ein und springt.
+            smoothedSourcePos = target;
+            sourceSmoothers.reset (target);
+        }
+        else
+        {
+            sourceSmoothers.setTarget (target);
+
+            Vec3 sourceVel;
+            sourceSmoothers.tick (smoothedSourcePos, sourceVel);
+        }
 
         listenerSmoothers.setTarget (listenerTargetMetres);
 
