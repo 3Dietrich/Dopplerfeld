@@ -77,7 +77,13 @@ juce::String FieldComponent::formatSpeed (double sourceSpeedMps, double speedOfS
         case SpeedUnit::Mach: value = sourceSpeedMps / juce::jmax (1.0, speedOfSoundMps);       label = "Mach"; break;
     }
 
-    return juce::String (value, 1) + " " + label;
+    // Feste Breite (@dpa-Feedback "Langsamkeit der Anzeigewahrnehmung"): egal
+    // ob 0 oder 100 km/h, Zahl und Einheit duerfen im laufenden Betrieb nicht
+    // seitlich wandern - nur die Ziffern selbst duerfen sich aendern. Beide
+    // Abnehmer (Cockpit-Display hier und PluginEditor::statusText()) bekommen
+    // deshalb schon hier eine auf Zeichenbreite feste Zeichenkette statt sie
+    // selbst nachtraeglich padden zu muessen.
+    return juce::String::formatted ("%6.1f %-4s", value, label);
 }
 
 // ---- Koordinatenumrechnung -------------------------------------------------
@@ -182,9 +188,14 @@ void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
 
     const juce::String text = formatSpeed (snapshot.sourceSpeed, snapshot.speedOfSound, speedUnit);
 
+    // Monospace statt Proportionalschrift (@dpa-Feedback "Langsamkeit der
+    // Anzeigewahrnehmung"): erst bei fester Zeichenbreite pro Glyphe haelt die
+    // feste Zeichenbreite aus formatSpeed() die Anzeige auch pixelgenau
+    // stehen - in einer Proportionalschrift waeren "1" und "0" unterschiedlich
+    // breit und die Zahl würde bei jeder Ziffernaenderung minimal ruckeln.
     g.setColour (hudYellow.withAlpha (0x55 / 255.0f));
-    g.setFont (juce::Font (juce::FontOptions (26.0f, juce::Font::bold)));
-    g.drawFittedText (text, box.reduced (6), juce::Justification::centred, 1);
+    g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 26.0f, juce::Font::bold)));
+    g.drawText (text, box.reduced (6), juce::Justification::centred, false);
 }
 
 void FieldComponent::drawWalls (juce::Graphics& g) const

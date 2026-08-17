@@ -259,14 +259,10 @@ juce::String DopplerfeldEditor::statusText() const
 
     // @dpa-Feedback: Tempo der Quelle, Einheit per speedUnitButton umschaltbar.
     // Mach kommt aus derselben Momentangeschwindigkeit, nicht aus M_r (das ist
-    // radial zum jeweiligen Ohr, hier geht es um die Quelle selbst).
-    {
-        // Wert und Einheit kommen aus FieldComponent::formatSpeed() (auch vom
-        // Cockpit-Display im Feld genutzt) - hier nur auf feste Breite
-        // gebracht, damit die Statuszeile nicht wackelt (siehe Kommentar oben).
-        const juce::String formatted = FieldComponent::formatSpeed (snapshot.sourceSpeed, snapshot.speedOfSound, speedUnit);
-        text << formatted.paddedLeft (' ', 11);
-    }
+    // radial zum jeweiligen Ohr, hier geht es um die Quelle selbst). Feste
+    // Breite kommt schon aus FieldComponent::formatSpeed() selbst (auch vom
+    // Cockpit-Display im Feld genutzt) - hier kein zweites Padding noetig.
+    text << FieldComponent::formatSpeed (snapshot.sourceSpeed, snapshot.speedOfSound, speedUnit);
 
     // @dpa-Feedback: L-M-Abstand immer sichtbar, nicht nur bei Vorbeiflug.
     text << "   L-M " << juce::String::formatted ("%7.1f", (snapshot.sourcePos - snapshot.listener.head).length()) << " m";
