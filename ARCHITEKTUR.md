@@ -147,6 +147,54 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (spät nachts: Nachlauf-Fix, Motor-Gating, Record-Diagnose)
+
+Nachlauf hatte einen echten Bug (@dpa-Repro): bei "Slew Limiter" lief er ein
+Stück, bremste aber nicht sichtbar. Ursache war ein Design-Fehler der
+ersten Fassung, kein Solver-/Physik-Bug - siehe `git log` ("Nachlauf-Fix:
+analytischer Zielpunkt statt eigenem Simulations-Timer") für die Herleitung.
+Fix: statt eines eigenen 60-Hz-Simulations-Timers wird beim Loslassen EIN
+analytisch integrierter Endpunkt gesetzt (`v0*halfLife/ln(2)`), der
+jeweils aktive Smoother bremst mit seiner EIGENEN Kurve dorthin - kein
+zweiter, konkurrierender Bremsmechanismus mehr. Der "Nachlauf"-Schalter
+sitzt jetzt im "Bewegung"-Panel statt in der Kopfzeile.
+
+**Motor-Gating** (`DopplerfeldProcessor::setMotorGateEnabled`, Schalter
+"Motor bei Griff" in "Motorsteuerung", Default aus): Motor klingt nur,
+während/nachdem M gegriffen ist. mousedown faedet schnell ein (~30ms),
+mouseup wartet erst auf die Ruheposition (dieselbe 0,05-m/s-Schwelle wie
+der Nachlauf, inkl. eines evtl. laufenden Nachlaufs) und faedet dann über
+2,5s ruhig aus. `FieldComponent` meldet nur die rohen Greif-/Loslass-
+Ereignisse (`onSourceGrabbed`/`onSourceReleased`), kennt das Feature selbst
+nicht - Zustandsmaschine (Sustaining/Attacking/AwaitingRest/Releasing/Idle)
+und die eigentliche Gain-Rampe leben im Processor, direkt am Mono-Puffer
+der Motor-Quelle, DopplerEngine/Physik unberührt. Wirkt nur bei Quelle
+"Motor" und nur auf M, nicht L (Klärung per Rückfrage). **Ungehört.**
+
+**Record-Diagnose** (noch offen, kein Fix): @dpa berichtet, eine über die
+ganze Fläche aufgenommene Bewegung spiele nur in kleinen Kreisen um den
+Anfang ab. Preset `presets/irgendwas ist mit rec kaputt` von Hand dekodiert
+(JUCE-eigenes Base64-Format, `<Bytelänge>.<Daten>`, siehe
+`MemoryBlock::toBase64Encoding` in JUCE) und ausgewertet:
+
+- Die Daten selbst sind NICHT leer/korrupt: 9276 Frames (46,4 s), x
+  2026–3278 m, y 789–1412 m bei `fieldMetres` 3580 m - ein plausibler,
+  nicht-trivialer Ausschnitt.
+- Aber: Weglänge 17713 m gegen eine Bounding-Box-Diagonale von nur 1399 m
+  (Faktor 12,7×) - viel Hin-und-Her/Schleifen auf engem Raum, und die Box
+  deckt auch nur ~35 %/30 % der Feldbreite/-höhe ab, nicht die ganze Fläche.
+- `CriticallyDampedSpring::tick()` (aktiver Smoother bei dieser Aufnahme,
+  τ≈0,18s) sieht bei Code-Lektüre korrekt kritisch gedämpft aus (kein
+  Überschwinger-Bug wie neulich beim Slew Limiter) - Verdacht deshalb:
+  `MotionRecorder` zeichnet bewusst die GEGLÄTTETE (nicht die rohe) Position
+  auf; ein schneller, richtungswechselnder Sweep durch einen 180ms-Glätter
+  rundet Ecken ab und bleibt hinter schnellen Ausschlägen zurück - das
+  könnte genau dieses Bild erzeugen, WÄRE aber kein Bug, sondern erwartetes
+  Lag-Filter-Verhalten. Nicht verifiziert: ob die Bewegung schon beim
+  LIVE-Ziehen so kringelig aussah (dann Smoother-Charakteristik) oder erst
+  bei der Wiedergabe (dann echter Record/Playback-Bug) - @dpas Antwort
+  darauf steht noch aus, bevor hier weitergesucht wird.
+
 ## Stand 2026-08-17 (Nacht: Cockpit-Tempo, Motorsteuerung, Audio In, Nachlauf)
 
 Vier UI-/Quellen-Features aus einer Runde, `solver_check`+`load_check` grün,
