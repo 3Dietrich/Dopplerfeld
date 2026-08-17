@@ -11,6 +11,22 @@ namespace
 constexpr double pi    = 3.14159265358979323846;
 constexpr double twoPi = 6.283185307179586476925;
 
+// Einträge im gespeicherten Zustand, die KEINE Parameter sind: sie hängen als
+// Property am Wurzelknoten des APVTS-Baums statt in der Parameterliste. Eine
+// Bewegungsaufzeichnung ist kein automatisierbarer Regler, und ein
+// Wiedergabezustand auch nicht.
+//
+// Namen an einer Stelle, aus demselben Grund wie in Params.h: ein Tippfehler
+// an der Verwendungsstelle würde stumm eine leere Property lesen.
+constexpr const char* motionFramesId  = "motionFrames";
+constexpr const char* motionRateId    = "motionRateHz";
+constexpr const char* motionPlayingId = "motionWasPlaying";
+
+// Ein Frame sind drei double (x, y, z). Ausgeschrieben statt die Vec3-Struktur
+// roh zu kopieren: das Dateiformat soll nicht am Speicherlayout eines
+// C++-Typs hängen.
+constexpr size_t doublesPerFrame = 3;
+
 // Winkeldifferenz auf (-π, π]: ohne das würde die Yaw-Glättung beim Sprung
 // über den Nulldurchgang den langen Weg einmal um den Kopf herum nehmen.
 double wrapToPi (double a)
@@ -238,6 +254,12 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.outputGain = raw (Params::outputGain);
     pp.limiterOn  = raw (Params::limiterOn);
 
+    // Übergabepuffer der geladenen Aufzeichnung einmal auf Höchstlänge
+    // bringen. Danach wächst er nie mehr, gibt seinen Speicher nie her und
+    // kann dem Audiothread deshalb nicht unter den Händen wegwandern (siehe
+    // stagedMotionFrames in PluginProcessor.h).
+    stagedMotionFrames.reserve ((size_t) motionRecordMaxFrames);
+
     // Der Motor ist die Default-Quelle: er klingt sofort, ohne dass erst eine
     // Datei geladen werden muss.
     sourceHolder.setSource (&engineGenerator);
@@ -285,7 +307,7 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     motionTickAccum   = 0.0;
     recorderTickAccum = 0.0;
 
-    motionRecorder.prepare (motionRecordRateHz, 120.0);
+    motionRecorder.prepare (motionRecordRateHz, motionRecordMaxSeconds);
 
     // Kapazität des Players einmal vorwärmen: der Clip wird später im
     // Audiothread übernommen (siehe handlePendingRequests), und eine
@@ -294,9 +316,7 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     // motionPlayerCapacityWarmed in PluginProcessor.h.
     if (! motionPlayerCapacityWarmed)
     {
-        const size_t maxFrames = (size_t) std::ceil (motionRecordRateHz * 120.0);
-
-        std::vector<Vec3> warmup (maxFrames);
+        std::vector<Vec3> warmup ((size_t) motionRecordMaxFrames);
         motionPlayer.setClip (warmup, motionRecordRateHz);
         motionPlayer.setClip ({}, motionRecordRateHz);
 
@@ -640,6 +660,24 @@ void DopplerfeldProcessor::handlePendingRequests()
         {
             motionRecorder.startRecording (dopplerEngine.currentTime());
         }
+    }
+
+    if (motionLoadRequest.exchange (false))
+    {
+        // Aus dem gespeicherten Zustand geladene Aufzeichnung übernehmen
+        // (@dpa: "State laden muss Record laden"). Beide Ziele allokieren
+        // dabei nicht: ihre Kapazitäten stehen seit prepareToPlay() fest, und
+        // setStateInformation() hat die Framezahl vorher auf dasselbe Maximum
+        // gedeckelt.
+        motionRecorder.setFrames (stagedMotionFrames);
+        motionPlayer.setClip (stagedMotionFrames, stagedMotionRateHz);
+
+        // "Und wenn Play beim Save aktiv war, soll es beim Laden direkt
+        // play'en" - derselbe Weg wie der Play-Knopf, nur ohne Umweg über
+        // dessen Anfrage-Flag: hier läuft schon der Audiothread. Ein leerer
+        // Clip lässt trigger() von selbst wirkungslos bleiben.
+        if (motionLoadWasPlaying.load())
+            motionPlayer.trigger (dopplerEngine.currentTime());
     }
 
     if (flyStopRequest.exchange (false))
@@ -1017,18 +1055,110 @@ juce::AudioProcessorEditor* DopplerfeldProcessor::createEditor()
 
 void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // Nur die APVTS. Bewegungsaufzeichnungen leben ausdrücklich nur zur
-    // Laufzeit (Plan Abschnitt 7), ebenso die Quellwahl und der Sample-Pfad.
-    if (auto state = apvts.copyState(); state.isValid())
-        if (auto xml = state.createXml())
-            copyXmlToBinary (*xml, destData);
+    // APVTS plus die Bewegungsaufzeichnung samt Wiedergabezustand (@dpa:
+    // "Recorded muss in state!"). Die Aufzeichnung hängt als binäre Property
+    // am Wurzelknoten der Kopie; JUCE schreibt MemoryBlock-Properties beim
+    // Umwandeln in XML als base64-Attribut mit und liest sie ebenso zurück.
+    // Das Dateiformat bleibt damit dasselbe wie bisher (copyXmlToBinary), und
+    // ältere Presets ohne diese Property laden unverändert weiter.
+    //
+    // Quellwahl und Sample-Pfad bleiben draußen (Plan Abschnitt 7).
+    auto state = apvts.copyState();
+
+    if (! state.isValid())
+        return;
+
+    std::vector<Vec3> frames;
+
+    if (motionRecorder.copyFrames (frames) && ! frames.empty())
+    {
+        juce::MemoryBlock block (frames.size() * doublesPerFrame * sizeof (double));
+        auto* values = static_cast<double*> (block.getData());
+
+        for (size_t i = 0; i < frames.size(); ++i)
+        {
+            values[i * doublesPerFrame + 0] = frames[i].x;
+            values[i * doublesPerFrame + 1] = frames[i].y;
+            values[i * doublesPerFrame + 2] = frames[i].z;
+        }
+
+        state.setProperty (motionFramesId, juce::var (block), nullptr);
+        state.setProperty (motionRateId, motionRecordRateHz, nullptr);
+    }
+    else
+    {
+        // Ohne Aufnahme darf keine alte Property stehenbleiben: apvts.state
+        // trägt sie nach einem Laden weiter, und ein Speichern danach schriebe
+        // sonst die Aufzeichnung des vorigen Presets erneut mit.
+        state.removeProperty (motionFramesId, nullptr);
+        state.removeProperty (motionRateId, nullptr);
+    }
+
+    // Immer geschrieben, auch ohne Aufzeichnung: das ist gleichzeitig die
+    // Marke, an der setStateInformation() einen Zustand MIT Bewegungsteil von
+    // einem älteren ohne unterscheidet.
+    state.setProperty (motionPlayingId, isPlayingMotion(), nullptr);
+
+    if (auto xml = state.createXml())
+        copyXmlToBinary (*xml, destData);
 }
 
 void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+    auto xml = getXmlFromBinary (data, sizeInBytes);
+
+    if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))
+        return;
+
+    const auto tree = juce::ValueTree::fromXml (*xml);
+
+    if (! tree.isValid())
+        return;
+
+    // Bewegungsteil herausholen, aber NICHT selbst anwenden: MotionRecorder
+    // und MotionPlayer gehören ausschließlich dem Audiothread (siehe
+    // toggleRecording()). Übergeben wird deshalb über denselben
+    // Anfrage-Mechanismus wie Aufnahme und Wiedergabe.
+    //
+    // Ein Zustand ohne die Marke motionPlayingId kommt aus einer Fassung, die
+    // den Bewegungsteil noch nicht gespeichert hat. Dann bleibt eine laufende
+    // Aufzeichnung stehen, statt von einem alten Preset stillschweigend
+    // gelöscht zu werden.
+    if (tree.hasProperty (motionPlayingId))
+    {
+        stagedMotionFrames.clear();
+        stagedMotionRateHz = motionRecordRateHz;
+
+        if (const auto* block = tree.getProperty (motionFramesId).getBinaryData())
+        {
+            const size_t stored = block->getSize() / (doublesPerFrame * sizeof (double));
+
+            // Deckelung schon hier, nicht erst im Audiothread: dort steht die
+            // Kapazität fest und darf nicht wachsen. Ein Preset mit einer
+            // anderen Höchstlänge verliert deshalb sein Ende, statt eine
+            // Allokation im Audiothread zu erzwingen.
+            const size_t count = std::min (stored, (size_t) motionRecordMaxFrames);
+
+            stagedMotionFrames.resize (count);
+
+            const auto* values = static_cast<const double*> (block->getData());
+
+            for (size_t i = 0; i < count; ++i)
+                stagedMotionFrames[i] = { values[i * doublesPerFrame + 0],
+                                          values[i * doublesPerFrame + 1],
+                                          values[i * doublesPerFrame + 2] };
+
+            const double storedRate = (double) tree.getProperty (motionRateId, motionRecordRateHz);
+
+            if (storedRate > 0.0)
+                stagedMotionRateHz = storedRate;
+        }
+
+        motionLoadWasPlaying.store ((bool) tree.getProperty (motionPlayingId, false));
+        motionLoadRequest.store (true);
+    }
+
+    apvts.replaceState (tree);
 }
 
 // Diese Fabrikfunktion verlangt JUCE von jedem Plugin-Projekt.

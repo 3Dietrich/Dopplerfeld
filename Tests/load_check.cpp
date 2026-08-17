@@ -1044,6 +1044,185 @@ int main()
     }
 
     //==================================================================
+    // 1j. Bewegungsaufzeichnung im gespeicherten Zustand (@dpa: "Recorded muss
+    //     in state! und State laden muss Record laden! Und wenn Play beim save
+    //     aktiv war, soll es beim laden direkt play'en").
+    //
+    //     Drei Zusicherungen, die keine einzelne Klasse allein prüfen kann:
+    //
+    //     a) Die Frames landen wirklich im Zustand - der Blob wird dadurch um
+    //        mindestens ihre Rohgröße größer als einer ohne Aufnahme.
+    //     b) Ein geladener Zustand füllt Recorder UND Player, und die Frames
+    //        kommen unverändert zurück (derselbe Zustand, zweimal gespeichert,
+    //        trägt dieselben Rohdaten).
+    //     c) Lief die Wiedergabe beim Speichern, läuft sie nach dem Laden von
+    //        selbst wieder.
+    {
+        // Das Frames-Attribut aus dem Zustandsblob herausschneiden.
+        // copyXmlToBinary legt 8 Byte Kopf, dann den XML-Text und dann eine 0
+        // ab; getXmlFromBinary ist geschützt und hier nicht erreichbar. Ein
+        // Vergleich der ganzen Blobs wäre die schwächere Prüfung: er hinge
+        // zusätzlich an der Textform jedes Reglerwerts.
+        auto framesAttribute = [] (const juce::MemoryBlock& mb) -> juce::String
+        {
+            if (mb.getSize() < 10)
+                return {};
+
+            const juce::String text (static_cast<const char*> (mb.getData()) + 8,
+                                     mb.getSize() - 9);
+
+            const juce::String key ("base64:motionFrames=\"");
+            const int at = text.indexOf (key);
+
+            if (at < 0)
+                return {};
+
+            const int from = at + key.length();
+            const int to   = text.indexOfChar (from, '"');
+
+            return to > from ? text.substring (from, to) : juce::String();
+        };
+
+        auto configure = [] (DopplerfeldProcessor& p)
+        {
+            p.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (p, Params::fieldMetres, 200.0f);
+            setParam (p, Params::smootherType, 1.0f);
+            setParam (p, Params::lisX, 0.5f);
+            setParam (p, Params::lisY, 0.5f);
+            setParam (p, Params::srcX, 0.2f);
+            setParam (p, Params::srcY, 0.5f);
+        };
+
+        juce::MemoryBlock savedWithout, saved, savedAgain, savedWhilePlaying;
+
+        int  framesRecorded   = 0;
+        int  framesLoaded     = 0;
+        bool playingAtSave    = false;
+        bool playingAfterLoad = false;
+
+        Stats recordStats, loadStats, playStats;
+
+        {
+            DopplerfeldProcessor proc;
+            configure (proc);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            // Vergleichsgröße für a): derselbe Zustand ohne Aufnahme.
+            proc.getStateInformation (savedWithout);
+
+            proc.toggleRecording();
+
+            render (proc, buffer, 1.0, recordStats, [&proc] (double t)
+            {
+                setParam (proc, Params::srcX, (float) (0.2 + 20.0 * t / 200.0));
+            });
+
+            // Der Stopp wird wie der Start erst im nächsten Block abgeholt -
+            // dort wandert der Clip auch in den Player.
+            proc.toggleRecording();
+            render (proc, buffer, 0.1, recordStats, [] (double) {});
+
+            framesRecorded = proc.recordedFrameCount();
+            proc.getStateInformation (saved);
+
+            proc.triggerPlayback();
+            render (proc, buffer, 0.1, playStats, [] (double) {});
+
+            playingAtSave = proc.isPlayingMotion();
+            proc.getStateInformation (savedWhilePlaying);
+        }
+
+        {
+            // Reihenfolge wie im Host: Zustand setzen, DANN vorbereiten. Genau
+            // deshalb darf setStateInformation nicht selbst in den Player
+            // schreiben - prepareToPlay käme danach und würde es überholen.
+            DopplerfeldProcessor proc;
+            configure (proc);
+            proc.setStateInformation (saved.getData(), (int) saved.getSize());
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            render (proc, buffer, 0.1, loadStats, [] (double) {});
+
+            framesLoaded = proc.recordedFrameCount();
+            proc.getStateInformation (savedAgain);
+        }
+
+        {
+            DopplerfeldProcessor proc;
+            configure (proc);
+            proc.setStateInformation (savedWhilePlaying.getData(), (int) savedWhilePlaying.getSize());
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            render (proc, buffer, 0.1, playStats, [] (double) {});
+
+            playingAfterLoad = proc.isPlayingMotion();
+        }
+
+        const juce::String rawSaved      = framesAttribute (saved);
+        const juce::String rawSavedAgain = framesAttribute (savedAgain);
+
+        std::printf ("%-22s Zustand ohne Aufnahme %zu B, mit Aufnahme %zu B | Frames "
+                     "aufgezeichnet %d, geladen %d | Play nach Laden %s\n",
+                     "Bewegung im State", savedWithout.getSize(), saved.getSize(),
+                     framesRecorded, framesLoaded, playingAfterLoad ? "ja" : "nein");
+
+        if (framesRecorded < 100)
+        {
+            std::printf ("FEHLGESCHLAGEN: nur %d Frames aufgezeichnet - der Testfall "
+                         "greift nicht\n", framesRecorded);
+            failed = true;
+        }
+
+        // a) Drei double je Frame sind 24 Byte; base64 macht daraus mehr, nie
+        //    weniger. Der Zustand muss also mindestens um so viel wachsen.
+        if (saved.getSize() < savedWithout.getSize() + (size_t) framesRecorded * 24)
+        {
+            std::printf ("FEHLGESCHLAGEN: Zustand waechst nur um %zu Byte, %d Frames "
+                         "brauchen mindestens %zu - die Aufzeichnung steht nicht drin\n",
+                         saved.getSize() - savedWithout.getSize(), framesRecorded,
+                         (size_t) framesRecorded * 24);
+            failed = true;
+        }
+
+        // b) Recorder und Player sind gefüllt, und die Rohdaten sind dieselben.
+        if (framesLoaded != framesRecorded)
+        {
+            std::printf ("FEHLGESCHLAGEN: nach dem Laden %d Frames statt %d\n",
+                         framesLoaded, framesRecorded);
+            failed = true;
+        }
+
+        if (rawSaved.isEmpty() || rawSaved != rawSavedAgain)
+        {
+            std::printf ("FEHLGESCHLAGEN: Frames kommen veraendert zurueck (%d gegen %d "
+                         "Zeichen Rohdaten)\n", rawSaved.length(), rawSavedAgain.length());
+            failed = true;
+        }
+
+        // c) War die Wiedergabe beim Speichern an, muss sie nach dem Laden
+        //    wieder laufen - ohne dass jemand Play drückt.
+        if (! playingAtSave)
+        {
+            std::printf ("FEHLGESCHLAGEN: Wiedergabe lief beim Speichern nicht - der "
+                         "Testfall greift nicht\n");
+            failed = true;
+        }
+        else if (! playingAfterLoad)
+        {
+            std::printf ("FEHLGESCHLAGEN: Wiedergabe laeuft nach dem Laden nicht wieder an\n");
+            failed = true;
+        }
+
+        if (loadStats.nonFinite + playStats.nonFinite > 0)
+        {
+            std::printf ("FEHLGESCHLAGEN: NaN/Inf nach dem Laden einer Aufzeichnung\n");
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 2. Extremfall: größtes Feld, Überschallflug quer hindurch, Umkehr,
     //    Feldgrößenwechsel.
     {

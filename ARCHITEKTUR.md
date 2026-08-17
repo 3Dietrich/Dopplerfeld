@@ -146,6 +146,54 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (Bewegungsaufzeichnung im gespeicherten Zustand)
+
+Bisher lebten Aufzeichnungen ausdrücklich nur zur Laufzeit. @dpa will das
+anders: "Recorded muss in state! und State laden muss Record laden! Und wenn
+Play beim save aktiv war, soll es beim laden direkt play'en!!" - genau das ist
+jetzt so.
+
+- **Format bleibt dasselbe.** Die Frames hängen als `MemoryBlock`-Property am
+  Wurzelknoten der `apvts.state`-Kopie. JUCE schreibt solche Properties beim
+  Umwandeln in XML als `base64:`-Attribut mit und liest sie ebenso zurück -
+  `copyXmlToBinary` bleibt unverändert, und **ältere Presets laden weiter**.
+  Gespeichert werden drei ausgeschriebene `double` je Frame, nicht die rohe
+  `Vec3`-Struktur: das Dateiformat soll nicht am Speicherlayout eines
+  C++-Typs hängen.
+- **`motionWasPlaying` wird immer geschrieben**, auch ohne Aufzeichnung. Es ist
+  gleichzeitig die Marke, an der das Laden einen Zustand MIT Bewegungsteil von
+  einem älteren ohne unterscheidet. Ein altes Preset löscht deshalb keine
+  laufende Aufzeichnung, ein neues mit leerer Aufzeichnung schon.
+- **Beide Richtungen kreuzen die Threadgrenze**, und beide brauchten dafür
+  etwas Eigenes:
+  - *Speichern* liest aus dem `MotionRecorder`, der dem Audiothread gehört.
+    `MotionRecorder::copyFrames()` ist der lock-freie Leseweg dorthin: der
+    Audiothread hängt an und veröffentlicht die Anzahl DANACH (also sieht ein
+    Leser nur fertige Frames), und eine `takeGeneration` steigt bei jedem
+    vollständigen Inhaltswechsel - nur dabei wird bestehender Speicher
+    überschrieben statt angehängt, und genau daran erkennt der Leser, dass
+    seine Kopie eine Mischung zweier Aufnahmen wäre. Vier Versuche, dann gibt
+    er auf; dieselbe Bauart wie `DopplerEngine::fillSnapshot()`.
+  - *Laden* schreibt nicht selbst in `MotionRecorder`/`MotionPlayer`, sondern
+    legt die Frames in `stagedMotionFrames` ab und setzt ein Anfrage-Flag, wie
+    Aufnahme und Wiedergabe. Das ist nicht nur Formsache: der Host ruft
+    `setStateInformation()` typischerweise VOR `prepareToPlay()`, und dessen
+    Kapazitäts-Vorwärmung würde einen direkt gesetzten Clip wieder überholen.
+- **Echtzeitsicherheit**: `stagedMotionFrames` bekommt im Konstruktor einmal
+  die Höchstkapazität und gibt sie nie wieder her - der Audiothread kann dem
+  Vektor also nicht beim Kopieren den Boden wegziehen. Beim Übernehmen
+  allokiert nichts: `MotionRecorder::setFrames()` und `MotionPlayer::setClip()`
+  weisen in vorgewärmte Kapazität zu. Eine Aufzeichnung aus einem Preset mit
+  anderer Höchstlänge wird **abgeschnitten** (Deckelung schon im
+  Message-Thread) - Allokieren im Audiothread ist die Alternative, die es
+  nicht gibt.
+
+`load_check` prüft dreierlei: der Zustand wächst um mindestens die Rohgröße der
+Frames (24 Byte je Frame; gemessen 3741 → 10190 Byte bei 200 Frames), dieselben
+Frames kommen nach einem Lade-Speicher-Durchgang zeichengleich zurück, und eine
+beim Speichern laufende Wiedergabe läuft nach dem Laden von selbst wieder an.
+Geladen wird im Test in der Host-Reihenfolge (Zustand setzen, dann vorbereiten).
+
 ## Stand 2026-08-17 (perspektivische Ansicht)
 
 Backlog-Punkt "zweite, perspektivische Ansicht" ist gebaut. Die Draufsicht
@@ -607,28 +655,6 @@ Aufrufe hinweg gepflegte Faltungsstruktur der Ankunftszeitfunktion
 `A(t_e) = t_e + R(t_e)/c`; beides ist derzeit nicht nötig.
 
 **Offen / bekannt kaputt:**
-
-Zuerst zwei Vereinfachungen, die mit den Wänden vom 2026-08-17 neu dazukommen
-und bewusst nicht gelöst sind - sie gehören zusammen und wären ein eigener Lauf:
-
-- **Keine Verdeckung.** Eine Wand ist akustisch nur ein Spiegel, kein
-  Hindernis. Steht sie zwischen Quelle und Hörer, kommt der Direktschall
-  trotzdem ungehindert durch. Verdeckung richtig zu machen heißt Beugung an
-  der Kante, und eine unendliche Ebene hat keine.
-- **Keine Seitenprüfung der Reflexion.** Wandert die Quelle auf die andere
-  Seite einer Wand, wird die Spiegelung weiter gerechnet, obwohl es diesen Weg
-  physikalisch nicht gibt. Ein reiner Seitentest wäre billig, aber halb: ohne
-  Verdeckung würde er die Reflexion wegnehmen und den (dann falschen)
-  Direktschall stehen lassen. Deshalb erst zusammen mit dem Punkt darüber.
-- **Große Felder bei Mach 2 sind teuer.** Gemessen im
-  N-Wellen-Szenario (Feld 2000 m, Mach 2, Vorbeiflugabstand 300 m): rund 24000
-  Löser-Auswertungen pro Block, im Mittel 26 % vom Echtzeitbudget, einzelne
-  Blöcke über dem Budget. Ursache ist das lange Suchfenster auf großen Feldern,
-  nicht ein Defekt - auf einem 150-m-Feld liegt derselbe Fall bei 6700. Der
-  CPU-Balken und der Notaus im Schwarm-Panel sind die Antwort darauf; ein
-  weiterer Löser-Sprung wäre ein eigener Lauf (Ansätze siehe unten unter
-  "Was am Scan nicht half").
-
 - Ob der "Sound zerstückelt weg"-Komplex damit weg ist, muss @dpas Ohr
   entscheiden - gemessen ist die Überlastung weg, gehört wurde seitdem
   nicht. Falls Aussetzer bleiben, sind sie NICHT mehr mit CPU-Überlastung

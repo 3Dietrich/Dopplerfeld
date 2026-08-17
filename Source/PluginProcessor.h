@@ -21,6 +21,7 @@
 #include "Util/FieldSnapshot.h"
 
 #include <atomic>
+#include <vector>
 
 // Zusammenbau aller Bausteine (Plan 3.6 bis 3.13): Quellstufe -> Glättung ->
 // DopplerEngine -> Ausgangsstufe. Der Processor selbst rechnet keine Physik,
@@ -38,8 +39,17 @@ public:
     // nichts mehr allokieren muss (Plan 2.12).
     static constexpr double maxFieldMetres = 10000.0;
 
-    // Regelrate der Bewegungsaufzeichnung (Plan 3.9).
-    static constexpr double motionRecordRateHz = 200.0;
+    // Regelrate und Höchstlänge der Bewegungsaufzeichnung (Plan 3.9). Beide
+    // Zahlen bemessen die Kapazität von Recorder und Player und damit die
+    // Obergrenze, bis zu der eine geladene Aufzeichnung ohne Allokation im
+    // Audiothread übernommen werden kann.
+    static constexpr double motionRecordRateHz    = 200.0;
+    static constexpr double motionRecordMaxSeconds = 120.0;
+
+    // Wie viele Frames dabei höchstens zusammenkommen. Eine geladene
+    // Aufzeichnung wird darauf abgeschnitten.
+    static constexpr int motionRecordMaxFrames =
+        (int) (motionRecordRateHz * motionRecordMaxSeconds);
 
     // Teilblocklänge, in der processBlock die Engine füttert. Zwischen zwei
     // Aufrufen zieht die Engine die Quellposition linear durch, kurze
@@ -407,6 +417,25 @@ private:
 
     //==================================================================
     // Message-Thread -> Audiothread
+
+    // Geladene Bewegungsaufzeichnung. setStateInformation() legt sie hier ab
+    // und setzt danach das Flag; abgeholt wird sie am Blockanfang im
+    // Audiothread (handlePendingRequests). Direkt in motionRecorder/
+    // motionPlayer zu schreiben wäre ein echtes Datenrennen - die beiden
+    // gehören ausschließlich dem Audiothread, siehe toggleRecording().
+    //
+    // Die Kapazität wird im Konstruktor einmal auf die Höchstlänge gestellt
+    // und danach nie überschritten. Damit gibt der Vektor seinen Speicher nie
+    // wieder her, und ein zweites Laden kann dem Audiothread nicht den Boden
+    // unter den Füßen wegziehen, während er noch kopiert - schlimmstenfalls
+    // liest er dann Werte aus zwei Presets, was zwei Preset-Wechsel innerhalb
+    // eines Audioblocks (~10 ms) voraussetzt. Eine echte Kommandoqueue wäre
+    // der lupenreine Weg, siehe die Begründung bei toggleRecording().
+    std::vector<Vec3> stagedMotionFrames;
+    double            stagedMotionRateHz = motionRecordRateHz;
+
+    std::atomic<bool> motionLoadRequest    { false };
+    std::atomic<bool> motionLoadWasPlaying { false };
 
     std::atomic<bool> recordToggleRequest { false };
     std::atomic<bool> playTriggerRequest  { false };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <vector>
 
 #include "../Physics/Vec3.h"
@@ -34,6 +35,21 @@ public:
     int numFrames() const { return (int) recordedFrames.size(); }
     const std::vector<Vec3>& frames() const { return recordedFrames; }
 
+    // Kopie für den Message-Thread (Preset-Speicherung), lock-frei und ohne
+    // Rückwirkung auf den Audiothread. numFrames()/frames() taugen dafür
+    // nicht: der Audiothread hängt dort währenddessen an.
+    //
+    // false heißt "während des Kopierens hat der Inhalt komplett gewechselt"
+    // (neue Aufnahme begonnen oder Clip geladen) - dann ist die Kopie eine
+    // Mischung zweier Aufnahmen und wird verworfen, dest bleibt leer.
+    bool copyFrames (std::vector<Vec3>& dest) const;
+
+    // Setzt den kompletten Inhalt aus einem geladenen Zustand. Läuft im
+    // Audiothread und allokiert nicht, solange prepare() gelaufen ist: die
+    // Kapazität steht seitdem fest, überzählige Frames werden abgeschnitten
+    // statt sie zu erzwingen.
+    void setFrames (const std::vector<Vec3>& src);
+
 private:
     double controlRateHz = 200.0;
     double maxSeconds = 120.0;
@@ -43,4 +59,17 @@ private:
     double startTime = 0.0;
 
     std::vector<Vec3> recordedFrames;
+
+    // Anzahl fertig geschriebener Frames, lock-frei für copyFrames(). Der
+    // Audiothread hängt an, ohne je neu zu allokieren (die Kapazität steht
+    // seit prepare() fest), und veröffentlicht die neue Anzahl DANACH - ein
+    // Leser, der erst die Anzahl liest und dann so viele Frames kopiert, sieht
+    // deshalb ausschließlich fertig geschriebene Einträge.
+    std::atomic<int> publishedFrames { 0 };
+
+    // Wird bei jedem vollständigen Inhaltswechsel erhöht (neue Aufnahme,
+    // geladener Clip) - und nur dabei wird bestehender Speicher überschrieben
+    // statt angehängt. Genau dann kann ein laufender Leser eine Mischung
+    // zweier Aufnahmen erwischen, und genau daran erkennt er es.
+    std::atomic<unsigned int> takeGeneration { 0 };
 };
