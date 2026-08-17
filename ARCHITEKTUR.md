@@ -146,6 +146,44 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (Mehrfachreflexion, eine Generation)
+
+Der Backlog-Punkt war als riskantester gekennzeichnet ("Stabilitätsthema").
+Er ist es nicht - aber aus einem Grund, der erst beim Hinsehen klar wird:
+
+**Warum das nicht aufschwingen kann.** Die Sorge galt einem
+Verzögerungsnetz mit Rückführung. Hier liegt die Spiegelquellen-Methode vor:
+jeder Weg ist ein eigener `PropagationPath`, der den geteilten
+Quellsignalpuffer **liest** und additiv auf den Ausgang schreibt. Kein Pfad
+schreibt je in den Puffer zurück, kein Ausgang ist irgendwo Eingang - es gibt
+keine Schleife, in der sich eine Verstärkung aufsammeln könnte. Der Ausgang
+ist eine endliche Summe endlich vieler beschränkter Terme. Deshalb keine
+Rekursion und keine Abbruchbedingung, sondern eine feste, abzählbare Liste.
+
+- **Genau eine zusätzliche Generation**: Wege Quelle → Fläche X → Fläche Y →
+  Ohr mit X ≠ Y. Zweimal dieselbe unendliche Ebene gibt es nicht (die
+  Verkettung wäre die Identität und damit der Direktschall). Bei drei Flächen
+  sechs Kombinationen, also zwölf weitere Pfade - Default aus, und der
+  Notaus-Knopf schaltet sie mit ab.
+- **`PathTransform` speichert jetzt eine allgemeine affine Abbildung.** Die
+  Verkettung zweier Spiegelungen ist keine Spiegelung mehr, sondern eine
+  Drehung (schneidende Ebenen) bzw. Verschiebung (parallele Ebenen). Beides
+  ist wieder eine Isometrie und damit zulässig, nur nicht mehr als Normale
+  darstellbar.
+- **`bounceGain`** (Default 0,6) ist der Pegelfaktor je Generation, hart unter
+  1. Nötig, weil die Flächendämpfung ein Tiefpass mit
+  Gleichstromverstärkung 1 ist: sie nimmt Höhen, keinen Pegel. Ohne ihn wäre
+  eine zweifach reflektierte Welle nur durch den längeren Weg leiser - und der
+  kann bei zwei nah beieinander stehenden Wänden fast null sein.
+- **Nachweis im Test statt Behauptung**: `load_check` fährt den ungünstigsten
+  Fall (zwei parallele, nahezu schallharte Wände plus Boden, Dämpfung null,
+  Bounce Gain am Anschlag, Limiter aus, Quelle steht still) und misst den
+  Pegel eine Sekunde nach dem Einschwingen und zehn Sekunden später:
+  RMS 2,41118 → 2,41384, Faktor 1,001.
+
+Der Preis ist Rechenzeit, nicht Stabilität: alles an heißt 20 Pfade statt 2.
+Im Ruhezustand sind das 4640 statt 187 Löser-Auswertungen pro Block.
+
 ## Stand 2026-08-17 (Wände als frei platzierbare Ebenen)
 
 Backlog-Punkt "frei platzierbare Wände" ist gebaut, `solver_check` und
@@ -300,25 +338,20 @@ den Höhen), sind Modellentscheidungen, die sein Ohr noch bestätigen muss.
 Aus derselben Grill-Session mit @dpa. Alles hier ist besprochen und gewollt,
 aber jeweils ein eigener Lauf - nicht vergessen, nur nicht dran.
 
-1. **Mehrfach-Reflexionen / Feedback zwischen Flächen.** Bewusst
-   zurückgestellt, weil es ein Stabilitätsthema ist (Spiegelquellen zweiter
-   und höherer Ordnung wachsen kombinatorisch, und ein Rückkopplungsweg
-   zwischen zwei Flächen braucht eine Abbruchbedingung, die weder klickt noch
-   aufschaukelt).
-2. **Druckwellen-/N-Wellen-Synthese für den Überschallknall**, mit eigenem
+1. **Druckwellen-/N-Wellen-Synthese für den Überschallknall**, mit eigenem
    Regler "Größe/Masse" der Quelle. Der Knall entsteht heute allein aus der
    Überlagerung mehrerer Wurzelzweige; eine echte N-Welle hätte eine eigene
    Wellenform, deren Länge von der Ausdehnung des Körpers abhängt. Hängt mit
    dem offenen Punkt "Boom klingt noch nicht richtig" unten zusammen.
-3. **Mehrfach-M / "Schrot"-Quellen:** bis zu 3 unterschiedliche Quellen plus
+2. **Mehrfach-M / "Schrot"-Quellen:** bis zu 3 unterschiedliche Quellen plus
    bis zu 20 günstige Klone davon. Dazu ein CPU-Meter, ein manueller Regler
    für die Anzahl und ein Reset-Knopf - die Klone sind der Grund für den
    Regler: die Löserlast skaliert linear mit der Pfadanzahl, und @dpa will
    sehen, was er sich gerade einkauft, statt einen stillen Deckel zu bekommen.
-4. **Zwei neue Bewegungsgeneratoren:** geradlinig durch den Bildschirm und
+3. **Zwei neue Bewegungsgeneratoren:** geradlinig durch den Bildschirm und
    waagerecht querend, jeweils mit zwei Startvarianten - kontinuierlich
    einfahrend oder mit abruptem Knall-Start.
-5. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
+4. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
    mit exponentiell wachsendem Feld-Blick. Erst mit z als echter Achse
    überhaupt sinnvoll; die heutige Feldanzeige zeigt z gar nicht an.
 
