@@ -86,10 +86,13 @@ namespace Params
     // Vorbeiflug-Generatoren (FlyByGenerator): Bahnart, Startvariante,
     // Vorbeiflugabstand in Metern und Geschwindigkeit in m/s. Die
     // Geschwindigkeit ist ausdrücklich live automatisierbar - der Generator
-    // integriert den jeweils aktuellen Wert.
+    // integriert den jeweils aktuellen Wert. flyApproach ist von flyDistance
+    // entkoppelt: flyDistance ist der seitliche Abstand zu L im Vorbeiflug,
+    // flyApproach die Anflug-/Abflugstrecke (halfLength() in FlyByGenerator).
     constexpr const char* flyKind     = "flyKind";
     constexpr const char* flyStart    = "flyStart";
     constexpr const char* flyDistance = "flyDistance";
+    constexpr const char* flyApproach = "flyApproach";
     constexpr const char* flySpeed    = "flySpeed";
 
     // --- Physik ---

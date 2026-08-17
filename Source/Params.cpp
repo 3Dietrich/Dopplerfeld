@@ -193,6 +193,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (flyDistance, "Fly Distance", range, 20.0f, "m"));
     }
     {
+        // Anflug-/Abflugstrecke, eigenstaendig statt aus flyDistance
+        // abgeleitet (vorher halfLength() = max(100, 6*flyDistance) - ein
+        // Regler steuerte damit ungewollt zwei verschiedene Groessen:
+        // seitlichen Abstand UND Bahnlaenge/Startpunkt). Default 300 m deckt
+        // sich ungefaehr mit dem alten abgeleiteten Wert bei einem mittleren
+        // flyDistance und bleibt bei sehr hohen Fluggeschwindigkeiten (>1000
+        // m/s) auf Wunsch weiter hochstellbar, damit der Anflug nicht zu kurz
+        // fuer eine hoerbare Annaeherung wird.
+        auto range = juce::NormalisableRange<float> (10.0f, 5000.0f);
+        range.setSkewForCentre (300.0f);
+        layout.add (floatParam (flyApproach, "Fly Approach", range, 300.0f, "m"));
+    }
+    {
         // Bis 1500 m/s, also gut Mach 4 - der Ueberschallfall ist hier der
         // eigentliche Zweck, nicht der Ausnahmefall.
         auto range = juce::NormalisableRange<float> (0.0f, 1500.0f);

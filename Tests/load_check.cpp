@@ -743,6 +743,11 @@ int main()
             setParam (proc, Params::flyKind,     1.0f);   // waagerecht querend
             setParam (proc, Params::flyStart,    abruptStart ? 1.0f : 0.0f);
             setParam (proc, Params::flyDistance, 40.0f);
+            // Anflugstrecke seit der Entkopplung (Fly Dist steuert nur noch
+            // den seitlichen Abstand) explizit gesetzt - alter, aus 6x
+            // flyDistance abgeleiteter Wert, damit dieses Szenario dieselbe
+            // Geometrie/Zeitachse prueft wie zuvor.
+            setParam (proc, Params::flyApproach, 240.0f);
             setParam (proc, Params::flySpeed,    200.0f);
 
             proc.prepareToPlay (sampleRate, blockSize);
@@ -850,6 +855,10 @@ int main()
             setParam (proc, Params::flyKind,     1.0f);   // waagerecht querend
             setParam (proc, Params::flyStart,    0.0f);   // kontinuierlich
             setParam (proc, Params::flyDistance, 300.0f);
+            // Alter, aus 6x flyDistance abgeleiteter Wert (siehe Kommentar
+            // oben) - der Unterschallfall braucht die lange Anflugstrecke,
+            // damit er ueber das gesamte 12s-Fenster subsonic bleibt.
+            setParam (proc, Params::flyApproach, 1800.0f);
             setParam (proc, Params::flySpeed,    (float) speedMetresPerSecond);
 
             proc.prepareToPlay (sampleRate, blockSize);

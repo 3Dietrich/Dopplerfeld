@@ -206,6 +206,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.flyKind     = raw (Params::flyKind);
     pp.flyStart    = raw (Params::flyStart);
     pp.flyDistance = raw (Params::flyDistance);
+    pp.flyApproach = raw (Params::flyApproach);
     pp.flySpeed    = raw (Params::flySpeed);
 
     pp.boomLimitDb     = raw (Params::boomLimitDb);
@@ -725,7 +726,7 @@ void DopplerfeldProcessor::startFlyBy()
     const auto start = pp.flyStart->load() < 0.5f ? FlyByGenerator::Start::Continuous
                                                   : FlyByGenerator::Start::Abrupt;
 
-    flyBy.configure (kind, start, (double) pp.flyDistance->load(),
+    flyBy.configure (kind, start, (double) pp.flyDistance->load(), (double) pp.flyApproach->load(),
                      listenerState.head, (double) pp.srcZ->load());
     flyBy.setSpeed ((double) pp.flySpeed->load());
     flyBy.start();

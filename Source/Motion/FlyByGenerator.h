@@ -51,8 +51,12 @@ public:
     // listenerPos legt die Bezugsachse fest, heightMetres die Flughöhe (die
     // kommt vom vorhandenen Source-Z-Regler, der Generator erfindet keine
     // zweite Höhe). distanceMetres ist der Abstand, in dem die Bahn am Hörer
-    // vorbeiläuft - senkrecht zur Flugrichtung.
-    void configure (Kind kind, Start start, double distanceMetres,
+    // vorbeiläuft - senkrecht zur Flugrichtung. approachMetres ist davon
+    // unabhängig die Anflug-/Abflugstrecke (halbe Bahnlänge, siehe
+    // halfLength()) - zwei verschiedene Größen, die sich nicht in einen
+    // Regler verschmelzen lassen, ohne dass einer von beiden ungewollt
+    // mitläuft.
+    void configure (Kind kind, Start start, double distanceMetres, double approachMetres,
                     Vec3 listenerPos, double heightMetres);
 
     // Setzt den Flug an den Anfangspunkt und startet ihn.
@@ -96,10 +100,10 @@ private:
     // Versatzvektor senkrecht dazu, in der Waagerechten.
     Vec3 offset() const;
 
-    // Halbe Streckenlänge. Der Flug beginnt so weit vor dem nächsten Punkt,
-    // dass sein Anfang weit weg und damit leise ist - sonst begänne jeder
-    // Vorbeiflug mit der Quelle direkt am Ohr. Untergrenze, damit auch ein
-    // Vorbeiflug in einem Meter Abstand eine hörbare Anflugphase hat.
+    // Halbe Streckenlänge = die Anflug-/Abflugstrecke (Params::flyApproach),
+    // eigenständig und NICHT aus distance abgeleitet - distance ist allein
+    // der seitliche Versatz zu L, siehe offset(). Untergrenze verhindert eine
+    // entartete Bahn bei einem sehr klein automatisierten Wert.
     double halfLength() const;
 
     Vec3 positionAt (double distanceAlongPath) const;
@@ -109,6 +113,7 @@ private:
 
     Vec3   listener;
     double distance  = 20.0;
+    double approach  = 300.0;
     double height    = 0.0;
     double speed     = 50.0;
 

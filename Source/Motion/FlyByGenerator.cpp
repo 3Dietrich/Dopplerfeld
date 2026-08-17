@@ -3,12 +3,13 @@
 #include <algorithm>
 #include <cmath>
 
-void FlyByGenerator::configure (Kind kindIn, Start startIn, double distanceMetres,
+void FlyByGenerator::configure (Kind kindIn, Start startIn, double distanceMetres, double approachMetres,
                                 Vec3 listenerPos, double heightMetres)
 {
     kind         = kindIn;
     startVariant = startIn;
     distance     = distanceMetres;
+    approach     = approachMetres;
     listener     = listenerPos;
     height       = heightMetres;
 }
@@ -35,11 +36,11 @@ Vec3 FlyByGenerator::offset() const
 
 double FlyByGenerator::halfLength() const
 {
-    // Das Sechsfache des Vorbeiflugabstands ist weit genug, dass die Quelle am
-    // Anfang rund 15 dB leiser ist als im nächsten Punkt; die Untergrenze von
-    // 100 m sorgt dafür, dass auch ein Vorbeiflug dicht am Ohr eine hörbare
-    // Anflugphase hat, statt aus dem Nichts zu erscheinen.
-    return std::max (100.0, 6.0 * std::abs (distance));
+    // Eigenständiger Regler (Params::flyApproach), keine Ableitung mehr aus
+    // distance - die beiden steuerten vorher ungewollt gemeinsam Bahnlänge
+    // UND seitlichen Abstand. Untergrenze nur als Schutz vor einer entarteten
+    // (quasi punktförmigen) Bahn.
+    return std::max (10.0, approach);
 }
 
 Vec3 FlyByGenerator::positionAt (double distanceAlongPath) const

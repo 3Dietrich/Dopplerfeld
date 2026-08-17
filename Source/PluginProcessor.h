@@ -303,6 +303,7 @@ private:
         std::atomic<float>* flyKind     = nullptr;
         std::atomic<float>* flyStart    = nullptr;
         std::atomic<float>* flyDistance = nullptr;
+        std::atomic<float>* flyApproach = nullptr;
         std::atomic<float>* flySpeed    = nullptr;
 
         std::atomic<float>* boomLimitDb     = nullptr;
