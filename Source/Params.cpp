@@ -170,6 +170,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // --- Physik ---
     layout.add (floatParam (boomLimitDb, "Boom Limit", { 0.0f, 60.0f, 0.1f }, 30.0f, "dB"));
     layout.add (floatParam (airAbsorbAmount, "Air Absorption", unitRange(), 1.0f));
+
+    // Default aus: die Bodenreflexion verdoppelt die Löserlast, und wer sie
+    // nicht braucht, soll sie nicht bezahlen.
+    layout.add (boolParam (groundReflectionOn, "Ground Reflection", false));
+    layout.add (floatParam (groundDampAmount, "Ground Damping", unitRange(), 0.5f));
     layout.add (std::make_unique<juce::AudioParameterInt> (juce::ParameterID { solverStride, 1 }, "Solver Stride", 1, 16, 1));
 
     // --- Crossfade ---

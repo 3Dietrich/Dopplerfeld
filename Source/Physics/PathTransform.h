@@ -19,6 +19,29 @@ struct PathTransform
     float gain = 1.0f;
 };
 
+// Spiegelung an der Bodenebene z = 0 (Spiegelquellen-/Image-Source-Methode).
+//
+// Gespiegelt wird hier der EMPFÄNGER, nicht die Quelle - das Ergebnis ist
+// dasselbe und geometrisch exakt gleichwertig, denn mit L' = (Lx, Ly, -Lz) und
+// M' = (Mx, My, -Mz) gilt
+//
+//   |L' - M|² = (Lx-Mx)² + (Ly-My)² + (Lz+Mz)² = |L - M'|²
+//
+// für jeden Zeitpunkt, und dasselbe gilt für die Ableitung nach der Zeit, also
+// auch für M_r und den Doppler. Der Empfänger ist der Parameter, den
+// PropagationPath ohnehin pro Solver-Punkt hereinbekommt; die Quelle liegt in
+// der geteilten Trajektorie, die alle Pfade gemeinsam lesen und die deshalb
+// nicht pfadweise gespiegelt werden kann, ohne sie zu vervielfachen.
+//
+// gain bleibt 1: der Boden reflektiert die Amplitude vollständig, der Verlust
+// steckt in der Höhendämpfung (PropagationPath::setReflectionDamping).
+inline PathTransform groundMirrorTransform()
+{
+    PathTransform t;
+    t.scale.z = -1.0;
+    return t;
+}
+
 // Empfängerposition spiegeln/verschieben. Komponentenweise skalieren, dann
 // offset addieren - die Reihenfolge ist Teil der Definition oben (die Wand bei
 // x = w wird zu x -> 2w - x, nicht zu 2w + (-x) mit vorher verschobenem x).

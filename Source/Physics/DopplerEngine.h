@@ -74,6 +74,19 @@ public:
     void setBoomLimitDb (double dB);
     void setAirAbsorptionAmount (double amount01);
 
+    // Bodenreflexion an/aus. Die Spiegelpfade existieren immer (sie werden in
+    // prepare() mit angelegt), gerechnet werden sie nur im eingeschalteten
+    // Zustand - ein Umschalten allokiert also nichts und kostet ausgeschaltet
+    // auch keine Löserzeit. Beim Wiedereinschalten liegt ihr letzter
+    // Löserzeitpunkt in der Vergangenheit; PropagationPath sät sich daraufhin
+    // von selbst neu (Lückenerkennung in process()), und die Zweige rampen
+    // über den Anti-Klick-Envelope ein statt zu knacken.
+    void setGroundReflectionEnabled (bool shouldBeEnabled);
+    bool isGroundReflectionEnabled() const { return groundReflectionOn; }
+
+    // Höhendämpfung der Reflexion, 0..1. Wirkt nur auf die Spiegelpfade.
+    void setGroundDampingAmount (double amount01);
+
     // Globaler Umschalter aus Plan 3.11 (fadeAuto/fadeManualMs), wirkt auf
     // den nächsten Geometriewechsel. Denselben Setter hat der
     // SoundSourceHolder - beide hängen am selben Parameterpaar.
@@ -116,7 +129,10 @@ private:
     // Sprung über die Ohrgeschwindigkeit in den alten Satz zurückholen.
     struct PathSet
     {
-        void prepare (double sampleRate, int maxBlockSize, int numPaths,
+        // mirror gibt je Pfad an, ob er der Direktschall (0) oder die
+        // Bodenspiegelung (1) ist; daraus folgt sein PathTransform. Die Länge
+        // des Vektors bestimmt die Pfadanzahl.
+        void prepare (double sampleRate, int maxBlockSize, const std::vector<int>& mirror,
                       double trajRateHz, double maxSeconds);
         void reset (Vec3 pos, double time, const ListenerState& l);
 
@@ -137,9 +153,11 @@ private:
         ListenerState prevListener;
 
         // Blockkontext, von der Engine vor jedem process() gesetzt.
-        const SourceSignalBuffer* signal   = nullptr;
-        const MediumState*        medium   = nullptr;
-        const std::vector<int>*   pathEar  = nullptr;
+        const SourceSignalBuffer* signal     = nullptr;
+        const MediumState*        medium     = nullptr;
+        const std::vector<int>*   pathEar    = nullptr;
+        const std::vector<int>*   pathMirror = nullptr;
+        bool                      mirrorsOn      = false;
         double                    blockStartTime = 0.0;
         double                    sr             = 0.0;
     };
@@ -161,6 +179,7 @@ private:
 
     SourceSignalBuffer signal;          // geteilt, genau ein Schreiber
     std::vector<int>   pathEar;         // welcher Pfad auf welchen Kanal
+    std::vector<int>   pathMirror;      // 0 = Direktschall, 1 = Bodenspiegelung
 
     SoundSource* source = nullptr;
 
@@ -182,6 +201,14 @@ private:
     // Sätze müssen von Anfang an gleich eingestellt sein).
     double boomLimitDb    = 30.0;
     double airAbsorbAmount = 1.0;
+
+    bool   groundReflectionOn = false;
+    double groundDampAmount   = 0.5;
+
+    // Eckfrequenz der Bodendämpfung bei voller Stärke. Modellkonstante, kein
+    // Regler: der Regler ist die Stärke. Rund ein Kilohertz ist die Gegend, in
+    // der eine streifende Reflexion an Gras/Erde ihre Höhen verliert.
+    static constexpr double groundDampFcHz = 800.0;
 
     bool   useManualFade = false;
     double manualFadeSeconds = 0.05;

@@ -146,7 +146,9 @@ juce::String DopplerfeldEditor::statusText() const
     {
         const auto& info = snapshot.paths[(size_t) i];
 
-        text << "      " << (info.ear == 0 ? "L" : "R")
+        // Spiegelpfade mit ' markiert (L' / R'), sonst stünden bei
+        // eingeschalteter Bodenreflexion vier gleich aussehende Blöcke da.
+        text << "      " << (info.ear == 0 ? "L" : "R") << (info.mirrored ? "'" : " ")
              << " " << juce::String::formatted ("%7.1f", info.delaySeconds * 1000.0) << " ms"
              << "  M_r " << juce::String::formatted ("%5.2f", info.machRadial)
              << "  Zweige " << juce::String::formatted ("%2d", info.activeBranches);

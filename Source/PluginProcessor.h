@@ -222,6 +222,9 @@ private:
         std::atomic<float>* boomLimitDb     = nullptr;
         std::atomic<float>* airAbsorbAmount = nullptr;
 
+        std::atomic<float>* groundReflectionOn = nullptr;
+        std::atomic<float>* groundDampAmount   = nullptr;
+
         std::atomic<float>* fadeAuto     = nullptr;
         std::atomic<float>* fadeManualMs = nullptr;
 
@@ -277,6 +280,7 @@ private:
 
     double lastBoomLimitDb    = 30.0;
     double lastAirAbsorbAmount = 1.0;
+    double lastGroundDampAmount = 0.5;
 
     double motionTickAccum   = 0.0;   // Rest-Samples bis zum nächsten Glätter-Tick
     double recorderTickAccum = 0.0;   // dito für die 200-Hz-Aufzeichnung

@@ -79,6 +79,20 @@ public:
     // fc(R) = clamp(fc0*(R_ref/R)^k, 200, 18000) - Defaults aus Plan 2.9.
     void setAirAbsorption (double fc0Hz, double refMetres, double exponent);
 
+    // Zusätzliche Höhendämpfung für gespiegelte Pfade (Boden, später Wände).
+    // Eigener Grad neben der Luftdämpfung, weil beide Verschiedenes
+    // beschreiben: die Luftdämpfung modelliert die geflogene STRECKE und
+    // wächst deshalb mit R, die Reflexionsdämpfung modelliert die FLÄCHE und
+    // fällt einmal pro Reflexion an - unabhängig davon, wie weit der Schall
+    // danach noch fliegt. Boden schluckt Höhen deutlich stärker als Luft.
+    //
+    // amount01 blendet wie airAbsorptionAmount gegen Bypass: 0 heißt wirklich
+    // aus (ideal harte Fläche), nicht bloß "der milde Fall". fcHz ist die
+    // Eckfrequenz bei voller Stärke; sie bleibt eine Modellkonstante des
+    // Aufrufers, damit hier kein fester Wert im Weg steht, falls später
+    // Wandmaterialien dazukommen.
+    void setReflectionDamping (double amount01, double fcHz);
+
     // Solver-Rate (Plan 2.11). Bei erkanntem Überschall im Fenster wird
     // automatisch auf supersonic umgeschaltet, weil M_r dort schnell wechselt.
     void setSolverStride (int normalStride, int supersonicStride);
@@ -138,6 +152,7 @@ private:
 
         double lpCoeff = 1.0;   // Luftdämpfung, pro Solver-Punkt aktualisiert
         double lpZ     = 0.0;   // Filterzustand - gehört zum Zweig (Plan 2.9)
+        double refZ    = 0.0;   // Reflexionsdämpfung, ebenfalls je Zweig
         double env     = 0.0;   // Anti-Klick-Rampe, 0..1
     };
 
@@ -186,6 +201,11 @@ private:
     double airRefM     = 10.0;
     double airExponent = 0.7;
     double airAmount   = 1.0;
+
+    // Reflexionsdämpfung. 0 = aus, dann wird der Filter gar nicht erst
+    // durchlaufen (der Direktschall zahlt für dieses Bauteil also nichts).
+    double reflectAmount = 0.0;
+    double reflectFcHz   = 800.0;
 
     int baseStride       = 64;   // Plan 2.11: 64 Samples, 750 Hz bei 48 kHz
     int supersonicStride = 8;    // Plan 2.11: adaptiv feiner bei Überschall

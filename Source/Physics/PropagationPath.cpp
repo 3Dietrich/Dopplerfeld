@@ -45,6 +45,12 @@ void PropagationPath::setAirAbsorption (double fc0Hz, double refMetres, double e
     airExponent = exponent;
 }
 
+void PropagationPath::setReflectionDamping (double amount01, double fcHz)
+{
+    reflectAmount = std::min (1.0, std::max (0.0, amount01));
+    reflectFcHz   = std::max (20.0, fcHz);
+}
+
 void PropagationPath::setSolverStride (int normalStride, int supersonicStrideIn)
 {
     baseStride       = std::max (1, normalStride);
@@ -257,6 +263,14 @@ void PropagationPath::process (const SourceTrajectory&   traj,
     const double envInc = 1.0 / std::max (1.0, rampSeconds * sr);
     const double gain   = (double) transform.gain;
 
+    // Reflexionsdämpfung: fester One-Pole, einmal je Block gerechnet statt je
+    // Solver-Punkt - anders als die Luftdämpfung hängt er nicht von R ab.
+    // Derselbe Bypass-Trick wie dort (Koeffizient gegen 1 blenden), damit
+    // "aus" wirklich aus ist und nicht der Eckfrequenz-Fall.
+    const bool   useReflectLp = reflectAmount > 0.0;
+    const double reflectA     = 1.0 - std::exp (-2.0 * 3.14159265358979323846 * reflectFcHz / sr);
+    const double reflectCoeff = 1.0 - reflectAmount * (1.0 - std::min (1.0, std::max (0.0, reflectA)));
+
     for (int n0 = 0; n0 < numSamples; n0 += stride)
     {
         const int    len    = std::min (stride, numSamples - n0);
@@ -373,6 +387,25 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 if (! std::isfinite (b.lpZ))
                     b.lpZ = 0.0;
 
+                // Zweite, streckenunabhängige Dämpfungsstufe für gespiegelte
+                // Pfade. Beim Direktschall ist reflectAmount 0 und die Stufe
+                // wird komplett übersprungen - sie kostet dort nur den (immer
+                // gleich ausgehenden, also gut vorhersagbaren) Sprung.
+                double y = b.lpZ;
+
+                if (useReflectLp)
+                {
+                    b.refZ += reflectCoeff * (y - b.refZ);
+
+                    // Dieselbe Selbstheilung wie bei lpZ: ein einzelner
+                    // nicht-endlicher Wert würde den Zustand sonst dauerhaft
+                    // vergiften und der Zweig bliebe für immer stumm.
+                    if (! std::isfinite (b.refZ))
+                        b.refZ = 0.0;
+
+                    y = b.refZ;
+                }
+
                 // Envelope nach dem Filter: so ist der Zweig bei env = 0 exakt
                 // still und kann sofort freigegeben werden, ohne dass ein
                 // abgeschnittener Filterschwanz knackt.
@@ -381,7 +414,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 else if (b.env > target)
                     b.env = std::max (target, b.env - envInc);
 
-                out[n0 + i] += (float) (b.lpZ * b.env * gain);
+                out[n0 + i] += (float) (y * b.env * gain);
             }
 
             b.tau     = tau1;

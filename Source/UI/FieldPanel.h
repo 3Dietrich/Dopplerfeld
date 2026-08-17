@@ -47,13 +47,19 @@ private:
     // es dort keine Achse - deshalb sind das die einzigen Positionsregler.
     Knob srcZKnob, lisZKnob;
 
+    // Höhendämpfung der Bodenreflexion - steht neben den z-Reglern, weil sie
+    // ohne Höhenunterschied nichts zu tun hat.
+    Knob groundDampKnob;
+
     // Neben Output Gain: -6dB-Marke, Clip-Anzeige mit 500ms-Halt (@dpa).
     LevelMeter levelMeter;
 
     juce::ToggleButton fadeAutoButton   { "Fade Auto" };
     juce::ToggleButton limiterOnButton  { "Limiter" };
+    juce::ToggleButton groundReflectionButton { "Bodenreflexion" };
     std::unique_ptr<ButtonAttachment> fadeAutoAttachment;
     std::unique_ptr<ButtonAttachment> limiterOnAttachment;
+    std::unique_ptr<ButtonAttachment> groundReflectionAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FieldPanel)
 };

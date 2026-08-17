@@ -23,19 +23,21 @@ double wrapAngle (double a)
 //======================================================================
 // PathSet - ein kompletter Geometriesatz
 
-void DopplerEngine::PathSet::prepare (double sampleRate, int maxBlockSize, int numPathsIn,
+void DopplerEngine::PathSet::prepare (double sampleRate, int maxBlockSize, const std::vector<int>& mirror,
                                       double trajRateHz, double maxSeconds)
 {
     sr = sampleRate;
 
     trajectory.prepare (trajRateHz, maxSeconds);
 
-    paths.resize ((size_t) std::max (0, numPathsIn));
+    paths.resize (mirror.size());
 
-    for (auto& p : paths)
+    for (size_t i = 0; i < paths.size(); ++i)
     {
+        auto& p = paths[i];
+
         p.prepare (sr, maxBlockSize);
-        p.setTransform (PathTransform{});
+        p.setTransform (mirror[i] != 0 ? groundMirrorTransform() : PathTransform{});
         p.setTrajectoryGridSeconds (1.0 / trajRateHz);
     }
 }
@@ -87,6 +89,14 @@ void DopplerEngine::PathSet::renderInto (juce::AudioBuffer<float>& dest, int num
 
     for (size_t i = 0; i < paths.size() && i < pathEar->size(); ++i)
     {
+        // Abgeschaltete Bodenreflexion heißt: der Spiegelpfad wird gar nicht
+        // erst gerechnet. Sein Löser bleibt damit auf dem alten Zeitpunkt
+        // stehen und sät sich beim Wiedereinschalten selbst neu, statt über
+        // eine Lücke zu interpolieren.
+        if (pathMirror != nullptr && i < pathMirror->size()
+            && (*pathMirror)[i] != 0 && ! mirrorsOn)
+            continue;
+
         const bool rightEar = ((*pathEar)[i] != 0);
 
         const Vec3 pos = earPosition (prevListener, rightEar);
@@ -123,17 +133,22 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
 
     silence.assign ((size_t) maxBlock, 0.0f);
 
-    // Phase 1: genau zwei Pfade, linkes und rechtes Ohr, beide mit
-    // Identity-Transform. Phase 2 hängt hier weitere Einträge an.
-    pathEar = { 0, 1 };
+    // Vier Pfade: Direktschall auf beide Ohren, dazu die an z = 0 gespiegelte
+    // Quelle ebenfalls auf beide Ohren. Die Spiegelpfade liegen dauerhaft
+    // bereit, damit das Ein- und Ausschalten der Bodenreflexion im Audiothread
+    // nichts allokiert; ausgeschaltet werden sie übersprungen (renderInto).
+    // Wände wären nach demselben Muster weitere Einträge.
+    pathEar    = { 0, 1, 0, 1 };
+    pathMirror = { 0, 0, 1, 1 };
 
     geometry.prepare (sr, maxBlock, 2);
 
-    geometry.active().prepare  (sr, maxBlock, (int) pathEar.size(), trajectoryRateHz, maxHistorySeconds);
-    geometry.pending().prepare (sr, maxBlock, (int) pathEar.size(), trajectoryRateHz, maxHistorySeconds);
+    geometry.active().prepare  (sr, maxBlock, pathMirror, trajectoryRateHz, maxHistorySeconds);
+    geometry.pending().prepare (sr, maxBlock, pathMirror, trajectoryRateHz, maxHistorySeconds);
 
     setBoomLimitDb (boomLimitDb);
     setAirAbsorptionAmount (airAbsorbAmount);
+    setGroundDampingAmount (groundDampAmount);
 
     reset();
 }
@@ -201,11 +216,16 @@ void DopplerEngine::configurePendingSet (Vec3 newPos)
 
     // Zweigidentitäten und Filterzustände hängen an der alten Geometrie und
     // dürfen nicht nachgeführt werden (siehe RetardedTimeSolver.h).
-    for (auto& p : s.paths)
+    for (size_t i = 0; i < s.paths.size(); ++i)
     {
+        auto& p = s.paths[i];
+
         p.reset();
         p.setBoomLimitDb (boomLimitDb);
         p.setAirAbsorptionAmount (airAbsorbAmount);
+
+        if (i < pathMirror.size() && pathMirror[i] != 0)
+            p.setReflectionDamping (groundDampAmount, groundDampFcHz);
     }
 }
 
@@ -305,6 +325,23 @@ void DopplerEngine::setAirAbsorptionAmount (double amount01)
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
             p.setAirAbsorptionAmount (amount01);
+}
+
+void DopplerEngine::setGroundReflectionEnabled (bool shouldBeEnabled)
+{
+    groundReflectionOn = shouldBeEnabled;
+}
+
+void DopplerEngine::setGroundDampingAmount (double amount01)
+{
+    groundDampAmount = amount01;
+
+    // Nur die Spiegelpfade: der Direktschall streift keine Fläche, seine
+    // Höhen verliert er ausschließlich an die Luft.
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (size_t i = 0; i < s->paths.size() && i < pathMirror.size(); ++i)
+            if (pathMirror[i] != 0)
+                s->paths[i].setReflectionDamping (amount01, groundDampFcHz);
 }
 
 void DopplerEngine::pushTrajectory (double blockStart, double blockEnd)
@@ -449,8 +486,16 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
     for (size_t i = 0; i < set.paths.size() && i < pathEar.size()
                        && s.pathCount < FieldSnapshot::maxPaths; ++i)
     {
+        const bool mirrored = (i < pathMirror.size() && pathMirror[i] != 0);
+
+        // Nicht gerechnete Pfade gehören nicht in die Anzeige - ihre Werte
+        // stammen sonst vom letzten Einschaltzeitpunkt und stünden dort fest.
+        if (mirrored && ! groundReflectionOn)
+            continue;
+
         auto& info = s.paths[(size_t) s.pathCount];
 
+        info.mirrored       = mirrored;
         info.ear            = pathEar[i];
         info.activeBranches = set.paths[i].numActiveBranches();
         info.delaySeconds   = set.paths[i].lastDelaySeconds();
@@ -545,6 +590,8 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
         s.signal         = &signal;
         s.medium         = &medium;
         s.pathEar        = &pathEar;
+        s.pathMirror     = &pathMirror;
+        s.mirrorsOn      = groundReflectionOn;
         s.blockStartTime = blockStart;
         s.sr             = sr;
     };

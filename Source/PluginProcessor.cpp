@@ -189,6 +189,9 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.boomLimitDb     = raw (Params::boomLimitDb);
     pp.airAbsorbAmount = raw (Params::airAbsorbAmount);
 
+    pp.groundReflectionOn = raw (Params::groundReflectionOn);
+    pp.groundDampAmount   = raw (Params::groundDampAmount);
+
     pp.fadeAuto     = raw (Params::fadeAuto);
     pp.fadeManualMs = raw (Params::fadeManualMs);
 
@@ -397,6 +400,18 @@ void DopplerfeldProcessor::applyParameters()
     {
         lastAirAbsorbAmount = airAbsorb;
         dopplerEngine.setAirAbsorptionAmount (airAbsorb);
+    }
+
+    // Der Schalter selbst ist billig (ein bool pro Block), die Dämpfung läuft
+    // wie oben über alle Pfade und deshalb nur bei echter Änderung.
+    dopplerEngine.setGroundReflectionEnabled (pp.groundReflectionOn->load() > 0.5f);
+
+    const double groundDamp = (double) pp.groundDampAmount->load();
+
+    if (std::abs (groundDamp - lastGroundDampAmount) > 1.0e-9)
+    {
+        lastGroundDampAmount = groundDamp;
+        dopplerEngine.setGroundDampingAmount (groundDamp);
     }
 
     // --- Crossfade ---

@@ -244,6 +244,77 @@ int main()
     }
 
     //==================================================================
+    // 1c. Bodenreflexion: derselbe Vorbeiflug zweimal, einmal ohne und einmal
+    //     mit Spiegelpfaden. Geprüft wird zweierlei - dass die zusätzlichen
+    //     Pfade den Ausgang nicht entgleisen lassen (NaN/Inf), und dass sie
+    //     überhaupt etwas beitragen. Ohne den zweiten Teil würde ein
+    //     versehentlich nie gerechneter Spiegelpfad stumm durchrutschen.
+    //
+    //     Die Quelle liegt dabei 20 m über dem Boden, nicht auf ihm: bei
+    //     srcZ = 0 fiele die Spiegelquelle mit der echten zusammen und die
+    //     Reflexion wäre nur eine Verdopplung ohne eigene Laufzeit.
+    {
+        auto flyBy = [&] (bool groundOn, Stats& stats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 200.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcX, 0.05f);
+            setParam (proc, Params::srcY, 0.5f + (float) (10.0 / (200.0 * DopplerfeldProcessor::fieldAspect)));
+            setParam (proc, Params::srcZ, 20.0f);
+
+            setParam (proc, Params::groundReflectionOn, groundOn ? 1.0f : 0.0f);
+            setParam (proc, Params::groundDampAmount, 0.5f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            render (proc, buffer, 6.0, stats, [&proc] (double t)
+            {
+                setParam (proc, Params::srcX, (float) (0.05 + 30.0 * t / 200.0));
+            });
+        };
+
+        Stats without, with;
+
+        flyBy (false, without);
+        flyBy (true,  with);
+
+        without.report ("Boden aus, srcZ=20m");
+        with.report    ("Boden an,  srcZ=20m");
+
+        if (with.nonFinite > 0 || with.peak <= 0.0)
+            failed = true;
+
+        // Der Spiegelpfad ist ein zweiter Ausbreitungsweg mit eigener Laufzeit;
+        // seine Summe mit dem Direktschall muss messbar anders sein als der
+        // Direktschall allein.
+        const double rmsWithout = std::sqrt (without.sumSquares[0] / ((double) without.samples * 0.5));
+        const double rmsWith    = std::sqrt (with.sumSquares[0]    / ((double) with.samples    * 0.5));
+
+        if (std::abs (rmsWith - rmsWithout) <= 1.0e-6 * std::max (rmsWithout, 1.0e-9))
+        {
+            std::printf ("FEHLGESCHLAGEN: Bodenreflexion ändert den Ausgang nicht "
+                         "(RMS ohne %.6f, mit %.6f)\n", rmsWithout, rmsWith);
+            failed = true;
+        }
+
+        // Vier Pfade statt zwei: die Anzeige muss die Spiegelpfade auch
+        // ausweisen, sonst stimmt die Statuszeile nicht mit dem überein, was
+        // gerechnet wird.
+        if (with.maxBranches <= 0)
+        {
+            std::printf ("FEHLGESCHLAGEN: mit Bodenreflexion meldet kein Pfad aktive Zweige\n");
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 2. Extremfall: größtes Feld, Überschallflug quer hindurch, Umkehr,
     //    Feldgrößenwechsel.
     {

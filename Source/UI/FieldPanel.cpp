@@ -50,6 +50,21 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
                "Ohrhoehe des Hoerers ueber dem Boden in Metern (Standard 1.75 = stehend). "
                "Erst ein Hoehenunterschied zwischen Quelle und Hoerer macht die "
                "Bodenreflexion hoerbar.");
+    setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",
+               "Wie stark der Boden bei der Reflexion die Hoehen schluckt. 0 = ideal "
+               "harte Flaeche (Reflexion klingt wie der Direktschall), 1 = weicher Boden "
+               "(Gras/Erde). Wirkt nur auf den gespiegelten Pfad, nicht auf den "
+               "Direktschall - und nur bei eingeschalteter Bodenreflexion.");
+
+    groundReflectionButton.setTooltip (
+        "Zweiter Ausbreitungsweg pro Ohr ueber den Boden (Spiegelquelle an der Ebene "
+        "z=0), mit eigener Laufzeit, eigenem Doppler und eigener Daempfung. "
+        "Achtung: bei Source Z = 0 liegt die Spiegelquelle exakt auf der echten "
+        "Quelle, die Reflexion ist dann nur eine gedaempfte Verdopplung ohne eigene "
+        "Laufzeit - hoerbar getrennt wird sie erst, wenn die Quelle ueber dem Boden "
+        "liegt. Kostet die doppelte Loeserlast, deshalb standardmaessig aus.");
+    addAndMakeVisible (groundReflectionButton);
+    groundReflectionAttachment = std::make_unique<ButtonAttachment> (apvts, Params::groundReflectionOn, groundReflectionButton);
 
     fadeAutoButton.setTooltip ("Ueberblendzeit bei Sprüngen automatisch aus der jeweiligen "
                                "Aenderung ableiten (Distanz/Klangfrequenz), statt eine feste "
@@ -77,6 +92,8 @@ void FieldPanel::resized()
     fadeAutoButton.setBounds (toggleRow.removeFromLeft (120));
     toggleRow.removeFromLeft (8);
     limiterOnButton.setBounds (toggleRow.removeFromLeft (100));
+    toggleRow.removeFromLeft (8);
+    groundReflectionButton.setBounds (toggleRow.removeFromLeft (140));
     area.removeFromTop (6);
 
     auto knobRow = area.removeFromTop (knobH);
@@ -91,11 +108,12 @@ void FieldPanel::resized()
     knobRow.removeFromLeft (4);
     levelMeter.setBounds (knobRow.removeFromLeft (24));
 
-    // Zweite Reihe: die Geometrie-Achse z.
+    // Zweite Reihe: die Geometrie-Achse z und die daran hängende
+    // Bodendämpfung.
     area.removeFromTop (6);
 
     auto geoRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcZKnob, &lisZKnob })
+    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob })
     {
         layoutKnob (*k, geoRow.removeFromLeft (knobW));
         geoRow.removeFromLeft (4);

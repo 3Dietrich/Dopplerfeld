@@ -81,6 +81,10 @@ namespace Params
     // --- Physik ---
     constexpr const char* boomLimitDb     = "boomLimitDb";
     constexpr const char* airAbsorbAmount = "airAbsorbAmount";
+
+    // Bodenreflexion (Spiegelquelle an der Ebene z = 0) und ihre Höhendämpfung.
+    constexpr const char* groundReflectionOn = "groundReflectionOn";
+    constexpr const char* groundDampAmount   = "groundDampAmount";
     constexpr const char* solverStride    = "solverStride";   // nur Debug
 
     // --- Crossfade ---

@@ -51,6 +51,7 @@ struct FieldSnapshot
     struct PathInfo
     {
         int    ear             = 0;       // 0 = links, 1 = rechts (Plan 3.6 pathEar)
+        bool   mirrored        = false;   // Bodenspiegelung statt Direktschall
         int    activeBranches  = 0;
         double delaySeconds    = 0.0;
         double machRadial      = 0.0;
