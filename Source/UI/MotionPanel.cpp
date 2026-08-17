@@ -67,6 +67,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     smootherTypeCombo.setTooltip (smootherTypeLabel.getTooltip());
     addAndMakeVisible (smootherTypeCombo);
     smootherTypeAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::smootherType, smootherTypeCombo);
+    smootherTypeCombo.onChange = [this] { updateSlewControlsVisibility(); };
 
     playInterpLabel.setText ("Play Interp", juce::dontSendNotification);
     playInterpLabel.setJustificationType (juce::Justification::centredLeft);
@@ -118,7 +119,12 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (flyDistanceKnob, apvts, Params::flyDistance, "Fly Dist",
                "Abstand, in dem die Bahn am Hoerer vorbeilaeuft - senkrecht zur "
                "Flugrichtung. Kleiner Abstand = kraeftigerer Doppler-Umschlag beim "
-               "Vorbeiflug.");
+               "Vorbeiflug. Aendert NICHT die Bahnlaenge, dafuer 'Fly Approach'.");
+    setupKnob (flyApproachKnob, apvts, Params::flyApproach, "Fly Approach",
+               "Anflug-/Abflugstrecke: wie weit vor (und nach) dem naechsten Punkt die "
+               "Bahn beginnt bzw. endet. Unabhaengig von 'Fly Dist' (das ist nur der "
+               "seitliche Abstand) - laenger heisst mehr hoerbare Annaeherung vor dem "
+               "eigentlichen Vorbeiflug, besonders bei hoher Fluggeschwindigkeit sinnvoll.");
     setupKnob (flySpeedKnob, apvts, Params::flySpeed, "Fly Speed",
                "Fluggeschwindigkeit in m/s, live veraenderbar und automatisierbar - die "
                "Bahn integriert den jeweils aktuellen Wert, ein Automationsverlauf "
@@ -130,6 +136,20 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
                           "sofort.");
     addAndMakeVisible (flyButton);
     flyButton.onClick = [this] { if (onFlyClicked != nullptr) onFlyClicked(); };
+
+    // Anfangszustand passend zum tatsaechlich geladenen Smoother setzen - sonst
+    // stuenden Slew Vmax/Amax nach dem Oeffnen des Editors aktiv, obwohl der
+    // geladene Zustand z.B. "Critically Damped Spring" waehlt.
+    updateSlewControlsVisibility();
+}
+
+void MotionPanel::updateSlewControlsVisibility()
+{
+    const bool isSlewLimiter = smootherTypeCombo.getText() == "Slew Limiter";
+    slewVmaxKnob.slider.setEnabled (isSlewLimiter);
+    slewVmaxKnob.label.setEnabled (isSlewLimiter);
+    slewAmaxKnob.slider.setEnabled (isSlewLimiter);
+    slewAmaxKnob.label.setEnabled (isSlewLimiter);
 }
 
 void MotionPanel::setPlaying (bool isPlaying)
@@ -195,7 +215,7 @@ void MotionPanel::resized()
     area.removeFromTop (6);
 
     auto flyKnobRow = area.removeFromTop (knobH);
-    for (auto* k : { &flyDistanceKnob, &flySpeedKnob })
+    for (auto* k : { &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
     {
         layoutKnob (*k, flyKnobRow.removeFromLeft (knobW));
         flyKnobRow.removeFromLeft (4);

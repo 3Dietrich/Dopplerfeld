@@ -47,6 +47,11 @@ private:
                      const juce::String& tooltip = {});
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
+    // Slew Vmax/Amax sind nur bei Smoother "Slew Limiter" ueberhaupt wirksam
+    // (siehe Params::slewVmax/slewAmax) - bei jedem anderen Verfahren
+    // ausgegraut statt weiter bedienbar, aber wirkungslos, herumzustehen.
+    void updateSlewControlsVisibility();
+
     // Combo-Items werden aus der tatsaechlichen AudioParameterChoice-Liste
     // uebernommen statt hier erneut als String-Literale getippt zu werden -
     // sonst waere ein zweiter Ort fuer Tippfehler bei den Choice-Texten offen.
@@ -67,7 +72,7 @@ private:
     juce::ComboBox flyStartCombo;
     std::unique_ptr<ComboBoxAttachment> flyStartAttachment;
 
-    Knob flyDistanceKnob, flySpeedKnob;
+    Knob flyDistanceKnob, flyApproachKnob, flySpeedKnob;
 
     juce::TextButton flyButton { "Vorbeiflug" };
 
