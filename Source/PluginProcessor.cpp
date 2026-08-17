@@ -201,6 +201,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.playSpeed    = raw (Params::playSpeed);
     pp.playInterp   = raw (Params::playInterp);
     pp.playLoop     = raw (Params::playLoop);
+    pp.globalMaxSpeed = raw (Params::globalMaxSpeed);
 
     pp.flyKind     = raw (Params::flyKind);
     pp.flyStart    = raw (Params::flyStart);
@@ -811,6 +812,12 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
         // der Bewegungswiedergabe, diese vor dem rohen Reglerziel. Alle drei
         // liefern nur ein ZIEL - geglättet, in die Trajektorie geschrieben und
         // gelöst wird danach für alle gleich (Plan 3.8/3.9).
+        // Fuer den gemeinsamen Tempo-Deckel unten: Positionen vor diesem Tick,
+        // um daraus die tatsaechlich zurueckgelegte Strecke zu messen -
+        // unabhaengig davon, welcher Smoother/Generator sie erzeugt hat.
+        const Vec3 prevSourcePos = smoothedSourcePos;
+        const Vec3 prevHeadPos   = listenerState.head;
+
         Vec3 target = sourceTargetMetres;
         bool bypassSmoothing = false;
 
@@ -845,12 +852,12 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
 
         if (bypassSmoothing)
         {
-            // Alle vier internen Verfahren synchron mitführen (nicht nur das
-            // aktive) - sonst setzt ein Wechsel zurück zu Maus/Automation nach
-            // dem Stop mit einem veralteten, "eingefrorenen" Zustand wieder
-            // ein und springt.
+            // Das Nachfuehren des internen Glaetter-Zustands (Kommentar
+            // weiter unten) passiert erst NACH dem Tempo-Deckel, mit der
+            // eventuell gekappten Position - sonst stuende der interne
+            // Zustand auf dem ungekappten Ziel, und ein spaeterer Wechsel
+            // zurueck zu Maus/Automation spraenge genau dorthin.
             smoothedSourcePos = target;
-            sourceSmoothers.reset (target);
         }
         else
         {
@@ -864,6 +871,40 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
 
         Vec3 headVel;
         listenerSmoothers.tick (listenerState.head, headVel);
+
+        // Gemeinsamer Tempo-Deckel (@dpa: "ein 'max Fly speed' fuer alles"):
+        // letzte Stufe nach JEDER Quelle (Maus/Automation-Glaettung, Flug,
+        // Wiedergabe) - klemmt die in diesem Tick tatsaechlich zurueckgelegte
+        // Strecke, nicht den Regler-Mechanismus selbst. Wirkt dadurch
+        // unabhaengig davon, welcher der vier Smoother oder der Vorbeiflug-
+        // Generator das Ziel geliefert hat, ohne dass jeder einzeln sein
+        // eigenes Limit kennen muesste. Default ist so hoch, dass er nichts
+        // begrenzt, bis @dpa ihn bewusst herunterstellt.
+        {
+            const double maxStep = (double) pp.globalMaxSpeed->load() * tickDt;
+
+            auto clampStep = [maxStep] (Vec3 prev, Vec3& current)
+            {
+                const Vec3   delta = current - prev;
+                const double dist  = delta.length();
+
+                if (dist > maxStep && dist > 1.0e-9)
+                    current = prev + delta * (maxStep / dist);
+            };
+
+            clampStep (prevSourcePos, smoothedSourcePos);
+            clampStep (prevHeadPos,   listenerState.head);
+        }
+
+        if (bypassSmoothing)
+        {
+            // Alle vier internen Verfahren synchron mitführen (nicht nur das
+            // aktive) - sonst setzt ein Wechsel zurück zu Maus/Automation nach
+            // dem Stop mit einem veralteten, "eingefrorenen" Zustand wieder
+            // ein und springt. Mit der (eventuell durch den Tempo-Deckel
+            // gekappten) Position, nicht dem rohen Ziel von oben.
+            sourceSmoothers.reset (smoothedSourcePos);
+        }
 
         // Yaw bekommt einen eigenen One-Pole statt durch den Positionsglätter
         // zu laufen: der rechnet in Metern (der Slew-Limiter klemmt m/s, der

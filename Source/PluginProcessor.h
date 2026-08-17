@@ -283,6 +283,7 @@ private:
         std::atomic<float>* playSpeed    = nullptr;
         std::atomic<float>* playInterp   = nullptr;
         std::atomic<float>* playLoop     = nullptr;
+        std::atomic<float>* globalMaxSpeed = nullptr;
 
         std::atomic<float>* flyKind     = nullptr;
         std::atomic<float>* flyStart    = nullptr;

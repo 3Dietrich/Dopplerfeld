@@ -78,6 +78,11 @@ namespace Params
     constexpr const char* playInterp   = "playInterp";
     constexpr const char* playLoop     = "playLoop";
 
+    // Gemeinsamer Tempo-Deckel fuer jede Bewegungsquelle (Maus/Automation UND
+    // Vorbeiflug) - letzte Stufe in DopplerfeldProcessor::advanceMotion(),
+    // unabhaengig davon, welcher Smoother/Generator das Ziel geliefert hat.
+    constexpr const char* globalMaxSpeed = "globalMaxSpeed";
+
     // Vorbeiflug-Generatoren (FlyByGenerator): Bahnart, Startvariante,
     // Vorbeiflugabstand in Metern und Geschwindigkeit in m/s. Die
     // Geschwindigkeit ist ausdrücklich live automatisierbar - der Generator

@@ -54,6 +54,10 @@ private:
 
     Knob smootherTauKnob, slewVmaxKnob, slewAmaxKnob, playSpeedKnob;
 
+    // Gemeinsamer Tempo-Deckel fuer jede Bewegungsquelle (Maus/Automation UND
+    // Vorbeiflug) - siehe Params::globalMaxSpeed.
+    Knob globalMaxSpeedKnob;
+
     // Vorbeiflug: Bahnart, Startvariante, Abstand, Tempo.
     juce::Label flyKindLabel;
     juce::ComboBox flyKindCombo;

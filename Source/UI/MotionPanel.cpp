@@ -50,6 +50,12 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (playSpeedKnob,   apvts, Params::playSpeed,   "Play Speed",
                "Wiedergabegeschwindigkeit einer Aufnahme (0.25-4x). Skaliert die Bewegung "
                "und damit den Doppler - schnelle Wiedergabe kann Ueberschall erzeugen.");
+    setupKnob (globalMaxSpeedKnob, apvts, Params::globalMaxSpeed, "Max Speed",
+               "Gemeinsamer Tempo-Deckel fuer ALLE Bewegung - Maus/Automation-Glaettung "
+               "UND Vorbeiflug zusammen, unabhaengig vom gewaehlten Smoother. Anders als "
+               "'Slew Vmax' (nur bei Slew Limiter, begrenzt dessen eigene Dynamik) wirkt "
+               "das hier immer, als letzte Sicherung. Default sehr hoch = wirkungslos, "
+               "bis bewusst heruntergestellt.");
 
     smootherTypeLabel.setText ("Smoother", juce::dontSendNotification);
     smootherTypeLabel.setJustificationType (juce::Justification::centredLeft);
@@ -165,7 +171,7 @@ void MotionPanel::resized()
     area.removeFromTop (6);
 
     auto knobRow = area.removeFromTop (knobH);
-    for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob })
+    for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob, &globalMaxSpeedKnob })
     {
         layoutKnob (*k, knobRow.removeFromLeft (knobW));
         knobRow.removeFromLeft (4);

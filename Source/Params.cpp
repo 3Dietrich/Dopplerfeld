@@ -167,6 +167,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (choiceParam (playInterp, "Play Interp", { "Linear", "Catmull-Rom" }, 1));
     layout.add (boolParam (playLoop, "Play Loop", false));
 
+    {
+        // Gemeinsamer Tempo-Deckel fuer JEDE Bewegungsquelle der Quelle -
+        // Maus/Automation-Glaettung UND Vorbeiflug gleichermassen (@dpa:
+        // "ein 'max Fly speed' fuer alles"). Default so hoch, dass er ohne
+        // ausdrueckliches Herunterstellen nichts begrenzt (keine versteckten
+        // Limits) - Slew Vmax bleibt daneben als eigener, spezifischerer
+        // Regler bestehen (siehe Tooltip dort: Vmax/Amax sind zwei
+        // verschiedene Groessen, die sich nicht verlustfrei zu einem Regler
+        // verschmelzen lassen).
+        auto range = juce::NormalisableRange<float> (1.0f, 100000.0f);
+        range.setSkewForCentre (300.0f);
+        layout.add (floatParam (globalMaxSpeed, "Max Speed", range, 100000.0f, "m/s"));
+    }
+
     // Vorbeiflug-Generatoren.
     layout.add (choiceParam (flyKind, "Fly Path", { "Durch den Bildschirm", "Waagerecht querend" }, 1));
     layout.add (choiceParam (flyStart, "Fly Start", { "Kontinuierlich", "Knall-Start" }, 0));
