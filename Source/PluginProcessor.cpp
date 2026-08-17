@@ -631,7 +631,15 @@ void DopplerfeldProcessor::handlePendingRequests()
     }
 
     if (flyStopRequest.exchange (false))
+    {
+        // Gleiche Synchronisation wie beim natuerlichen Ende der Strecke
+        // (siehe advanceMotion()) - sonst springt die Quelle beim manuellen
+        // Stopp-Knopf genauso auf die alte, vorherige Zielposition.
+        if (flyBy.isRunning())
+            sourceTargetMetres = flyBy.currentPosition();
+
         flyBy.stop();
+    }
 
     if (flyTriggerRequest.exchange (false))
         startFlyBy();
@@ -748,6 +756,16 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
         if (flyBy.isRunning())
         {
             target = flyBy.tick (tickDt);
+
+            // Endpunkt merken: sobald der Flug endet (isRunning() faellt in
+            // diesem tick() auf false), faellt der naechste Durchlauf auf
+            // sourceTargetMetres zurueck - ohne diese Synchronisation waere
+            // das der Punkt von VOR dem Flug, und die Quelle spraenge dorthin
+            // (@dpa-Repro: Vorbeiflug endet, M springt an die alte Stelle).
+            // So bleibt sie stattdessen einfach dort stehen, wo der Flug
+            // endete - kein Sprung, kein neuer Sonderzustand.
+            if (! flyBy.isRunning())
+                sourceTargetMetres = target;
         }
         else if (motionPlayer.isPlaying())
         {
