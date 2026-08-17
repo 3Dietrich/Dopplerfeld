@@ -146,6 +146,47 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (Vorbeiflug-Generatoren)
+
+Backlog-Punkt "zwei neue Bewegungsgeneratoren" ist gebaut:
+`Source/Motion/FlyByGenerator` liefert eine geradlinige Bahn in die Tiefe
+("durch den Bildschirm") oder waagerecht querend, mit Abstandsparameter in
+Metern und live automatisierbarer Geschwindigkeit. Kein Sonderzustand - der
+Generator liefert nur Zielpositionen, wie Maus, Hostautomation und
+`MotionPlayer`; geglättet und gelöst wird danach für alle gleich.
+
+Zwei Startvarianten, und der Unterschied steckt ausschließlich in der
+Vorgeschichte des neuen Geometriesatzes:
+
+- **kontinuierlich** - `SourceTrajectory::fillLinear()` belegt rückwärts
+  dieselbe Gerade. Der Löser sieht eine Quelle, die schon immer geflogen ist:
+  kein Positions- und kein Geschwindigkeitssprung.
+- **Knall-Start** - konstante Vorgeschichte, die Quelle erscheint schlagartig
+  in voller Fahrt. Bewusst unphysikalisch und als reproduzierbarer Testfall
+  für den offenen Punkt "Überschall-Boom klingt nicht richtig" gedacht.
+
+**Zwei Fallen, die dabei nicht offensichtlich sind:**
+
+1. Die lineare Vorbelegung darf nicht unbegrenzt weit zurückreichen. Der
+   Puffer deckt eine endliche Laufzeit ab (bei n_max rund 42 s, also gut
+   14 km); bei Überschall wäre die Quelle nach voller Rückrechnung so weit
+   weg, dass ihr Schall die Pufferlänge nicht mehr schafft - der Löser fände
+   keine Wurzel und das Ergebnis wäre Stille. Die Engine rechnet die zulässige
+   Spanne selbst aus, davor ruht die Quelle am Anfang der Geraden.
+2. Beide Varianten müssen die Quelle im ersten Moment bereits mit voller
+   Geschwindigkeit fliegen lassen. Statt den vier Glättungsverfahren eine
+   Anfangsgeschwindigkeit aufzudrücken (wofür sie keine gemeinsame
+   Schnittstelle haben), werden sie beim Start mit einem gleichförmig
+   wandernden Ziel eingelaufen.
+
+**Ein Ergebnis zum Merken:** der Pegel taugt nicht, um die beiden Varianten zu
+unterscheiden. Bei gleichförmiger Annäherung ist die retardierte Entfernung
+R_e = R_0/(1 − M_r), und der Fokussierungsfaktor 1/(1 − M_r) hebt sich mit ihr
+exakt weg: A = 1/(R_e (1 − M_r)) = 1/R_0. Beide Varianten sind im Anflug
+gleich laut (gemessen RMS 0,01746 gegen 0,01754), sie klingen nur verschieden
+hoch. `load_check` misst deshalb M_r: 0,58 beim weichen Start, 0,00 beim
+Knall-Start im selben Fenster.
+
 ## Stand 2026-08-17 (Mehrfachreflexion, eine Generation)
 
 Der Backlog-Punkt war als riskantester gekennzeichnet ("Stabilitätsthema").
@@ -348,10 +389,7 @@ aber jeweils ein eigener Lauf - nicht vergessen, nur nicht dran.
    für die Anzahl und ein Reset-Knopf - die Klone sind der Grund für den
    Regler: die Löserlast skaliert linear mit der Pfadanzahl, und @dpa will
    sehen, was er sich gerade einkauft, statt einen stillen Deckel zu bekommen.
-3. **Zwei neue Bewegungsgeneratoren:** geradlinig durch den Bildschirm und
-   waagerecht querend, jeweils mit zwei Startvarianten - kontinuierlich
-   einfahrend oder mit abruptem Knall-Start.
-4. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
+3. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
    mit exponentiell wachsendem Feld-Blick. Erst mit z als echter Achse
    überhaupt sinnvoll; die heutige Feldanzeige zeigt z gar nicht an.
 
