@@ -12,8 +12,14 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Bauart" FORCE)
 endif()
 
-# JUCE liegt als Git-Klon daneben und wird eingebunden, nicht kopiert.
-add_subdirectory(/Users/dpa/Documents/JUCE JUCE)
+# JUCE liegt als Git-Klon daneben und wird eingebunden, nicht kopiert. Pfad
+# per Variable statt fest verdrahtet, damit CI (und andere Rechner) mit
+# -DJUCE_DIR=... auf einen eigenen Checkout zeigen koennen; lokal bleibt der
+# bisherige Pfad als Vorgabe unveraendert.
+if(NOT DEFINED JUCE_DIR)
+    set(JUCE_DIR "$ENV{HOME}/Documents/JUCE")
+endif()
+add_subdirectory(${JUCE_DIR} JUCE)
 
 juce_add_plugin(Dopplerfeld
     COMPANY_NAME               "Dietrich Pank"

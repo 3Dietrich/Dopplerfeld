@@ -1,0 +1,74 @@
+name: Build & Release
+
+# Bei jedem Push: bauen + testen, als frueher Warnschuss (Warnungsfrei-
+# Anspruch, solver_check/load_check). Bei einem Versions-Tag (v*) zusaetzlich
+# ein GitHub-Release mit fertig gebauter Standalone-App/VST3/AU anlegen -
+# das ist der Weg fuer Nutzer, das Plugin ohne eigenes Bauen herunterzuladen.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+# contents: write nur fuer den Release-Job noetig (Tag-Upload); der reine
+# Build-Job braucht das nicht, bekommt aber dieselbe Berechtigung zugeteilt,
+# weil GitHub Actions Permissions nur workflow-weit vergibt.
+permissions:
+  contents: write
+
+# JUCE ist kein Submodul dieses Repos (siehe README/CMakeLists.txt: liegt
+# lokal daneben, wird per JUCE_DIR eingebunden) - hier extra ausgecheckt und
+# ueber den Commit als Cache-Schluessel wiederverwendet, damit nicht jeder
+# Lauf den ganzen ~1GB-Checkout neu zieht.
+env:
+  JUCE_REF: '8.0.6'
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Dopplerfeld auschecken
+        uses: actions/checkout@v4
+
+      - name: JUCE auschecken
+        uses: actions/checkout@v4
+        with:
+          repository: juce-framework/JUCE
+          ref: ${{ env.JUCE_REF }}
+          path: JUCE-src
+
+      - name: JUCE-Bauartefakte cachen
+        uses: actions/cache@v4
+        with:
+          path: JUCE-src/**/build
+          key: juce-${{ env.JUCE_REF }}-${{ runner.os }}
+
+      - name: Konfigurieren
+        run: cmake -B build -DJUCE_DIR=${{ github.workspace }}/JUCE-src -DCMAKE_BUILD_TYPE=Release
+
+      - name: Bauen (Standalone, VST3, AU)
+        run: cmake --build build --config Release --target Dopplerfeld_Standalone Dopplerfeld_VST3 Dopplerfeld_AU -j 4
+
+      - name: Testen (solver_check, load_check)
+        run: cmake --build build --config Release --target solver_check load_check -j 4 && ctest --test-dir build --output-on-failure
+
+      - name: Artefakte fuer die Freigabe packen
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mkdir -p dist
+          cp -R build/Dopplerfeld_artefacts/Release/Standalone/Dopplerfeld.app dist/
+          cp -R build/Dopplerfeld_artefacts/Release/VST3/Dopplerfeld.vst3 dist/
+          cp -R build/Dopplerfeld_artefacts/Release/AU/Dopplerfeld.component dist/
+          if [ -d presets ]; then cp -R presets dist/Presets; fi
+          cd dist && zip -r ../Dopplerfeld-macOS-${{ github.ref_name }}.zip .
+
+      - name: Release veroeffentlichen
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            "Dopplerfeld-macOS-${{ github.ref_name }}.zip" \
+            --title "Dopplerfeld ${{ github.ref_name }}" \
+            --generate-notes
