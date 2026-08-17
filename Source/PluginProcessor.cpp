@@ -192,6 +192,9 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.groundReflectionOn = raw (Params::groundReflectionOn);
     pp.groundDampAmount   = raw (Params::groundDampAmount);
 
+    pp.reflect2ndOn = raw (Params::reflect2ndOn);
+    pp.bounceGain   = raw (Params::bounceGain);
+
     {
         const char* const onIds[]    { Params::wall1On,    Params::wall2On };
         const char* const xIds[]     { Params::wall1X,     Params::wall2X };
@@ -432,6 +435,9 @@ void DopplerfeldProcessor::applyParameters()
     // dass hier über alle Pfade beider Geometriesätze gelaufen werden müsste.
     dopplerEngine.setGroundReflectionEnabled (pp.groundReflectionOn->load() > 0.5f);
     dopplerEngine.setGroundDampingAmount ((double) pp.groundDampAmount->load());
+
+    dopplerEngine.setSecondOrderEnabled (pp.reflect2ndOn->load() > 0.5f);
+    dopplerEngine.setBounceGain ((double) pp.bounceGain->load());
 
     // Wände: nur die Ziele einsammeln, gefolgt wird ihnen in advanceMotion().
     for (int w = 0; w < DopplerEngine::maxWalls; ++w)

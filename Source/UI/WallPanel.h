@@ -54,6 +54,12 @@ private:
 
     Wall walls[wallCount];
 
+    // Mehrfachreflexion: gilt fuer alle Flaechen zusammen, deshalb nicht je
+    // Wand, sondern einmal unten.
+    juce::ToggleButton secondOrderButton { "Mehrfachreflexion" };
+    std::unique_ptr<ButtonAttachment> secondOrderAttachment;
+    Knob bounceGainKnob;
+
     juce::TextButton panicButton { "Alle Reflexionen aus" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WallPanel)

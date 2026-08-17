@@ -102,6 +102,28 @@ public:
     void setWall (int index, bool enabled, Vec3 anchorMetres,
                   double azimuthRad, double tiltRad, double damping01);
 
+    // Mehrfachreflexionen: genau EINE zusätzliche Generation, also Wege der
+    // Form Quelle -> Fläche X -> Fläche Y -> Ohr mit X != Y. Mehr nicht, und
+    // ausdrücklich keine Rekursion.
+    //
+    // Warum das nicht aufschwingen kann (das war der Grund, aus dem der Punkt
+    // ursprünglich zurückgestellt wurde): das hier ist die
+    // Spiegelquellen-Methode, kein Rückkopplungsnetz. Jeder Weg ist ein
+    // eigener PropagationPath, der den geteilten Quellsignalpuffer LIEST und
+    // additiv auf den Ausgang schreibt. Kein Pfad schreibt je in den Puffer
+    // zurück, kein Ausgang ist irgendwo Eingang - es gibt schlicht keine
+    // Schleife, die eine Verstärkung aufsammeln könnte. Der Ausgang ist eine
+    // endliche Summe endlich vieler beschränkter Terme (jeder einzelne durch
+    // 1/(R_min·eps) begrenzt, wie jeder Pfad im Projekt).
+    //
+    // bounceGain ist trotzdem da und liegt unter 1: die Dämpfung an der Fläche
+    // ist ein Tiefpass mit Gleichstromverstärkung 1, nimmt also nur Höhen und
+    // keinen Pegel. Ohne einen ausdrücklichen Faktor je Generation wäre eine
+    // zweifach reflektierte Welle nur durch den längeren Weg leiser, was für
+    // eine reale Fläche zu wenig ist.
+    void setSecondOrderEnabled (bool shouldBeEnabled);
+    void setBounceGain (double gain01);
+
     // Alles außer dem Direktschall aus - die minimale sichere Konfiguration.
     void disableAllReflections();
 
@@ -165,11 +187,29 @@ private:
         double        dampFcHz = 800.0;
     };
 
+    // Ein Ausbreitungsweg als Rezept: über welche Flächen er läuft, in der
+    // Reihenfolge, in der der Schall sie trifft.
+    //
+    //   first < 0            - Direktschall
+    //   first >= 0, second<0 - eine Reflexion
+    //   beide >= 0           - zwei Reflexionen (first zuerst getroffen)
+    //
+    // Die Abbildung des EMPFÄNGERS läuft dabei genau andersherum:
+    // |L - σ_second(σ_first(M))| = |σ_first(σ_second(L)) - M|, weil jede
+    // Spiegelung eine Isometrie ist. Deshalb ist die äußere Abbildung σ_first.
+    struct PathRecipe
+    {
+        int ear    = 0;
+        int first  = -1;
+        int second = -1;
+
+        int order() const { return (first < 0 ? 0 : (second < 0 ? 1 : 2)); }
+    };
+
     struct PathSet
     {
-        // surface gibt je Pfad an, welche Fläche ihn erzeugt (Index in
-        // surfaces). Die Länge des Vektors bestimmt die Pfadanzahl.
-        void prepare (double sampleRate, int maxBlockSize, const std::vector<int>& surface,
+        // Die Länge des Rezeptvektors bestimmt die Pfadanzahl.
+        void prepare (double sampleRate, int maxBlockSize, size_t pathCount,
                       double trajRateHz, double maxSeconds);
         void reset (Vec3 pos, double time, const ListenerState& l);
 
@@ -190,14 +230,21 @@ private:
         ListenerState prevListener;
 
         // Blockkontext, von der Engine vor jedem process() gesetzt.
-        const SourceSignalBuffer* signal      = nullptr;
-        const MediumState*        medium      = nullptr;
-        const std::vector<int>*   pathEar     = nullptr;
-        const std::vector<int>*   pathSurface = nullptr;
-        const Surface*            surfaces    = nullptr;
-        double                    blockStartTime = 0.0;
-        double                    sr             = 0.0;
+        const SourceSignalBuffer*      signal  = nullptr;
+        const MediumState*             medium  = nullptr;
+        const std::vector<PathRecipe>* recipes = nullptr;
+        const DopplerEngine*           engine  = nullptr;
+        double                         blockStartTime = 0.0;
+        double                         sr             = 0.0;
     };
+
+    // Ist dieser Weg gerade zu rechnen, und wie sieht er aus? Beides hängt am
+    // Zustand der beteiligten Flächen und wird deshalb hier und nicht im
+    // PathSet beantwortet (die Flächen gehören der Engine, nicht dem Satz).
+    bool          recipeEnabled (const PathRecipe& r) const;
+    PathTransform recipeTransform (const PathRecipe& r) const;
+    double        recipeDamping (const PathRecipe& r) const;
+    double        recipeDampFcHz (const PathRecipe& r) const;
 
     void pushTrajectory (double blockStart, double blockEnd);
 
@@ -214,11 +261,13 @@ private:
 
     DualPathCrossfader<PathSet> geometry;
 
-    SourceSignalBuffer signal;          // geteilt, genau ein Schreiber
-    std::vector<int>   pathEar;         // welcher Pfad auf welchen Kanal
-    std::vector<int>   pathSurface;     // welche Fläche den Pfad erzeugt
+    SourceSignalBuffer      signal;     // geteilt, genau ein Schreiber
+    std::vector<PathRecipe> recipes;    // parallel zu PathSet::paths
 
     Surface surfaces[surfaceCount];
+
+    bool   secondOrderOn = false;
+    double bounceGain    = 0.6;
 
     SoundSource* source = nullptr;
 

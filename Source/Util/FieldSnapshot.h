@@ -20,7 +20,9 @@ struct FieldSnapshot
 {
     static constexpr int maxTrailPoints = 128;
     static constexpr int maxWavefronts  = 12;
-    static constexpr int maxPaths       = 12;   // Plan 2.12: bis zu 12 Leser (2 Ohren + Spiegelquellen)
+    // 2 Ohren mal (Direktschall + 3 Flächen + 6 Flächenpaare) = 20 mögliche
+    // Wege; aufgerundet, damit die Anzeige nichts abschneidet.
+    static constexpr int maxPaths       = 24;
     static constexpr int maxWalls       = 2;    // frei platzierbare Wände, siehe DopplerEngine
 
     // Quellposition, dezimierte Spur der letzten Sekunden.
@@ -54,8 +56,12 @@ struct FieldSnapshot
         int    ear             = 0;       // 0 = links, 1 = rechts (Plan 3.6 pathEar)
 
         // Welche Fläche diesen Pfad erzeugt: 0 = Direktschall, 1 = Boden,
-        // ab 2 die Wände (siehe DopplerEngine::Surface).
+        // ab 2 die Wände (siehe DopplerEngine::Surface). Bei zwei Reflexionen
+        // die zuerst getroffene.
         int    surface         = 0;
+
+        // Anzahl der Reflexionen: 0 = Direktschall, 1 = einfach, 2 = zweifach.
+        int    order           = 0;
         int    activeBranches  = 0;
         double delaySeconds    = 0.0;
         double machRadial      = 0.0;

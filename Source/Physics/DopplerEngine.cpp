@@ -23,14 +23,14 @@ double wrapAngle (double a)
 //======================================================================
 // PathSet - ein kompletter Geometriesatz
 
-void DopplerEngine::PathSet::prepare (double sampleRate, int maxBlockSize, const std::vector<int>& surface,
+void DopplerEngine::PathSet::prepare (double sampleRate, int maxBlockSize, size_t pathCount,
                                       double trajRateHz, double maxSeconds)
 {
     sr = sampleRate;
 
     trajectory.prepare (trajRateHz, maxSeconds);
 
-    paths.resize (surface.size());
+    paths.resize (pathCount);
 
     for (auto& p : paths)
     {
@@ -72,8 +72,8 @@ void DopplerEngine::PathSet::renderInto (juce::AudioBuffer<float>& dest, int num
     for (int ch = 0; ch < dest.getNumChannels(); ++ch)
         dest.clear (ch, 0, numSamples);
 
-    if (signal == nullptr || medium == nullptr || pathEar == nullptr
-        || pathSurface == nullptr || surfaces == nullptr || sr <= 0.0)
+    if (signal == nullptr || medium == nullptr || recipes == nullptr
+        || engine == nullptr || sr <= 0.0)
         return;
 
     const int numCh = dest.getNumChannels();
@@ -89,29 +89,30 @@ void DopplerEngine::PathSet::renderInto (juce::AudioBuffer<float>& dest, int num
     // negativ - deshalb das Minuszeichen (Herleitung in Listener.h).
     const double yawRate = -wrapAngle (listener.yaw - prevListener.yaw) / dt;
 
-    for (size_t i = 0; i < paths.size() && i < pathEar->size() && i < pathSurface->size(); ++i)
+    for (size_t i = 0; i < paths.size() && i < recipes->size(); ++i)
     {
-        const Surface& surface = surfaces[(size_t) (*pathSurface)[i]];
+        const PathRecipe& recipe = (*recipes)[i];
 
         // Abgeschaltete Fläche heißt: der Spiegelpfad wird gar nicht erst
         // gerechnet. Sein Löser bleibt damit auf dem alten Zeitpunkt stehen und
         // sät sich beim Wiedereinschalten selbst neu, statt über eine Lücke zu
         // interpolieren.
-        if (! surface.enabled)
+        if (! engine->recipeEnabled (recipe))
             continue;
 
         // Wände dürfen wandern, deshalb vor jedem Block frisch übernehmen.
         // Beim Direktschall ist das die Identität, beim Boden immer dieselbe
         // Ebene - in beiden Fällen kostet es nur die Zuweisung.
-        paths[i].setTransform (surface.transform);
-        paths[i].setReflectionDamping (surface.damping, surface.dampFcHz);
+        paths[i].setTransform (engine->recipeTransform (recipe));
+        paths[i].setReflectionDamping (engine->recipeDamping (recipe),
+                                       engine->recipeDampFcHz (recipe));
 
-        const bool rightEar = ((*pathEar)[i] != 0);
+        const bool rightEar = (recipe.ear != 0);
 
         const Vec3 pos = earPosition (prevListener, rightEar);
         const Vec3 vel = earVelocity (prevListener, headVel, yawRate, rightEar);
 
-        const int ch = std::min ((*pathEar)[i], numCh - 1);
+        const int ch = std::min (recipe.ear, numCh - 1);
 
         paths[i].process (trajectory, *signal, *medium,
                           pos, vel, blockStartTime,
@@ -142,20 +143,32 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
 
     silence.assign ((size_t) maxBlock, 0.0f);
 
-    // Ein Pfadpaar (linkes/rechtes Ohr) je Fläche: Direktschall, Boden und die
-    // Wände. Alle liegen dauerhaft bereit, damit das Ein- und Ausschalten einer
+    // Ein Pfadpaar (linkes/rechtes Ohr) je möglichem Weg: Direktschall, je eine
+    // Reflexion an jeder Fläche, und je zwei Reflexionen an zwei
+    // VERSCHIEDENEN Flächen. Zweimal dieselbe unendliche Ebene hintereinander
+    // gibt es nicht - die Verkettung wäre die Identität und damit der
+    // Direktschall.
+    //
+    // Alle liegen dauerhaft bereit, damit das Ein- und Ausschalten einer
     // Reflexion im Audiothread nichts allokiert; ausgeschaltet werden sie
     // übersprungen (renderInto) und kosten dann auch keine Löserzeit.
-    pathEar.clear();
-    pathSurface.clear();
+    recipes.clear();
 
-    for (int s = 0; s < surfaceCount; ++s)
+    auto addPair = [this] (int first, int second)
     {
-        pathEar.push_back (0);
-        pathSurface.push_back (s);
-        pathEar.push_back (1);
-        pathSurface.push_back (s);
-    }
+        recipes.push_back ({ 0, first, second });
+        recipes.push_back ({ 1, first, second });
+    };
+
+    addPair (-1, -1);   // Direktschall
+
+    for (int s = 1; s < surfaceCount; ++s)
+        addPair (s, -1);
+
+    for (int a = 1; a < surfaceCount; ++a)
+        for (int b = 1; b < surfaceCount; ++b)
+            if (a != b)
+                addPair (a, b);
 
     // Der Direktschall ist die Fläche ohne Fläche: keine Spiegelung, keine
     // Dämpfung, nie abschaltbar.
@@ -176,8 +189,8 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
 
     geometry.prepare (sr, maxBlock, 2);
 
-    geometry.active().prepare  (sr, maxBlock, pathSurface, trajectoryRateHz, maxHistorySeconds);
-    geometry.pending().prepare (sr, maxBlock, pathSurface, trajectoryRateHz, maxHistorySeconds);
+    geometry.active().prepare  (sr, maxBlock, recipes.size(), trajectoryRateHz, maxHistorySeconds);
+    geometry.pending().prepare (sr, maxBlock, recipes.size(), trajectoryRateHz, maxHistorySeconds);
 
     setBoomLimitDb (boomLimitDb);
     setAirAbsorptionAmount (airAbsorbAmount);
@@ -384,11 +397,94 @@ void DopplerEngine::setWall (int index, bool enabled, Vec3 anchorMetres,
     s.transform = wallMirrorTransform (anchorMetres, azimuthRad, tiltRad);
 }
 
+void DopplerEngine::setSecondOrderEnabled (bool shouldBeEnabled)
+{
+    secondOrderOn = shouldBeEnabled;
+}
+
+void DopplerEngine::setBounceGain (double gain01)
+{
+    // Streng unter 1 geklemmt: das ist der Faktor je zusätzlicher Generation,
+    // und genau er garantiert, dass eine weitere Generation leiser ist als die
+    // vorige - unabhängig von der Geometrie. Bei genau 1 wäre eine zweifach
+    // reflektierte Welle nur durch den längeren Weg gedämpft, und der kann bei
+    // zwei nah beieinander stehenden Wänden fast null sein.
+    bounceGain = std::min (0.99, std::max (0.0, gain01));
+}
+
 void DopplerEngine::disableAllReflections()
 {
     // Index 0 ist der Direktschall und bleibt.
     for (int i = 1; i < surfaceCount; ++i)
         surfaces[i].enabled = false;
+
+    secondOrderOn = false;
+}
+
+bool DopplerEngine::recipeEnabled (const PathRecipe& r) const
+{
+    switch (r.order())
+    {
+        case 0:  return true;   // Direktschall, immer
+        case 1:  return surfaces[(size_t) r.first].enabled;
+        default: return secondOrderOn
+                        && surfaces[(size_t) r.first].enabled
+                        && surfaces[(size_t) r.second].enabled;
+    }
+}
+
+PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
+{
+    if (r.order() == 0)
+        return PathTransform{};
+
+    if (r.order() == 1)
+        return surfaces[(size_t) r.first].transform;
+
+    // Der Schall trifft erst first, dann second; der Empfänger wird deshalb
+    // erst an second und dann an first gespiegelt (siehe PathRecipe).
+    PathTransform t = composeTransforms (surfaces[(size_t) r.first].transform,
+                                         surfaces[(size_t) r.second].transform);
+
+    t.gain = (float) bounceGain;
+
+    return t;
+}
+
+double DopplerEngine::recipeDamping (const PathRecipe& r) const
+{
+    if (r.order() == 0)
+        return 0.0;
+
+    const double a = surfaces[(size_t) r.first].damping;
+
+    if (r.order() == 1)
+        return a;
+
+    // Zwei Flächen hintereinander: der Pfad hat nur EINE Dämpfungsstufe, die
+    // beiden werden deshalb zusammengefasst. 1 - (1-a)(1-b) ist die übliche
+    // Reihenschaltung zweier Absorptionsgrade - bei b = 0 fällt sie exakt auf
+    // a zurück, und sie kann nie über 1 hinauslaufen. Eine echte Kaskade aus
+    // zwei getrennten Filtern wäre genauer, kostet aber einen zweiten
+    // Filterzustand je Zweig für einen Unterschied, den man an einer
+    // Modellkonstante ohnehin nicht festmachen kann.
+    const double b = surfaces[(size_t) r.second].damping;
+
+    return 1.0 - (1.0 - a) * (1.0 - b);
+}
+
+double DopplerEngine::recipeDampFcHz (const DopplerEngine::PathRecipe& r) const
+{
+    if (r.order() == 0)
+        return groundDampFcHz;
+
+    const double a = surfaces[(size_t) r.first].dampFcHz;
+
+    if (r.order() == 1)
+        return a;
+
+    // Die dunklere der beiden Flächen gibt den Ton an.
+    return std::min (a, surfaces[(size_t) r.second].dampFcHz);
 }
 
 std::uint64_t DopplerEngine::solverEvaluations() const
@@ -541,20 +637,21 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
 
     s.pathCount = 0;
 
-    for (size_t i = 0; i < set.paths.size() && i < pathEar.size() && i < pathSurface.size()
+    for (size_t i = 0; i < set.paths.size() && i < recipes.size()
                        && s.pathCount < FieldSnapshot::maxPaths; ++i)
     {
-        const int surfaceIndex = pathSurface[i];
+        const PathRecipe& recipe = recipes[i];
 
         // Nicht gerechnete Pfade gehören nicht in die Anzeige - ihre Werte
         // stammen sonst vom letzten Einschaltzeitpunkt und stünden dort fest.
-        if (! surfaces[(size_t) surfaceIndex].enabled)
+        if (! recipeEnabled (recipe))
             continue;
 
         auto& info = s.paths[(size_t) s.pathCount];
 
-        info.surface        = surfaceIndex;
-        info.ear            = pathEar[i];
+        info.surface        = std::max (0, recipe.first);
+        info.order          = recipe.order();
+        info.ear            = recipe.ear;
         info.activeBranches = set.paths[i].numActiveBranches();
         info.delaySeconds   = set.paths[i].lastDelaySeconds();
         info.machRadial     = set.paths[i].lastMachRadial();
@@ -657,9 +754,8 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
 
         s.signal         = &signal;
         s.medium         = &medium;
-        s.pathEar        = &pathEar;
-        s.pathSurface    = &pathSurface;
-        s.surfaces       = surfaces;
+        s.recipes        = &recipes;
+        s.engine         = this;
         s.blockStartTime = blockStart;
         s.sr             = sr;
     };

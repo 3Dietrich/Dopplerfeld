@@ -111,6 +111,11 @@ namespace Params
     constexpr const char* wall2Tilt  = "wall2Tilt";
     constexpr const char* wall2Damp  = "wall2Damp";
 
+    // Mehrfachreflexion: genau eine zusätzliche Generation (Quelle -> Fläche X
+    // -> Fläche Y -> Ohr, X != Y), plus der Pegelfaktor je Generation.
+    constexpr const char* reflect2ndOn = "reflect2ndOn";
+    constexpr const char* bounceGain   = "bounceGain";
+
     // --- Crossfade ---
     constexpr const char* fadeAuto     = "fadeAuto";
     constexpr const char* fadeManualMs = "fadeManualMs";

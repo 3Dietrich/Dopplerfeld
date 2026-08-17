@@ -67,6 +67,22 @@ WallPanel::WallPanel (juce::AudioProcessorValueTreeState& apvts)
                    "beim Boden.");
     }
 
+    secondOrderButton.setTooltip (
+        "Genau EINE zusaetzliche Reflexionsgeneration: Wege der Form Quelle -> Flaeche X "
+        "-> Flaeche Y -> Ohr, mit X ungleich Y. Braucht mindestens zwei eingeschaltete "
+        "Flaechen, sonst gibt es solche Wege gar nicht. Zwei parallele Waende ergeben so "
+        "das typische Flatterecho. Kostet bis zu sechs weitere Pfadpaare - der CPU-Wert "
+        "in der Statuszeile zeigt, was man sich einkauft.");
+    addAndMakeVisible (secondOrderButton);
+    secondOrderAttachment = std::make_unique<ButtonAttachment> (apvts, Params::reflect2ndOn,
+                                                                secondOrderButton);
+
+    setupKnob (bounceGainKnob, apvts, Params::bounceGain, "Bounce Gain",
+               "Pegelfaktor je zusaetzlicher Reflexionsgeneration, immer unter 1. Die "
+               "Flaechendaempfung allein reicht dafuer nicht: die ist ein Tiefpass mit "
+               "Gleichstromverstaerkung 1 und nimmt nur Hoehen, keinen Pegel. Kleinere "
+               "Werte = die zweite Reflexion tritt weiter zurueck.");
+
     panicButton.setTooltip (
         "Notaus: schaltet Bodenreflexion und alle Waende auf einen Schlag ab und faellt "
         "damit auf die minimale sichere Konfiguration zurueck - nur noch der Direktpfad "
@@ -102,5 +118,13 @@ void WallPanel::resized()
         area.removeFromTop (8);
     }
 
+    auto secondRow = area.removeFromTop (26);
+    secondOrderButton.setBounds (secondRow.removeFromLeft (160));
+    area.removeFromTop (4);
+
+    auto gainRow = area.removeFromTop (knobH);
+    layoutKnob (bounceGainKnob, gainRow.removeFromLeft (knobW));
+
+    area.removeFromTop (8);
     panicButton.setBounds (area.removeFromTop (28).removeFromLeft (200));
 }

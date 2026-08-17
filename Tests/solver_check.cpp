@@ -755,6 +755,63 @@ void testMirrorPlanes()
         check (err < 1.0e-12, "zweimal gespiegelt ist die Identitaet", buf);
     }
 
+    // 6b. Verkettung zweier Spiegelungen (Mehrfachreflexion). Das Ergebnis ist
+    //     KEINE Spiegelung mehr, sondern eine Drehung bzw. Verschiebung - aber
+    //     immer noch eine Isometrie, und genau darauf beruht, dass ein Pfad
+    //     zweiter Ordnung dieselbe Rechnung benutzen darf wie jeder andere.
+    {
+        const double quarterTurn = 3.14159265358979323846 * 0.5;
+
+        const PathTransform a = wallMirrorTransform (Vec3 { -20.0, 0.0, 0.0 }, quarterTurn, 0.0);
+        const PathTransform b = wallMirrorTransform (Vec3 {  20.0, 0.0, 0.0 }, quarterTurn, 0.0);
+        const PathTransform ab = composeTransforms (a, b);
+
+        // Reihenfolge: erst b, dann a.
+        double worstOrder = 0.0;
+        double worstIso   = 0.0;
+
+        for (int i = 0; i < 40; ++i)
+        {
+            const double u = (double) i;
+
+            const Vec3 L { 3.0 + 0.5 * u, -5.0 + 0.3 * u, 1.75 };
+            const Vec3 M { -8.0 + 0.7 * u, 14.0 - 0.2 * u, 3.0 + 0.1 * u };
+
+            const Vec3 viaCompose = applyPathTransform (ab, L);
+            const Vec3 viaSteps   = applyPathTransform (a, applyPathTransform (b, L));
+
+            worstOrder = std::max (worstOrder, (viaCompose - viaSteps).length());
+
+            // Isometrie: der Abstand zur Quelle bleibt beim Spiegeln des
+            // Empfängers derselbe wie beim (umgekehrten) Spiegeln der Quelle.
+            const double lhs = (applyPathTransform (ab, L) - M).length();
+            const double rhs = (L - applyPathTransform (composeTransforms (b, a), M)).length();
+
+            worstIso = std::max (worstIso, std::abs (lhs - rhs));
+        }
+
+        std::snprintf (buf, sizeof (buf), "max |dp| = %.3e m", worstOrder);
+        check (worstOrder < 1.0e-12, "Verkettung == zwei Einzelschritte", buf);
+
+        std::snprintf (buf, sizeof (buf), "max |dR| = %.3e m", worstIso);
+        check (worstIso < 1.0e-9, "verkettete Abbildung bleibt Isometrie", buf);
+
+        // Zwei parallele Wände bei x = -20 und x = +20: erst an der rechten,
+        // dann an der linken gespiegelt ergibt x -> (-40) - (40 - x) = x - 80.
+        // Eine reine Verschiebung um den doppelten Wandabstand also - das ist
+        // der Flatterecho-Fall und zugleich der Nachweis, dass die Verkettung
+        // keine Spiegelung mehr ist (eine Spiegelung hat immer Fixpunkte,
+        // diese Abbildung hat keinen).
+        const Vec3 p { 5.0, 1.0, 2.0 };
+        const Vec3 q = applyPathTransform (ab, p);
+
+        std::snprintf (buf, sizeof (buf), "dx = %.6f m (erwartet -80), dy = %.3e, dz = %.3e",
+                       q.x - p.x, q.y - p.y, q.z - p.z);
+        check (std::abs ((q.x - p.x) + 80.0) < 1.0e-9
+               && std::abs (q.y - p.y) < 1.0e-9 && std::abs (q.z - p.z) < 1.0e-12,
+               "zwei parallele Waende ergeben eine Verschiebung", buf);
+    }
+
     // 6. Ohne Normale (Direktschall) darf nichts passieren.
     {
         const PathTransform none;

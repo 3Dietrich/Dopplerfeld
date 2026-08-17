@@ -560,6 +560,105 @@ int main()
     }
 
     //==================================================================
+    // 1f. Mehrfachreflexion, und zwar gleich im ungünstigsten Fall: zwei
+    //     parallele, nahezu schallharte Wände plus Boden, Dämpfung fast null,
+    //     Bounce Gain am Anschlag. Das ist die Aufstellung, bei der ein
+    //     Rückkopplungsnetz aufschwingen würde.
+    //
+    //     Die Spiegelquellen-Methode kann das nicht: jeder Weg LIEST den
+    //     geteilten Quellsignalpuffer und schreibt additiv auf den Ausgang, kein
+    //     Pfad schreibt je zurück. Es gibt keine Schleife, in der sich eine
+    //     Verstärkung aufsammeln könnte. Der Test hält das fest, statt es nur zu
+    //     behaupten - geprüft wird, dass der Ausgang nach zehn Sekunden nicht
+    //     größer ist als am Anfang.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres, 60.0f);
+        setParam (proc, Params::smootherType, 1.0f);
+        setParam (proc, Params::lisX, 0.5f);
+        setParam (proc, Params::lisY, 0.5f);
+        setParam (proc, Params::lisZ, 1.75f);
+        setParam (proc, Params::srcX, 0.5f);
+        setParam (proc, Params::srcY, 0.5f);
+        setParam (proc, Params::srcZ, 2.0f);
+
+        // Alles an, alles hart, Limiter aus - der würde einen Aufschwinger
+        // gerade zudecken.
+        setParam (proc, Params::groundReflectionOn, 1.0f);
+        setParam (proc, Params::groundDampAmount, 0.0f);
+        setParam (proc, Params::limiterOn, 0.0f);
+
+        setParam (proc, Params::wall1On, 1.0f);
+        setParam (proc, Params::wall1X, 0.5f);
+        setParam (proc, Params::wall1Y, 0.05f);
+        setParam (proc, Params::wall1Angle, 0.0f);
+        setParam (proc, Params::wall1Tilt, 0.0f);
+        setParam (proc, Params::wall1Damp, 0.0f);
+
+        setParam (proc, Params::wall2On, 1.0f);
+        setParam (proc, Params::wall2X, 0.5f);
+        setParam (proc, Params::wall2Y, 0.95f);
+        setParam (proc, Params::wall2Angle, 0.0f);
+        setParam (proc, Params::wall2Tilt, 0.0f);
+        setParam (proc, Params::wall2Damp, 0.0f);
+
+        setParam (proc, Params::reflect2ndOn, 1.0f);
+        setParam (proc, Params::bounceGain, 0.95f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        // Erst zwei Sekunden zum Einschwingen, dann zwei Messfenster mit
+        // deutlichem Abstand. Die Quelle steht still - jede Zunahme wäre
+        // ausschließlich der Reflexionsstruktur zuzuschreiben.
+        Stats warmUp, early, late;
+
+        render (proc, buffer, 2.0, warmUp, [] (double) {});
+        render (proc, buffer, 1.0, early,  [] (double) {});
+        render (proc, buffer, 8.0, warmUp, [] (double) {});
+        render (proc, buffer, 1.0, late,   [] (double) {});
+
+        early.report ("Flatterecho, fruehes s");
+        late.report  ("Flatterecho, spaetes s");
+
+        const double rmsEarly = std::sqrt (early.sumSquares[0] / ((double) early.samples * 0.5));
+        const double rmsLate  = std::sqrt (late.sumSquares[0]  / ((double) late.samples  * 0.5));
+
+        std::printf ("%-22s RMS früh %.6f -> spät %.6f (Faktor %.3f), Spitze %.4f\n",
+                     "", rmsEarly, rmsLate,
+                     rmsEarly > 0.0 ? rmsLate / rmsEarly : 0.0,
+                     std::max (early.peak, late.peak));
+
+        if (early.nonFinite > 0 || late.nonFinite > 0)
+        {
+            std::printf ("FEHLGESCHLAGEN: NaN/Inf bei Mehrfachreflexion\n");
+            failed = true;
+        }
+
+        // Zehn Sekunden später darf es nicht lauter geworden sein. Etwas Luft
+        // nach oben, weil die Quelle rauschanteile hat und zwei Sekunden RMS
+        // nie exakt gleich ausfallen - aber weit unter allem, was ein
+        // Aufschwingen wäre.
+        if (rmsEarly > 0.0 && rmsLate > 1.2 * rmsEarly)
+        {
+            std::printf ("FEHLGESCHLAGEN: Pegel wächst über die Zeit (Faktor %.3f) - "
+                         "die Reflexionsstruktur schaukelt sich auf\n", rmsLate / rmsEarly);
+            failed = true;
+        }
+
+        // Und der Absolutwert muss in einer Größenordnung bleiben, die ein
+        // Limiter noch fangen kann.
+        if (std::max (early.peak, late.peak) > 100.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: Ausgangsspitze %.2f - viel zu laut\n",
+                         std::max (early.peak, late.peak));
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 2. Extremfall: größtes Feld, Überschallflug quer hindurch, Umkehr,
     //    Feldgrößenwechsel.
     {

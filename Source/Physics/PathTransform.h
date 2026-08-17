@@ -10,31 +10,33 @@
 // anderer Belegung - Boden und Wände sind kein Sonderweg, sondern weitere
 // PropagationPath-Instanzen.
 //
-// Die Ebene steht als { x : normal·x = planeOffset }. Gespiegelt wird nach
-// Householder:
-//
-//   x' = x - 2 (normal·x - planeOffset) normal
-//
-// Das deckt jede Lage ab, nicht nur achsenparallele: eine schräg im Feld
-// stehende Wand ist damit derselbe Aufwand wie der Boden. Eine frühere Fassung
-// konnte nur komponentenweise skalieren und verschieben (scale/offset) - damit
-// waren nur Ebenen senkrecht zu einer Koordinatenachse darstellbar.
+// Gespeichert wird eine allgemeine affine Abbildung x' = A x + offset, A
+// zeilenweise. Der Grund für die Allgemeinheit ist die Mehrfachreflexion:
+// eine einzelne Spiegelung ließe sich knapper als (Normale, Ebenenabstand)
+// hinschreiben, aber die VERKETTUNG zweier Spiegelungen ist keine Spiegelung
+// mehr, sondern eine Drehung (bei sich schneidenden Ebenen) bzw. eine
+// Verschiebung (bei parallelen). Beides ist wieder eine Isometrie und damit
+// zulässig - nur eben nicht mehr als Normale darstellbar.
 //
 // Bewusst JUCE-frei wie die restliche Physics-Schicht.
 struct PathTransform
 {
-    // Einheitsnormale der Spiegelebene. Länge 0 heißt "keine Spiegelung",
-    // die Abbildung ist dann die Identität - das ist der Direktschall.
-    Vec3   normal { 0.0, 0.0, 0.0 };
-    double planeOffset = 0.0;
+    // Zeilen der linearen Abbildung. Vorbelegt mit der Einheitsmatrix, also
+    // der Identität - das ist der Direktschall.
+    Vec3 row0 { 1.0, 0.0, 0.0 };
+    Vec3 row1 { 0.0, 1.0, 0.0 };
+    Vec3 row2 { 0.0, 0.0, 1.0 };
 
-    float  gain = 1.0f;
+    Vec3 offset { 0.0, 0.0, 0.0 };
 
-    bool mirrors() const { return normal.lengthSquared() > 0.0; }
+    float gain = 1.0f;
 };
 
 // Spiegelung an einer beliebigen Ebene durch pointOnPlane mit der (nicht
-// notwendig normierten) Normalen n.
+// notwendig normierten) Normalen n:
+//
+//   x' = x - 2 (n·x - d) n   mit d = n·pointOnPlane
+//      = (I - 2 n nᵀ) x + 2 d n
 //
 // Gespiegelt wird der EMPFÄNGER, nicht die Quelle - das Ergebnis ist dasselbe
 // und geometrisch exakt gleichwertig: eine Spiegelung ist eine Isometrie, also
@@ -49,10 +51,16 @@ struct PathTransform
 // steckt in der Höhendämpfung (PropagationPath::setReflectionDamping).
 inline PathTransform planeMirrorTransform (Vec3 n, Vec3 pointOnPlane)
 {
+    const Vec3   u = n.normalised();
+    const double d = u.dot (pointOnPlane);
+
     PathTransform t;
 
-    t.normal      = n.normalised();
-    t.planeOffset = t.normal.dot (pointOnPlane);
+    t.row0 = { 1.0 - 2.0 * u.x * u.x,      - 2.0 * u.x * u.y,       - 2.0 * u.x * u.z };
+    t.row1 = {     - 2.0 * u.y * u.x,  1.0 - 2.0 * u.y * u.y,       - 2.0 * u.y * u.z };
+    t.row2 = {     - 2.0 * u.z * u.x,      - 2.0 * u.z * u.y,   1.0 - 2.0 * u.z * u.z };
+
+    t.offset = u * (2.0 * d);
 
     return t;
 }
@@ -93,28 +101,54 @@ inline PathTransform wallMirrorTransform (Vec3 anchor, double azimuthRad, double
     return planeMirrorTransform (n, anchor);
 }
 
-// Empfängerposition spiegeln. Ohne Normale (Direktschall) unverändert
-// durchgereicht - das ist kein Sonderfall der Formel, sondern nur die
-// Abkürzung dafür.
-inline Vec3 applyPathTransform (const PathTransform& t, Vec3 receiverPos)
+// Verkettung: erst inner, dann outer, also x -> outer(inner(x)).
+//
+//   A = A_outer A_inner,  offset = A_outer offset_inner + offset_outer
+//
+// Damit wird aus zwei Reflexionen eine Abbildung, und die Mehrfachreflexion
+// ist nur ein weiterer PropagationPath - kein Rückkopplungsweg, keine
+// Rekursion, nichts, was aufschwingen könnte (siehe DopplerEngine).
+inline PathTransform composeTransforms (const PathTransform& outer, const PathTransform& inner)
 {
-    if (! t.mirrors())
-        return receiverPos;
+    // Spalten von A_inner, damit die Produkte als Skalarprodukte lesbar
+    // bleiben.
+    const Vec3 col0 { inner.row0.x, inner.row1.x, inner.row2.x };
+    const Vec3 col1 { inner.row0.y, inner.row1.y, inner.row2.y };
+    const Vec3 col2 { inner.row0.z, inner.row1.z, inner.row2.z };
 
-    const double d = t.normal.dot (receiverPos) - t.planeOffset;
+    PathTransform t;
 
-    return receiverPos - t.normal * (2.0 * d);
+    t.row0 = { outer.row0.dot (col0), outer.row0.dot (col1), outer.row0.dot (col2) };
+    t.row1 = { outer.row1.dot (col0), outer.row1.dot (col1), outer.row1.dot (col2) };
+    t.row2 = { outer.row2.dot (col0), outer.row2.dot (col1), outer.row2.dot (col2) };
+
+    t.offset = Vec3 { outer.row0.dot (inner.offset),
+                      outer.row1.dot (inner.offset),
+                      outer.row2.dot (inner.offset) } + outer.offset;
+
+    t.gain = outer.gain * inner.gain;
+
+    return t;
 }
 
-// Dieselbe Abbildung für eine Geschwindigkeit. Der Ebenenabstand fällt weg,
-// weil er eine Konstante ist und beim Ableiten nach der Zeit verschwindet; der
-// Spiegelanteil wirkt dagegen sehr wohl - ein nach oben laufendes Ohr bewegt
-// sich im Bodenbild nach unten. Ohne diese zweite Funktion wäre die Bewegung
-// des Spiegelempfängers falsch und mit ihr der Doppler der Reflexion.
+// Empfängerposition abbilden. Wird einmal je Teilblock und Pfad gerufen, nicht
+// je Sample - die neun Multiplikationen fallen neben dem Löser nicht auf,
+// deshalb gibt es hier keine Abkürzung für den Identitätsfall.
+inline Vec3 applyPathTransform (const PathTransform& t, Vec3 receiverPos)
+{
+    return { t.row0.dot (receiverPos) + t.offset.x,
+             t.row1.dot (receiverPos) + t.offset.y,
+             t.row2.dot (receiverPos) + t.offset.z };
+}
+
+// Dieselbe Abbildung für eine Geschwindigkeit. Der offset fällt weg, weil er
+// eine Konstante ist und beim Ableiten nach der Zeit verschwindet; der lineare
+// Anteil wirkt dagegen sehr wohl - ein nach oben laufendes Ohr bewegt sich im
+// Bodenbild nach unten. Ohne diese zweite Funktion wäre die Bewegung des
+// Spiegelempfängers falsch und mit ihr der Doppler der Reflexion.
 inline Vec3 applyPathTransformVelocity (const PathTransform& t, Vec3 receiverVel)
 {
-    if (! t.mirrors())
-        return receiverVel;
-
-    return receiverVel - t.normal * (2.0 * t.normal.dot (receiverVel));
+    return { t.row0.dot (receiverVel),
+             t.row1.dot (receiverVel),
+             t.row2.dot (receiverVel) };
 }

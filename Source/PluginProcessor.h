@@ -237,6 +237,9 @@ private:
         std::atomic<float>* wallTilt[DopplerEngine::maxWalls]  {};
         std::atomic<float>* wallDamp[DopplerEngine::maxWalls]  {};
 
+        std::atomic<float>* reflect2ndOn = nullptr;
+        std::atomic<float>* bounceGain   = nullptr;
+
         std::atomic<float>* fadeAuto     = nullptr;
         std::atomic<float>* fadeManualMs = nullptr;
 

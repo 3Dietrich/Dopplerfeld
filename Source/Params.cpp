@@ -199,6 +199,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (wall2Tilt,  "Wall 2 Tilt",  { -90.0f, 90.0f, 0.1f }, 0.0f, "°"));
     layout.add (floatParam (wall2Damp,  "Wall 2 Damp",  unitRange(), 0.3f));
 
+    // Mehrfachreflexion. Default aus, und hier mit dem staerksten Grund von
+    // allen: sie ist erst ab zwei eingeschalteten Flaechen ueberhaupt moeglich
+    // und kostet dann bis zu sechs weitere Pfadpaare.
+    layout.add (boolParam (reflect2ndOn, "Multi Reflection", false));
+
+    // Pegelfaktor je zusaetzlicher Generation. Unter 1, damit jede weitere
+    // Generation garantiert leiser ist als die vorige - die Flaechendaempfung
+    // allein leistet das nicht, sie ist ein Tiefpass mit
+    // Gleichstromverstaerkung 1 und nimmt nur Hoehen.
+    layout.add (floatParam (bounceGain, "Bounce Gain", { 0.0f, 0.95f, 0.01f }, 0.6f));
+
     // --- Crossfade ---
     layout.add (boolParam (fadeAuto, "Fade Auto", true));
     layout.add (floatParam (fadeManualMs, "Fade Manual", { 5.0f, 500.0f, 0.1f }, 50.0f, "ms"));

@@ -71,6 +71,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         setParameter (Params::groundReflectionOn, 0.0);
         setParameter (Params::wall1On, 0.0);
         setParameter (Params::wall2On, 0.0);
+        setParameter (Params::reflect2ndOn, 0.0);
     };
 
     motionPanel.onRecordClicked = [this] { dopplerfeldProcessor.toggleRecording(); };
@@ -156,16 +157,29 @@ juce::String DopplerfeldEditor::statusText() const
          << " (Physik " << juce::String::formatted ("%4.0f", (double) dopplerfeldProcessor.cpuLoadPhysicsPercent()) << "%"
          << " / Quelle " << juce::String::formatted ("%4.0f", (double) dopplerfeldProcessor.cpuLoadSourcePercent()) << "%)";
 
+    // Nur Direktschall und einfache Reflexionen einzeln auflisten. Mit beiden
+    // Wänden, Boden und Mehrfachreflexion wären es zwanzig Pfade - die Zeile
+    // wäre unlesbar und der Nutzen null, weil die Zweitordnungs-Pfade
+    // paarweise dasselbe erzählen. Ihre Anzahl steht stattdessen als Zahl
+    // dahinter, damit sichtbar bleibt, was gerade gerechnet wird.
+    int higherOrder = 0;
+
     for (int i = 0; i < snapshot.pathCount; ++i)
     {
         const auto& info = snapshot.paths[(size_t) i];
 
+        if (info.order > 1)
+        {
+            ++higherOrder;
+            continue;
+        }
+
         // Spiegelpfade sind an der Fläche markiert, aus der sie kommen (Boden
         // als ', Wände durchnummeriert) - sonst stünden bei eingeschalteten
-        // Reflexionen bis zu acht gleich aussehende Blöcke da.
+        // Reflexionen mehrere gleich aussehende Blöcke da.
         const char* surfaceMark = " ";
 
-        switch (info.surface)
+        switch (info.order == 0 ? 0 : info.surface)
         {
             case 0:  surfaceMark = " "; break;   // Direktschall
             case 1:  surfaceMark = "'"; break;   // Boden
@@ -178,6 +192,9 @@ juce::String DopplerfeldEditor::statusText() const
              << "  M_r " << juce::String::formatted ("%5.2f", info.machRadial)
              << "  Zweige " << juce::String::formatted ("%2d", info.activeBranches);
     }
+
+    if (higherOrder > 0)
+        text << "      +" << higherOrder << " Mehrfachrefl.";
 
     if (dopplerfeldProcessor.isRecording())
         text << "      Aufnahme " << dopplerfeldProcessor.recordedFrameCount() << " Frames";
