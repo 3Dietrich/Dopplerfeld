@@ -48,8 +48,11 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   dessen Geschichte.
 - **`PropagationPath`** (Physics/) - eine Ausbreitungsstrecke Quelle→Empfänger.
   Enthält den Löser, pro Wurzelzweig ein Luftdämpfungsfilter (`Branch::lpZ`,
-  One-Pole) und einen Anti-Klick-Envelope. Beliebig oft instanziierbar (Plan:
-  später auch Boden-/Wandspiegelungen). **Bekannte Schwachstelle:** `lpZ` ist
+  One-Pole) und einen Anti-Klick-Envelope. Beliebig oft instanziierbar - die
+  Bodenspiegelung ist genau das und kein Sonderweg: dieselbe Klasse mit
+  `PathTransform{scale.z = -1}`, dazu ein zweiter, streckenunabhängiger
+  Dämpfungsgrad (`setReflectionDamping`) für die Reflexionsfläche.
+  **Bekannte Schwachstelle:** `lpZ` ist
   persistenter Filterzustand - ein einzelner nicht-endlicher Wert würde ihn
   für immer vergiften (siehe `git log` Commit "Fix: dauerhafter Sound-Ausfall"
   für einen bereits gefundenen, aber laut @dpa NICHT vollständig behobenen
@@ -57,8 +60,12 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   auch beim Verlust des Fensterfokus auf, was gegen einen reinen Physik-
   Edge-Case spricht).
 - **`DopplerEngine`** (Physics/) - hält Quellsignal-Ringpuffer
-  (`SourceSignalBuffer`), Quell-Trajektorie, und zwei `PropagationPath`
-  (L/R-Ohr) pro `PathSet`. Ein `PathSet` ist ein kompletter Geometriesatz;
+  (`SourceSignalBuffer`), Quell-Trajektorie, und vier `PropagationPath` pro
+  `PathSet`: Direktschall auf L/R plus die Bodenspiegelung auf L/R
+  (`pathEar`/`pathMirror`). Die Spiegelpfade liegen dauerhaft bereit und
+  werden bei abgeschalteter Bodenreflexion übersprungen - Umschalten
+  allokiert damit nichts, und ausgeschaltet kosten sie keine Löserzeit.
+  Ein `PathSet` ist ein kompletter Geometriesatz;
   bei Positionssprüngen/Feldgrößenänderungen laufen zwei `PathSet`
   gegeneinander gecrossfadet (`DualPathCrossfader<PathSet>`, Member
   `geometry`). `fillSnapshot()` liefert per Seqlock-Doppelpufferung Anzeige-
@@ -82,11 +89,17 @@ Alle IDs zentral in `Source/Params.h` (`namespace Params`), Layout in
 `Params.cpp::createParameterLayout()`. Jeder Regler dort eine Zeile - min/max/
 step ändern heißt: diese eine Zeile ändern, nicht durchs UI suchen.
 
+Eine Ausnahme in der Einheitenwahl: `srcX/srcY/lisX/lisY` sind auf die
+Feldfläche normiert (0..1) und werden erst im Processor mit dem Feldmaßstab
+multipliziert, `srcZ/lisZ` stehen dagegen in echten Metern. Die Höhe hängt
+nicht am Maßstab - ein Feldwechsel von 100 m auf 10000 m darf den Hörer nicht
+mitwachsen lassen. Ein Feldgrößenwechsel verschiebt deshalb x/y, aber nie z.
+
 ## Build & Test
 
 ```
 cmake -B build
-cmake --build build --target Dopplerfeld_Standalone -j 4
+cmake --build build --config Release -j 4
 cd build && ctest --output-on-failure     # solver_check + load_check
 ```
 
@@ -101,7 +114,14 @@ unoptimiert im Audiothread. Zum Debuggen ausdrücklich
 `solver_check`: Physik-Löser gegen geschlossene Lösung (Plan 2.5), muss bei
 jeder Änderung an `RetardedTimeSolver`/`PropagationPath` grün bleiben.
 `load_check`: Processor offline durchgefahren (n=200 und n=10000, inkl.
-Mach-3-Querung), prüft auf NaN/Inf und grobe CPU-Plausibilität.
+Mach-3-Querung), prüft auf NaN/Inf und grobe CPU-Plausibilität. Enthält auch
+das Bodenreflexions-Szenario: derselbe Vorbeiflug mit und ohne Spiegelpfade,
+und die Prüfung, dass die Reflexion den Ausgang überhaupt verändert (ein nie
+gerechneter Spiegelpfad würde sonst stumm durchrutschen).
+
+Zu bauen ist die komplette Konfiguration, nicht nur die Standalone: die
+Testbinaries hängen an denselben Quellen, `--target Dopplerfeld_Standalone`
+lässt sie stehen und `ctest` liefe danach gegen den alten Stand.
 
 **Wichtig:** dieses Projekt hat bislang durchgehend warnungsfrei gebaut
 (volle JUCE-Warnschärfe: `-Wall -Wextra -Wshadow-all -Wconversion
@@ -110,6 +130,78 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 (z.B. `-Wfloat-equal` bei absichtlichen Identitätsvergleichen) werden lokal
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
+
+## Stand 2026-08-17 (dritte Achse z, Bodenreflexion)
+
+Auslöser war @dpas Wunsch nach echter Höhe: sobald z ungleich 0 ist,
+reflektiert der Boden. Beides ist gebaut, `solver_check` und `load_check`
+sind grün, der Bau bleibt warnungsfrei.
+
+**Was jetzt geht:**
+
+- **z ist eine echte dritte Achse.** `srcZ`/`lisZ` sind reguläre Parameter
+  in Metern (Defaults: Hörer 1,75 m Ohrhöhe, Quelle 0 m). Die Physik konnte
+  das schon immer - `Vec3`, `RetardedTimeSolver`, `PropagationPath` und die
+  Ohrgeometrie in `Listener.h` rechnen seit H3/H4 dreidimensional; gefehlt
+  hat ausschließlich der Weg vom Regler bis dorthin. Regler dafür im
+  `FieldPanel`, weil x/y gar keine Regler haben (die zieht man mit der Maus
+  im Feld) und für z keine Feldachse existiert.
+- **Bodenreflexion** als Spiegelquelle an der Ebene z = 0, an-/abschaltbar
+  (`groundReflectionOn`, Default aus), mit eigenem Dämpfungsgrad
+  (`groundDampAmount`, Eckfrequenz 800 Hz als Modellkonstante). Zwei
+  zusätzliche `PropagationPath` pro `PathSet`, kein neuer Algorithmus.
+  Gemessen im `load_check`-Szenario (Quelle 20 m hoch, Hörer 1,75 m,
+  Vorbeiflug): RMS 0,0183 → 0,0275, Block-Mittel 1,3 % → 2,0 % vom
+  Echtzeit-Budget.
+
+**Zwei Dinge, die beim Hören sonst irritieren:**
+
+- Gespiegelt wird der **Empfänger**, nicht die Quelle. Für die Ebene z = 0
+  ist das exakt dasselbe (`|L' - M| = |L - M'|`, samt Zeitableitung und damit
+  samt Doppler), aber es geht ohne eine zweite Trajektorie - die Quellbahn
+  lesen alle Pfade gemeinsam. Herleitung steht in `PathTransform.h`.
+- Bei `srcZ` = 0 (dem Default) liegt die Spiegelquelle **exakt auf** der
+  echten Quelle. Die Reflexion ist dann nur eine gedämpfte Verdopplung ohne
+  eigene Laufzeit, kein hörbar getrennter zweiter Weg. Das ist physikalisch
+  richtig und kein Fehler - hörbar wird die Reflexion erst, wenn die Quelle
+  über dem Boden liegt.
+
+Gehört hat @dpa das alles noch nicht - gemessen ist es, beurteilt nicht.
+Insbesondere die 800 Hz Eckfrequenz der Bodendämpfung und der Umstand, dass
+die Reflexion mit voller Amplitude zurückkommt (der Verlust steckt allein in
+den Höhen), sind Modellentscheidungen, die sein Ohr noch bestätigen muss.
+
+## Backlog (aufgenommen 2026-08-17, bewusst nicht gebaut)
+
+Aus derselben Grill-Session mit @dpa. Alles hier ist besprochen und gewollt,
+aber jeweils ein eigener Lauf - nicht vergessen, nur nicht dran.
+
+1. **Frei platzierbare Wände**, auch als unendliche Ebenen. Architektonisch
+   derselbe Griff wie die Bodenreflexion: ein weiterer `PropagationPath` mit
+   passendem `PathTransform` (Wand bei x = w heißt `scale.x = -1`,
+   `offset.x = 2w`, siehe `PathTransform.h`). Offen ist vor allem die UI -
+   wie platziert und orientiert man eine Ebene im 700x400-Feld.
+2. **Mehrfach-Reflexionen / Feedback zwischen Flächen.** Bewusst
+   zurückgestellt, weil es ein Stabilitätsthema ist (Spiegelquellen zweiter
+   und höherer Ordnung wachsen kombinatorisch, und ein Rückkopplungsweg
+   zwischen zwei Flächen braucht eine Abbruchbedingung, die weder klickt noch
+   aufschaukelt).
+3. **Druckwellen-/N-Wellen-Synthese für den Überschallknall**, mit eigenem
+   Regler "Größe/Masse" der Quelle. Der Knall entsteht heute allein aus der
+   Überlagerung mehrerer Wurzelzweige; eine echte N-Welle hätte eine eigene
+   Wellenform, deren Länge von der Ausdehnung des Körpers abhängt. Hängt mit
+   dem offenen Punkt "Boom klingt noch nicht richtig" unten zusammen.
+4. **Mehrfach-M / "Schrot"-Quellen:** bis zu 3 unterschiedliche Quellen plus
+   bis zu 20 günstige Klone davon. Dazu ein CPU-Meter, ein manueller Regler
+   für die Anzahl und ein Reset-Knopf - die Klone sind der Grund für den
+   Regler: die Löserlast skaliert linear mit der Pfadanzahl, und @dpa will
+   sehen, was er sich gerade einkauft, statt einen stillen Deckel zu bekommen.
+5. **Zwei neue Bewegungsgeneratoren:** geradlinig durch den Bildschirm und
+   waagerecht querend, jeweils mit zwei Startvarianten - kontinuierlich
+   einfahrend oder mit abruptem Knall-Start.
+6. **Zweite, perspektivische Ansicht:** Blick in die Tiefe statt von oben,
+   mit exponentiell wachsendem Feld-Blick. Erst mit z als echter Achse
+   überhaupt sinnvoll; die heutige Feldanzeige zeigt z gar nicht an.
 
 ## Stand 2026-08-16 (Phase 1 fertig, erste Hördurchgänge)
 
