@@ -181,10 +181,17 @@ public:
     // schaltet bei Erfolg weich auf die Sample-Quelle um.
     bool loadSampleFile (const juce::File& file);
 
+    // Pfad der zuletzt erfolgreich geladenen Sample-Datei, leer wenn noch nie
+    // geladen. Nur zur Anzeige/zum Speichern gedacht (Message-Thread) - der
+    // Audiothread kennt nur den fertig dekodierten Puffer in sampleSource.
+    juce::String loadedSamplePath() const { return samplePath; }
+
     // Quellwahl Motor <-> Sample <-> Audio In (@dpa-Feedback: dritte Quelle).
-    // Bewusst kein APVTS-Parameter: Plan 3.11 führt keinen auf, und der
-    // geladene Sample-Pfad gehört ebenso wenig zum gespeicherten Zustand
-    // (Plan Abschnitt 7).
+    // Bewusst kein APVTS-Parameter: Plan 3.11 führt keinen auf. Quellwahl und
+    // Sample-Pfad hängen trotzdem am gespeicherten Zustand, siehe
+    // getStateInformation()/setStateInformation() - dort als eigene
+    // ValueTree-Property statt als APVTS-Parameter, aus demselben Grund wie
+    // die Bewegungsaufzeichnung (nicht automatisierbar).
     enum class SourceKind { Motor, Sample, AudioIn };
     void selectSourceKind (SourceKind kind);
     SourceKind currentSourceKind() const { return static_cast<SourceKind> (sourceKindSelected.load()); }
@@ -544,6 +551,11 @@ private:
     // class> ginge zwar auch, int ist hier aber schon ueberall sonst der
     // Zustandstyp fuer sowas in dieser Datei).
     std::atomic<int> sourceKindSelected { 0 };   // SourceKind::Motor
+
+    // Nur Message-Thread (gesetzt in loadSampleFile(), gelesen in
+    // getStateInformation() und für die Anzeige im Editor). Kein Atomic
+    // nötig, juce::String ist hier nie aus dem Audiothread erreichbar.
+    juce::String samplePath;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DopplerfeldProcessor)
 };

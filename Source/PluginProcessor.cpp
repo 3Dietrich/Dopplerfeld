@@ -22,6 +22,14 @@ constexpr const char* motionFramesId  = "motionFrames";
 constexpr const char* motionRateId    = "motionRateHz";
 constexpr const char* motionPlayingId = "motionWasPlaying";
 
+// Quellwahl und Sample-Pfad, aus demselben Grund wie oben eigene Properties
+// statt APVTS-Parameter (siehe SourceKind-Kommentar im Header). Der Pfad
+// bleibt bewusst ein Dateipfad statt eingebetteter Audiodaten (@dpa-
+// Entscheidung 20260818) - das Sample muss beim Weitergeben eines Presets
+// mitkopiert werden, dafür bleiben die Preset-Dateien klein.
+constexpr const char* sourceKindId  = "sourceKind";
+constexpr const char* samplePathId  = "samplePath";
+
 // Ein Frame sind drei double (x, y, z). Ausgeschrieben statt die Vec3-Struktur
 // roh zu kopieren: das Dateiformat soll nicht am Speicherlayout eines
 // C++-Typs hängen.
@@ -1230,6 +1238,7 @@ bool DopplerfeldProcessor::loadSampleFile (const juce::File& file)
     if (! sampleSource.loadFile (file))
         return false;
 
+    samplePath = file.getFullPathName();
     selectSourceKind (SourceKind::Sample);
     return true;
 }
@@ -1257,9 +1266,10 @@ void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
     // am Wurzelknoten der Kopie; JUCE schreibt MemoryBlock-Properties beim
     // Umwandeln in XML als base64-Attribut mit und liest sie ebenso zurück.
     // Das Dateiformat bleibt damit dasselbe wie bisher (copyXmlToBinary), und
-    // ältere Presets ohne diese Property laden unverändert weiter.
-    //
-    // Quellwahl und Sample-Pfad bleiben draußen (Plan Abschnitt 7).
+    // ältere Presets ohne diese Property laden unverändert weiter. Quellwahl
+    // und Sample-Pfad hängen als eigene Properties genauso mit dran (@dpa:
+    // "state muss Quellen/Sample-Pfad merken!"), siehe sourceKindId/
+    // samplePathId weiter unten.
     auto state = apvts.copyState();
 
     if (! state.isValid())
@@ -1295,6 +1305,17 @@ void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
     // Marke, an der setStateInformation() einen Zustand MIT Bewegungsteil von
     // einem älteren ohne unterscheidet.
     state.setProperty (motionPlayingId, isPlayingMotion(), nullptr);
+
+    // Quellwahl immer schreiben (auch Motor - 0 ist sonst nicht von "Property
+    // fehlt, also alter Preset" unterscheidbar). Sample-Pfad nur, wenn
+    // tatsächlich je eines geladen wurde, sonst bliebe eine leere Property
+    // stehen, die setStateInformation() beim Laden unnötig prüfen müsste.
+    state.setProperty (sourceKindId, static_cast<int> (currentSourceKind()), nullptr);
+
+    if (samplePath.isNotEmpty())
+        state.setProperty (samplePathId, samplePath, nullptr);
+    else
+        state.removeProperty (samplePathId, nullptr);
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -1353,6 +1374,27 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
 
         motionLoadWasPlaying.store ((bool) tree.getProperty (motionPlayingId, false));
         motionLoadRequest.store (true);
+    }
+
+    // Sample zuerst laden (das schaltet intern immer auf SourceKind::Sample
+    // um, siehe loadSampleFile()), danach erst die gespeicherte Quellwahl
+    // anwenden - so landet man am Ende bei Motor/AudioIn, obwohl zusätzlich
+    // ein Sample geladen war, statt es dabei stumm auf Sample zu belassen.
+    // Fehlt die Datei am gespeicherten Pfad (verschoben/gelöscht/anderer
+    // Rechner), bleibt es beim zuletzt geladenen bzw. leeren Sample - kein
+    // Abbruch, das Preset lädt trotzdem.
+    if (tree.hasProperty (samplePathId))
+    {
+        const juce::File file (tree.getProperty (samplePathId).toString());
+
+        if (file.existsAsFile())
+            loadSampleFile (file);
+    }
+
+    if (tree.hasProperty (sourceKindId))
+    {
+        const int kind = juce::jlimit (0, 2, (int) tree.getProperty (sourceKindId, 0));
+        selectSourceKind (static_cast<SourceKind> (kind));
     }
 
     apvts.replaceState (tree);

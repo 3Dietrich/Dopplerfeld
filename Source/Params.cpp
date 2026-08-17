@@ -132,7 +132,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (imbalance, "Imbalance", unitRange(), 0.0f));
 
     // --- Sample ---
-    layout.add (floatParam (sampleGain, "Sample Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+    // Obergrenze bewusst hoch (@dpa: leise Samples brauchen bei den hohen
+    // Dynamiken im Feld mehr Spielraum als der übliche +12dB-Regler).
+    layout.add (floatParam (sampleGain, "Sample Gain", { -60.0f, 36.0f, 0.1f }, 0.0f, "dB"));
     layout.add (floatParam (samplePitch, "Sample Pitch", { -24.0f, 24.0f, 0.01f }, 0.0f, "st"));
     // Loop-Punkte normiert (0..1 der geladenen Datei), weil die Länge des
     // Samples zum Zeitpunkt des Layouts noch nicht bekannt ist.
