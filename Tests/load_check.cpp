@@ -45,12 +45,49 @@ struct Stats
     int       blocks     = 0;
     double    totalMicros = 0.0;
     double    worstMicros = 0.0;
+    double    worstAtSeconds = 0.0;   // wann der schlechteste Block lag
     double    peak        = 0.0;
     double    sumSquares[2] { 0.0, 0.0 };
     long long samples     = 0;
     long long nonFinite   = 0;
     double    maxMach     = 0.0;
     int       maxBranches = 0;
+
+    // Löser-Auswertungen über den ganzen Lauf (siehe
+    // RetardedTimeSolver::residualEvaluations). Die Wanduhrzahlen darüber
+    // schwanken auf einem beschäftigten Rechner um Faktor zwei; diese Zahl ist
+    // auf derselben Codebasis reproduzierbar und deshalb das Maß, an dem
+    // Löser-Regressionen wirklich auffallen.
+    std::uint64_t solverEvals = 0;
+
+    // Längste zusammenhängende Stille im linken Kanal, in Sekunden, ab dem
+    // ersten Ton gezählt. Genau das ist das Symptom, über das @dpa berichtet
+    // ("der Ton setzt aus") - und genau das übersehen die bisherigen
+    // Kriterien: NaN/Inf-Zähler und Gesamtspitze bleiben sauber, wenn das
+    // Plugin mittendrin ein paar Sekunden lang schweigt und danach
+    // weitermacht. Die Anlaufstille vor dem ersten Eintreffen des Schalls
+    // (Laufzeit!) zählt nicht mit.
+    double worstSilenceSeconds = 0.0;
+    double silenceRun          = 0.0;
+    bool   heardAnything       = false;
+
+    void noteSample (double x, double dt)
+    {
+        constexpr double audible = 1.0e-4;
+
+        if (std::abs (x) >= audible)
+        {
+            heardAnything = true;
+            silenceRun    = 0.0;
+            return;
+        }
+
+        if (! heardAnything)
+            return;
+
+        silenceRun         += dt;
+        worstSilenceSeconds = std::max (worstSilenceSeconds, silenceRun);
+    }
 
     void report (const char* title) const
     {
@@ -60,10 +97,14 @@ struct Stats
         const double rmsLeft   = std::sqrt (sumSquares[0] / perChan);
         const double rmsRight  = std::sqrt (sumSquares[1] / perChan);
 
-        std::printf ("%-22s Blöcke %4d | Block Ø %8.1f us  max %9.1f us  (Budget %.0f us, Ø %6.1f%%)\n",
-                     title, blocks, mean, worstMicros, budget, 100.0 * mean / budget);
+        std::printf ("%-22s Blöcke %4d | Block Ø %8.1f us  max %9.1f us (bei t=%5.2fs)  (Budget %.0f us, Ø %6.1f%%)\n",
+                     title, blocks, mean, worstMicros, worstAtSeconds, budget, 100.0 * mean / budget);
         std::printf ("%-22s Ausgang Spitze %.4f, RMS L %.5f / R %.5f | nicht-endlich %lld | |M_r| max %.2f | Zweige max %d\n",
                      "", peak, rmsLeft, rmsRight, nonFinite, maxMach, maxBranches);
+        std::printf ("%-22s Löser-Auswertungen %10llu  (%.0f pro Block) | längste Stille %.3f s\n",
+                     "", (unsigned long long) solverEvals,
+                     blocks > 0 ? (double) solverEvals / blocks : 0.0,
+                     worstSilenceSeconds);
     }
 };
 
@@ -79,6 +120,11 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
 
     const int numBlocks = (int) std::ceil (seconds * sampleRate / blockSize);
 
+    // Nur die Arbeit DIESES Abschnitts zählen: bei mehreren render()-Aufrufen
+    // auf demselben Processor (Extremfall-Szenario) wäre eine reine
+    // Endabfrage sonst die Summe aller vorherigen mit.
+    const std::uint64_t evalsBefore = proc.solverEvaluations();
+
     for (int block = 0; block < numBlocks; ++block)
     {
         moveSource ((double) block * blockSize / sampleRate);
@@ -93,7 +139,12 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
 
         ++stats.blocks;
         stats.totalMicros += micros;
-        stats.worstMicros  = std::max (stats.worstMicros, micros);
+
+        if (micros > stats.worstMicros)
+        {
+            stats.worstMicros    = micros;
+            stats.worstAtSeconds = (double) block * blockSize / sampleRate;
+        }
 
         for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
         {
@@ -115,6 +166,9 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
 
                 if (ch < 2)
                     stats.sumSquares[ch] += x * x;
+
+                if (ch == 0)
+                    stats.noteSample (x, 1.0 / sampleRate);
             }
         }
 
@@ -127,6 +181,8 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
             stats.maxBranches = std::max (stats.maxBranches, snapshot.paths[(size_t) i].activeBranches);
         }
     }
+
+    stats.solverEvals += proc.solverEvaluations() - evalsBefore;
 }
 }
 
@@ -310,6 +366,97 @@ int main()
         if (with.maxBranches <= 0)
         {
             std::printf ("FEHLGESCHLAGEN: mit Bodenreflexion meldet kein Pfad aktive Zweige\n");
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // 1d. Bodenreflexion UNTER LAST: dasselbe "realistisch nahe Mach 1" wie in
+    //     1b, aber mit eingeschalteten Spiegelpfaden. Das ist der Fall, den
+    //     @dpa live getroffen hat (Boden an + schnelle Bewegung -> Ton setzt
+    //     aus) und den bisher kein Szenario abgedeckt hat: 1b fährt schnell,
+    //     aber ohne Boden, 1c fährt mit Boden, aber mit gemütlichen 30 m/s.
+    //
+    //     Gemessen wird nicht nur der Mittelwert, sondern vor allem der
+    //     schlechteste Einzelblock: ein Aussetzer entsteht am einzelnen Block,
+    //     der sein Budget reißt, nicht am Durchschnitt.
+    {
+        auto fastRun = [&] (bool groundOn, Stats& stats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 150.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcX, 0.1f);
+            setParam (proc, Params::srcY, 0.5f);
+            setParam (proc, Params::srcZ, 20.0f);
+
+            setParam (proc, Params::groundReflectionOn, groundOn ? 1.0f : 0.0f);
+            setParam (proc, Params::groundDampAmount, 0.5f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            render (proc, buffer, 8.0, stats, [&proc] (double t)
+            {
+                const bool half = std::fmod (t, 0.3) < 0.15;
+                setParam (proc, Params::srcX, half ? 0.1f : 0.9f);
+            });
+        };
+
+        Stats without, with;
+
+        fastRun (false, without);
+        fastRun (true,  with);
+
+        without.report ("Mach1, Boden aus");
+        with.report    ("Mach1, Boden an");
+
+        if (with.nonFinite > 0 || with.peak <= 0.0)
+            failed = true;
+
+        // Das Symptom selbst: der Ton darf nicht wegbleiben.
+        if (with.worstSilenceSeconds > 0.05)
+        {
+            std::printf ("FEHLGESCHLAGEN: Ton setzt %.3f s lang aus (Bodenreflexion bei hoher "
+                         "Geschwindigkeit)\n", with.worstSilenceSeconds);
+            failed = true;
+        }
+
+        // Bewusst NICHT über die Wanduhr: die schwankt auf einem beschäftigten
+        // Rechner um Faktor zwei und macht den Test damit zum Würfelspiel.
+        // Gemessen wird die Löserarbeit, und zwar zweierlei.
+        //
+        // Erstens: die Spiegelpfade dürfen nichts kosten, was über das
+        // Verdoppeln der Pfadanzahl hinausgeht. Ein Spiegelpfad, der
+        // systematisch teurer wäre als der Direktpfad (zu großes Suchfenster,
+        // verlorene Zweigidentitäten, ständiges Neusäen), fiele hier auf.
+        const double evalsWith    = with.blocks    > 0 ? (double) with.solverEvals    / with.blocks    : 0.0;
+        const double evalsWithout = without.blocks > 0 ? (double) without.solverEvals / without.blocks : 0.0;
+
+        if (evalsWithout > 0.0 && evalsWith > 2.5 * evalsWithout)
+        {
+            std::printf ("FEHLGESCHLAGEN: Bodenreflexion kostet %.1fx statt der erwarteten 2x "
+                         "(%.0f statt %.0f Löser-Auswertungen pro Block)\n",
+                         evalsWith / evalsWithout, evalsWith, evalsWithout);
+            failed = true;
+        }
+
+        // Zweitens eine absolute Obergrenze als Regressionsbremse. Gemessen
+        // sind rund 6700 Auswertungen pro Block; die Schranke liegt bewusst
+        // knapp genug, dass ein Rückfall in den alten Zustand (rund 17000,
+        // Vollscan an jedem Solver-Punkt) sie reißt.
+        constexpr double evalBudget = 11000.0;
+
+        if (evalsWith > evalBudget)
+        {
+            std::printf ("FEHLGESCHLAGEN: %.0f Löser-Auswertungen pro Block, erlaubt sind %.0f\n",
+                         evalsWith, evalBudget);
             failed = true;
         }
     }

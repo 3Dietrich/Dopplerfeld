@@ -553,6 +553,113 @@ void testMachConeArrival()
     }
 }
 
+// -------------------------------------------------------------- Test 6
+// Gedrosseltes Entdecken (solve(..., allowFullScan)): der teure Vollscan läuft
+// nicht mehr an jedem Solver-Punkt, sondern höchstens alle discoverySeconds;
+// nachgeführt wird weiter an jedem Punkt. Geprüft wird das, was dabei auf dem
+// Spiel steht - dass die Kegelankunft trotzdem innerhalb derselben 3-ms-
+// Toleranz bemerkt wird - und das, was es bringt: deutlich weniger
+// Residuums-Auswertungen. Dieselbe Geometrie wie Test 5, damit beide Zahlen
+// unmittelbar vergleichbar sind.
+void testThrottledDiscovery()
+{
+    std::printf ("\nGedrosseltes Entdecken (Vollscan seltener als Nachfuehren)\n");
+
+    const MediumState medium;
+    const double c = medium.speedOfSound();
+
+    const double speed = 2.0 * c;
+    const double d     = 100.0;
+    const double tPass = 1.0;
+
+    const Vec3 M0 { -speed * tPass, 0.0, 0.0 };
+    const Vec3 v  { speed, 0.0, 0.0 };
+    const Vec3 listener { 0.0, d, 0.0 };
+
+    const double tBoom    = tPass + d * std::sqrt (3.0) / speed;
+    const double solverDt = 8.0 / 48000.0;
+
+    // Der Wert, mit dem PropagationPath arbeitet.
+    const double discoverySeconds = 0.5e-3;
+
+    // throttled == false ist der alte Zustand (Vollscan an jedem Punkt) und
+    // dient hier als Vergleichsmaßstab für beide Zahlen.
+    auto run = [&] (bool throttled, double& outDetect, std::uint64_t& outEvals)
+    {
+        SourceTrajectory traj;
+        fillUniform (traj, M0, v, 0.0, 1.6);
+
+        RetardedTimeSolver solver;
+        solver.setMinScanStep (gridDt);
+        solver.clearResidualEvaluations();
+
+        double lastDiscovery = tPass;
+        outDetect = -1.0;
+
+        for (double t_h = tPass; t_h <= 1.6; t_h += solverDt)
+        {
+            bool discover = true;
+
+            if (throttled)
+            {
+                discover = (t_h - lastDiscovery) >= discoverySeconds;
+
+                if (discover)
+                    lastDiscovery = t_h;
+            }
+
+            Root roots[8];
+            const int n = solver.solve (traj, medium, listener, t_h, roots, 8, discover);
+
+            if (outDetect < 0.0 && n >= 3)
+                outDetect = t_h;
+        }
+
+        outEvals = solver.residualEvaluations();
+    };
+
+    double        tFull = 0.0, tThrottled = 0.0;
+    std::uint64_t evalsFull = 0, evalsThrottled = 0;
+
+    run (false, tFull,      evalsFull);
+    run (true,  tThrottled, evalsThrottled);
+
+    char buf[256];
+
+    if (tThrottled < 0.0)
+    {
+        fail ("Kegelankunft wird auch gedrosselt bemerkt", "kein Schritt mit >= 3 Wurzeln");
+        return;
+    }
+
+    const double err = tThrottled - tBoom;
+
+    std::snprintf (buf, sizeof (buf),
+                   "t_erkannt = %.6f s (ungedrosselt %.6f s), t_boom = %.6f s, dt = %+.3e s",
+                   tThrottled, tFull, tBoom, err);
+    check (err >= -1.0e-4 && err < 3.0e-3, "Kegelankunft bleibt in der 3-ms-Toleranz", buf);
+
+    // Die Drosselung darf nur SPÄTER erkennen, nie früher - alles andere wäre
+    // Zufall und kein Verständnis der Mechanik.
+    std::snprintf (buf, sizeof (buf), "gedrosselt %+.3e s gegenueber ungedrosselt",
+                   tThrottled - tFull);
+    check (tThrottled >= tFull - 1.0e-9, "Drosselung erkennt nicht frueher", buf);
+
+    // Verspätung höchstens um ein Entdeckungsintervall (plus einen
+    // Solver-Punkt Raster).
+    std::snprintf (buf, sizeof (buf), "Verspaetung %.3e s, erlaubt %.3e s",
+                   tThrottled - tFull, discoverySeconds + solverDt);
+    check (tThrottled - tFull <= discoverySeconds + solverDt + 1.0e-9,
+           "Verspaetung bleibt im Entdeckungsintervall", buf);
+
+    const double ratio = evalsFull > 0 ? (double) evalsThrottled / (double) evalsFull : 1.0;
+
+    std::snprintf (buf, sizeof (buf), "%llu statt %llu Auswertungen (%.0f %%)",
+                   (unsigned long long) evalsThrottled, (unsigned long long) evalsFull,
+                   100.0 * ratio);
+    check (ratio < 0.75, "Drosselung spart messbar Loeserarbeit", buf);
+}
+
 } // namespace
 
 int main()
@@ -567,6 +674,7 @@ int main()
     testUniformSupersonic();
     testCircularNoDropouts();
     testMachConeArrival();
+    testThrottledDiscovery();
 
     std::printf ("\n");
 
