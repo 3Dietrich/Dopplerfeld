@@ -241,44 +241,32 @@ bool SourceTrajectory::samplePositionAt (double t, Vec3& outPos) const
     return true;
 }
 
-double SourceTrajectory::maxSpeedInWindow (double t0, double /*t1*/) const
+double SourceTrajectory::maxSince (const std::deque<std::pair<double, double>>& d, double t0)
 {
-    // Verankerung ans laufende Fenster wie im Löser (Plan 2.10):
-    // maxSpeedInWindow(t_h - T_max, t_h) - t1 ist in der Praxis immer die
-    // aktuelle Schreibzeit, deshalb genügt es, den Vorderrand bis t0
-    // nachzuziehen (amortisiert O(1): jeder Eintrag verlässt die Deque
-    // höchstens einmal). Mit einem t1 aus der Vergangenheit könnte das
-    // Ergebnis theoretisch auch Werte nach t1 mit einschließen.
-    while (! speedDeque.empty() && speedDeque.front().first < t0)
-        speedDeque.pop_front();
+    // Die Deque enthält genau die Einträge, die von keinem späteren Eintrag
+    // dominiert werden; ihre Werte fallen deshalb von vorn nach hinten streng.
+    // Der Größte im Fenster [t0, jetzt] ist damit der erste Eintrag mit
+    // Zeit >= t0 - binär gesucht statt vorne weggeworfen, damit die Deque für
+    // den nächsten Frager mit anderem (älterem) t0 vollständig bleibt.
+    //
+    // Dass der Eintrag stellvertretend für alle weggeworfenen steht, ist die
+    // Invariante des Verfahrens: ein Eintrag fliegt nur raus, wenn ein SPÄTERER
+    // mindestens so groß ist - der liegt dann erst recht im Fenster.
+    const auto it = std::lower_bound (d.begin(), d.end(), t0,
+                                      [] (const std::pair<double, double>& e, double t)
+                                      { return e.first < t; });
 
-    return speedDeque.empty() ? 0.0 : speedDeque.front().second;
+    return it == d.end() ? 0.0 : it->second;
 }
 
-double SourceTrajectory::maxDistanceInWindow (double t0) const
+double SourceTrajectory::maxSpeedSince (double t0) const
 {
-    while (! distDeque.empty() && distDeque.front().first < t0)
-        distDeque.pop_front();
-
-    return distDeque.empty() ? 0.0 : distDeque.front().second;
+    return maxSince (speedDeque, t0);
 }
 
-double SourceTrajectory::recentMaxSpeed (double windowSeconds) const
+double SourceTrajectory::maxDistanceSince (double t0) const
 {
-    if (writeIndex < capacity)
-        return 0.0;   // noch nicht initialisiert (siehe sampleAt)
-
-    const std::int64_t upper     = writeIndex - 1;
-    const std::int64_t lower     = writeIndex - capacity;
-    const std::int64_t stepsBack = (std::int64_t) std::ceil (windowSeconds / gridDt);
-    const std::int64_t from      = std::max (lower, upper - stepsBack);
-
-    float maxSpeed = 0.0f;
-
-    for (std::int64_t i = from; i <= upper; ++i)
-        maxSpeed = std::max (maxSpeed, ring[(size_t) ringSlot (i)].speed);
-
-    return (double) maxSpeed;
+    return maxSince (distDeque, t0);
 }
 
 double SourceTrajectory::oldestTime() const

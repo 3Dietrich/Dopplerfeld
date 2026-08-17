@@ -62,6 +62,11 @@ void PropagationPath::setTrajectoryGridSeconds (double seconds)
     trajGridSeconds = std::max (1.0e-6, seconds);
 }
 
+void PropagationPath::setDiscoveryIntervalSeconds (double seconds)
+{
+    discoverySeconds = std::max (0.0, seconds);
+}
+
 void PropagationPath::setBranchRampSeconds (double seconds)
 {
     rampSeconds = std::min (2.0e-3, std::max (0.5e-3, seconds));
@@ -210,8 +215,9 @@ void PropagationPath::seedAt (const SourceTrajectory& traj,
         b.env     = 0.0;
     }
 
-    lastSolveTime = t_h;
-    seeded        = true;
+    lastSolveTime     = t_h;
+    lastDiscoveryTime = t_h;
+    seeded            = true;
 }
 
 void PropagationPath::process (const SourceTrajectory&   traj,
@@ -238,21 +244,15 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
     // Überschall JETZT (nicht irgendwann in den letzten bis zu 40s) ->
     // feineres Solver-Raster (Plan 2.11), weil M_r dort innerhalb weniger
-    // Samples umschlägt. Bewusst recentMaxSpeed() statt maxSpeedInWindow():
-    // Stride ist eine reine Zeitraster-Entscheidung - ob JETZT fein
-    // aufgelöst werden muss, nicht ob es das je einmal musste. Ein
+    // Samples umschlägt. Stride ist eine reine Zeitraster-Entscheidung - ob
+    // JETZT fein aufgelöst werden muss, nicht ob es das je einmal musste. Ein
     // Überschall-Moment vor 30s braucht keine 8-fach so oft aufgerufene
     // Löserkette mehr, dessen M_r ändert sich nicht mehr schnell. Die
-    // korrektheitskritische Vollfenster-Suche nach eventuell noch
-    // eintreffenden alten Wurzeln (verspätete Booms aus großer Distanz,
-    // Plan 2.6/2.10) bleibt im Löser selbst unverändert auf dem vollen
-    // Fenster - hier geht es nur darum, wie oft er gerufen wird, nicht was
-    // er dabei findet. (Ursache des von @dpa beobachteten "Aussetzer nach
-    // schnellem Bewegen": stride blieb bis zu 40s lang auf 8 hängen, macht
-    // pro Solver-Punkt ~8x mehr Aufrufe plus - über den Vollfenster-Löser
-    // selbst - einen gröberen/teureren Scan durch den dadurch aufgeblähten
-    // Lipschitz-Bound.)
-    const double recentMaxSpeed = traj.recentMaxSpeed (2.0);
+    // korrektheitskritische Wurzelsuche im Löser hängt daran nicht - dort geht
+    // es nur darum, wie oft er gerufen wird, nicht was er dabei findet.
+    // (Ursache des von @dpa beobachteten "Aussetzer nach schnellem Bewegen":
+    // stride blieb bis zu 40s lang auf 8 hängen.)
+    const double recentMaxSpeed = traj.maxSpeedSince (blockStartTime - 2.0);
     const int    stride         = (recentMaxSpeed > c) ? supersonicStride : baseStride;
 
     // Zusammenhängende Zeitachse? Ein halbes Sample Toleranz reicht, weil der
@@ -286,9 +286,19 @@ void PropagationPath::process (const SourceTrajectory&   traj,
         // pro Block ausgewertet (Plan 3.5), ohne dass der Pfad den Hörer kennt.
         const Vec3 recvAtEnd = recvPos0 + recvVel * (tEnd - blockStartTime);
 
+        // Neue Zweige entstehen nur bei einer Kegelankunft, nachzuführen sind
+        // die vorhandenen dagegen an jedem Solver-Punkt. Deshalb wird die
+        // teure Suche zeitlich gedeckelt und nicht an den Stride gehängt: bei
+        // Stride 64 (Unterschall) liegt ohnehin jeder Solver-Punkt weiter
+        // auseinander als das Intervall, dort ändert sich also nichts.
+        const bool discover = (tEnd - lastDiscoveryTime) >= discoverySeconds;
+
+        if (discover)
+            lastDiscoveryTime = tEnd;
+
         Root roots[maxBranchSlots];
         const int nRoots = solver.solve (traj, medium, recvAtEnd, tEnd,
-                                         roots, maxBranchSlots);
+                                         roots, maxBranchSlots, discover);
 
         Target targets[maxBranchSlots];
 

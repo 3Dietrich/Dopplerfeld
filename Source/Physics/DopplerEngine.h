@@ -114,6 +114,12 @@ public:
 
     bool isCrossfading() const { return geometry.isFading(); }
 
+    // Summe der Löser-Auswertungen über ALLE Pfade beider Geometriesätze -
+    // maschinenunabhängiges Lastmaß für Regressionstests (load_check). Die
+    // Wanduhr allein taugt dafür nicht: sie schwankt auf einem beschäftigten
+    // Rechner um Faktor zwei.
+    std::uint64_t solverEvaluations() const;
+
     // Sekunden seit prepare()/reset(), gemeinsame Zeitbasis von Signalpuffer,
     // Trajektorie und Löser.
     double currentTime() const { return (double) sampleClock / sr; }

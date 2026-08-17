@@ -344,6 +344,17 @@ void DopplerEngine::setGroundDampingAmount (double amount01)
                 s->paths[i].setReflectionDamping (amount01, groundDampFcHz);
 }
 
+std::uint64_t DopplerEngine::solverEvaluations() const
+{
+    std::uint64_t total = 0;
+
+    for (const auto* s : { &geometry.active(), &geometry.pending() })
+        for (const auto& p : s->paths)
+            total += p.solverEvaluations();
+
+    return total;
+}
+
 void DopplerEngine::pushTrajectory (double blockStart, double blockEnd)
 {
     const double grid = 1.0 / trajectoryRateHz;

@@ -103,6 +103,18 @@ public:
     // deshalb reicht der Besitzer der Puffer (DopplerEngine) sie hier durch.
     void setTrajectoryGridSeconds (double seconds);
 
+    // Zeitlicher Mindestabstand zweier Vollscans des Lösers (Suche nach NEU
+    // entstandenen Zweigen). Bekannte Zweige werden davon unberührt an jedem
+    // Solver-Punkt nachgeführt - es geht ausschließlich darum, wie schnell
+    // eine Kegelankunft bemerkt wird.
+    //
+    // Der Grund für die Trennung: im Überschall läuft der Löser auf Stride 8,
+    // also alle 167 us bei 48 kHz, und jeder dieser Aufrufe scannte bisher das
+    // komplette Suchfenster neu ab, obwohl in 167 us fast nie ein Zweig
+    // hinzukommt. Der Scan ist dabei der mit Abstand teuerste Posten des
+    // ganzen Plugins.
+    void setDiscoveryIntervalSeconds (double seconds);
+
     // Anti-Klick-Rampe beim Erscheinen/Verschwinden eines Zweigs (Plan 3.7,
     // letzter Absatz): 0,5 bis 2 ms. Das ist ausdrücklich kein globaler
     // Crossfade - der würde den Knall wegmitteln, den man hören will.
@@ -136,6 +148,10 @@ public:
     double lastMachRadial() const    { return dispMach.load(); }
 
     int maxBlockSize() const { return maxBlockSamples; }
+
+    // Lastmaß des Lösers dieses Pfades (siehe
+    // RetardedTimeSolver::residualEvaluations). Nur für Messungen.
+    std::uint64_t solverEvaluations() const { return solver.residualEvaluations(); }
 
 private:
     // Zustand eines Wurzelzweigs am zuletzt gerechneten Solver-Punkt.
@@ -188,8 +204,15 @@ private:
     double sr              = 0.0;
     int    maxBlockSamples = 0;
 
-    double lastSolveTime = 0.0;
-    bool   seeded        = false;
+    double lastSolveTime     = 0.0;
+    double lastDiscoveryTime = 0.0;
+    bool   seeded            = false;
+
+    // 0,5 ms. Obergrenze der Entdeckungslatenz für eine Kegelankunft und damit
+    // eine Modellkonstante wie die Rampendauer, kein Regler. Die Größe ist an
+    // der Toleranz gewählt, die solver_check für die Kegelankunft ansetzt
+    // (3 ms) - mit reichlich Abstand darunter.
+    double discoverySeconds = 0.5e-3;
 
     // Regularisierung und Untergrenzen (Plan 2.7).
     double boomDb    = 30.0;

@@ -30,6 +30,12 @@ struct Residual
     double tOldest;
     double tNewest;
 
+    // Lastzähler des Lösers (siehe RetardedTimeSolver::residualEvaluations).
+    // Ein Inkrement neben einer Catmull-Rom-Interpolation samt Wurzel fällt
+    // nicht ins Gewicht, liefert aber ein Maß, das auf jeder Maschine gleich
+    // ausfällt.
+    std::uint64_t& evals;
+
     void sample (double t, Vec3& p, Vec3& v) const
     {
         const double tc = std::min (std::max (t, tOldest), tNewest);
@@ -48,6 +54,8 @@ struct Residual
     // positionsonly-Abtastung: das ist der heißeste Pfad des ganzen Lösers.
     double operator() (double t) const
     {
+        ++evals;
+
         const double tc = std::min (std::max (t, tOldest), tNewest);
 
         Vec3 p {};
@@ -220,6 +228,10 @@ void RetardedTimeSolver::reset()
     branchCount      = 0;
     nextId           = 0;
     droppedRootCount = 0;
+
+    // evalCount bleibt stehen: er misst die geleistete Arbeit über einen
+    // Messlauf hinweg, und ein Positionssprung mitten im Lauf ist Teil dieser
+    // Arbeit. Genullt wird ausdrücklich per clearResidualEvaluations().
 }
 
 void RetardedTimeSolver::setMinScanStep (double seconds)
@@ -232,7 +244,8 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
                                Vec3 receiverPos,
                                double t_h,
                                Root* outRoots,
-                               int maxRoots)
+                               int maxRoots,
+                               bool allowFullScan)
 {
     if (outRoots == nullptr || maxRoots <= 0)
         return 0;
@@ -257,7 +270,7 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
         return 0;
     }
 
-    const Residual F { traj, receiverPos, t_h, c, tOldest, tNewest };
+    const Residual F { traj, receiverPos, t_h, c, tOldest, tNewest, evalCount };
 
     // Fenster: oben durch t_h begrenzt - wegen |·| >= 0 liegt jede Wurzel bei
     // t_e <= t_h, Kausalität ist eingebaut.
@@ -282,23 +295,51 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
     //
     // Nebeneffekt: F(windowStart) >= 0 ist damit garantiert, solange der
     // Puffer lang genug ist - genau die Randbedingung aus Plan 2.6.
-    const double rMax        = receiverPos.length() + traj.maxDistanceInWindow (tOldest);
-    const double windowStart = std::max (tOldest, t_h - rMax / c);
-    const double windowEnd   = t_h;
+    //
+    // Die Schranke darf danach mit dem bereits verkleinerten Fenster noch
+    // einmal gebildet werden, und das bleibt exakt: liegt eine Wurzel in
+    // [windowStart, t_h], dann ist R(t_e) <= |L| + max{|M(t)| : t in genau
+    // diesem Fenster}, also t_e >= t_h - dieser neuen Schranke / c. Bei einer
+    // Quelle, die vor einer Weile weit weg war und jetzt nah ist, schrumpft
+    // das Fenster dadurch deutlich. Zwei Durchgänge reichen; jeder kostet nur
+    // eine Binärsuche in der Deque.
+    double windowStart = tOldest;
 
-    // Schritt 1, Schnelltest (Plan 2.10): O(1) über die monotone Deque. Die
-    // ist am jüngsten Schreibzeitpunkt verankert, kann bei einem t_h aus der
-    // Vergangenheit also auch spätere Geschwindigkeiten mitzählen. Der Fehler
-    // geht in die harmlose Richtung: lieber ein Vollscan zu viel als ein
+    for (int refine = 0; refine < 3; ++refine)
+    {
+        const double rMax  = receiverPos.length() + traj.maxDistanceSince (windowStart);
+        const double next  = std::max (tOldest, t_h - rMax / c);
+
+        if (next <= windowStart)
+            break;
+
+        windowStart = next;
+    }
+
+    const double windowEnd = t_h;
+
+    // Schritt 1, Schnelltest (Plan 2.10): Binärsuche über die monotone Deque.
+    // Die ist am jüngsten Schreibzeitpunkt verankert, kann bei einem t_h aus
+    // der Vergangenheit also auch spätere Geschwindigkeiten mitzählen. Der
+    // Fehler geht in die harmlose Richtung: lieber ein Vollscan zu viel als ein
     // übersehenes Wurzelpaar.
     //
-    // Bewusst mit tOldest statt mit windowStart: die Abfrage eviktiert vorne
-    // (siehe SourceTrajectory), ein engeres t0 würde die alten Einträge
-    // endgültig verwerfen - und der zweite Empfangspunkt auf derselben
-    // Trajektorie bekäme danach eine zu kleine Schranke, also zu große
-    // Scan-Schritte. Über das ganze Fenster gefragt ist das Ergebnis
-    // konservativ und für alle Empfangspunkte gleich gültig.
-    const double maxSpeed           = traj.maxSpeedInWindow (tOldest, t_h);
+    // Gefragt wird über das SUCHFENSTER, nicht über die ganze Historie. F wird
+    // ausschließlich in [windowStart, t_h] ausgewertet (der Rückwärtsscan läuft
+    // dort, findBracket klemmt dorthin), also gilt dort auch |F'| <= c + |v_M|
+    // mit dem Maximum aus genau diesem Bereich. Und ist die Quelle im Fenster
+    // durchweg langsamer als der Schall, fällt F dort streng monoton - dann
+    // gibt es genau eine Wurzel, ganz gleich, wie schnell die Quelle vor zehn
+    // Sekunden war.
+    //
+    // Das war die zweite Hälfte des "Hangover"-Problems: der Stride-Fix hat den
+    // Löser nach einem Überschall-Moment wieder seltener gerufen, aber jeder
+    // einzelne Aufruf lief bis zu 40 s lang weiter im teuren Vollscan-Modus,
+    // mit einer aus derselben alten Spitze aufgeblähten Lipschitz-Schranke und
+    // dadurch unnötig feinen Schritten. Der Puffer ist nach der GRÖSSTEN
+    // Feldgröße bemessen (rund 42 s), gehört wird meist auf einem kleinen Feld
+    // mit einem Fenster unter einer Sekunde.
+    const double maxSpeed           = traj.maxSpeedSince (windowStart);
     const bool   supersonicPossible = (maxSpeed > c);
     const double lip                = c + maxSpeed;   // |F'| <= c + |v_M|
 
@@ -388,7 +429,7 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
             // falsch (Plan 2.6 dimensioniert T_max so, dass das nicht auftritt).
         }
     }
-    else
+    else if (allowFullScan || nCand == 0)
     {
         // Schritt 4 (Plan 2.10): Vollscan mit Lipschitz-Sprüngen. F ist
         // Lipschitz-stetig mit Lip = c + vmax; ist |F(t)| > Lip*step, kann im

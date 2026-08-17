@@ -4,6 +4,8 @@
 #include "SourceTrajectory.h"
 #include "Vec3.h"
 
+#include <cstdint>
+
 // Eine gefundene Wurzel der Retarded-Time-Gleichung (Plan 2.10). Jede Wurzel
 // ist ein eigener Hörweg: bei Unterschall gibt es genau eine, im Mach-Kegel
 // kommt ein Paar dazu.
@@ -44,12 +46,26 @@ public:
     // nach t_e sortiert (älteste Emission zuerst). Bei Überlauf werden die
     // ältesten verworfen, weil die jüngeren Emissionen den aktuellen Klang
     // tragen.
+    //
+    // allowFullScan trennt zwei Dinge, die bisher zusammenhingen: das
+    // NACHFÜHREN bereits bekannter Zweige (billig, passiert immer) und das
+    // ENTDECKEN neu entstandener (der Lipschitz-Vollscan über das gesamte
+    // Suchfenster, im Überschall der mit Abstand teuerste Posten). Neue Zweige
+    // entstehen nur bei einer Kegelankunft; sie deshalb seltener zu suchen als
+    // die vorhandenen nachzuführen, kostet nichts weiter als eine
+    // Entdeckungslatenz in der Größe des Abfrageabstands - und die liegt weit
+    // unter der 3-ms-Toleranz, die solver_check für die Kegelankunft ansetzt.
+    //
+    // Ein Sonderfall bleibt immer beim Vollscan, egal was der Aufrufer sagt:
+    // wenn kein einziger Zweig nachgeführt werden konnte, wäre die Alternative
+    // Stille.
     int solve (const SourceTrajectory& traj,
                const MediumState& medium,
                Vec3 receiverPos,
                double t_h,
                Root* outRoots,
-               int maxRoots);
+               int maxRoots,
+               bool allowFullScan = true);
 
     // Untergrenze der Scan-Schrittweite (Plan 2.10: "minStep ist die
     // Trajektorien-Rasterweite, damit der Scan terminiert"). Der Löser kennt
@@ -62,6 +78,15 @@ public:
     // wird verworfen und im Debug-Build gezählt").
     int  droppedRoots() const { return droppedRootCount; }
     void clearDroppedRoots() { droppedRootCount = 0; }
+
+    // Anzahl der Auswertungen des Residuums F seit dem letzten Nullsetzen.
+    // F auszuwerten ist die mit Abstand teuerste und häufigste Einzeloperation
+    // des Lösers (eine Catmull-Rom-Interpolation plus Wurzel), die Zahl ist
+    // deshalb ein maschinenunabhängiges Maß für seine Last - anders als eine
+    // Wanduhrmessung, die auf einem beschäftigten Rechner um Faktor zwei
+    // schwankt und Regressionen darin verschwinden lässt (load_check).
+    std::uint64_t residualEvaluations() const { return evalCount; }
+    void clearResidualEvaluations() { evalCount = 0; }
 
 private:
     // Höchstzahl gleichzeitig gesammelter Vorzeichenwechsel. Bewusst größer
@@ -82,6 +107,8 @@ private:
     int    branchCount      = 0;
     int    nextId           = 0;
     int    droppedRootCount = 0;
+
+    std::uint64_t evalCount = 0;
 
     double minStep = 1.0e-3;   // 1 kHz Trajektorienraster
 };

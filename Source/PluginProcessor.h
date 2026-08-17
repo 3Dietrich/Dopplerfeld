@@ -112,6 +112,10 @@ public:
     float cpuLoadSourcePercent()  const { return cpuLoadSource.load (std::memory_order_relaxed); }
     float cpuLoadPhysicsPercent() const { return cpuLoadPhysics.load (std::memory_order_relaxed); }
 
+    // Maschinenunabhängiges Lastmaß des Lösers für Messläufe (load_check),
+    // siehe DopplerEngine::solverEvaluations().
+    std::uint64_t solverEvaluations() const { return dopplerEngine.solverEvaluations(); }
+
     // Lädt die Datei im Message-Thread (Pflicht, siehe SampleSource) und
     // schaltet bei Erfolg weich auf die Sample-Quelle um.
     bool loadSampleFile (const juce::File& file);

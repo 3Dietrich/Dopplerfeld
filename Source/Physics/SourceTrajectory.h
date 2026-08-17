@@ -53,36 +53,25 @@ public:
     // - hier fällt eine ganze Catmull-Rom-Interpolation pro Aufruf weg.
     bool samplePositionAt (double t, Vec3& outPos) const;
 
-    // O(1) über eine intern gepflegte monotone Deque (Standardalgorithmus
-    // "sliding window maximum"), gepflegt beim Schreiben in push()/reset().
-    // Geht von einem an "jetzt" verankerten Fenster aus, wie es der Löser
-    // benutzt (t1 == newestTime()); mit t0 wird zusätzlich vorne eviktiert.
-    double maxSpeedInWindow (double t0, double t1) const;
+    // Größte Geschwindigkeit |v_M(t)| im Fenster [t0, jetzt], O(log n) über
+    // eine intern gepflegte monotone Deque (Standardalgorithmus "sliding
+    // window maximum"), gepflegt beim Schreiben in push()/reset().
+    //
+    // Die Abfrage ist ausdrücklich NICHT destruktiv: sie sucht den ersten
+    // Eintrag ab t0 binär, statt den Vorderrand bis dorthin wegzuwerfen.
+    // Nur so darf jeder Empfangspunkt sein EIGENES Fenster fragen - und genau
+    // das braucht der Löser, dessen Suchfenster von |L| abhängt und damit für
+    // Ohr, Spiegelohr und Feldgröße verschieden ausfällt. Mit destruktiver
+    // Eviktion hätte der erste Frager dem zweiten die Einträge weggeworfen,
+    // die dieser für seine (größere) Schranke noch braucht.
+    double maxSpeedSince (double t0) const;
 
     // Größter Abstand |M(t)| zum Koordinatenursprung im Fenster [t0, jetzt],
-    // O(1) über eine zweite monotone Deque nach demselben Muster wie
-    // maxSpeedInWindow(). Damit lässt sich die maximal mögliche Laufzeit
-    // abschätzen: R(t) = |L - M(t)| <= |L| + max |M(t)|. Der Löser begrenzt
-    // darüber sein Suchfenster (siehe RetardedTimeSolver::solve).
-    //
-    // Wie maxSpeedInWindow() zieht die Abfrage den Vorderrand der Deque bis t0
-    // nach und ist deshalb NUR mit dem vollen Fensteranfang (oldestTime())
-    // aufzurufen - mit einem engeren t0 wären die alten Einträge unwiderruflich
-    // weg, und ein zweiter Empfangspunkt mit größerem |L| bekäme eine zu
-    // kleine Schranke und damit ein zu kurzes Fenster.
-    double maxDistanceInWindow (double t0) const;
-
-    // Rein lesende Alternative für reine Performance-Entscheidungen (z.B.
-    // PropagationPath: wie fein muss der Löser gerastert werden), die NICHT
-    // mit maxSpeedInWindow() geteilt werden darf: dessen Deque eviktiert beim
-    // Abfragen vorne (siehe Kommentar dort) - ein zusätzlicher, engerer
-    // Aufruf VOR der korrektheitskritischen Vollfenster-Abfrage im Löser
-    // würde ihr genau die alten Einträge wegwerfen, die sie für verspätet
-    // eintreffende Überschall-Ereignisse (Plan 2.6/2.10) noch braucht.
-    // Scannt stattdessen direkt den Ringpuffer, unabhängig vom Deque-Zustand.
-    // Bei 1kHz-Raster und Sekunden-Fenstern (max. wenige tausend Punkte) ist
-    // das pro Aufruf (einmal pro Audioblock, nicht pro Sample) günstig genug.
-    double recentMaxSpeed (double windowSeconds) const;
+    // nach demselben Muster über eine zweite monotone Deque. Damit lässt sich
+    // die maximal mögliche Laufzeit abschätzen: R(t) = |L - M(t)| <=
+    // |L| + max |M(t)|. Der Löser begrenzt darüber sein Suchfenster (siehe
+    // RetardedTimeSolver::solve).
+    double maxDistanceSince (double t0) const;
 
     double oldestTime() const;
     double newestTime() const;
@@ -106,11 +95,14 @@ private:
     // wurden. Der gültige Bereich ist [writeIndex - capacity, writeIndex - 1].
     std::int64_t writeIndex = 0;
 
+    // Max über [t0, jetzt] aus einer monotonen Deque, ohne sie zu verändern.
+    static double maxSince (const std::deque<std::pair<double, double>>& d, double t0);
+
     // (Zeit, Geschwindigkeit), streng monoton fallend von vorn nach hinten.
-    // mutable, weil maxSpeedInWindow() bei älterem t0 vorne eviktieren darf,
-    // ohne den logischen (Puffer-)Zustand der Klasse zu ändern.
-    mutable std::deque<std::pair<double, double>> speedDeque;
+    // Eviktiert wird ausschließlich beim Schreiben, wenn ein Eintrag aus dem
+    // Ringpuffer fällt - nie beim Abfragen (siehe maxSpeedSince).
+    std::deque<std::pair<double, double>> speedDeque;
 
     // (Zeit, |p|) nach demselben Muster wie speedDeque.
-    mutable std::deque<std::pair<double, double>> distDeque;
+    std::deque<std::pair<double, double>> distDeque;
 };
