@@ -39,6 +39,7 @@ target_sources(Dopplerfeld
         Source/Physics/SourceSignalBuffer.cpp
         Source/Motion/MotionRecorder.cpp
         Source/Motion/MotionPlayer.cpp
+        Source/Motion/FlyByGenerator.cpp
         Source/Motion/OnePoleSmoother.cpp
         Source/Motion/CriticallyDampedSpring.cpp
         Source/Motion/SlewLimiter.cpp

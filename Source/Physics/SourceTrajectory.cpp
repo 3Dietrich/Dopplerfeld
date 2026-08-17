@@ -84,6 +84,35 @@ void SourceTrajectory::jumpTo (Vec3 pos, double time)
     fillConstant (pos, time);
 }
 
+void SourceTrajectory::fillLinear (Vec3 pos, Vec3 vel, double time, double spanSeconds)
+{
+    speedDeque.clear();
+    distDeque.clear();
+    writeIndex = 0;
+
+    const double speed = vel.length();
+    const double span  = std::max (0.0, spanSeconds);
+
+    for (int i = 0; i < capacity; ++i)
+    {
+        const double t     = time - (double) (capacity - 1 - i) * gridDt;
+        const double along = std::max (t - time, -span);
+        const bool   moving = (t - time) >= -span;
+
+        TrajectorySample s;
+
+        s.t     = t;
+        s.p     = pos + vel * along;
+        s.v     = moving ? vel : Vec3{};
+        s.speed = moving ? (float) speed : 0.0f;
+
+        ring[(size_t) ringSlot (writeIndex)] = s;
+        pushSpeedSample (s.t, (double) s.speed);
+        pushDistanceSample (s.t, s.p.length());
+        ++writeIndex;
+    }
+}
+
 void SourceTrajectory::push (Vec3 pos, double time)
 {
     assert (writeIndex > 0); // reset()/jumpTo() muss vor dem ersten push() laufen

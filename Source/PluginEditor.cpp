@@ -74,6 +74,14 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         setParameter (Params::reflect2ndOn, 0.0);
     };
 
+    motionPanel.onFlyClicked = [this]
+    {
+        if (dopplerfeldProcessor.isFlyingBy())
+            dopplerfeldProcessor.stopFlyBy();
+        else
+            dopplerfeldProcessor.triggerFlyBy();
+    };
+
     motionPanel.onRecordClicked = [this] { dopplerfeldProcessor.toggleRecording(); };
     motionPanel.onPlayClicked   = [this]
     {
@@ -124,6 +132,7 @@ void DopplerfeldEditor::timerCallback()
     sourceButton.setButtonText (dopplerfeldProcessor.isUsingSampleSource() ? "Quelle: Sample"
                                                                            : "Quelle: Motor");
     motionPanel.setPlaying (dopplerfeldProcessor.isPlayingMotion());
+    motionPanel.setFlying (dopplerfeldProcessor.isFlyingBy());
 
     // 30Hz-Timer = ~33ms zwischen zwei Aufrufen (siehe startTimerHz weiter
     // unten) - fest verdrahtet statt gemessen, das Levelmeter braucht nur

@@ -25,6 +25,11 @@ public:
     std::function<void()> onRecordClicked;
     std::function<void()> onPlayClicked;   // Aufrufer entscheidet: je nach Zustand trigger() oder stop()
 
+    // Vorbeiflug-Generator. Beschriftung wie beim Play-Knopf vom Aufrufer
+    // nachgefuehrt, weil nur er den tatsaechlichen Zustand kennt.
+    void setFlying (bool isFlying);
+    std::function<void()> onFlyClicked;
+
 private:
     using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -48,6 +53,19 @@ private:
     static void populateChoices (juce::ComboBox& combo, juce::AudioProcessorValueTreeState& apvts, const juce::String& paramID);
 
     Knob smootherTauKnob, slewVmaxKnob, slewAmaxKnob, playSpeedKnob;
+
+    // Vorbeiflug: Bahnart, Startvariante, Abstand, Tempo.
+    juce::Label flyKindLabel;
+    juce::ComboBox flyKindCombo;
+    std::unique_ptr<ComboBoxAttachment> flyKindAttachment;
+
+    juce::Label flyStartLabel;
+    juce::ComboBox flyStartCombo;
+    std::unique_ptr<ComboBoxAttachment> flyStartAttachment;
+
+    Knob flyDistanceKnob, flySpeedKnob;
+
+    juce::TextButton flyButton { "Vorbeiflug" };
 
     juce::Label smootherTypeLabel;
     juce::ComboBox smootherTypeCombo;

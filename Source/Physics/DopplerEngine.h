@@ -71,6 +71,17 @@ public:
     // FadeReason::SourcePosition und der Sprungweite.
     void jumpSourceTo (Vec3 posMetres);
 
+    // Wie jumpSourceTo(), aber der neue Geometriesatz bekommt eine
+    // gleichförmig BEWEGTE Vorgeschichte statt einer ruhenden. Damit fängt ein
+    // Vorbeiflug an, als sei die Quelle schon immer geflogen: kein Positions-
+    // und kein Geschwindigkeitssprung, den der Löser als Ereignis auffassen
+    // müsste.
+    //
+    // Wie weit die Gerade zurückreicht, rechnet die Engine selbst aus - sie
+    // kennt als Einzige die Pufferlänge und damit die längste Laufzeit, die
+    // noch abgedeckt ist (siehe SourceTrajectory::fillLinear).
+    void startLinearMotion (Vec3 posMetres, Vec3 velocity);
+
     void setBoomLimitDb (double dB);
     void setAirAbsorptionAmount (double amount01);
 
@@ -253,8 +264,8 @@ private:
     void publishSnapshot (const MediumState& medium);
 
     // Gemeinsamer Kern von Positionssprung und Feldgrößenwechsel.
-    void startGeometrySwitch (Vec3 newPos, int fadeSamples);
-    void configurePendingSet (Vec3 newPos);
+    void startGeometrySwitch (Vec3 newPos, Vec3 preVelocity, int fadeSamples);
+    void configurePendingSet (Vec3 newPos, Vec3 preVelocity);
     void applyArmedFieldChange();
 
     int fadeSamplesFor (FadeReason reason, double positionDeltaMetres) const;
@@ -279,6 +290,7 @@ private:
     // Warteschlange der Länge eins auf Aufruferseite: der Crossfader merkt
     // sich nur die Dauer, die Zielgeometrie steht hier.
     Vec3 queuedJumpPos { 0.0, 0.0, 0.0 };
+    Vec3 queuedJumpVel { 0.0, 0.0, 0.0 };
 
     double fieldMetres       = 100.0;
     bool   fieldChangeArmed  = false;

@@ -82,7 +82,7 @@ private:
     // CollapsiblePanel setzen kann.
     static constexpr int engineContentHeight = 608;
     static constexpr int sampleContentHeight = 220;
-    static constexpr int motionContentHeight = 214;
+    static constexpr int motionContentHeight = 384;
     static constexpr int fieldContentHeight  = 218;
     static constexpr int wallContentHeight   = 396;
 

@@ -659,6 +659,119 @@ int main()
     }
 
     //==================================================================
+    // 1g. Vorbeiflug-Generatoren. Geprüft wird der Unterschied, um den es bei
+    //     den beiden Startvarianten physikalisch geht.
+    //
+    //     Bei "kontinuierlich" ist die Trajektorie rückwärts mit derselben
+    //     Geraden vorbelegt. Der Löser findet deshalb ab dem ersten Moment eine
+    //     Wurzel mit M_r > 0 - die Quelle fliegt schon auf den Hörer zu, der
+    //     Ton ist von Anfang an hochgestimmt.
+    //
+    //     Bei "Knall-Start" ist die Vorgeschichte konstant: was der Hörer
+    //     zuerst bekommt, ist der Schall einer RUHENDEN Quelle (M_r = 0), weil
+    //     die Bewegung gerade erst eingesetzt hat und ihr Schall noch unterwegs
+    //     ist.
+    //
+    //     Gemessen wird deshalb M_r und NICHT der Pegel. Der Pegel taugt hier
+    //     nämlich überhaupt nicht, und zwar aus einem hübschen Grund: bei
+    //     gleichförmiger Annäherung ist die retardierte Entfernung
+    //     R_e = R_0/(1 - M_r), und der Fokussierungsfaktor 1/(1 - M_r) hebt
+    //     sich mit ihr exakt weg - A = 1/(R_e (1 - M_r)) = 1/R_0. Beide
+    //     Varianten sind im Anflug also gleich laut, sie klingen nur
+    //     verschieden hoch. (Gemessen: RMS 0,01746 gegen 0,01754.)
+    {
+        auto flight = [&] (bool abruptStart, Stats& earlyStats, Stats& restStats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 300.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcZ, 30.0f);
+
+            setParam (proc, Params::flyKind,     1.0f);   // waagerecht querend
+            setParam (proc, Params::flyStart,    abruptStart ? 1.0f : 0.0f);
+            setParam (proc, Params::flyDistance, 40.0f);
+            setParam (proc, Params::flySpeed,    200.0f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            // Kurz laufen lassen, damit die Quelle klingt, dann starten.
+            Stats settle;
+            render (proc, buffer, 0.5, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            // Erstes halbes Sekundenfenster: die Quelle ist noch weit weg, der
+            // Vorbeiflug liegt noch vor uns, und nur die Vorgeschichte
+            // unterscheidet die beiden Varianten.
+            render (proc, buffer, 0.5, earlyStats, [] (double) {});
+            render (proc, buffer, 2.5, restStats,  [] (double) {});
+        };
+
+        Stats smoothEarly, smoothRest, abruptEarly, abruptRest;
+
+        flight (false, smoothEarly, smoothRest);
+        flight (true,  abruptEarly, abruptRest);
+
+        smoothEarly.report ("Vorbeiflug weich, Start");
+        abruptEarly.report ("Vorbeiflug Knall, Start");
+        smoothRest.report  ("Vorbeiflug weich, Rest");
+
+        std::printf ("%-22s M_r im Startfenster: weich %.2f, Knall %.2f\n",
+                     "", smoothEarly.maxMach, abruptEarly.maxMach);
+
+        const long long nonFinite = smoothEarly.nonFinite + smoothRest.nonFinite
+                                  + abruptEarly.nonFinite + abruptRest.nonFinite;
+
+        if (nonFinite > 0)
+        {
+            std::printf ("FEHLGESCHLAGEN: NaN/Inf beim Vorbeiflug\n");
+            failed = true;
+        }
+
+        if (smoothRest.peak <= 0.0 || abruptRest.peak <= 0.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: Vorbeiflug bleibt stumm\n");
+            failed = true;
+        }
+
+        // Der Vorbeiflug muss auch wirklich stattfinden: nahe am Hörer ist er
+        // ein Vielfaches lauter als in der Anflugphase.
+        if (smoothRest.peak <= 2.0 * smoothEarly.peak)
+        {
+            std::printf ("FEHLGESCHLAGEN: kein Vorbeiflug erkennbar (Spitze Anflug %.4f, "
+                         "Vorbeiflug %.4f)\n", smoothEarly.peak, smoothRest.peak);
+            failed = true;
+        }
+
+        // Der Kern: die vorbelegte Vorgeschichte muss dem Löser von der ersten
+        // Probe an eine fliegende Quelle liefern. Erwartet sind rund 0,58
+        // (200 m/s fast frontal), also deutlich über 0,4.
+        if (smoothEarly.maxMach < 0.4)
+        {
+            std::printf ("FEHLGESCHLAGEN: kontinuierlicher Start liefert kein M_r > 0 "
+                         "(%.2f) - die Vorgeschichte ist nicht vorbelegt\n",
+                         smoothEarly.maxMach);
+            failed = true;
+        }
+
+        // Und der Gegenbeweis: der Knall-Start darf im selben Fenster GAR
+        // keine Bewegung zeigen, sonst unterscheiden sich die Varianten nicht.
+        if (abruptEarly.maxMach > 0.05)
+        {
+            std::printf ("FEHLGESCHLAGEN: Knall-Start zeigt schon Bewegung (M_r %.2f) - "
+                         "die Vorgeschichte ist nicht konstant\n", abruptEarly.maxMach);
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 2. Extremfall: größtes Feld, Überschallflug quer hindurch, Umkehr,
     //    Feldgrößenwechsel.
     {

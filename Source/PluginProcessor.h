@@ -4,6 +4,7 @@
 
 #include "Motion/CriticallyDampedSpring.h"
 #include "Motion/MotionPlayer.h"
+#include "Motion/FlyByGenerator.h"
 #include "Motion/MotionRecorder.h"
 #include "Motion/MotionSmoother.h"
 #include "Motion/OneEuroSmoother.h"
@@ -90,6 +91,14 @@ public:
 
     bool isRecording() const { return recordingActive.load(); }
     bool isPlayingMotion() const { return playbackActive.load(); }
+
+    // Vorbeiflug-Generator. Wie Record/Play über atomare Anfragen, damit die
+    // Zustandsänderung im Audiothread passiert - der Generator konfiguriert
+    // beim Start Glätter UND Trajektorien-Vorgeschichte, und beides gehört
+    // ausschließlich dorthin.
+    void triggerFlyBy() { flyTriggerRequest.store (true); }
+    void stopFlyBy()    { flyStopRequest.store (true); }
+    bool isFlyingBy() const { return flyByActive.load(); }
     int  recordedFrameCount() const { return recordedFrames.load(); }
 
     // Linearer Spitzenwert seit dem letzten Abruf (Levelmeter, @dpa-Feedback).
@@ -161,6 +170,11 @@ private:
 
     void applyParameters();
     void handlePendingRequests();
+
+    // Setzt den Vorbeiflug auf: Generator, Glätter-Vorwärmung und die zur
+    // Startvariante passende Trajektorien-Vorgeschichte. Nur aus dem
+    // Audiothread (handlePendingRequests).
+    void startFlyBy();
     void advanceMotion (int numSamples);
     void applyOutputStage (juce::AudioBuffer<float>& buffer);
 
@@ -223,6 +237,11 @@ private:
         std::atomic<float>* playInterp   = nullptr;
         std::atomic<float>* playLoop     = nullptr;
 
+        std::atomic<float>* flyKind     = nullptr;
+        std::atomic<float>* flyStart    = nullptr;
+        std::atomic<float>* flyDistance = nullptr;
+        std::atomic<float>* flySpeed    = nullptr;
+
         std::atomic<float>* boomLimitDb     = nullptr;
         std::atomic<float>* airAbsorbAmount = nullptr;
 
@@ -260,8 +279,9 @@ private:
     SmootherSet sourceSmoothers;
     SmootherSet listenerSmoothers;
 
-    MotionRecorder motionRecorder;
-    MotionPlayer   motionPlayer;
+    MotionRecorder  motionRecorder;
+    MotionPlayer    motionPlayer;
+    FlyByGenerator  flyBy;
 
     // Die Kapazitäts-Vorwärmung in prepareToPlay() darf nur beim allerersten
     // Mal laufen - prepareToPlay() wird vom Host bei jeder Blockgrößen-/
@@ -330,10 +350,13 @@ private:
     std::atomic<bool> playTriggerRequest  { false };
     std::atomic<bool> stopTriggerRequest  { false };
     std::atomic<bool> sourceSwitchRequest { false };
+    std::atomic<bool> flyTriggerRequest   { false };
+    std::atomic<bool> flyStopRequest      { false };
 
     // Audiothread -> Message-Thread, nur zur Anzeige.
     std::atomic<bool>  recordingActive { false };
     std::atomic<bool>  playbackActive  { false };
+    std::atomic<bool>  flyByActive     { false };
     std::atomic<float> outPeakL { 0.0f };
     std::atomic<float> outPeakR { 0.0f };
     std::atomic<float> cpuLoad        { 0.0f };   // siehe cpuLoadPercent()

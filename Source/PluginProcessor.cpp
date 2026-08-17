@@ -186,6 +186,11 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.playInterp   = raw (Params::playInterp);
     pp.playLoop     = raw (Params::playLoop);
 
+    pp.flyKind     = raw (Params::flyKind);
+    pp.flyStart    = raw (Params::flyStart);
+    pp.flyDistance = raw (Params::flyDistance);
+    pp.flySpeed    = raw (Params::flySpeed);
+
     pp.boomLimitDb     = raw (Params::boomLimitDb);
     pp.airAbsorbAmount = raw (Params::airAbsorbAmount);
 
@@ -378,6 +383,13 @@ void DopplerfeldProcessor::applyParameters()
 
     yawSmoothCoeff = 1.0 - std::exp (-1.0 / (DopplerEngine::trajectoryRateHz * std::max (1.0e-3, tau)));
 
+    // --- Vorbeiflug ---
+    // Nur das Tempo wird laufend nachgeführt; Bahnart, Startvariante und
+    // Abstand legt der Start fest (siehe handlePendingRequests). Eine
+    // Bahnart, die sich mitten im Flug ändert, wäre ein Positionssprung -
+    // das Tempo dagegen ist genau der Wert, den @dpa live automatisieren will.
+    flyBy.setSpeed ((double) pp.flySpeed->load());
+
     // --- Wiedergabe ---
     motionPlayer.setSpeed ((double) pp.playSpeed->load());
     motionPlayer.setLooping (pp.playLoop->load() > 0.5f);
@@ -500,6 +512,12 @@ void DopplerfeldProcessor::handlePendingRequests()
         }
     }
 
+    if (flyStopRequest.exchange (false))
+        flyBy.stop();
+
+    if (flyTriggerRequest.exchange (false))
+        startFlyBy();
+
     if (playTriggerRequest.exchange (false))
         motionPlayer.trigger (dopplerEngine.currentTime());
 
@@ -508,7 +526,74 @@ void DopplerfeldProcessor::handlePendingRequests()
 
     recordingActive.store (motionRecorder.isRecording());
     playbackActive.store (motionPlayer.isPlaying());
+    flyByActive.store (flyBy.isRunning());
     recordedFrames.store (motionRecorder.numFrames());
+}
+
+void DopplerfeldProcessor::startFlyBy()
+{
+    const auto kind = pp.flyKind->load() < 0.5f ? FlyByGenerator::Kind::ThroughScreen
+                                                : FlyByGenerator::Kind::Crossing;
+    const auto start = pp.flyStart->load() < 0.5f ? FlyByGenerator::Start::Continuous
+                                                  : FlyByGenerator::Start::Abrupt;
+
+    flyBy.configure (kind, start, (double) pp.flyDistance->load(),
+                     listenerState.head, (double) pp.srcZ->load());
+    flyBy.setSpeed ((double) pp.flySpeed->load());
+    flyBy.start();
+
+    // Glätter vorwärmen. Beide Startvarianten verlangen, dass die Quelle im
+    // ersten Moment BEREITS mit voller Geschwindigkeit fliegt - beim
+    // Knall-Start ist genau das der Effekt, beim kontinuierlichen wäre eine
+    // anlaufende Quelle der Widerspruch zur vorbelegten Vorgeschichte.
+    //
+    // Statt den Glättern eine Anfangsgeschwindigkeit von außen aufzudrücken
+    // (die vier Verfahren haben dafür keine gemeinsame Schnittstelle, und der
+    // Slew-Limiter müsste seine Beschleunigungsgrenze umgehen), werden sie
+    // hier mit einem gleichförmig wandernden Ziel eingelaufen. Danach steht
+    // jedes Verfahren in seinem eigenen eingeschwungenen Zustand - genau dem,
+    // den es auch nach einer Weile Flug hätte.
+    const Vec3   direction = flyBy.startVelocity().normalised();
+    const double speed     = flyBy.startVelocity().length();
+    const double tickDt    = 1.0 / DopplerEngine::trajectoryRateHz;
+
+    // Fünf Zeitkonstanten reichen für jedes der vier Verfahren; die
+    // Obergrenze deckelt die Arbeit im Audiothread auf zwei Sekunden
+    // Simulationszeit, also ein paar tausend Additionen.
+    const double tau        = std::max (1.0e-3, (double) pp.smootherTau->load());
+    const int    primeTicks = juce::jlimit (1, 2000,
+                                            (int) std::ceil (5.0 * tau * DopplerEngine::trajectoryRateHz));
+
+    const Vec3 runUp = flyBy.startPosition() - direction * (speed * tickDt * (double) primeTicks);
+
+    sourceSmoothers.reset (runUp);
+
+    Vec3 primedVel;
+
+    for (int i = 1; i <= primeTicks; ++i)
+    {
+        sourceSmoothers.setTarget (runUp + direction * (speed * tickDt * (double) i));
+        sourceSmoothers.tick (smoothedSourcePos, primedVel);
+    }
+
+    // Der Unterschied zwischen den beiden Startvarianten steckt allein in der
+    // Vorgeschichte, die der neue Geometriesatz mitbekommt:
+    //
+    //   kontinuierlich - dieselbe Gerade, rückwärts fortgesetzt. Der Löser
+    //                    sieht eine Quelle, die schon immer geflogen ist.
+    //   Knall-Start    - eine ruhende Quelle am Startpunkt. Die Bewegung setzt
+    //                    schlagartig ein; das ist bewusst unphysikalisch und
+    //                    als reproduzierbarer Testfall für den Überschallknall
+    //                    gedacht.
+    //
+    // Gesetzt wird die tatsächlich geglättete Position, nicht der ideale
+    // Startpunkt: der Glätter hat im eingeschwungenen Zustand einen festen
+    // Nachlauf, und die Vorgeschichte muss zu dem passen, was gleich
+    // weitergeschrieben wird.
+    if (start == FlyByGenerator::Start::Continuous)
+        dopplerEngine.startLinearMotion (smoothedSourcePos, direction * speed);
+    else
+        dopplerEngine.jumpSourceTo (smoothedSourcePos);
 }
 
 void DopplerfeldProcessor::advanceMotion (int numSamples)
@@ -535,8 +620,16 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
         // (Plan 3.9): sie liefert nur das Ziel, geglättet wird danach. Damit
         // ist auch die Auflage erfüllt, dass ein linear interpolierter Clip
         // zwingend durch den Glätter muss.
-        const Vec3 target = motionPlayer.isPlaying() ? motionPlayer.tick (tickDt)
-                                                     : sourceTargetMetres;
+        // Rangfolge der Zielquellen: ein laufender Vorbeiflug hat Vorrang vor
+        // der Bewegungswiedergabe, diese vor dem rohen Reglerziel. Alle drei
+        // liefern nur ein ZIEL - geglättet, in die Trajektorie geschrieben und
+        // gelöst wird danach für alle gleich (Plan 3.8/3.9).
+        Vec3 target = sourceTargetMetres;
+
+        if (flyBy.isRunning())
+            target = flyBy.tick (tickDt);
+        else if (motionPlayer.isPlaying())
+            target = motionPlayer.tick (tickDt);
 
         sourceSmoothers.setTarget (target);
 

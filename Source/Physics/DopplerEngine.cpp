@@ -215,6 +215,7 @@ void DopplerEngine::reset()
 
     prevTarget       = sourceTarget;
     queuedJumpPos    = sourceTarget;
+    queuedJumpVel    = Vec3{};
     fieldChangeArmed = false;
 
     // Nach einem Zeitsprung wäre die alte Marke in der Zukunft und der
@@ -240,7 +241,7 @@ void DopplerEngine::setManualFade (bool shouldUseManual, double seconds)
     manualFadeSeconds = seconds;
 }
 
-void DopplerEngine::configurePendingSet (Vec3 newPos)
+void DopplerEngine::configurePendingSet (Vec3 newPos, Vec3 preVelocity)
 {
     auto& s = geometry.pending();
 
@@ -249,9 +250,34 @@ void DopplerEngine::configurePendingSet (Vec3 newPos)
     // newestTime() und die Zeitachse der Trajektorie wäre nicht mehr monoton.
     const double t = (double) (nextTrajIndex - 1) / trajectoryRateHz;
 
-    // Komplette Vorgeschichte konstant an der neuen Stelle: der neue Satz
-    // klingt sofort, statt erst nach der Laufzeit einzusetzen (Plan 2.6/3.2).
-    s.trajectory.jumpTo (newPos, t);
+    // Komplette Vorgeschichte an der neuen Stelle: der neue Satz klingt sofort,
+    // statt erst nach der Laufzeit einzusetzen (Plan 2.6/3.2). Ruhend, wenn
+    // keine Anfangsgeschwindigkeit angegeben ist, sonst als gleichförmige
+    // Bewegung auf derselben Geraden.
+    const double preSpeed = preVelocity.length();
+
+    if (preSpeed > 0.0)
+    {
+        // Wie weit die Gerade zurückreichen darf: der Puffer deckt eine
+        // endliche Laufzeit ab, und der Schall vom ältesten Punkt muss den
+        // Hörer noch erreichen können. Sonst fände der Löser dort gar keine
+        // Wurzel und der neue Satz begänne stumm.
+        //
+        // Reichweite konservativ mit der langsamsten je auftretenden
+        // Schallgeschwindigkeit (0 °C) und 10 % Sicherheitsabstand gerechnet -
+        // dieselbe Zahl, nach der auch die Pufferlänge bemessen ist.
+        const double reach   = 0.9 * 331.3 * maxHistorySeconds;
+        const double startR  = (listener.head - newPos).length();
+        const double allowed = std::max (0.0, (reach - startR) / preSpeed);
+
+        s.trajectory.fillLinear (newPos, preVelocity, t,
+                                 std::min (maxHistorySeconds, allowed));
+    }
+    else
+    {
+        s.trajectory.jumpTo (newPos, t);
+    }
+
     s.lastPos = newPos;
 
     // Die neue Ohrgeometrie gehört zum neuen Satz; der alte behält seine und
@@ -271,7 +297,7 @@ void DopplerEngine::configurePendingSet (Vec3 newPos)
     }
 }
 
-void DopplerEngine::startGeometrySwitch (Vec3 newPos, int fadeSamples)
+void DopplerEngine::startGeometrySwitch (Vec3 newPos, Vec3 preVelocity, int fadeSamples)
 {
     sourceTarget = newPos;
     prevTarget   = newPos;
@@ -283,11 +309,12 @@ void DopplerEngine::startGeometrySwitch (Vec3 newPos, int fadeSamples)
         // neue Zielzustand hier, bis der laufende Fade durch ist (Plan 3.7,
         // Warteschlange der Länge eins, der letzte gewinnt).
         queuedJumpPos = newPos;
+        queuedJumpVel = preVelocity;
         geometry.beginSwitch (fadeSamples);
         return;
     }
 
-    configurePendingSet (newPos);
+    configurePendingSet (newPos, preVelocity);
     geometry.beginSwitch (fadeSamples);
 }
 
@@ -299,7 +326,16 @@ void DopplerEngine::jumpSourceTo (Vec3 posMetres)
     const PathSet& newest = geometry.isFading() ? geometry.pending() : geometry.active();
     const double   delta  = (posMetres - newest.lastPos).length();
 
-    startGeometrySwitch (posMetres, fadeSamplesFor (FadeReason::SourcePosition, delta));
+    startGeometrySwitch (posMetres, Vec3{}, fadeSamplesFor (FadeReason::SourcePosition, delta));
+}
+
+void DopplerEngine::startLinearMotion (Vec3 posMetres, Vec3 velocity)
+{
+    const PathSet& newest = geometry.isFading() ? geometry.pending() : geometry.active();
+    const double   delta  = (posMetres - newest.lastPos).length();
+
+    startGeometrySwitch (posMetres, velocity,
+                         fadeSamplesFor (FadeReason::SourcePosition, delta));
 }
 
 void DopplerEngine::setFieldMetres (double metres)
@@ -348,7 +384,7 @@ void DopplerEngine::applyArmedFieldChange()
     // Der Fade startet erst hier, am Blockanfang, und nicht schon in
     // setFieldMetres(): so ist die Reihenfolge der Setter egal - die neuen
     // Positionen stehen dann in jedem Fall schon.
-    startGeometrySwitch (sourceTarget, fadeSamplesFor (FadeReason::FieldSize, 0.0));
+    startGeometrySwitch (sourceTarget, Vec3{}, fadeSamplesFor (FadeReason::FieldSize, 0.0));
 }
 
 void DopplerEngine::setBoomLimitDb (double dB)
@@ -711,7 +747,7 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
     //    jetzt darf pending() neu konfiguriert werden.
     if (geometry.queuedSwitchDue())
     {
-        configurePendingSet (queuedJumpPos);
+        configurePendingSet (queuedJumpPos, queuedJumpVel);
         geometry.startQueuedSwitch();
     }
 

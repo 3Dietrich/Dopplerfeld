@@ -43,6 +43,27 @@ public:
     // sie ohne Anlaufzeit klingt (Plan 3.2/3.7).
     void jumpTo (Vec3 pos, double time);
 
+    // Wie jumpTo(), aber mit gleichförmiger Bewegung statt Ruhe als
+    // Vorgeschichte: M(t) = pos + vel * (t - time) für den gesamten Puffer.
+    //
+    // Damit lässt sich ein Vorbeiflug so anfangen, als sei die Quelle schon
+    // immer geflogen. Der Unterschied zu jumpTo() ist nicht kosmetisch: nach
+    // jumpTo() steht in der Vorgeschichte eine ruhende Quelle, der Löser findet
+    // dort M_r = 0 und die Bewegung setzt mit einem Geschwindigkeitssprung ein
+    // - hörbar als Knacken beziehungsweise, bei Überschall, als ein Knall, den
+    // die Bahn gar nicht hergibt. Nach fillLinear() ist die Vorgeschichte
+    // dieselbe Gerade, auf der es weitergeht, und im Löser passiert an der Naht
+    // schlicht nichts Besonderes.
+    // spanSeconds begrenzt, wie weit die gleichförmige Bewegung zurückreicht;
+    // davor ruht die Quelle an dem Punkt, an dem die Gerade beginnt. Diese
+    // Begrenzung ist keine Bequemlichkeit, sondern nötig: der Puffer deckt eine
+    // endliche Laufzeit ab (bei n_max rund 42 s, also gut 14 km). Eine
+    // unbegrenzte Rückrechnung würde die Quelle bei Überschall so weit
+    // entfernen, dass ihr Schall die volle Pufferlänge nicht mehr schafft - der
+    // Löser fände dann gar keine Wurzel und das Ergebnis wäre Stille (siehe
+    // "Puffer kürzer als die Laufzeit" in RetardedTimeSolver::solve).
+    void fillLinear (Vec3 pos, Vec3 vel, double time, double spanSeconds);
+
     // Catmull-Rom-Interpolation zwischen den Stützstellen um t. false,
     // wenn t außerhalb von [oldestTime(), newestTime()] liegt.
     bool sampleAt (double t, Vec3& outPos, Vec3& outVel) const;

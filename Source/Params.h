@@ -78,6 +78,15 @@ namespace Params
     constexpr const char* playInterp   = "playInterp";
     constexpr const char* playLoop     = "playLoop";
 
+    // Vorbeiflug-Generatoren (FlyByGenerator): Bahnart, Startvariante,
+    // Vorbeiflugabstand in Metern und Geschwindigkeit in m/s. Die
+    // Geschwindigkeit ist ausdrücklich live automatisierbar - der Generator
+    // integriert den jeweils aktuellen Wert.
+    constexpr const char* flyKind     = "flyKind";
+    constexpr const char* flyStart    = "flyStart";
+    constexpr const char* flyDistance = "flyDistance";
+    constexpr const char* flySpeed    = "flySpeed";
+
     // --- Physik ---
     constexpr const char* boomLimitDb     = "boomLimitDb";
     constexpr const char* airAbsorbAmount = "airAbsorbAmount";

@@ -167,6 +167,25 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (choiceParam (playInterp, "Play Interp", { "Linear", "Catmull-Rom" }, 1));
     layout.add (boolParam (playLoop, "Play Loop", false));
 
+    // Vorbeiflug-Generatoren.
+    layout.add (choiceParam (flyKind, "Fly Path", { "Durch den Bildschirm", "Waagerecht querend" }, 1));
+    layout.add (choiceParam (flyStart, "Fly Start", { "Kontinuierlich", "Knall-Start" }, 0));
+    {
+        // Skew auf 20 m: der interessante Bereich sind Vorbeifluege in wenigen
+        // bis einigen zehn Metern. Nach oben trotzdem bis 2 km offen, statt
+        // auf einen "vernuenftigen" Wert zu deckeln.
+        auto range = juce::NormalisableRange<float> (0.5f, 2000.0f);
+        range.setSkewForCentre (20.0f);
+        layout.add (floatParam (flyDistance, "Fly Distance", range, 20.0f, "m"));
+    }
+    {
+        // Bis 1500 m/s, also gut Mach 4 - der Ueberschallfall ist hier der
+        // eigentliche Zweck, nicht der Ausnahmefall.
+        auto range = juce::NormalisableRange<float> (0.0f, 1500.0f);
+        range.setSkewForCentre (60.0f);
+        layout.add (floatParam (flySpeed, "Fly Speed", range, 60.0f, "m/s"));
+    }
+
     // --- Physik ---
     layout.add (floatParam (boomLimitDb, "Boom Limit", { 0.0f, 60.0f, 0.1f }, 30.0f, "dB"));
     layout.add (floatParam (airAbsorbAmount, "Air Absorption", unitRange(), 1.0f));
