@@ -291,6 +291,7 @@ private:
 
         std::atomic<float>* boomLimitDb     = nullptr;
         std::atomic<float>* airAbsorbAmount = nullptr;
+        std::atomic<float>* distanceCurve   = nullptr;
 
         std::atomic<float>* groundReflectionOn = nullptr;
         std::atomic<float>* groundDampAmount   = nullptr;
@@ -375,6 +376,7 @@ private:
 
     double lastBoomLimitDb    = 30.0;
     double lastAirAbsorbAmount = 1.0;
+    double lastDistanceCurve   = 0.0;
     bool   lastNWaveOn         = false;
     double lastNWaveSize       = 15.0;
 

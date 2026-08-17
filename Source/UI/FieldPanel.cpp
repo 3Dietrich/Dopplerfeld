@@ -42,6 +42,12 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
                "Ausgangslautstaerke (dB). Der Pegel folgt 1/Abstand ohne Referenzdistanz - "
                "bei grossen Feldern ist das leise, hier laesst sich gegensteuern.");
 
+    setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve",
+               "Wie stark die Entfernung auf die Lautstaerke wirkt. Mitte (0) = "
+               "physikalisch korrektes 1/R, wie bisher. Nach rechts: faellt schneller "
+               "ab (schaerfer abgegrenzt). Nach links: faellt flacher ab (traegt "
+               "weiter, verschwimmt mehr).");
+
     setupKnob (srcZKnob,        apvts, Params::srcZ,            "Source Z",
                "Hoehe der Quelle ueber dem Boden in Metern. 0 = auf dem Boden (Auto, "
                "Motorrad), groessere Werte fuer Ueberflug o.ae. x/y stellt man mit der "
@@ -130,7 +136,7 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto geoRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &nWaveSizeKnob })
+    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &nWaveSizeKnob, &distanceCurveKnob })
     {
         layoutKnob (*k, geoRow.removeFromLeft (knobW));
         geoRow.removeFromLeft (4);

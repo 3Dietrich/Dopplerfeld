@@ -209,6 +209,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.boomLimitDb     = raw (Params::boomLimitDb);
     pp.airAbsorbAmount = raw (Params::airAbsorbAmount);
+    pp.distanceCurve   = raw (Params::distanceCurve);
 
     pp.groundReflectionOn = raw (Params::groundReflectionOn);
     pp.groundDampAmount   = raw (Params::groundDampAmount);
@@ -492,6 +493,16 @@ void DopplerfeldProcessor::applyParameters()
     {
         lastAirAbsorbAmount = airAbsorb;
         dopplerEngine.setAirAbsorptionAmount (airAbsorb);
+    }
+
+    // Wie oben nur bei tatsaechlicher Aenderung: der Setter laeuft ueber alle
+    // Pfade beider Geometriesaetze.
+    const double distCurve = (double) pp.distanceCurve->load();
+
+    if (std::abs (distCurve - lastDistanceCurve) > 1.0e-9)
+    {
+        lastDistanceCurve = distCurve;
+        dopplerEngine.setDistanceCurve (distCurve);
     }
 
     // Wie oben: der Setter läuft über alle Pfade beider Geometriesätze,

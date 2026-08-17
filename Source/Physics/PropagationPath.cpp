@@ -33,6 +33,24 @@ void PropagationPath::setBoomLimitDb (double dB)
     eps    = std::pow (10.0, -dB / 20.0);
 }
 
+void PropagationPath::setDistanceCurve (double curve)
+{
+    const double c = std::min (1.0, std::max (-1.0, curve));
+
+    // Beide Hälften einzeln aufgezogen: die Reglermitte soll genau den
+    // Exponenten 1 ergeben, und die Enden liegen nicht symmetrisch um 1
+    // (0,3 nach unten, 2,5 nach oben).
+    const double span = c >= 0.0 ? (distanceExponentSteep - 1.0)
+                                 : (1.0 - distanceExponentFlat);
+
+    distanceExponent = 1.0 + c * span;
+
+    // Kein Gleichheitsvergleich auf 0 - das Projekt baut mit -Wfloat-equal.
+    // "Betrag nicht größer als null" deckt +0 und -0 ab und fängt zusätzlich
+    // NaN auf: dann wird das reine 1/R gerechnet statt eines NaN-Exponenten.
+    plainInverseR = ! (std::abs (c) > 0.0);
+}
+
 void PropagationPath::setAirAbsorptionAmount (double amount01)
 {
     airAmount = std::min (1.0, std::max (0.0, amount01));
@@ -177,7 +195,13 @@ void PropagationPath::evaluateRoot (const SourceTrajectory& traj,
     // A = A_geo * A_focus. A_focus = 1/|1 - M_r| entsteht beim fraktionalen
     // Auslesen der Delay-Line NICHT von allein und muss hier explizit gesetzt
     // werden (Plan 2.7) - das ist die Stelle, die erfahrungsgemäß fehlt.
-    double amp = 1.0 / (R * denom);
+    //
+    // A_geo = 1/R^k mit einstellbarem k (setDistanceCurve). Bei k = 1 - dem
+    // Default und dem physikalisch richtigen Kugelwellen-Fall - wird R direkt
+    // benutzt statt std::pow, damit dieser Fall bitgleich bleibt.
+    const double rGeo = plainInverseR ? R : std::pow (R, distanceExponent);
+
+    double amp = 1.0 / (rGeo * denom);
 
     if (nearFieldOn)
         amp += nearFieldGain (R, dominantFreqHz);

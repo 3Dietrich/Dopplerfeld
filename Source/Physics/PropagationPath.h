@@ -70,6 +70,20 @@ public:
     void   setBoomLimitDb (double dB);
     double boomLimitDb() const { return boomDb; }
 
+    // Entfernungsabhängigkeit der Amplitude (@dpa-Skizze "Amp-Verlauf": drei
+    // Kurven über Distanz gegen Amplitude, die mittlere neutral). Statt starr
+    // A_geo = 1/R rechnet der Pfad 1/R^k mit einstellbarem k.
+    //
+    // curve = 0 ergibt genau k = 1, also das physikalisch richtige
+    // Kugelwellen-Gesetz und damit exakt das bisherige Verhalten. Positive
+    // Werte machen k größer (der Pegel fällt schneller mit der Entfernung ab),
+    // negative kleiner (er fällt flacher ab und trägt weiter).
+    //
+    // k bleibt hart über null: bei k = 0 wäre die Amplitude von der Entfernung
+    // völlig unabhängig, ein Vorbeiflug hätte dann keine Ferne mehr.
+    void   setDistanceCurve (double curve);
+    double distanceExponentValue() const { return distanceExponent; }
+
     // Anteil der Luftdämpfung, 0 = aus (Filter durchgereicht), 1 = voll
     // (Plan 3.11, Parameter airAbsorbAmount). Skaliert den One-Pole-Koeffi-
     // zienten in Richtung Bypass, damit "aus" wirklich aus ist und nicht bloß
@@ -247,6 +261,21 @@ private:
     // der Toleranz gewählt, die solver_check für die Kegelankunft ansetzt
     // (3 ms) - mit reichlich Abstand darunter.
     double discoverySeconds = 0.5e-3;
+
+    // Exponent von R in A_geo = 1/R^k, siehe setDistanceCurve().
+    //
+    // plainInverseR ist die Abkürzung für k = 1: dort wird std::pow gar nicht
+    // gerufen, sondern R direkt benutzt. Nicht aus Sparsamkeit, sondern damit
+    // der Standardfall garantiert bitgleich zum reinen 1/R bleibt, statt an der
+    // Genauigkeit von pow(R, 1.0) zu hängen.
+    double distanceExponent = 1.0;
+    bool   plainInverseR    = true;
+
+    // Exponent an den beiden Reglerenden. Unsymmetrisch um 1, weil "flacher"
+    // sich schon bei kleiner Änderung deutlich hört, "schärfer" aber Luft nach
+    // oben braucht.
+    static constexpr double distanceExponentSteep = 2.5;
+    static constexpr double distanceExponentFlat  = 0.3;
 
     // Regularisierung und Untergrenzen (Plan 2.7).
     double boomDb    = 30.0;

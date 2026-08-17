@@ -43,6 +43,12 @@ private:
 
     Knob fieldMetresKnob, boomLimitKnob, airAbsorbKnob, fadeManualKnob, outputGainKnob;
 
+    // Entfernung -> Amplitude schaerfer/flacher als das physikalische 1/R
+    // (@dpa-Skizze "Amp-Verlauf"). Steht bei den Hoehe-Reglern statt in der
+    // ersten Reihe, weil dort kein Platz mehr frei ist - thematisch gehoert
+    // er eher zu Boom Limit/Air Absorb.
+    Knob distanceCurveKnob;
+
     // Höhe über dem Boden. x/y stellt man mit der Maus im Feld ein, für z gibt
     // es dort keine Achse - deshalb sind das die einzigen Positionsregler.
     Knob srcZKnob, lisZKnob;

@@ -203,6 +203,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
 
     setBoomLimitDb (boomLimitDb);
     setAirAbsorptionAmount (airAbsorbAmount);
+    setDistanceCurve (distanceCurve);
     setNWave (nWaveOn, nWaveSizeM);
 
     reset();
@@ -304,6 +305,7 @@ void DopplerEngine::configurePendingSet (Vec3 newPos, Vec3 preVelocity)
         p.reset();
         p.setBoomLimitDb (boomLimitDb);
         p.setAirAbsorptionAmount (airAbsorbAmount);
+        p.setDistanceCurve (distanceCurve);
         p.setNWave (nWaveOn, nWaveSizeM);
     }
 }
@@ -414,6 +416,15 @@ void DopplerEngine::setAirAbsorptionAmount (double amount01)
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
             p.setAirAbsorptionAmount (amount01);
+}
+
+void DopplerEngine::setDistanceCurve (double curve)
+{
+    distanceCurve = curve;
+
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setDistanceCurve (curve);
 }
 
 void DopplerEngine::setGroundReflectionEnabled (bool shouldBeEnabled)

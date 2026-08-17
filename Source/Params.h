@@ -91,6 +91,11 @@ namespace Params
     constexpr const char* boomLimitDb     = "boomLimitDb";
     constexpr const char* airAbsorbAmount = "airAbsorbAmount";
 
+    // Amp-Verlauf über die Entfernung: verstellt den Exponenten k in
+    // A_geo = 1/R^k. 0 = physikalisch korrektes 1/R (Default und exakt das
+    // bisherige Verhalten), positiv = fällt schneller ab, negativ = flacher.
+    constexpr const char* distanceCurve   = "distanceCurve";
+
     // Bodenreflexion (Spiegelquelle an der Ebene z = 0) und ihre Höhendämpfung.
     constexpr const char* groundReflectionOn = "groundReflectionOn";
     constexpr const char* groundDampAmount   = "groundDampAmount";

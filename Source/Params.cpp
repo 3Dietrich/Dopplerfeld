@@ -190,6 +190,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (boomLimitDb, "Boom Limit", { 0.0f, 60.0f, 0.1f }, 30.0f, "dB"));
     layout.add (floatParam (airAbsorbAmount, "Air Absorption", unitRange(), 1.0f));
 
+    // Amp-Verlauf über die Entfernung. Symmetrischer Reglerweg um die Mitte,
+    // die Mitte ist der Default und trifft den Exponenten 1 exakt - bestehende
+    // Presets ohne diesen Parameter klingen damit unverändert.
+    layout.add (floatParam (distanceCurve, "Distance Curve", { -1.0f, 1.0f, 0.01f }, 0.0f));
+
     // Default aus: die Bodenreflexion verdoppelt die Löserlast, und wer sie
     // nicht braucht, soll sie nicht bezahlen.
     layout.add (boolParam (groundReflectionOn, "Ground Reflection", false));

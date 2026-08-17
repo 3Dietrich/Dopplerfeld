@@ -85,6 +85,10 @@ public:
     void setBoomLimitDb (double dB);
     void setAirAbsorptionAmount (double amount01);
 
+    // Entfernungsabhängigkeit der Amplitude, siehe
+    // PropagationPath::setDistanceCurve(). 0 = physikalisch korrektes 1/R.
+    void setDistanceCurve (double curve);
+
     // Druckwellen-/N-Wellen-Schicht, siehe PropagationPath::setNWave().
     void setNWave (bool shouldBeEnabled, double sizeMetres);
 
@@ -335,6 +339,7 @@ private:
     // Sätze müssen von Anfang an gleich eingestellt sein).
     double boomLimitDb    = 30.0;
     double airAbsorbAmount = 1.0;
+    double distanceCurve   = 0.0;
 
     bool   nWaveOn    = false;
     double nWaveSizeM = 15.0;
