@@ -146,6 +146,76 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (Nachmittag: vier Bugfixes, vier neue Regler)
+
+Aus einem echten Hördurchgang mit @dpa, direkt im Anschluss an z-Achse/
+Bodenreflexion. `solver_check` und `load_check` grün, warnungsfrei.
+
+**Bugfixes:**
+
+- **Slew Limiter schwang bei Berührung ungedämpft um sein Ziel.** Die
+  Zielgeschwindigkeit zielte bis zuletzt mit vollem `v_max` aufs Ziel, ohne
+  Bremsstrecke einzuplanen - schoss zwangsläufig drüber hinaus, kehrte mit
+  derselben Wucht um, traf von der Gegenseite wieder mit voller Geschwindigkeit
+  auf. Fix: Zielgeschwindigkeit auf `min(v_max, sqrt(2·a_max·d))` gekappt
+  (Standard-Bremskurve).
+- **Play Speed wirkte bei CatmullRom-Wiedergabe wie ein Weichmacher.** Der
+  Player-Output lief zusätzlich durch den Positionsglätter mit fester
+  Zeitkonstante - bei höherem Tempo wanderte das Ziel schneller durch den
+  Clip, als der Glätter folgen konnte, er schnitt Ecken: die Bewegung wurde
+  kleiner/runder statt schneller. CatmullRom ist laut eigenem Klassenkommentar
+  (`MotionPlayer.h`) schon C1-glatt und braucht diesen zweiten Glätter gar
+  nicht (nur Linear). Bei CatmullRom wird das Ziel jetzt direkt übernommen,
+  der interne Glätter-Zustand bleibt synchron mitgeführt.
+- **Vorbeiflug sprang am Ende auf die alte Position von vor dem Flug.**
+  `sourceTargetMetres` hielt die Position von davor unverändert; fiel
+  `isRunning()` auf false (Streckenende oder Stop-Knopf), übernahm der
+  nächste Tick sofort diesen alten, oft weit entfernten Wert. Jetzt wird die
+  tatsächliche Endposition synchronisiert, bevor die Kontrolle zurückfällt.
+- **"Engine Reset" half nicht zuverlässig bei Aussetzern nach CPU-Spitzen**
+  (meist Mach > 1) - nur ein Wechsel der Audio-Puffergröße brachte den Ton
+  verlässlich zurück, weil der einen echten `prepareToPlay()`-Durchlauf
+  auslöst. `dopplerEngine.reset()` allein ließ Klangquelle
+  (`engineGenerator`/`sampleSource`/`sourceHolder`) und beide Positionsglätter
+  unangetastet. `restartEngine()` macht jetzt denselben vollen
+  `prepareToPlay()`-Durchlauf mit den aktuellen Werten, umschlossen von
+  `suspendProcessing()` (kein Datenrennen mit dem Audiothread) - vom
+  Nachrichten-Thread aus (Button "Engine Restart"), nicht aus
+  `handlePendingRequests()` heraus, weil `prepareToPlay()` allokieren darf,
+  im Audiothread wäre das verboten.
+
+**Neue Regler:**
+
+- **Tempo-Anzeige der Quelle** in der Statuszeile, Einheit umschaltbar
+  (km/h, m/s, Mach) - Mach aus derselben Momentangeschwindigkeit wie die
+  anderen beiden, nicht aus `M_r` (das ist radial zum jeweiligen Ohr).
+- **Amp-Verlauf-Regler** (`distanceCurve`, -1..1, Default 0): verstellt den
+  Exponenten k in `A_geo = 1/R^k` statt starr `1/R`. Bei k=1 (Default,
+  Reglermitte) wird `R` direkt benutzt statt `std::pow` - der Standardfall
+  bleibt bitgleich, bestehende Presets klingen unverändert. Bereich
+  unsymmetrisch (0,3 flach .. 2,5 steil): "flacher" ist schon bei kleiner
+  Änderung deutlich hörbar, "schärfer" braucht mehr Spielraum.
+- **Gemeinsamer Tempo-Deckel "Max Speed"** (m/s, Default 100000 =
+  wirkungslos bis bewusst heruntergestellt): letzte Stufe in
+  `advanceMotion()`, klemmt die pro Tick zurückgelegte Strecke von Quelle
+  UND Hörer - unabhängig davon, ob Maus/Automation-Glättung (alle vier
+  Verfahren), Vorbeiflug oder CatmullRom-Wiedergabe das Ziel geliefert hat.
+  `Slew Vmax`/`Slew Amax` bleiben als eigene, spezifischere Regler des
+  Slew-Limiter-Verfahrens bestehen - das sind zwei verschiedene Größen
+  (Tempolimit vs. Antritt), die sich nicht verlustfrei zu einem Regler
+  verschmelzen lassen, ohne Ausdruckskraft zu verlieren.
+- **Wegvorschau bei Vorbeiflug**: geplante Reststrecke gestrichelt
+  eingezeichnet, Punkt kürzesten Abstands zu L markiert und beziffert -
+  geschlossene Geometrie (`FlyByGenerator::nearestPoint()`), keine Suche:
+  die Bahn ist gerade und liegt per Konstruktion in konstantem Versatz zum
+  Hörer. Vorerst nur Draufsicht, Perspektive folgt bei Bedarf. Der
+  aktuelle L-M-Abstand steht jetzt unabhängig vom Vorbeiflug immer in der
+  Statuszeile.
+
+Gehört/gesehen hat @dpa davon: die vier Bugfixes ja (direkt gemeldet und
+gegengetestet), die vier neuen Regler noch nicht - Modellkonstanten
+(Amp-Verlauf-Grenzen, Max-Speed-Default) sind Startwerte, kein Urteil.
+
 ## Stand 2026-08-17 (Bewegungsaufzeichnung im gespeicherten Zustand)
 
 Bisher lebten Aufzeichnungen ausdrücklich nur zur Laufzeit. @dpa will das
