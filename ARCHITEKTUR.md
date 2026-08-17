@@ -146,6 +146,66 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-17 (Abend: Slew-Regler ausgrauen, Fly Approach entkoppelt, Stille-Diagnose)
+
+**Zwei kleine Fixes**, `solver_check`+`load_check` grün, warnungsfrei:
+
+- **Slew Vmax/Amax** im Bewegung-Panel sind jetzt nur bei Smoother "Slew
+  Limiter" aktiv (`setEnabled`), bei jedem anderen Verfahren ausgegraut - vorher
+  bedienbar, aber wirkungslos, standen sie einfach so da.
+- **"Fly Dist" steuerte ungewollt zwei Groessen**: `FlyByGenerator::halfLength()`
+  = max(100, 6·|distance|) hing am seitlichen Vorbeiflugabstand, ein Regler
+  kontrollierte damit Abstand UND Anflugstrecke/Startpunkt der Bahn zugleich.
+  Neuer, eigenstaendiger Parameter **Fly Approach** (`Params::flyApproach`,
+  Default 300 m) uebernimmt die Bahnlaenge.
+
+**Diagnose (noch OFFEN, kein Fix):** @dpa berichtet bei ~2000 km/h einen
+kurzen hohen Pegel, der nach rund 250 ms abstandsabhaengig abbricht, bei
+~1500 km/h nicht. Ein neues `load_check`-Szenario (reiner Diagnose-Block,
+keine Assertion, im Quelltext nach dem N-Wellen-Test) fliegt beide Tempi
+(555,56 und 416,67 m/s) bei mehreren Vorbeiflugabstaenden und misst die
+laengste zusammenhaengende Stille waehrend des Fluges:
+
+- **Bestaetigt: echte Stille, keine CPU-Ueberlast.** Blockzeiten liegen bei
+  13-37 % vom Budget (kein Block nahe der Grenze), aber der Ausgang wird fuer
+  150-800 ms **exakt** 0.0 (nicht nur leise) - abstandsabhaengig wachsend
+  (5 m ≈ 150-330 ms, 300 m ≈ 590-810 ms).
+- **Verdaechtigter Mechanismus, mit Beleg, aber nicht bestaetigt:**
+  `DopplerEngine::configurePendingSet()` fuellt beim Start der linearen
+  Vorgeschichte (`SourceTrajectory::fillLinear`) die Bahn nur soweit rueckwaerts,
+  wie
+  `allowed = (0.9·331.3·maxHistorySeconds - startR) / preSpeed`
+  erlaubt (Datei `Source/Physics/DopplerEngine.cpp`, `configurePendingSet()`).
+  **`allowed` faellt umgekehrt proportional zur Fluggeschwindigkeit** - eine
+  schnellere Quelle bekommt eine KUERZERE gueltige Vorgeschichte. Im
+  Block-Trace (2000 km/h, d=20 m) blieb der Anzeigewert `delaySeconds` eines
+  Pfades ueber die gesamte Stille-Phase bitgleich bei 36,3355 s eingefroren
+  (waehrend `residualEvaluations()` im selben Fenster kontinuierlich weiter
+  waechst, der Loeser also aktiv bleibt) - ein Wert nahe an, aber unter
+  `maxHistorySeconds` (≈ 41,8 s bei n_max = 10000 m). Passt zu einer Wurzel,
+  die aus der wegen `allowed` verkuerzten/gepadeten Vorgeschichte keinen
+  gueltigen Signal-Lesepunkt mehr findet (`SourceSignalBuffer::readAt()`
+  liefert 0,0f ausserhalb des geschriebenen Bereichs, siehe Kommentar dort).
+  **Nicht** bestaetigt: der exakte Code-Pfad, der den Zweig danach wieder
+  freigibt (env muesste nach ~1 ms auf 0 laufen und den Slot freigeben - warum
+  "Zweige" in der Anzeige die ganze Stille ueber bei 1 verharrt, ist noch
+  ungeklaert).
+- **Nicht deckungsgleich mit @dpas Beobachtung:** im synthetischen Sweep
+  (fester `flyApproach` = 300 m fuer beide Tempi) ist die Stille bei
+  1500 km/h *laenger* als bei 2000 km/h, nicht kuerzer/abwesend wie berichtet -
+  vermutlich weil @dpas tatsaechliche Regler-Kombination (Fly Approach, Fly
+  Dist, Smoother, evtl. Bodenreflexion/Waende) von diesem Sweep abweicht. Der
+  Sweep beweist also: der Bug ist real und nicht CPU-bedingt, aber nicht,
+  dass er bei genau diesen zwei Tempi exakt so auftritt wie gehoert.
+
+**Naechster Schritt:** gezielte Session in `RetardedTimeSolver.cpp`/
+`PropagationPath.cpp`/`DopplerEngine::configurePendingSet()` - Kandidaten:
+entweder `allowed` grosszuegiger bemessen (die 0,9-Sicherheitsmarge oder die
+0°C-Referenzgeschwindigkeit lockern), oder den Fall "keine gueltige
+Vorgeschichte am gewuenschten Punkt" explizit behandeln statt still auf 0 zu
+lesen. Empfehlung: hoher Denkaufwand (Opus), weil physikalisch-numerisch
+kritischer Code mit bestehender `solver_check`-Abdeckung, kein Schnellschuss.
+
 ## Stand 2026-08-17 (Nachmittag: vier Bugfixes, vier neue Regler)
 
 Aus einem echten Hördurchgang mit @dpa, direkt im Anschluss an z-Achse/

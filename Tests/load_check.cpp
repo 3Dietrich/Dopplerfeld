@@ -1296,6 +1296,62 @@ int main()
         }
     }
 
+    //==================================================================
+    // 1i. DIAGNOSE (noch ohne Assertion): @dpa berichtet bei ~2000 km/h
+    //     (556 m/s) einen kurzen hohen Pegel, der nach rund 250 ms
+    //     abstandsabhängig abbricht - bei ~1500 km/h (417 m/s) nicht. Misst
+    //     längste Stille und Löserlast über den gesamten Vorbeiflug, für
+    //     mehrere Vorbeiflugabstände.
+    {
+        auto flight = [&] (double speedMps, double distanceM, Stats& stats)
+        {
+            DopplerfeldProcessor proc;
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 4000.0f);
+            setParam (proc, Params::smootherType, 1.0f);   // Critically Damped Spring (App-Default)
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcZ, 0.0f);
+
+            setParam (proc, Params::flyKind,     0.0f);   // durch den Bildschirm
+            setParam (proc, Params::flyStart,    0.0f);   // kontinuierlich
+            setParam (proc, Params::flyDistance, (float) distanceM);
+            setParam (proc, Params::flyApproach, 300.0f);
+            setParam (proc, Params::flySpeed,    (float) speedMps);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            Stats settle;
+            render (proc, buffer, 0.3, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            // Nur die aktive Flugdauer (2*halfLength/speed) - KEIN Puffer
+            // danach, sonst mischt sich die (erwartungsgemaess leise) Stille
+            // NACH Flugende in "laengste Stille" hinein und verwaesserst die
+            // Messung.
+            const double flightSeconds = 2.0 * 300.0 / speedMps;
+            render (proc, buffer, flightSeconds, stats, [] (double) {});
+        };
+
+        for (double distanceM : { 5.0, 10.0, 20.0, 50.0, 100.0, 300.0 })
+        {
+            Stats fast, slow;
+            flight (555.56, distanceM, fast);
+            flight (416.67, distanceM, slow);
+
+            char title1[32];
+            char title2[32];
+            std::snprintf (title1, sizeof (title1), "2000kmh d=%.0fm", distanceM);
+            std::snprintf (title2, sizeof (title2), "1500kmh d=%.0fm", distanceM);
+            fast.report (title1);
+            slow.report (title2);
+        }
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }
