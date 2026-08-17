@@ -30,6 +30,12 @@ struct FieldSnapshot
     std::array<Vec3, maxTrailPoints> trail {};
     int  trailCount = 0;
 
+    // Momentangeschwindigkeit der Quelle (m/s, aus der Trajektorie) und die
+    // aktuelle Schallgeschwindigkeit (m/s, temperaturabhaengig) - zusammen
+    // ergibt das Mach fuer die Statuszeile (@dpa-Feedback: Tempo-Anzeige).
+    double sourceSpeed  = 0.0;
+    double speedOfSound = 343.0;
+
     // Emissionszeiten (Sekunden, dieselbe Zeitbasis wie DopplerEngine::
     // currentTime()) vergangener Sample-Momente, aus denen der Editor
     // Wellenfront-Kreise um die jeweilige Quellposition zur Emissionszeit

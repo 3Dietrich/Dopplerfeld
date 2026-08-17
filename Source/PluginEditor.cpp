@@ -139,6 +139,31 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     viewButton.setButtonText ("Ansicht: Draufsicht");
     addAndMakeVisible (viewButton);
 
+    speedUnitButton.setTooltip ("Tempo-Einheit fuer die Statuszeile umschalten "
+                                "(km/h, m/s, Mach).");
+    speedUnitButton.setButtonText ("km/h");
+    speedUnitButton.onClick = [this]
+    {
+        speedUnit = (speedUnit == SpeedUnit::KmH) ? SpeedUnit::Ms
+                  : (speedUnit == SpeedUnit::Ms)   ? SpeedUnit::Mach
+                                                    : SpeedUnit::KmH;
+        speedUnitButton.setButtonText (speedUnit == SpeedUnit::KmH ? "km/h"
+                                      : speedUnit == SpeedUnit::Ms  ? "m/s"
+                                                                    : "Mach");
+    };
+    addAndMakeVisible (speedUnitButton);
+
+    engineResetButton.setTooltip ("Audiomotor neu anlassen: setzt die Physik-Engine "
+                                  "zurueck (Trajektorie, Ausbreitungswege, deren Filter "
+                                  "und Einblendungen), falls nach einer CPU-Spitze kein "
+                                  "Ton mehr kommt. Keine Neuallokation, kein Aussetzer "
+                                  "durch den Reset selbst.");
+    engineResetButton.setButtonText ("Engine Reset");
+    engineResetButton.setColour (juce::TextButton::buttonColourId,
+                                 juce::Colours::orangered.withAlpha (0.35f));
+    engineResetButton.onClick = [this] { dopplerfeldProcessor.resetEngine(); };
+    addAndMakeVisible (engineResetButton);
+
     tooltipsButton.setToggleState (true, juce::dontSendNotification);
     tooltipsButton.setTooltip ("Hilfehinweise beim Ueberfahren der Regler ein-/ausblenden.");
     tooltipsButton.onClick = [this] { tooltipWindow.enabled = tooltipsButton.getToggleState(); };
@@ -202,6 +227,25 @@ juce::String DopplerfeldEditor::statusText() const
     // "wackelt". Mit fester Zeichenbreite bleiben Spalten stehen.
     text << "M  x " << juce::String::formatted ("%7.1f", snapshot.sourcePos.x)
          << " m   y " << juce::String::formatted ("%7.1f", snapshot.sourcePos.y) << " m";
+
+    // @dpa-Feedback: Tempo der Quelle, Einheit per speedUnitButton umschaltbar.
+    // Mach kommt aus derselben Momentangeschwindigkeit, nicht aus M_r (das ist
+    // radial zum jeweiligen Ohr, hier geht es um die Quelle selbst).
+    {
+        double value = 0.0;
+        const char* unit = "";
+
+        switch (speedUnit)
+        {
+            case SpeedUnit::KmH:  value = snapshot.sourceSpeed * 3.6;  unit = "km/h"; break;
+            case SpeedUnit::Ms:   value = snapshot.sourceSpeed;        unit = "m/s";  break;
+            case SpeedUnit::Mach: value = snapshot.sourceSpeed
+                                          / juce::jmax (1.0, snapshot.speedOfSound);
+                                   unit = "Mach"; break;
+        }
+
+        text << "   " << juce::String::formatted ("%7.1f", value) << " " << unit;
+    }
 
     // @dpa-Feedback: CPU-Echtzeit-Anzeige (Wanduhrzeit/Audiozeit, geglättet -
     // siehe cpuLoadPercent()). Über 100% färbt paint() die ganze Statuszeile
@@ -292,6 +336,10 @@ void DopplerfeldEditor::resized()
     tooltipsButton.setBounds (topBar.removeFromLeft (130));
     topBar.removeFromLeft (8);
     viewButton.setBounds (topBar.removeFromLeft (170));
+    topBar.removeFromLeft (8);
+    speedUnitButton.setBounds (topBar.removeFromLeft (70));
+    topBar.removeFromLeft (8);
+    engineResetButton.setBounds (topBar.removeFromLeft (110));
 
     area.removeFromTop (6);
 

@@ -93,6 +93,19 @@ private:
     // den gespeicherten Zustand des Hosts.
     juce::TextButton viewButton;
 
+    // Tempo-Anzeige in der Statuszeile (@dpa-Feedback), Einheit umschaltbar.
+    // Ebenfalls kein Parameter - reine Anzeigefrage wie die Ansicht oben.
+    enum class SpeedUnit { KmH, Ms, Mach };
+    SpeedUnit speedUnit = SpeedUnit::KmH;
+    juce::TextButton speedUnitButton;
+
+    // "Audiomotor neu anlassen" (@dpa-Feedback): allgemeiner Reset der
+    // Engine, nicht nur des Schwarms (siehe SwarmPanel fuer dessen Notaus).
+    // In der Kopfzeile statt in einem einklappbaren Panel, weil er genau
+    // dann gebraucht wird, wenn der Ton schon weg ist - auffindbar muss er
+    // sein, ohne erst ein Panel aufzuklappen.
+    juce::TextButton engineResetButton;
+
     // Inhaltshöhen der vier Panels: was ihr resized() an Reihen und Reglern
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines
     // CollapsiblePanel setzen kann.

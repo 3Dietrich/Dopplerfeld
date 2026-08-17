@@ -674,6 +674,13 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
     s.now        = now;
     s.sourcePos  = set.lastPos;
     s.listener   = listener;
+    s.speedOfSound = medium.speedOfSound();
+
+    {
+        Vec3 p, v;
+        s.sourceSpeed = set.trajectory.sampleAt (std::min (now, set.trajectory.newestTime()), p, v)
+                        ? v.length() : 0.0;
+    }
 
     const double tNewest = std::min (now, set.trajectory.newestTime());
     const double tOldest = set.trajectory.oldestTime();
