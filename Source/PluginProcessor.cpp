@@ -30,6 +30,26 @@ constexpr const char* motionPlayingId = "motionWasPlaying";
 constexpr const char* sourceKindId  = "sourceKind";
 constexpr const char* samplePathId  = "samplePath";
 
+// Fester Anker für relative Sample-Pfade (@dpa 20260818: "relativ zum
+// Presets-Ordner!"). JUCE teilt getStateInformation()/setStateInformation()
+// nicht mit, in welche Datei der Host gerade schreibt bzw. aus welcher er
+// liest (weder die VST3/AU-Preset-Verwaltung noch "Save/Load State" der
+// Standalone-App geben den Pfad weiter) - ohne einen selbst definierten,
+// festen Ordner gäbe es also gar keinen Bezugspunkt für "relativ". Legt sich
+// beim ersten Zugriff selbst an; Presets+Samples, die hier drunterliegen,
+// bleiben beim Verschieben/Kopieren des ganzen Ordners portabel. Alles
+// außerhalb (auch der bisherige projekteigene presets/-Ordner) landet
+// weiterhin als absoluter Pfad im Preset - unverändert funktionsfähig, nur
+// eben ortsgebunden.
+juce::File presetsRootDirectory()
+{
+    auto dir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+                   .getChildFile ("Dopplerfeld")
+                   .getChildFile ("Presets");
+    dir.createDirectory();
+    return dir;
+}
+
 // Ein Frame sind drei double (x, y, z). Ausgeschrieben statt die Vec3-Struktur
 // roh zu kopieren: das Dateiformat soll nicht am Speicherlayout eines
 // C++-Typs hängen.
@@ -1313,7 +1333,19 @@ void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty (sourceKindId, static_cast<int> (currentSourceKind()), nullptr);
 
     if (samplePath.isNotEmpty())
-        state.setProperty (samplePathId, samplePath, nullptr);
+    {
+        const juce::File sampleFile (samplePath);
+        const juce::File presetsRoot = presetsRootDirectory();
+
+        // Liegt die Datei unter dem Presets-Anker, kommt der relative Pfad
+        // ins Preset (portabel), sonst wie bisher der absolute (siehe
+        // presetsRootDirectory()).
+        state.setProperty (samplePathId,
+                            sampleFile.isAChildOf (presetsRoot)
+                                ? sampleFile.getRelativePathFrom (presetsRoot)
+                                : samplePath,
+                            nullptr);
+    }
     else
         state.removeProperty (samplePathId, nullptr);
 
@@ -1385,7 +1417,14 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
     // Abbruch, das Preset lädt trotzdem.
     if (tree.hasProperty (samplePathId))
     {
-        const juce::File file (tree.getProperty (samplePathId).toString());
+        const juce::String stored = tree.getProperty (samplePathId).toString();
+
+        // Absoluter Pfad (alte Presets, oder Sample lag außerhalb des
+        // Presets-Ankers) wird direkt genommen, ein relativer gegen
+        // presetsRootDirectory() aufgelöst.
+        const juce::File file = juce::File::isAbsolutePath (stored)
+                                     ? juce::File (stored)
+                                     : presetsRootDirectory().getChildFile (stored);
 
         if (file.existsAsFile())
             loadSampleFile (file);
