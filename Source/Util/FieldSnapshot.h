@@ -94,4 +94,12 @@ struct FieldSnapshot
         double tiltRad    = 0.0;
     };
     std::array<WallInfo, maxWalls> walls {};
+
+    // Vorbeiflug-Wegvorschau (@dpa-Feedback), nur bei laufendem Vorbeiflug
+    // gueltig (flyByActive). Geschlossene Geometrie, keine Suche: die Bahn
+    // ist gerade, siehe FlyByGenerator::nearestPoint().
+    bool   flyByActive          = false;
+    Vec3   flyByPlannedEnd;       // Ende der geplanten Reststrecke
+    Vec3   flyByNearestPoint;     // Punkt der Bahn mit kuerzestem Abstand zu L
+    double flyByNearestDistance = 0.0;
 };

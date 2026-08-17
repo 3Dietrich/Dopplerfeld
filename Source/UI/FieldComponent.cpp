@@ -130,6 +130,7 @@ void FieldComponent::paint (juce::Graphics& g)
     drawWalls (g);
     drawWavefronts (g);
     drawTrail (g);
+    drawFlyByPreview (g);
     drawSource (g);
     drawListener (g);
 }
@@ -261,6 +262,40 @@ void FieldComponent::drawTrail (juce::Graphics& g) const
     g.setColour (juce::Colours::orange.withAlpha (0.6f));
     g.strokePath (path, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved,
                                                juce::PathStrokeType::rounded));
+}
+
+void FieldComponent::drawFlyByPreview (juce::Graphics& g) const
+{
+    if (! snapshot.flyByActive)
+        return;
+
+    // Geplante Reststrecke: aktuelle Position bis Streckenende, duenn und
+    // gestrichelt - anders als die Spur (durchgezogen, Vergangenheit).
+    const auto fromPx = worldToScreen (snapshot.sourcePos);
+    const auto toPx   = worldToScreen (snapshot.flyByPlannedEnd);
+
+    juce::Path path;
+    path.startNewSubPath (fromPx);
+    path.lineTo (toPx);
+
+    const float dashLengths[] { 4.0f, 4.0f };
+    juce::Path dashed;
+    juce::PathStrokeType (1.0f).createDashedStroke (dashed, path, dashLengths, 2);
+
+    g.setColour (juce::Colours::orange.withAlpha (0.35f));
+    g.fillPath (dashed);
+
+    // Punkt kuerzesten Abstands zu L, mit Zahl (@dpa: "kuerzsten Abstand des
+    // gesamten laufs zum L einzeichnen und angeben").
+    const auto nearestPx = worldToScreen (snapshot.flyByNearestPoint);
+
+    g.setColour (juce::Colours::orange.withAlpha (0.8f));
+    g.drawEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre (nearestPx), 1.5f);
+
+    g.setFont (11.0f);
+    g.drawText (formatMetres (snapshot.flyByNearestDistance) + " min",
+               (int) nearestPx.x + 6, (int) nearestPx.y - 14, 90, 12,
+               juce::Justification::left);
 }
 
 void FieldComponent::drawSource (juce::Graphics& g) const

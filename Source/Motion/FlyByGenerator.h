@@ -77,6 +77,18 @@ public:
     // Aktuelle Zielposition, ohne die Bahn weiterzudrehen.
     Vec3 currentPosition() const { return positionAt (travelled); }
 
+    // Ende der geplanten Bahn (@dpa: "voraussichtlichen Weg einzeichnen") -
+    // für die Restanzeige zusammen mit currentPosition().
+    Vec3 plannedEnd() const { return positionAt (2.0 * halfLength()); }
+
+    // Der Punkt auf der GESAMTEN Bahn mit dem kürzesten Abstand zum Hörer,
+    // geschlossene Formel statt Suche: die Bahn ist gerade und liegt per
+    // Konstruktion in konstantem Versatz zum Hörer (siehe positionAt()) -
+    // der naechste Punkt ist exakt die Mitte der Strecke, auf Hoererhoehe in
+    // Flugrichtung. @dpa: "jeweiligen kuerzsten Abstand des gesamten laufs".
+    Vec3   nearestPoint() const { return positionAt (halfLength()); }
+    double nearestDistanceMetres() const { return (nearestPoint() - listener).length(); }
+
 private:
     // Einheitsvektor der Flugrichtung.
     Vec3 direction() const;

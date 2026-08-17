@@ -121,6 +121,12 @@ private:
     void drawPerspectiveListener (juce::Graphics& g) const;
     void drawWavefronts (juce::Graphics& g) const;
     void drawTrail (juce::Graphics& g) const;
+
+    // Vorbeiflug-Wegvorschau (@dpa-Feedback): geplante Reststrecke + Punkt
+    // kuerzesten Abstands zu L. Nur Draufsicht - die Perspektive bekommt das
+    // spaeter, wenn's noetig wird (siehe ARCHITEKTUR.md).
+    void drawFlyByPreview (juce::Graphics& g) const;
+
     void drawSource (juce::Graphics& g) const;
     void drawListener (juce::Graphics& g) const;
 

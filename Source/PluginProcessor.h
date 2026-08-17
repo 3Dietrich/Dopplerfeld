@@ -87,7 +87,22 @@ public:
     //==================================================================
     // Schnittstelle zum Editor (alles Message-Thread).
 
-    void fillFieldSnapshot (FieldSnapshot& dest) const { dopplerEngine.fillSnapshot (dest); }
+    // Vorbeiflug-Wegvorschau kommt vom Generator, nicht von der Engine (der
+    // Generator ist Sache des Processors, siehe advanceMotion()) - deshalb
+    // hier nachgetragen statt in DopplerEngine::fillSnapshot() selbst.
+    void fillFieldSnapshot (FieldSnapshot& dest) const
+    {
+        dopplerEngine.fillSnapshot (dest);
+
+        dest.flyByActive = flyBy.isRunning();
+
+        if (dest.flyByActive)
+        {
+            dest.flyByPlannedEnd     = flyBy.plannedEnd();
+            dest.flyByNearestPoint   = flyBy.nearestPoint();
+            dest.flyByNearestDistance = flyBy.nearestDistanceMetres();
+        }
+    }
 
     // Aufnahme umschalten und Wiedergabe starten. Beide setzen nur ein
     // atomares Flag, das der Audiothread am Blockanfang abholt: eine volle

@@ -248,6 +248,9 @@ juce::String DopplerfeldEditor::statusText() const
         text << "   " << juce::String::formatted ("%7.1f", value) << " " << unit;
     }
 
+    // @dpa-Feedback: L-M-Abstand immer sichtbar, nicht nur bei Vorbeiflug.
+    text << "   L-M " << juce::String::formatted ("%7.1f", (snapshot.sourcePos - snapshot.listener.head).length()) << " m";
+
     // @dpa-Feedback: CPU-Echtzeit-Anzeige (Wanduhrzeit/Audiozeit, geglättet -
     // siehe cpuLoadPercent()). Über 100% färbt paint() die ganze Statuszeile
     // rot (siehe dort) - reiner Text reicht hier, kein eigener Meter nötig.
