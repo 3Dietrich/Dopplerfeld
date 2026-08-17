@@ -55,13 +55,31 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     }
     layout.add (floatParam (airTempC, "Air Temperature", { -20.0f, 40.0f, 0.1f }, 20.0f, "°C"));
 
+    // Höhe über dem Boden. Anders als x/y NICHT normiert, sondern in echten
+    // Metern: die Körpergröße eines Hörers ändert sich nicht, wenn man den
+    // Feldmaßstab von 100 m auf 10000 m stellt. Skew auf 10 m, weil sich die
+    // interessanten Höhen (Kopf, Fahrzeug, Dach) alle im einstelligen bis
+    // zweistelligen Meterbereich abspielen - oben bleibt trotzdem Platz für
+    // Flugzeuge, statt den Regler auf einen "vernünftigen" Wert zu deckeln.
+    auto heightRange = []
+    {
+        auto r = juce::NormalisableRange<float> (0.0f, 10000.0f);
+        r.setSkewForCentre (10.0f);
+        return r;
+    };
+
     // --- Quelle ---
     layout.add (floatParam (srcX, "Source X", unitRange(), 0.5f));
     layout.add (floatParam (srcY, "Source Y", unitRange(), 0.5f));
+    // Default 0 m: Autos und Motorräder - die häufigsten Szenen - fahren auf
+    // dem Boden, und genau dort liegt auch die Reflexionsebene.
+    layout.add (floatParam (srcZ, "Source Z", heightRange(), 0.0f, "m"));
 
     // --- Hörer ---
     layout.add (floatParam (lisX, "Listener X", unitRange(), 0.5f));
     layout.add (floatParam (lisY, "Listener Y", unitRange(), 0.5f));
+    // Default 1,75 m: Ohrhöhe eines stehenden Hörers.
+    layout.add (floatParam (lisZ, "Listener Z", heightRange(), 1.75f, "m"));
     layout.add (floatParam (lisYaw, "Listener Yaw", { -180.0f, 180.0f }, 0.0f, "°"));
     layout.add (floatParam (earSpacing, "Ear Spacing", { 0.10f, 0.25f, 0.001f }, 0.17f, "m"));
 

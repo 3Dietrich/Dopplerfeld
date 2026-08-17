@@ -13,12 +13,16 @@ namespace Params
     constexpr const char* airTempC    = "airTempC";      // vorbereitet, Phase 1 nicht in der UI
 
     // --- Quelle ---
+    // x/y sind auf die Feldfläche normiert (0..1), z ist die Höhe über dem
+    // Boden in echten Metern - sie hängt nicht am Feldmaßstab.
     constexpr const char* srcX = "srcX";
     constexpr const char* srcY = "srcY";
+    constexpr const char* srcZ = "srcZ";
 
     // --- Hörer ---
     constexpr const char* lisX        = "lisX";
     constexpr const char* lisY        = "lisY";
+    constexpr const char* lisZ        = "lisZ";
     constexpr const char* lisYaw      = "lisYaw";
     constexpr const char* earSpacing  = "earSpacing";
 

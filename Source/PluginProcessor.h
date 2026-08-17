@@ -160,7 +160,9 @@ private:
     void advanceMotion (int numSamples);
     void applyOutputStage (juce::AudioBuffer<float>& buffer);
 
-    Vec3 metresFromNormalised (double normX, double normY) const;
+    // x/y kommen normiert herein und werden mit dem Feldmaßstab multipliziert,
+    // z kommt bereits in Metern (siehe Params.cpp) und geht unverändert durch.
+    Vec3 metresFromNormalised (double normX, double normY, double zMetres) const;
 
     // Zeigt auf den Rohwert eines Parameters (Message-Thread schreibt, hier
     // wird pro Block gelesen). Gegenüber einem APVTS-Listener spart das die
@@ -176,9 +178,11 @@ private:
 
         std::atomic<float>* srcX = nullptr;
         std::atomic<float>* srcY = nullptr;
+        std::atomic<float>* srcZ = nullptr;
 
         std::atomic<float>* lisX       = nullptr;
         std::atomic<float>* lisY       = nullptr;
+        std::atomic<float>* lisZ       = nullptr;
         std::atomic<float>* lisYaw     = nullptr;
         std::atomic<float>* earSpacing = nullptr;
 

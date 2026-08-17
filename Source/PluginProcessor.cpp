@@ -136,9 +136,11 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.srcX = raw (Params::srcX);
     pp.srcY = raw (Params::srcY);
+    pp.srcZ = raw (Params::srcZ);
 
     pp.lisX       = raw (Params::lisX);
     pp.lisY       = raw (Params::lisY);
+    pp.lisZ       = raw (Params::lisZ);
     pp.lisYaw     = raw (Params::lisYaw);
     pp.earSpacing = raw (Params::earSpacing);
 
@@ -292,20 +294,25 @@ bool DopplerfeldProcessor::isBusesLayoutSupported (const BusesLayout& layouts) c
 //======================================================================
 // Parameter
 
-Vec3 DopplerfeldProcessor::metresFromNormalised (double normX, double normY) const
+Vec3 DopplerfeldProcessor::metresFromNormalised (double normX, double normY, double zMetres) const
 {
-    // z bleibt in Phase 1 null, wird aber mitgeführt (Plan 2.1).
+    // z ist eine echte dritte Achse (Höhe über dem Boden) und geht in Metern
+    // durch, während x/y am Feldmaßstab hängen. Ein Feldgrößenwechsel
+    // verschiebt deshalb die Höhen nicht - genau das ist gewollt, sonst würde
+    // ein größeres Feld den Hörer wachsen lassen.
     return { normX * fieldMetresValue,
              normY * fieldMetresValue * fieldAspect,
-             0.0 };
+             zMetres };
 }
 
 void DopplerfeldProcessor::applyParameters()
 {
     fieldMetresValue = (double) pp.fieldMetres->load();
 
-    sourceTargetMetres   = metresFromNormalised ((double) pp.srcX->load(), (double) pp.srcY->load());
-    listenerTargetMetres = metresFromNormalised ((double) pp.lisX->load(), (double) pp.lisY->load());
+    sourceTargetMetres   = metresFromNormalised ((double) pp.srcX->load(), (double) pp.srcY->load(),
+                                                 (double) pp.srcZ->load());
+    listenerTargetMetres = metresFromNormalised ((double) pp.lisX->load(), (double) pp.lisY->load(),
+                                                 (double) pp.lisZ->load());
 
     targetYawRadians         = juce::degreesToRadians ((double) pp.lisYaw->load());
     listenerState.earSpacing = (double) pp.earSpacing->load();

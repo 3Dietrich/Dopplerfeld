@@ -42,6 +42,15 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
                "Ausgangslautstaerke (dB). Der Pegel folgt 1/Abstand ohne Referenzdistanz - "
                "bei grossen Feldern ist das leise, hier laesst sich gegensteuern.");
 
+    setupKnob (srcZKnob,        apvts, Params::srcZ,            "Source Z",
+               "Hoehe der Quelle ueber dem Boden in Metern. 0 = auf dem Boden (Auto, "
+               "Motorrad), groessere Werte fuer Ueberflug o.ae. x/y stellt man mit der "
+               "Maus im Feld ein, die Hoehe nur hier.");
+    setupKnob (lisZKnob,        apvts, Params::lisZ,            "Listener Z",
+               "Ohrhoehe des Hoerers ueber dem Boden in Metern (Standard 1.75 = stehend). "
+               "Erst ein Hoehenunterschied zwischen Quelle und Hoerer macht die "
+               "Bodenreflexion hoerbar.");
+
     fadeAutoButton.setTooltip ("Ueberblendzeit bei Sprüngen automatisch aus der jeweiligen "
                                "Aenderung ableiten (Distanz/Klangfrequenz), statt eine feste "
                                "Zeit ('Fade Manual') zu benutzen.");
@@ -81,4 +90,14 @@ void FieldPanel::resized()
     // (ohne die Beschriftungszeile, die braucht das Meter nicht).
     knobRow.removeFromLeft (4);
     levelMeter.setBounds (knobRow.removeFromLeft (24));
+
+    // Zweite Reihe: die Geometrie-Achse z.
+    area.removeFromTop (6);
+
+    auto geoRow = area.removeFromTop (knobH);
+    for (auto* k : { &srcZKnob, &lisZKnob })
+    {
+        layoutKnob (*k, geoRow.removeFromLeft (knobW));
+        geoRow.removeFromLeft (4);
+    }
 }

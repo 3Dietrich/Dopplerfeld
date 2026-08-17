@@ -80,7 +80,7 @@ private:
     static constexpr int engineContentHeight = 608;
     static constexpr int sampleContentHeight = 220;
     static constexpr int motionContentHeight = 214;
-    static constexpr int fieldContentHeight  = 130;
+    static constexpr int fieldContentHeight  = 218;
 
     // Das Feld bleibt exakt 700x400 (Plan 3.13). Die Größe ist nicht nur
     // Optik: FieldComponent rechnet die Feldhöhe in Metern aus seinem

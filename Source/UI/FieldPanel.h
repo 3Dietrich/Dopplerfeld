@@ -43,6 +43,10 @@ private:
 
     Knob fieldMetresKnob, boomLimitKnob, airAbsorbKnob, fadeManualKnob, outputGainKnob;
 
+    // Höhe über dem Boden. x/y stellt man mit der Maus im Feld ein, für z gibt
+    // es dort keine Achse - deshalb sind das die einzigen Positionsregler.
+    Knob srcZKnob, lisZKnob;
+
     // Neben Output Gain: -6dB-Marke, Clip-Anzeige mit 500ms-Halt (@dpa).
     LevelMeter levelMeter;
 
