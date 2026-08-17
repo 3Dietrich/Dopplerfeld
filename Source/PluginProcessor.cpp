@@ -200,6 +200,12 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.nWaveOn   = raw (Params::nWaveOn);
     pp.nWaveSize = raw (Params::nWaveSize);
 
+    pp.cloneTotal  = raw (Params::cloneTotal);
+    pp.cloneReal   = raw (Params::cloneReal);
+    pp.cloneAuto   = raw (Params::cloneAuto);
+    pp.cloneSpread = raw (Params::cloneSpread);
+    pp.cloneLevel  = raw (Params::cloneLevel);
+
     pp.reflect2ndOn = raw (Params::reflect2ndOn);
     pp.bounceGain   = raw (Params::bounceGain);
 
@@ -259,6 +265,8 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     currentSampleRate = sampleRate;
 
     monoScratch.setSize (1, maxBlock, false, true, true);
+
+    cloneSpray.prepare (sampleRate, 2);
 
     engineGenerator.prepare (sampleRate, maxBlock);
     sampleSource.prepare (sampleRate, maxBlock);
@@ -466,6 +474,8 @@ void DopplerfeldProcessor::applyParameters()
     dopplerEngine.setSecondOrderEnabled (pp.reflect2ndOn->load() > 0.5f);
     dopplerEngine.setBounceGain ((double) pp.bounceGain->load());
 
+    applyCloneParameters();
+
     // Wände: nur die Ziele einsammeln, gefolgt wird ihnen in advanceMotion().
     for (int w = 0; w < DopplerEngine::maxWalls; ++w)
     {
@@ -502,8 +512,92 @@ void DopplerfeldProcessor::applyParameters()
     limiterEnabled = pp.limiterOn->load() > 0.5f;
 }
 
+void DopplerfeldProcessor::applyCloneParameters()
+{
+    const int  total      = (int) pp.cloneTotal->load();
+    const int  wantedReal = std::min (total, (int) pp.cloneReal->load());
+    const bool automatic  = pp.cloneAuto->load() > 0.5f;
+
+    if (! automatic)
+    {
+        effectiveRealClones = wantedReal;
+        cloneAutoHoldBlocks = 0;
+    }
+    else
+    {
+        // Automatik. Sie darf nur langsam und in beide Richtungen getrennt
+        // reagieren, sonst pendelt sie im Takt ihrer eigenen Wirkung: ein Klon
+        // weniger senkt die Last, die gesenkte Last holt ihn zurück, und das
+        // Ganze schwingt im Blockraster.
+        //
+        // Deshalb zwei verschiedene Schwellen (Hysterese) und eine Haltezeit,
+        // und deshalb kein PI-Regler: hier wird eine ganzzahlige Pfadanzahl
+        // gestellt, kein stetiger Wert.
+        const float load = cpuLoad.load (std::memory_order_relaxed);
+
+        effectiveRealClones = std::min (effectiveRealClones, wantedReal);
+
+        if (cloneAutoHoldBlocks > 0)
+        {
+            --cloneAutoHoldBlocks;
+        }
+        else if (load > 70.0f && effectiveRealClones > 0)
+        {
+            --effectiveRealClones;
+            cloneAutoHoldBlocks = autoDownHoldBlocks;
+        }
+        else if (load < 40.0f && effectiveRealClones < wantedReal)
+        {
+            ++effectiveRealClones;
+            cloneAutoHoldBlocks = autoUpHoldBlocks;
+        }
+    }
+
+    effectiveRealClones = juce::jlimit (0, std::min (total, DopplerEngine::maxRealClones),
+                                        effectiveRealClones);
+
+    const int cheap = std::max (0, total - effectiveRealClones);
+
+    dopplerEngine.setRealClones (effectiveRealClones, (double) pp.cloneSpread->load());
+
+    cloneSpray.setCount (cheap);
+    cloneSpray.setLevel ((double) pp.cloneLevel->load());
+
+    // Die billigen Klone stellen die Streuung in ZEIT dar, nicht im Raum: sie
+    // haben keine Geometrie. Umgerechnet wird deshalb über die
+    // Schallgeschwindigkeit - eine Streuung von drei Metern heißt knapp neun
+    // Millisekunden Laufzeitunterschied, also genau das, was ein echter Klon in
+    // dieser Entfernung auch hätte.
+    const double spreadMs = (double) pp.cloneSpread->load() / 343.2 * 1000.0;
+
+    cloneSpray.setSpreadMs (spreadMs);
+    cloneSpray.setJitterMs (std::min (4.0, 0.2 * spreadMs + 0.3));
+
+    activeRealClones.store (effectiveRealClones);
+    activeCheapClones.store (cheap);
+}
+
 void DopplerfeldProcessor::handlePendingRequests()
 {
+    if (panicRequest.exchange (false))
+    {
+        // Sofort, ohne auf die Parameter zu warten: das ist der Knopf für den
+        // Fall, dass die CPU-Anzeige oben steht und der Ton wegbleibt. Der
+        // Editor setzt die Parameter zusätzlich zurück, damit die Schalter
+        // zeigen, was passiert ist - aber die Wirkung darf nicht davon
+        // abhängen, dass der Message-Thread noch durchkommt.
+        dopplerEngine.disableAllReflections();
+
+        effectiveRealClones = 0;
+        cloneAutoHoldBlocks = 0;
+
+        cloneSpray.setCount (0);
+        cloneSpray.reset();
+
+        activeRealClones.store (0);
+        activeCheapClones.store (0);
+    }
+
     if (sourceSwitchRequest.exchange (false))
         sourceHolder.switchTo (useSampleSource.load() ? static_cast<SoundSource*> (&sampleSource)
                                                        : static_cast<SoundSource*> (&engineGenerator));
@@ -802,6 +896,11 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
         start += n;
     }
+
+    // Billige Klone: sie arbeiten auf dem fertigen Stereosignal und kosten
+    // keinen Loeseraufruf. Vor der Ausgangsstufe, damit Gain und Limiter auch
+    // fuer sie gelten.
+    cloneSpray.process (buffer);
 
     applyOutputStage (buffer);
 

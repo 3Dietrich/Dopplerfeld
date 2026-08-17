@@ -10,7 +10,8 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
       samplePanel (p.apvts),
       motionPanel (p.apvts),
       fieldPanel  (p.apvts),
-      wallPanel   (p.apvts)
+      wallPanel   (p.apvts),
+      swarmPanel  (p.apvts)
 {
     addAndMakeVisible (field);
 
@@ -39,6 +40,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     motionPanelBox.setContent (&motionPanel);
     fieldPanelBox.setContent (&fieldPanel);
     wallPanelBox.setContent (&wallPanel);
+    swarmPanelBox.setContent (&swarmPanel);
 
     // Motor aufgeklappt (die Default-Quelle), der Rest zugeklappt - sonst
     // steht die Spalte beim Öffnen sofort voll.
@@ -46,8 +48,10 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     motionPanelBox.setExpanded (false);
     fieldPanelBox.setExpanded (true);
     wallPanelBox.setExpanded (false);
+    swarmPanelBox.setExpanded (false);
 
-    for (auto* box : { &enginePanelBox, &samplePanelBox, &motionPanelBox, &fieldPanelBox, &wallPanelBox })
+    for (auto* box : { &enginePanelBox, &samplePanelBox, &motionPanelBox, &fieldPanelBox,
+                       &wallPanelBox, &swarmPanelBox })
     {
         box->onExpandedChanged = [this] { layoutPanels(); };
         panelHolder.addAndMakeVisible (box);
@@ -62,16 +66,23 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         dopplerfeldProcessor.loadSampleFile (file);
     };
 
-    // Notaus: zurück auf die minimale sichere Konfiguration - nur noch der
-    // Direktpfad pro Ohr. Bewusst über die Parameter und nicht über einen
-    // Direktgriff in die Engine: so sieht man am Schalter, was passiert ist,
-    // der Host bekommt es mit, und es steht im gespeicherten Zustand.
-    wallPanel.onPanic = [this]
+    // Notaus: zurück auf die minimale sichere Konfiguration - nur der
+    // Direktpfad pro Ohr, keine Reflexionen, keine Klone.
+    //
+    // Zwei Wege, absichtlich beide: der Processor schaltet im Audiothread
+    // sofort ab (das ist der Knopf für den Fall, dass es gerade klemmt und der
+    // Message-Thread nicht durchkommt), und zusätzlich werden die Parameter
+    // zurückgesetzt, damit die Schalter zeigen, was passiert ist, der Host es
+    // mitbekommt und es im gespeicherten Zustand steht.
+    swarmPanel.onPanic = [this]
     {
+        dopplerfeldProcessor.panicToMinimal();
+
         setParameter (Params::groundReflectionOn, 0.0);
         setParameter (Params::wall1On, 0.0);
         setParameter (Params::wall2On, 0.0);
         setParameter (Params::reflect2ndOn, 0.0);
+        setParameter (Params::cloneTotal, 0.0);
     };
 
     motionPanel.onFlyClicked = [this]
@@ -133,6 +144,10 @@ void DopplerfeldEditor::timerCallback()
                                                                            : "Quelle: Motor");
     motionPanel.setPlaying (dopplerfeldProcessor.isPlayingMotion());
     motionPanel.setFlying (dopplerfeldProcessor.isFlyingBy());
+
+    swarmPanel.setLoad (dopplerfeldProcessor.cpuLoadPercent(),
+                        dopplerfeldProcessor.realCloneCount(),
+                        dopplerfeldProcessor.cheapCloneCount());
 
     // 30Hz-Timer = ~33ms zwischen zwei Aufrufen (siehe startTimerHz weiter
     // unten) - fest verdrahtet statt gemessen, das Levelmeter braucht nur
@@ -268,7 +283,8 @@ void DopplerfeldEditor::layoutPanels()
         { &samplePanelBox, sampleContentHeight },
         { &motionPanelBox, motionContentHeight },
         { &fieldPanelBox,  fieldContentHeight  },
-        { &wallPanelBox,   wallContentHeight   }
+        { &wallPanelBox,   wallContentHeight   },
+        { &swarmPanelBox,  swarmContentHeight  }
     };
 
     int y = 0;

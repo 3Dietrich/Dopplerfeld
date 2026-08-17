@@ -870,6 +870,134 @@ int main()
     }
 
     //==================================================================
+    // 1i. Klone ("Schrot"-Muster). Vier Dinge sind hier zu zeigen, und die
+    //     letzten zwei sind die wichtigen:
+    //
+    //     a) Echte Klone verändern den Ausgang und kosten Löserlast, und zwar
+    //        linear mit ihrer Anzahl - das ist die Zusicherung, auf die sich der
+    //        Regler beruft.
+    //     b) Billige Klone verändern den Ausgang, kosten aber NULL Löserlast.
+    //        Wenn dort auch nur eine Auswertung mehr anfällt, ist die
+    //        Nachbildung keine Nachbildung, sondern ein zweiter Löser.
+    //     c) Der Notaus muss die Last wirklich auf den Direktpfad zurückholen.
+    //     d) Nichts davon darf entgleisen.
+    {
+        auto run = [&] (int total, int real, bool panicHalfway, Stats& stats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 200.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcX, 0.05f);
+            setParam (proc, Params::srcY, 0.5f + (float) (10.0 / (200.0 * DopplerfeldProcessor::fieldAspect)));
+            setParam (proc, Params::srcZ, 5.0f);
+
+            setParam (proc, Params::cloneTotal,  (float) total);
+            setParam (proc, Params::cloneReal,   (float) real);
+            setParam (proc, Params::cloneAuto,   0.0f);   // Automatik hier aus
+            setParam (proc, Params::cloneSpread, 4.0f);
+            setParam (proc, Params::cloneLevel,  0.5f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            render (proc, buffer, 3.0, stats, [&] (double t)
+            {
+                setParam (proc, Params::srcX, (float) (0.05 + 30.0 * t / 200.0));
+
+                if (panicHalfway && t >= 1.5)
+                    proc.panicToMinimal();
+            });
+        };
+
+        Stats none, realOnly, cheapOnly, panicked;
+
+        run (0,  0,  false, none);
+        run (10, 10, false, realOnly);
+        run (10, 0,  false, cheapOnly);
+        run (10, 10, true,  panicked);
+
+        none.report      ("Ohne Klone");
+        realOnly.report  ("10 echte Klone");
+        cheapOnly.report ("10 billige Klone");
+        panicked.report  ("10 echte + Notaus");
+
+        auto perBlock = [] (const Stats& s)
+        {
+            return s.blocks > 0 ? (double) s.solverEvals / s.blocks : 0.0;
+        };
+
+        auto rmsOf = [] (const Stats& s)
+        {
+            return std::sqrt (s.sumSquares[0] / ((double) s.samples * 0.5));
+        };
+
+        const double evalsNone  = perBlock (none);
+        const double evalsReal  = perBlock (realOnly);
+        const double evalsCheap = perBlock (cheapOnly);
+        const double evalsPanic = perBlock (panicked);
+
+        std::printf ("%-22s Löser/Block: ohne %.0f, echt %.0f (%.1fx), billig %.0f, "
+                     "nach Notaus %.0f\n",
+                     "", evalsNone, evalsReal,
+                     evalsNone > 0.0 ? evalsReal / evalsNone : 0.0,
+                     evalsCheap, evalsPanic);
+
+        const long long nonFinite = realOnly.nonFinite + cheapOnly.nonFinite + panicked.nonFinite;
+
+        if (nonFinite > 0)
+        {
+            std::printf ("FEHLGESCHLAGEN: NaN/Inf mit Klonen\n");
+            failed = true;
+        }
+
+        // a) Zehn echte Klone sind elf Quellen, also rund elffache Löserlast.
+        //    Grosszügige Schranken: die Klone liegen an anderen Stellen und
+        //    brauchen dort nicht genau gleich viele Schritte.
+        if (evalsNone <= 0.0 || evalsReal < 6.0 * evalsNone || evalsReal > 16.0 * evalsNone)
+        {
+            std::printf ("FEHLGESCHLAGEN: zehn echte Klone kosten %.1fx statt der "
+                         "erwarteten ~11x\n", evalsNone > 0.0 ? evalsReal / evalsNone : 0.0);
+            failed = true;
+        }
+
+        if (std::abs (rmsOf (realOnly) - rmsOf (none)) <= 1.0e-6 * rmsOf (none))
+        {
+            std::printf ("FEHLGESCHLAGEN: echte Klone ändern den Ausgang nicht\n");
+            failed = true;
+        }
+
+        // b) Die billige Nachbildung darf KEINE einzige Löserauswertung
+        //    zusätzlich verursachen - sonst ist sie keine.
+        if (std::abs (evalsCheap - evalsNone) > 0.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: billige Klone kosten Löserlast (%.0f statt %.0f "
+                         "pro Block) - sie sind keine Nachbildung\n", evalsCheap, evalsNone);
+            failed = true;
+        }
+
+        if (std::abs (rmsOf (cheapOnly) - rmsOf (none)) <= 1.0e-6 * rmsOf (none))
+        {
+            std::printf ("FEHLGESCHLAGEN: billige Klone ändern den Ausgang nicht\n");
+            failed = true;
+        }
+
+        // c) Der Notaus muss wirken. Über den ganzen Lauf gemittelt liegt die
+        //    Last danach zwischen "voll" und "ohne" - geprüft wird deshalb, dass
+        //    sie deutlich unter dem vollen Fall liegt.
+        if (evalsPanic >= 0.75 * evalsReal)
+        {
+            std::printf ("FEHLGESCHLAGEN: Notaus senkt die Löserlast nicht "
+                         "(%.0f gegen %.0f pro Block)\n", evalsPanic, evalsReal);
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 2. Extremfall: größtes Feld, Überschallflug quer hindurch, Umkehr,
     //    Feldgrößenwechsel.
     {

@@ -17,6 +17,7 @@
 #include "Sources/EngineGenerator.h"
 #include "Sources/SampleSource.h"
 #include "Sources/SoundSourceHolder.h"
+#include "Util/CloneSpray.h"
 #include "Util/FieldSnapshot.h"
 
 #include <atomic>
@@ -99,6 +100,18 @@ public:
     void triggerFlyBy() { flyTriggerRequest.store (true); }
     void stopFlyBy()    { flyStopRequest.store (true); }
     bool isFlyingBy() const { return flyByActive.load(); }
+
+    // Was gerade tatsaechlich gerechnet wird - bei eingeschalteter Automatik
+    // weicht die Zahl der echten Klone vom Regler ab, und genau das soll man
+    // sehen koennen (@dpa: kein stiller Deckel).
+    int realCloneCount()  const { return activeRealClones.load(); }
+    int cheapCloneCount() const { return activeCheapClones.load(); }
+
+    // Notaus: zurueck auf die minimale sichere Konfiguration - nur der
+    // Direktpfad pro Ohr, keine Reflexionen, keine Klone. Greift im
+    // Audiothread beim naechsten Block; der Editor setzt zusaetzlich die
+    // Parameter zurueck, damit die Schalter zeigen, was passiert ist.
+    void panicToMinimal() { panicRequest.store (true); }
     int  recordedFrameCount() const { return recordedFrames.load(); }
 
     // Linearer Spitzenwert seit dem letzten Abruf (Levelmeter, @dpa-Feedback).
@@ -170,6 +183,17 @@ private:
 
     void applyParameters();
     void handlePendingRequests();
+
+    // Klone: Reglerstand einlesen, Automatik nachfuehren, echte und billige
+    // Anzahl setzen. Nur aus applyParameters() (Audiothread).
+    void applyCloneParameters();
+
+    // Haltezeiten der Klon-Automatik in Bloecken (bei 48 kHz / 512 Samples rund
+    // 10,7 ms je Block). Runter darf sie schnell reagieren - da geht es darum,
+    // Aussetzer zu vermeiden - hoch nur zoegerlich, damit sie nicht sofort
+    // wieder zurueckholt, was sie gerade abgeworfen hat.
+    static constexpr int autoDownHoldBlocks = 20;    // ~0,2 s
+    static constexpr int autoUpHoldBlocks   = 180;   // ~2 s
 
     // Setzt den Vorbeiflug auf: Generator, Glätter-Vorwärmung und die zur
     // Startvariante passende Trajektorien-Vorgeschichte. Nur aus dem
@@ -259,6 +283,12 @@ private:
         std::atomic<float>* nWaveOn   = nullptr;
         std::atomic<float>* nWaveSize  = nullptr;
 
+        std::atomic<float>* cloneTotal  = nullptr;
+        std::atomic<float>* cloneReal   = nullptr;
+        std::atomic<float>* cloneAuto   = nullptr;
+        std::atomic<float>* cloneSpread = nullptr;
+        std::atomic<float>* cloneLevel  = nullptr;
+
         std::atomic<float>* reflect2ndOn = nullptr;
         std::atomic<float>* bounceGain   = nullptr;
 
@@ -278,6 +308,10 @@ private:
     SampleSource      sampleSource;
     SoundSourceHolder sourceHolder;
     DopplerEngine     dopplerEngine;
+
+    // Billige Nachbildung der Klone, die keine eigene Loeserphysik bekommen.
+    // Sitzt hinter der Engine und vor der Ausgangsstufe.
+    CloneSpray cloneSpray;
 
     SmootherSet sourceSmoothers;
     SmootherSet listenerSmoothers;
@@ -321,6 +355,16 @@ private:
     bool   lastNWaveOn         = false;
     double lastNWaveSize       = 15.0;
 
+    // Wie viele Klone gerade WIRKLICH mit Loeserphysik laufen. Bei
+    // eingeschalteter Automatik weicht das vom Regler ab, deshalb ein eigener
+    // Wert - und deshalb wird er auch angezeigt, statt still zu wirken.
+    int    effectiveRealClones = 0;
+
+    // Zaehler fuer die Automatik, in Bloecken. Sie darf nur langsam und
+    // getrennt in beide Richtungen reagieren, sonst pendelt sie im Takt der
+    // eigenen Wirkung.
+    int    cloneAutoHoldBlocks = 0;
+
     // Geglättete Wandlage. Eine Wand ist eine Spiegelebene; springt sie, dann
     // springt der gespiegelte Empfänger und damit die Laufzeit des ganzen
     // Reflexionspfades - man hörte einen Klick. Der Regler schreibt deshalb
@@ -357,6 +401,7 @@ private:
     std::atomic<bool> sourceSwitchRequest { false };
     std::atomic<bool> flyTriggerRequest   { false };
     std::atomic<bool> flyStopRequest      { false };
+    std::atomic<bool> panicRequest        { false };
 
     // Audiothread -> Message-Thread, nur zur Anzeige.
     std::atomic<bool>  recordingActive { false };
@@ -368,6 +413,8 @@ private:
     std::atomic<float> cpuLoadSource  { 0.0f };   // siehe cpuLoadSourcePercent()
     std::atomic<float> cpuLoadPhysics { 0.0f };   // siehe cpuLoadPhysicsPercent()
     std::atomic<int>  recordedFrames  { 0 };
+    std::atomic<int>  activeRealClones  { 0 };
+    std::atomic<int>  activeCheapClones { 0 };
 
     std::atomic<bool> useSampleSource { false };
 

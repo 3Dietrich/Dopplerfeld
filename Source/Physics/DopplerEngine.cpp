@@ -170,6 +170,15 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
             if (a != b)
                 addPair (a, b);
 
+    // Klone: je ein Pfadpaar, nur Direktschall. Sie liegen wie alles andere
+    // dauerhaft bereit und werden übersprungen, solange sie nicht eingeschaltet
+    // sind.
+    for (int k = 0; k < maxRealClones; ++k)
+    {
+        recipes.push_back ({ 0, -1, -1, k });
+        recipes.push_back ({ 1, -1, -1, k });
+    }
+
     // Der Direktschall ist die Fläche ohne Fläche: keine Spiegelung, keine
     // Dämpfung, nie abschaltbar.
     surfaces[0] = Surface{};
@@ -445,6 +454,30 @@ void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres)
             p.setNWave (shouldBeEnabled, sizeMetres);
 }
 
+Vec3 DopplerEngine::cloneOffset (int index, double spreadMetres)
+{
+    // Drei zueinander irrationale Winkelschritte (goldener Schnitt und
+    // Verwandte) verteilen die Klone gleichmäßig, ohne sich je zu wiederholen
+    // und ohne dass ein Zufallsgenerator im Spiel wäre. Der Betrag wächst mit
+    // der Wurzel des Index, damit die Punkte flächig streuen statt sich auf
+    // einem Ring zu drängen.
+    const double u = (double) (index + 1);
+
+    const double a1 = u * 2.39996322972865332;    // goldener Winkel
+    const double a2 = u * 1.89654;
+    const double r  = spreadMetres * std::sqrt (u / (double) maxRealClones);
+
+    return { r * std::cos (a1),
+             r * std::sin (a1),
+             r * 0.35 * std::sin (a2) };
+}
+
+void DopplerEngine::setRealClones (int count, double spreadMetres)
+{
+    realClones  = std::min (maxRealClones, std::max (0, count));
+    cloneSpread = std::max (0.0, spreadMetres);
+}
+
 void DopplerEngine::setSecondOrderEnabled (bool shouldBeEnabled)
 {
     secondOrderOn = shouldBeEnabled;
@@ -467,10 +500,14 @@ void DopplerEngine::disableAllReflections()
         surfaces[i].enabled = false;
 
     secondOrderOn = false;
+    realClones    = 0;
 }
 
 bool DopplerEngine::recipeEnabled (const PathRecipe& r) const
 {
+    if (r.clone >= 0)
+        return r.clone < realClones;
+
     switch (r.order())
     {
         case 0:  return true;   // Direktschall, immer
@@ -483,6 +520,16 @@ bool DopplerEngine::recipeEnabled (const PathRecipe& r) const
 
 PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
 {
+    if (r.clone >= 0)
+    {
+        // Quelle um s verschieben == Empfänger um -s verschieben. Die
+        // Abbildung ist deshalb eine reine Verschiebung, die lineare Matrix
+        // bleibt die Einheitsmatrix.
+        PathTransform t;
+        t.offset = -cloneOffset (r.clone, cloneSpread);
+        return t;
+    }
+
     if (r.order() == 0)
         return PathTransform{};
 
@@ -501,6 +548,9 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
 
 double DopplerEngine::recipeDamping (const PathRecipe& r) const
 {
+    if (r.clone >= 0)
+        return 0.0;   // Klone laufen nur über den Direktschall
+
     if (r.order() == 0)
         return 0.0;
 
@@ -695,6 +745,11 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         if (! recipeEnabled (recipe))
             continue;
 
+        // Klone einzeln aufzulisten würde die Anzeige fluten; sie stehen als
+        // Zahl in s.realCloneCount.
+        if (recipe.clone >= 0)
+            continue;
+
         auto& info = s.paths[(size_t) s.pathCount];
 
         info.surface        = std::max (0, recipe.first);
@@ -706,6 +761,8 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
 
         ++s.pathCount;
     }
+
+    s.realCloneCount = realClones;
 
     for (int w = 0; w < maxWalls && w < FieldSnapshot::maxWalls; ++w)
     {

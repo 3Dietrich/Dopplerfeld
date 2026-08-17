@@ -69,6 +69,12 @@ struct FieldSnapshot
     std::array<PathInfo, maxPaths> paths {};
     int pathCount = 0;
 
+    // Klone werden NICHT einzeln aufgelistet - bei zwanzig Stueck waere die
+    // Liste unbrauchbar und die Werte saehen ohnehin fast gleich aus. Was
+    // zaehlt, ist wie viele gerade gerechnet werden.
+    int realCloneCount  = 0;
+    int cheapCloneCount = 0;
+
     // Lage der Wände, damit die Feldanzeige sie zeichnen kann. Die Wand ist
     // eine unendliche Ebene; in der Draufsicht ist sie eine Gerade durch
     // anchor mit Richtung (cos azimuth, sin azimuth). Die Neigung ändert daran

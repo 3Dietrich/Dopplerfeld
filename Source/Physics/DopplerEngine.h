@@ -138,6 +138,25 @@ public:
     void setSecondOrderEnabled (bool shouldBeEnabled);
     void setBounceGain (double gain01);
 
+    // Klone mit voller Löserphysik ("Schrot"-Muster). Ein Klon ist eine zweite
+    // Quelle, deren Route um einen kleinen festen Betrag von der echten
+    // abweicht.
+    //
+    // Genau deshalb braucht er weder eine eigene Trajektorie noch einen
+    // eigenen Signalpuffer: eine um s verschobene QUELLE ist dasselbe wie ein
+    // um -s verschobener EMPFÄNGER, und Empfänger verschieben ist genau das,
+    // was PathTransform ohnehin tut. Ein Klon kostet damit exakt ein Pfadpaar -
+    // nicht mehr, aber auch nicht weniger, und das ist der Grund für den
+    // Regler: die Löserlast wächst linear mit der Klonzahl.
+    //
+    // Klone laufen nur über den Direktschall. Sie zusätzlich über alle Flächen
+    // zu spiegeln wäre dieselbe Rechnung noch einmal mal vier und stünde in
+    // keinem Verhältnis zu dem, was man davon hört.
+    static constexpr int maxRealClones = 20;
+
+    void setRealClones (int count, double spreadMetres);
+    int  realCloneCount() const { return realClones; }
+
     // Alles außer dem Direktschall aus - die minimale sichere Konfiguration.
     void disableAllReflections();
 
@@ -217,8 +236,17 @@ private:
         int first  = -1;
         int second = -1;
 
+        // >= 0: dieser Weg gehört einem Klon, nicht der echten Quelle.
+        int clone  = -1;
+
         int order() const { return (first < 0 ? 0 : (second < 0 ? 1 : 2)); }
     };
+
+    // Fester Versatz eines Klons in Metern. Deterministisch aus dem Index
+    // gebildet, nicht gewürfelt: derselbe Regelweg muss zweimal dasselbe
+    // ergeben, sonst klingt jedes Laden anders und kein Vergleich zweier
+    // Durchläufe ist möglich.
+    static Vec3 cloneOffset (int index, double spreadMetres);
 
     struct PathSet
     {
@@ -282,6 +310,9 @@ private:
 
     bool   secondOrderOn = false;
     double bounceGain    = 0.6;
+
+    int    realClones  = 0;
+    double cloneSpread = 3.0;
 
     SoundSource* source = nullptr;
 

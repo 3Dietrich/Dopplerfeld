@@ -83,13 +83,6 @@ WallPanel::WallPanel (juce::AudioProcessorValueTreeState& apvts)
                "Gleichstromverstaerkung 1 und nimmt nur Hoehen, keinen Pegel. Kleinere "
                "Werte = die zweite Reflexion tritt weiter zurueck.");
 
-    panicButton.setTooltip (
-        "Notaus: schaltet Bodenreflexion und alle Waende auf einen Schlag ab und faellt "
-        "damit auf die minimale sichere Konfiguration zurueck - nur noch der Direktpfad "
-        "pro Ohr. Gedacht fuer den Fall, dass die CPU-Anzeige hochgeht und der Ton "
-        "wegbleibt: dann muss ein Weg zurueck da sein, ohne das Plugin neu zu laden.");
-    panicButton.onClick = [this] { if (onPanic) onPanic(); };
-    addAndMakeVisible (panicButton);
 }
 
 void WallPanel::resized()
@@ -124,7 +117,4 @@ void WallPanel::resized()
 
     auto gainRow = area.removeFromTop (knobH);
     layoutKnob (bounceGainKnob, gainRow.removeFromLeft (knobW));
-
-    area.removeFromTop (8);
-    panicButton.setBounds (area.removeFromTop (28).removeFromLeft (200));
 }

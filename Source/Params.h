@@ -132,6 +132,16 @@ namespace Params
     constexpr const char* nWaveOn   = "nWaveOn";
     constexpr const char* nWaveSize = "nWaveSize";
 
+    // "Schrot"-Muster: Klone der Quelle. cloneTotal ist die Gesamtzahl,
+    // cloneReal davon die mit voller Löserphysik - der Rest läuft über die
+    // billige Nachbildung (CloneSpray). cloneAuto zieht cloneReal bei hoher
+    // CPU-Last selbsttätig zurück.
+    constexpr const char* cloneTotal  = "cloneTotal";
+    constexpr const char* cloneReal   = "cloneReal";
+    constexpr const char* cloneAuto   = "cloneAuto";
+    constexpr const char* cloneSpread = "cloneSpread";
+    constexpr const char* cloneLevel  = "cloneLevel";
+
     // --- Crossfade ---
     constexpr const char* fadeAuto     = "fadeAuto";
     constexpr const char* fadeManualMs = "fadeManualMs";

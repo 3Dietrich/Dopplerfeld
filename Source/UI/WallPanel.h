@@ -21,10 +21,6 @@ public:
 
     void resized() override;
 
-    // Der Notaus gehört nicht zu einem Parameter, sondern schaltet mehrere auf
-    // einmal zurück - deshalb ein Rückruf statt eines Attachments.
-    std::function<void()> onPanic;
-
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
@@ -60,7 +56,6 @@ private:
     std::unique_ptr<ButtonAttachment> secondOrderAttachment;
     Knob bounceGainKnob;
 
-    juce::TextButton panicButton { "Alle Reflexionen aus" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WallPanel)
 };

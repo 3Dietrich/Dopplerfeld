@@ -241,6 +241,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (nWaveSize, "N-Wave Size", range, 15.0f, "m"));
     }
 
+    // --- Klone ("Schrot") ---
+    //
+    // Zwei getrennte Zahlen statt einer: die Gesamtzahl bestimmt, wie dicht
+    // der Schwarm klingt, und davon unabhaengig legt cloneReal fest, wie viele
+    // davon echte Loeserphysik bekommen. @dpa will sehen, was er sich
+    // einkauft, statt einen stillen Deckel zu bekommen - deshalb ist beides
+    // von Hand einstellbar und die Automatik nur ein Angebot.
+    layout.add (std::make_unique<juce::AudioParameterInt> (
+        juce::ParameterID { cloneTotal, 1 }, "Clones", 0, 20, 0));
+    layout.add (std::make_unique<juce::AudioParameterInt> (
+        juce::ParameterID { cloneReal, 1 }, "Clones Real", 0, 20, 2));
+    layout.add (boolParam (cloneAuto, "Clones Auto", false));
+    {
+        // Streuung der Klon-Routen in Metern. Klein gemeint ("die Route weicht
+        // um sehr kleine Betraege ab"), nach oben trotzdem offen.
+        auto range = juce::NormalisableRange<float> (0.0f, 200.0f);
+        range.setSkewForCentre (3.0f);
+        layout.add (floatParam (cloneSpread, "Clone Spread", range, 3.0f, "m"));
+    }
+    layout.add (floatParam (cloneLevel, "Clone Level", unitRange(), 0.5f));
+
     // --- Crossfade ---
     layout.add (boolParam (fadeAuto, "Fade Auto", true));
     layout.add (floatParam (fadeManualMs, "Fade Manual", { 5.0f, 500.0f, 0.1f }, 50.0f, "ms"));

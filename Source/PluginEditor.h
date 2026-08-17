@@ -8,6 +8,7 @@
 #include "UI/FieldPanel.h"
 #include "UI/MotionPanel.h"
 #include "UI/SamplePanel.h"
+#include "UI/SwarmPanel.h"
 #include "UI/WallPanel.h"
 #include "UI/ToggleableTooltipWindow.h"
 
@@ -60,12 +61,14 @@ private:
     CollapsiblePanel motionPanelBox { "Bewegung" };
     CollapsiblePanel fieldPanelBox  { "Feld / Physik / Ausgang" };
     CollapsiblePanel wallPanelBox   { "Reflexionen / Waende" };
+    CollapsiblePanel swarmPanelBox  { "Schwarm / Klone" };
 
     EnginePanel enginePanel;
     SamplePanel samplePanel;
     MotionPanel motionPanel;
     FieldPanel  fieldPanel;
     WallPanel   wallPanel;
+    SwarmPanel  swarmPanel;
 
     // Quellwahl ist kein Parameter (siehe DopplerfeldProcessor), deshalb ein
     // gewöhnlicher Knopf statt eines Attachments.
@@ -84,7 +87,8 @@ private:
     static constexpr int sampleContentHeight = 220;
     static constexpr int motionContentHeight = 384;
     static constexpr int fieldContentHeight  = 218;
-    static constexpr int wallContentHeight   = 396;
+    static constexpr int wallContentHeight   = 360;
+    static constexpr int swarmContentHeight  = 226;
 
     // Das Feld bleibt exakt 700x400 (Plan 3.13). Die Größe ist nicht nur
     // Optik: FieldComponent rechnet die Feldhöhe in Metern aus seinem
