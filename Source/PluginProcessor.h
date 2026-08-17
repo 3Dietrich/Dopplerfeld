@@ -16,6 +16,7 @@
 #include "Physics/Vec3.h"
 #include "Sources/EngineGenerator.h"
 #include "Sources/SampleSource.h"
+#include "Sources/AudioInSource.h"
 #include "Sources/SoundSourceHolder.h"
 #include "Util/CloneSpray.h"
 #include "Util/FieldSnapshot.h"
@@ -180,11 +181,13 @@ public:
     // schaltet bei Erfolg weich auf die Sample-Quelle um.
     bool loadSampleFile (const juce::File& file);
 
-    // Quellwahl Motor <-> Sample. Bewusst kein APVTS-Parameter: Plan 3.11
-    // führt keinen auf, und der geladene Sample-Pfad gehört ebenso wenig zum
-    // gespeicherten Zustand (Plan Abschnitt 7).
-    void selectSampleSource (bool shouldUseSample);
-    bool isUsingSampleSource() const { return useSampleSource.load(); }
+    // Quellwahl Motor <-> Sample <-> Audio In (@dpa-Feedback: dritte Quelle).
+    // Bewusst kein APVTS-Parameter: Plan 3.11 führt keinen auf, und der
+    // geladene Sample-Pfad gehört ebenso wenig zum gespeicherten Zustand
+    // (Plan Abschnitt 7).
+    enum class SourceKind { Motor, Sample, AudioIn };
+    void selectSourceKind (SourceKind kind);
+    SourceKind currentSourceKind() const { return static_cast<SourceKind> (sourceKindSelected.load()); }
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -239,6 +242,11 @@ private:
     void startFlyBy();
     void advanceMotion (int numSamples);
     void applyOutputStage (juce::AudioBuffer<float>& buffer);
+
+    // Rohzeiger auf die zur SourceKind gehoerende SoundSource - ein Ort
+    // statt derselben Fallunterscheidung in prepareToPlay() UND
+    // handlePendingRequests() (sourceSwitchRequest).
+    SoundSource* sourceForKind (SourceKind kind);
 
     // x/y kommen normiert herein und werden mit dem Feldmaßstab multipliziert,
     // z kommt bereits in Metern (siehe Params.cpp) und geht unverändert durch.
@@ -347,6 +355,7 @@ private:
 
     EngineGenerator   engineGenerator;
     SampleSource      sampleSource;
+    AudioInSource     audioInSource;
     SoundSourceHolder sourceHolder;
     DopplerEngine     dopplerEngine;
 
@@ -477,7 +486,10 @@ private:
     std::atomic<int>  activeRealClones  { 0 };
     std::atomic<int>  activeCheapClones { 0 };
 
-    std::atomic<bool> useSampleSource { false };
+    // Werte aus SourceKind, atomar statt des Enums selbst (std::atomic<enum
+    // class> ginge zwar auch, int ist hier aber schon ueberall sonst der
+    // Zustandstyp fuer sowas in dieser Datei).
+    std::atomic<int> sourceKindSelected { 0 };   // SourceKind::Motor
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DopplerfeldProcessor)
 };

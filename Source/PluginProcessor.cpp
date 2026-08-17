@@ -145,7 +145,9 @@ void DopplerfeldProcessor::SmootherSet::applyParameters (double tauSeconds, doub
 // Aufbau
 
 DopplerfeldProcessor::DopplerfeldProcessor()
-    : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+    : AudioProcessor (BusesProperties()
+                          .withInput  ("Input",  juce::AudioChannelSet::mono(), true)
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMETERS", Params::createParameterLayout())
 {
     pp.fieldMetres = raw (Params::fieldMetres);
@@ -269,6 +271,17 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     dopplerEngine.setSource (&sourceHolder);
 }
 
+SoundSource* DopplerfeldProcessor::sourceForKind (SourceKind kind)
+{
+    switch (kind)
+    {
+        case SourceKind::Sample:  return &sampleSource;
+        case SourceKind::AudioIn: return &audioInSource;
+        case SourceKind::Motor:
+        default:                  return &engineGenerator;
+    }
+}
+
 std::atomic<float>* DopplerfeldProcessor::raw (const char* paramID)
 {
     auto* value = apvts.getRawParameterValue (paramID);
@@ -295,9 +308,9 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
 
     engineGenerator.prepare (sampleRate, maxBlock);
     sampleSource.prepare (sampleRate, maxBlock);
+    audioInSource.prepare (sampleRate, maxBlock);
 
-    sourceHolder.setSource (useSampleSource.load() ? static_cast<SoundSource*> (&sampleSource)
-                                                   : static_cast<SoundSource*> (&engineGenerator));
+    sourceHolder.setSource (sourceForKind (currentSourceKind()));
     sourceHolder.prepare (sampleRate, maxBlock);
     sourceHolder.reset();
 
@@ -377,7 +390,15 @@ void DopplerfeldProcessor::restartEngine()
 
 bool DopplerfeldProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
+    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+        return false;
+
+    // Eingang fuer die "Audio In"-Quelle (@dpa-Feedback) - mono, weil jede
+    // Quelle laut SoundSource-Vertrag mono ist. Manche Hosts/Formate lassen
+    // den Eingangsbus trotzdem deaktiviert (IS_SYNTH-typisch); das bleibt
+    // zulaessig, "Audio In" ist dann einfach still (siehe AudioInSource).
+    const auto in = layouts.getMainInputChannelSet();
+    return in.isDisabled() || in == juce::AudioChannelSet::mono();
 }
 
 //======================================================================
@@ -653,8 +674,7 @@ void DopplerfeldProcessor::handlePendingRequests()
     }
 
     if (sourceSwitchRequest.exchange (false))
-        sourceHolder.switchTo (useSampleSource.load() ? static_cast<SoundSource*> (&sampleSource)
-                                                       : static_cast<SoundSource*> (&engineGenerator));
+        sourceHolder.switchTo (sourceForKind (currentSourceKind()));
 
     if (recordToggleRequest.exchange (false))
     {
@@ -992,8 +1012,19 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     const int    numSamples = buffer.getNumSamples();
     const double sr         = currentSampleRate;
 
-    // Instrument ohne Eingang: was der Host im Puffer hinterlässt, gehört
-    // nicht zum Signal.
+    // "Audio In"-Quelle (@dpa-Feedback): den Host-Eingang VOR dem Loeschen
+    // sichern - AudioInSource kopiert ihn in eigenen Speicher, danach gehoert
+    // der Puffer wieder ganz dem Ausgang (Kommentar direkt darunter). Manche
+    // Hosts/Formate lassen den Eingangsbus deaktiviert (IS_SYNTH-typisch) -
+    // dann bleibt "Audio In" einfach still statt etwas zu erfinden.
+    {
+        auto inBus = getBusBuffer (buffer, true, 0);
+        audioInSource.pushBlock (inBus.getNumChannels() > 0 ? inBus.getReadPointer (0) : nullptr,
+                                 numSamples);
+    }
+
+    // Instrument ohne (genutzten) Eingang: was der Host im Puffer
+    // hinterlässt, gehört nicht zum Ausgangssignal.
     buffer.clear();
 
     if (numSamples <= 0 || sr <= 0.0 || monoScratch.getNumSamples() <= 0)
@@ -1091,13 +1122,13 @@ bool DopplerfeldProcessor::loadSampleFile (const juce::File& file)
     if (! sampleSource.loadFile (file))
         return false;
 
-    selectSampleSource (true);
+    selectSourceKind (SourceKind::Sample);
     return true;
 }
 
-void DopplerfeldProcessor::selectSampleSource (bool shouldUseSample)
+void DopplerfeldProcessor::selectSourceKind (SourceKind kind)
 {
-    useSampleSource.store (shouldUseSample);
+    sourceKindSelected.store (static_cast<int> (kind));
     sourceSwitchRequest.store (true);
 }
 
