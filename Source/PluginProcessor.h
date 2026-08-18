@@ -21,6 +21,7 @@
 #include "Sources/SoundSourceHolder.h"
 #include "Util/CloneSpray.h"
 #include "Util/FieldSnapshot.h"
+#include "Util/ScopeRingBuffer.h"
 
 #include <atomic>
 #include <vector>
@@ -161,6 +162,16 @@ public:
     // seit dem vorigen.
     float consumeOutputPeakL() { return outPeakL.exchange (0.0f, std::memory_order_relaxed); }
     float consumeOutputPeakR() { return outPeakR.exchange (0.0f, std::memory_order_relaxed); }
+
+    // Scope (@dpa-Feedback): liest die juengsten `numSamples` Ausgangs-
+    // Samples (nach Gain/Limiter, dieselbe Stelle wie das Levelmeter) aus
+    // dem Ringpuffer. numSamples liegt in der Hand des Aufrufers (Editor/
+    // ScopeComponent::captureWindowSamples) - der Processor kennt die
+    // Anzeige-Konstante bewusst nicht, das ist reine UI-Sache.
+    void fillScopeWindow (float* destL, float* destR, int numSamples) const
+    {
+        scopeRing.readLatest (destL, destR, numSamples);
+    }
 
     // Geglättete CPU-Auslastung des Audiothreads in Prozent des Echtzeit-
     // Budgets (@dpa-Feedback: "CPU-Echtzeit-Anzeige"). >100% heißt: der Block
@@ -539,6 +550,14 @@ private:
 
     juce::SmoothedValue<float> outputGainLinear;
     bool limiterEnabled = true;
+
+    // Scope-Ringpuffer (@dpa-Feedback), gefuellt in applyOutputStage() an
+    // derselben Stelle wie das Levelmeter. Immer aktiv, unabhaengig davon,
+    // ob der Scope im Editor gerade eingeblendet ist - das Schreiben ist ein
+    // Array-Zugriff pro Sample, kein messbarer Zusatzaufwand, und so bleibt
+    // sofort Signal da, sobald der Scope eingeschaltet wird (kein stiller
+    // Deckel, der erst "warmlaufen" muesste).
+    ScopeRingBuffer scopeRing;
 
     //==================================================================
     // Message-Thread -> Audiothread

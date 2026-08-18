@@ -190,12 +190,63 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         dopplerfeldProcessor.setMotorGateEnabled (enabled);
     };
 
-    setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
-             margin * 2 + topBarHeight + 6 + fieldHeight + statusHeight);
+    // Scope (@dpa-Feedback): gross, wegschaltbar, mit Freeze und Sync.
+    addAndMakeVisible (scope);
+
+    scopeToggleButton.setTooltip ("Oszilloskop ein-/ausblenden.");
+    scopeToggleButton.setButtonText (scopeVisible ? "Scope ausblenden" : "Scope");
+    scopeToggleButton.onClick = [this]
+    {
+        scopeVisible = ! scopeVisible;
+        scopeToggleButton.setButtonText (scopeVisible ? "Scope ausblenden" : "Scope");
+        updateScopeVisibility();
+    };
+    addAndMakeVisible (scopeToggleButton);
+
+    scopeFreezeButton.setTooltip ("Scope-Bild anhalten - der Ringpuffer laeuft im Hintergrund "
+                                  "weiter, nur die Anzeige friert ein.");
+    scopeFreezeButton.onClick = [this]
+    {
+        const bool frozen = ! scope.isFrozen();
+        scope.setFrozen (frozen);
+        scopeFreezeButton.setButtonText (frozen ? "Freeze: An" : "Freeze");
+        scopeFreezeButton.setColour (juce::TextButton::buttonColourId,
+                                     frozen ? juce::Colours::orangered.withAlpha (0.35f)
+                                            : juce::Colours::transparentBlack);
+    };
+    scopeFreezeButton.setButtonText ("Freeze");
+    addAndMakeVisible (scopeFreezeButton);
+
+    scopeSyncButton.setTooltip ("Sync: richtet einen steigenden Nulldurchgang von L in der Mitte "
+                                "des Scopes aus - der Trigger-Moment steht dann immer zentriert.");
+    scopeSyncButton.onClick = [this]
+    {
+        const bool sync = ! scope.isSyncEnabled();
+        scope.setSyncEnabled (sync);
+        scopeSyncButton.setButtonText (sync ? "Sync: An" : "Sync");
+        scopeSyncButton.setColour (juce::TextButton::buttonColourId,
+                                   sync ? juce::Colours::orangered.withAlpha (0.35f)
+                                        : juce::Colours::transparentBlack);
+    };
+    scopeSyncButton.setButtonText ("Sync");
+    addAndMakeVisible (scopeSyncButton);
+
+    updateScopeVisibility();
 
     // 30 Hz: schnell genug, dass eine gezogene Quelle nicht ruckelt, und
     // langsam genug, dass die Wellenfronten nicht flimmern.
     startTimerHz (30);
+}
+
+void DopplerfeldEditor::updateScopeVisibility()
+{
+    scope.setVisible (scopeVisible);
+    scopeFreezeButton.setVisible (scopeVisible);
+    scopeSyncButton.setVisible (scopeVisible);
+
+    setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
+             margin * 2 + topBarHeight + 6 + fieldHeight
+                 + (scopeVisible ? scopeBlockHeight : 0) + statusHeight);
 }
 
 void DopplerfeldEditor::setParameter (const char* paramID, double value)
@@ -243,6 +294,16 @@ void DopplerfeldEditor::refreshDisplay()
     fieldPanel.pushLevels (dopplerfeldProcessor.consumeOutputPeakL(),
                            dopplerfeldProcessor.consumeOutputPeakR(),
                            1000.0 / 30.0);
+
+    // Scope (@dpa-Feedback): nur ziehen, wenn eingeblendet - bei Freeze
+    // ignoriert ScopeComponent::feed() das Fenster ohnehin, aber das Ziehen
+    // selbst spart sich der Editor, solange gar nicht sichtbar ist.
+    if (scopeVisible)
+    {
+        dopplerfeldProcessor.fillScopeWindow (scopeRawLeft.data(), scopeRawRight.data(),
+                                              ScopeComponent::captureWindowSamples);
+        scope.feed (scopeRawLeft.data(), scopeRawRight.data());
+    }
 
     // Statuszeile neu zeichnen, nicht das ganze Fenster - die Panels darüber
     // ändern sich nur bei Bedienung.
@@ -370,11 +431,26 @@ void DopplerfeldEditor::resized()
     speedUnitButton.setBounds (topBar.removeFromLeft (70));
     topBar.removeFromLeft (8);
     engineResetButton.setBounds (topBar.removeFromLeft (110));
+    topBar.removeFromLeft (8);
+    scopeToggleButton.setBounds (topBar.removeFromLeft (140));
 
     area.removeFromTop (6);
 
     auto fieldArea = area.removeFromLeft (fieldWidth);
     field.setBounds (fieldArea.removeFromTop (fieldHeight));
+
+    if (scopeVisible)
+    {
+        fieldArea.removeFromTop (6);
+
+        auto scopeToolbar = fieldArea.removeFromTop (scopeToolbarHeight);
+        scopeFreezeButton.setBounds (scopeToolbar.removeFromLeft (90));
+        scopeToolbar.removeFromLeft (8);
+        scopeSyncButton.setBounds (scopeToolbar.removeFromLeft (90));
+
+        fieldArea.removeFromTop (4);
+        scope.setBounds (fieldArea.removeFromTop (scopeHeight));
+    }
 
     area.removeFromLeft (margin);
     panelViewport.setBounds (area);

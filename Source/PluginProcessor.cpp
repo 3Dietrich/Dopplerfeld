@@ -1182,6 +1182,14 @@ void DopplerfeldProcessor::applyOutputStage (juce::AudioBuffer<float>& buffer)
             // Anzeige das zeigt, was tatsächlich rausgeht.
             updatePeak (ch == 0 ? outPeakL : outPeakR, (float) std::abs (x));
         }
+
+        // Scope (@dpa-Feedback): dieselbe Stelle wie das Levelmeter, NACH
+        // Gain+Limiter. Bei Mono-Bussen liegt nur Kanal 0 vor - dann geht
+        // derselbe Wert auf beide Scope-Spuren, statt eine leere Spur zu
+        // zeigen.
+        const float scopeL = data[0][i];
+        const float scopeR = numCh > 1 ? data[1][i] : scopeL;
+        scopeRing.push (scopeL, scopeR);
     }
 }
 

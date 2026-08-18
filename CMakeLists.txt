@@ -70,7 +70,8 @@ target_sources(Dopplerfeld
         Source/Util/CloneSpray.cpp
         Source/UI/SwarmPanel.cpp
         Source/Sources/SoundSourceHolder.cpp
-        Source/UI/LevelMeter.cpp)
+        Source/UI/LevelMeter.cpp
+        Source/UI/ScopeComponent.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 

@@ -9,11 +9,14 @@
 #include "UI/FieldPanel.h"
 #include "UI/MotionPanel.h"
 #include "UI/SamplePanel.h"
+#include "UI/ScopeComponent.h"
 #include "UI/SwarmPanel.h"
 #include "UI/WallPanel.h"
 #include "UI/ToggleableTooltipWindow.h"
 
 #include "Util/FieldSnapshot.h"
+
+#include <array>
 
 // Oberfläche nach Plan 3.13: links das Feld mit M und L, rechts die
 // einklappbaren Regler-Panels in einem Viewport.
@@ -46,6 +49,12 @@ private:
     // CollapsiblePanel ändert seine eigene Größe nicht (siehe dortiger
     // Klassenkommentar), das gehört hierher.
     void layoutPanels();
+
+    // Scope ein-/ausblenden (@dpa-Feedback: "wegschaltbar") - setzt die
+    // Sichtbarkeit von Scope/Freeze/Sync und rechnet die Fenstergroesse neu,
+    // weil der Scope-Block zwischen Feld und Statuszeile eigenen Platz
+    // braucht (siehe scopeBlockHeight).
+    void updateScopeVisibility();
 
     // Schreibt einen Wert in den Bereich des Parameters und meldet ihn dem
     // Host. Über die Range des Parameters statt mit eigenen Grenzen, damit
@@ -95,6 +104,23 @@ private:
 
     FieldComponent field;
     FieldSnapshot  snapshot;
+
+    // Oszilloskop (@dpa-Feedback: "gross genug zum analysieren, wegschaltbar
+    // mit Freeze und Sync"). Sitzt unter dem Feld, volle Feldbreite. Der
+    // Roh-Puffer wird bei jedem Timer-Tick frisch aus dem Processor gezogen
+    // und an die Komponente gereicht (siehe refreshDisplay()) - Freeze/Sync
+    // selbst leben in ScopeComponent, s. dortigen Klassenkommentar.
+    ScopeComponent scope;
+    bool scopeVisible = true;
+
+    juce::TextButton scopeToggleButton;
+    juce::TextButton scopeFreezeButton;
+    juce::TextButton scopeSyncButton;
+
+    // Zwischenspeicher fuer das Rohfenster aus dem Processor - Mitgliedsvariable
+    // statt Stack-Array im Timer, damit pro Tick nicht neu allokiert wird.
+    std::array<float, ScopeComponent::captureWindowSamples> scopeRawLeft {};
+    std::array<float, ScopeComponent::captureWindowSamples> scopeRawRight {};
 
     juce::Viewport  panelViewport;
     juce::Component panelHolder;
@@ -169,6 +195,13 @@ private:
     static constexpr int topBarHeight = 26;
     static constexpr int statusHeight = 44;
     static constexpr int panelColumnWidth = 470;   // breitestes Panel (Sample) plus Scrollbalken
+
+    // Scope-Block zwischen Feld und Statuszeile: Toolbar (Freeze/Sync) +
+    // Scope-Flaeche, volle Feldbreite. scopeBlockHeight ist der Platz, den
+    // updateScopeVisibility() der Fensterhoehe hinzufuegt/entzieht.
+    static constexpr int scopeToolbarHeight = 26;
+    static constexpr int scopeHeight        = 220;
+    static constexpr int scopeBlockHeight   = 6 + scopeToolbarHeight + 4 + scopeHeight;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DopplerfeldEditor)
 };
