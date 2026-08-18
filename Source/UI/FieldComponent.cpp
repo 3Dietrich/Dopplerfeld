@@ -286,6 +286,21 @@ void FieldComponent::drawGrid (juce::Graphics& g) const
     }
 }
 
+float FieldComponent::wavefrontBrightnessFactor() const
+{
+    // DopplerEngine::publishSnapshot() klemmt den Emissions-Zeitabstand nach
+    // unten auf 0.02s (spacing = clamp(fieldMetres/(c*maxWavefronts), 0.02,
+    // 0.5)). Bei kleinen Feldern greift dieser Boden, und es liegen relativ
+    // zur Feldflaeche deutlich mehr, dichter gepackte Ringe im Bild als bei
+    // dem Feld, gegen das die Grundhelligkeit unten getuned ist - ohne
+    // Gegenskalierung wirkt das Feld dort ueberfuellt/zu hell (@dpa 20260818,
+    // Screenshot "voller heller Schallkreise"). Nach unten grosszuegig
+    // gedeckelt, damit auch bei sehr kleinen Feldern noch etwas zu sehen
+    // bleibt - "alle hoerbaren sollen sichtbar bleiben".
+    constexpr double referenceFieldMetres = 6000.0;
+    return (float) juce::jlimit (0.30, 1.0, fieldMetres / referenceFieldMetres);
+}
+
 void FieldComponent::drawWavefronts (juce::Graphics& g) const
 {
     // Jede Front sitzt an der Quellposition zum EIGENEN Emissionszeitpunkt
@@ -293,6 +308,7 @@ void FieldComponent::drawWavefronts (juce::Graphics& g) const
     // erst dieser Versatz erzeugt die vorne gestauchten Fronten und bei
     // Ueberschall die Einhuellende, die den Mach-Kegel bildet (Plan 3.12).
     const float pxPerM = pixelsPerMetre();
+    const float brightness = wavefrontBrightnessFactor();
 
     for (int i = 0; i < snapshot.wavefrontCount; ++i)
     {
@@ -309,7 +325,7 @@ void FieldComponent::drawWavefronts (juce::Graphics& g) const
 
         // Aeltere Fronten sind weiter aussen und blasser - macht die
         // Ausbreitungsrichtung sichtbar, ohne Pfeile zeichnen zu muessen.
-        const float alpha = juce::jmap ((float) i, 0.0f,
+        const float alpha = brightness * juce::jmap ((float) i, 0.0f,
                                          (float) juce::jmax (1, snapshot.wavefrontCount - 1),
                                          0.55f, 0.08f);
         g.setColour (juce::Colours::cyan.withAlpha (alpha));
@@ -325,10 +341,16 @@ void FieldComponent::drawReflectionWavefronts (juce::Graphics& g) const
     // aus dem Snapshot statt um die echte Quellposition, und in eigener
     // Farbe, damit man Direktschall und Reflexion auseinanderhaelt.
     const float pxPerM = pixelsPerMetre();
+    const float brightness = wavefrontBrightnessFactor();
 
     auto drawSet = [&] (const FieldSnapshot::ImageWavefronts& wf, juce::Colour colour, float thickness)
     {
-        if (! wf.active)
+        // wf.gain: stetiges Wand-Seiten-Mass (DopplerEngine::wallSideGain),
+        // 0 sobald Quelle/Hoerer nicht mehr auf der Seite stehen, von der aus
+        // die Wand ueberhaupt zurueckwerfen kann - dieselbe Groesse wie im
+        // Audiothread, damit hier nicht sichtbar ist, was dort schon still
+        // ist (@dpa: "hinter den Waenden soll eigentlich nichts reflektieren").
+        if (! wf.active || wf.gain <= 0.001f)
             return;
 
         for (int i = 0; i < snapshot.wavefrontCount; ++i)
@@ -348,7 +370,8 @@ void FieldComponent::drawReflectionWavefronts (juce::Graphics& g) const
             // sichtbarer sein, 'leise' vom Gemuet her, aber sichtbar") -
             // jetzt in der Naehe der Direktschall-Kreise (0.55/0.08), nicht
             // mehr darunter.
-            const float alpha = juce::jmap ((float) i, 0.0f,
+            const float alpha = brightness * wf.gain
+                               * juce::jmap ((float) i, 0.0f,
                                             (float) juce::jmax (1, snapshot.wavefrontCount - 1),
                                             0.65f, 0.12f);
             g.setColour (colour.withAlpha (alpha));

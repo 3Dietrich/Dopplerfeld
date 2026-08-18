@@ -822,6 +822,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         const Surface& surf = surfaces[(size_t) (2 + w)];
 
         wf.active = surf.enabled;
+        wf.gain   = (float) wallSideGain (w);   // nur sichtbar, wo es auch klaenge
 
         if (wf.active)
             for (int i = 0; i < s.wavefrontCount; ++i)
@@ -830,6 +831,11 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
 
     {
         const bool pairsActive = secondOrderOn && surfaces[2].enabled && surfaces[3].enabled;
+
+        // Beide Wandseiten muessen stimmen, sonst kann die doppelte Reflexion
+        // gar nicht entstehen - dieselbe Multiplikations-Logik wie bei zwei
+        // Daempfungsstufen in Serie (siehe recipeDamping).
+        const float pairGain = (float) (wallSideGain (0) * wallSideGain (1));
 
         const PathTransform orderAB = composeTransforms (surfaces[2].transform, surfaces[3].transform);
         const PathTransform orderBA = composeTransforms (surfaces[3].transform, surfaces[2].transform);
@@ -840,6 +846,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         {
             auto& wf = s.wallPairWavefronts[(size_t) p];
             wf.active = pairsActive;
+            wf.gain   = pairGain;
 
             if (wf.active)
                 for (int i = 0; i < s.wavefrontCount; ++i)

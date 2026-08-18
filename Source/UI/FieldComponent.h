@@ -160,6 +160,11 @@ private:
     void drawPerspectiveListener (juce::Graphics& g) const;
     void drawWavefronts (juce::Graphics& g) const;
     void drawReflectionWavefronts (juce::Graphics& g) const;
+
+    // Helligkeits-Faktor der Wellenfront-Ringe (@dpa 20260818: bei n = 6000 m
+    // getuned, bei kleineren Feldern "voller heller Schallkreise" - siehe
+    // .cpp). Reiner Anzeige-Faktor, unabhaengig von der Geometrie.
+    float wavefrontBrightnessFactor() const;
     void drawTrail (juce::Graphics& g) const;
 
     // Vorbeiflug-Wegvorschau (@dpa-Feedback): geplante Reststrecke + Punkt
