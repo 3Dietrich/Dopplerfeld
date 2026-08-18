@@ -117,8 +117,12 @@ public:
     // deshalb wird ihre Abbildung nicht einmalig gesetzt, sondern vor jedem
     // Block aus diesen Werten gebildet. Der Aufrufer glättet sie, damit ein
     // gezogener Regler den Spiegelempfänger nicht springen lässt.
+    // gainLinear: reiner Amplitudenfaktor der Reflexion, unabhaengig von der
+    // Hoehendaempfung (damping01) - landet in surfaces[index].transform.gain
+    // und wird von composeTransforms() bei Mehrfachreflexion automatisch mit
+    // verkettet (Plan siehe recipeTransform()).
     void setWall (int index, bool enabled, Vec3 anchorMetres,
-                  double azimuthRad, double tiltRad, double damping01);
+                  double azimuthRad, double tiltRad, double damping01, double gainLinear);
 
     // Mehrfachreflexionen: genau EINE zusätzliche Generation, also Wege der
     // Form Quelle -> Fläche X -> Fläche Y -> Ohr mit X != Y. Mehr nicht, und
@@ -141,6 +145,12 @@ public:
     // eine reale Fläche zu wenig ist.
     void setSecondOrderEnabled (bool shouldBeEnabled);
     void setBounceGain (double gain01);
+
+    // Zusaetzlicher, unabhaengiger Boost-Faktor obendrauf - anders als
+    // bounceGain (s.o.) ausdruecklich ohne Deckelung unter 1: die
+    // Generationsgarantie bleibt bei bounceGain, dieser Faktor ist reiner
+    // Pegel-Boost (@dpa: Bounce Gain "braucht einen Gain Regler").
+    void setBounceGainBoost (double gainLinear);
 
     // Klone mit voller Löserphysik ("Schrot"-Muster). Ein Klon ist eine zweite
     // Quelle, deren Route um einen kleinen festen Betrag von der echten
@@ -312,8 +322,9 @@ private:
 
     Surface surfaces[surfaceCount];
 
-    bool   secondOrderOn = false;
-    double bounceGain    = 0.6;
+    bool   secondOrderOn      = false;
+    double bounceGain         = 0.6;
+    double bounceGainBoost    = 1.0;
 
     int    realClones  = 0;
     double cloneSpread = 3.0;

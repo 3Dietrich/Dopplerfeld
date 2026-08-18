@@ -193,7 +193,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
         surfaces[(size_t) (2 + w)].dampFcHz = wallDampFcHz;
         setWall (w, false, wallGeometry[w].anchor,
                  wallGeometry[w].azimuthRad, wallGeometry[w].tiltRad,
-                 surfaces[(size_t) (2 + w)].damping);
+                 surfaces[(size_t) (2 + w)].damping, 1.0);
     }
 
     geometry.prepare (sr, maxBlock, 2);
@@ -441,7 +441,8 @@ void DopplerEngine::setGroundDampingAmount (double amount01)
 }
 
 void DopplerEngine::setWall (int index, bool enabled, Vec3 anchorMetres,
-                             double azimuthRad, double tiltRad, double damping01)
+                             double azimuthRad, double tiltRad, double damping01,
+                             double gainLinear)
 {
     if (index < 0 || index >= maxWalls)
         return;
@@ -453,6 +454,12 @@ void DopplerEngine::setWall (int index, bool enabled, Vec3 anchorMetres,
     s.enabled   = enabled;
     s.damping   = damping01;
     s.transform = wallMirrorTransform (anchorMetres, azimuthRad, tiltRad);
+
+    // Gain sitzt in der Abbildung selbst, nicht in einem eigenen Surface-
+    // Feld: composeTransforms() multipliziert outer.gain * inner.gain bei
+    // Mehrfachreflexion automatisch mit (siehe recipeTransform()), ohne dass
+    // die Verkettung dafuer extra angefasst werden muesste.
+    s.transform.gain = (float) gainLinear;
 }
 
 void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres)
@@ -504,6 +511,15 @@ void DopplerEngine::setBounceGain (double gain01)
     bounceGain = std::min (0.99, std::max (0.0, gain01));
 }
 
+void DopplerEngine::setBounceGainBoost (double gainLinear)
+{
+    // Keine Klemmung: das hier ist ausdruecklich der Regler, der ueber 0dB
+    // hinaus darf - die Generationsgarantie liegt allein bei bounceGain
+    // (s.o.). Sicherheitsnetz gegen zu hohe Pegel ist der Master-Limiter,
+    // nicht dieser Setter.
+    bounceGainBoost = gainLinear;
+}
+
 void DopplerEngine::disableAllReflections()
 {
     // Index 0 ist der Direktschall und bleibt.
@@ -549,10 +565,14 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
 
     // Der Schall trifft erst first, dann second; der Empfänger wird deshalb
     // erst an second und dann an first gespiegelt (siehe PathRecipe).
+    // t.gain traegt an dieser Stelle bereits wall1Gain * wall2Gain aus der
+    // Verkettung (composeTransforms multipliziert outer.gain * inner.gain) -
+    // bounceGain (Generationsfaktor <1) und bounceGainBoost (freier Boost)
+    // kommen hier zusaetzlich obendrauf.
     PathTransform t = composeTransforms (surfaces[(size_t) r.first].transform,
                                          surfaces[(size_t) r.second].transform);
 
-    t.gain = (float) bounceGain;
+    t.gain *= (float) (bounceGain * bounceGainBoost);
 
     return t;
 }
