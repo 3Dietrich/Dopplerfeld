@@ -1,5 +1,6 @@
 #include "PositionJitter.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace
