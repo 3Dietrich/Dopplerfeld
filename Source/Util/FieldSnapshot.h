@@ -68,6 +68,16 @@ struct FieldSnapshot
     {
         bool active = false;
         std::array<Vec3, maxWavefronts> positions {};
+
+        // Stetiges 0..1-Mass dafuer, ob Quelle und Hoerer ueberhaupt auf der
+        // Seite der Wand(en) stehen, auf der eine Spiegelquellen-Reflexion
+        // entstehen kann (DopplerEngine::wallSideGain - dieselbe Groesse, die
+        // auch den Reflexions-PEGEL im Audiothread bestimmt). Ohne dieses
+        // Gate zeichnete der Editor Reflexions-Ringe auch dort, wo/wenn die
+        // Wand laengst nichts mehr zurueckwirft - sichtbar als Kreise, die
+        // durch die Wand hindurch bzw. dahinter auftauchen (@dpa 20260818,
+        // "hinter den Waenden soll eigentlich nichts reflektieren").
+        float gain = 1.0f;
     };
 
     // Einfache Reflexion, ein Satz je Wand.
