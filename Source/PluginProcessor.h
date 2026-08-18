@@ -9,6 +9,7 @@
 #include "Motion/MotionSmoother.h"
 #include "Motion/OneEuroSmoother.h"
 #include "Motion/OnePoleSmoother.h"
+#include "Motion/PositionJitter.h"
 #include "Motion/SlewLimiter.h"
 #include "Physics/DopplerEngine.h"
 #include "Physics/Listener.h"
@@ -297,6 +298,9 @@ private:
         std::atomic<float>* lisYaw     = nullptr;
         std::atomic<float>* earSpacing = nullptr;
 
+        std::atomic<float>* srcJitterAmount = nullptr;
+        std::atomic<float>* srcJitterRateHz = nullptr;
+
         std::atomic<float>* rpm = nullptr;
         std::atomic<float>* harmRatio[4]  {};
         std::atomic<float>* harmDetune[4] {};
@@ -351,6 +355,7 @@ private:
         std::atomic<float>* wallAngle[DopplerEngine::maxWalls] {};
         std::atomic<float>* wallTilt[DopplerEngine::maxWalls]  {};
         std::atomic<float>* wallDamp[DopplerEngine::maxWalls]  {};
+        std::atomic<float>* wallGain[DopplerEngine::maxWalls]  {};
 
         std::atomic<float>* nWaveOn   = nullptr;
         std::atomic<float>* nWaveSize  = nullptr;
@@ -363,6 +368,7 @@ private:
 
         std::atomic<float>* reflect2ndOn = nullptr;
         std::atomic<float>* bounceGain   = nullptr;
+        std::atomic<float>* bounceGainDb = nullptr;
 
         std::atomic<float>* fadeAuto     = nullptr;
         std::atomic<float>* fadeManualMs = nullptr;
@@ -392,6 +398,10 @@ private:
     MotionRecorder  motionRecorder;
     MotionPlayer    motionPlayer;
     FlyByGenerator  flyBy;
+
+    // Additive Mikrobewegung der Quelle M, vor sourceSmoothers eingehakt
+    // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.
+    PositionJitter  sourceJitter;
 
     // Die Kapazitäts-Vorwärmung in prepareToPlay() darf nur beim allerersten
     // Mal laufen - prepareToPlay() wird vom Host bei jeder Blockgrößen-/
@@ -485,6 +495,12 @@ private:
         double tiltRad    = 0.0;
         bool   on         = false;
         double damping    = 0.3;
+
+        // Reiner Amplitudenfaktor - springt wie damping sofort (kein
+        // Klick-Risiko wie bei anchor/azimuth/tilt: die Geometrie und damit
+        // die Laufzeit des Pfades bleibt unberuehrt, nur die Lautstaerke
+        // aendert sich blockweise, genau wie bei bounceGain/wallDamp).
+        double gainLinear = 1.0;
     };
 
     WallState wallTarget[DopplerEngine::maxWalls];

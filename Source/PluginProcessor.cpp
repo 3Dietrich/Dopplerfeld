@@ -190,6 +190,9 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.lisYaw     = raw (Params::lisYaw);
     pp.earSpacing = raw (Params::earSpacing);
 
+    pp.srcJitterAmount = raw (Params::srcJitterAmount);
+    pp.srcJitterRateHz = raw (Params::srcJitterRateHz);
+
     pp.rpm = raw (Params::rpm);
 
     const char* const ratioIds[4]  { Params::harmRatio1,  Params::harmRatio2,  Params::harmRatio3,  Params::harmRatio4 };
@@ -257,6 +260,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.reflect2ndOn = raw (Params::reflect2ndOn);
     pp.bounceGain   = raw (Params::bounceGain);
+    pp.bounceGainDb = raw (Params::bounceGainDb);
 
     {
         const char* const onIds[]    { Params::wall1On,    Params::wall2On };
@@ -265,6 +269,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
         const char* const angleIds[] { Params::wall1Angle, Params::wall2Angle };
         const char* const tiltIds[]  { Params::wall1Tilt,  Params::wall2Tilt };
         const char* const dampIds[]  { Params::wall1Damp,  Params::wall2Damp };
+        const char* const gainIds[]  { Params::wall1Gain,  Params::wall2Gain };
 
         static_assert (DopplerEngine::maxWalls == 2,
                        "Die ID-Listen oben sind je Wand von Hand geschrieben - eine dritte "
@@ -278,6 +283,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
             pp.wallAngle[w] = raw (angleIds[w]);
             pp.wallTilt[w]  = raw (tiltIds[w]);
             pp.wallDamp[w]  = raw (dampIds[w]);
+            pp.wallGain[w]  = raw (gainIds[w]);
         }
     }
 
@@ -392,6 +398,7 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
 
     sourceSmoothers.prepare (DopplerEngine::trajectoryRateHz);
     listenerSmoothers.prepare (DopplerEngine::trajectoryRateHz);
+    sourceJitter.prepare (DopplerEngine::trajectoryRateHz);
 
     motionTickAccum   = 0.0;
     recorderTickAccum = 0.0;
@@ -499,6 +506,9 @@ void DopplerfeldProcessor::applyParameters()
 
     targetYawRadians         = juce::degreesToRadians ((double) pp.lisYaw->load());
     listenerState.earSpacing = (double) pp.earSpacing->load();
+
+    sourceJitter.setAmount ((double) pp.srcJitterAmount->load());
+    sourceJitter.setRate   ((double) pp.srcJitterRateHz->load());
 
     const bool fieldJustChanged = std::abs (fieldMetresValue - lastFieldMetres) > 1.0e-9;
 
@@ -621,6 +631,7 @@ void DopplerfeldProcessor::applyParameters()
 
     dopplerEngine.setSecondOrderEnabled (pp.reflect2ndOn->load() > 0.5f);
     dopplerEngine.setBounceGain ((double) pp.bounceGain->load());
+    dopplerEngine.setBounceGainBoost (juce::Decibels::decibelsToGain ((double) pp.bounceGainDb->load()));
 
     applyCloneParameters();
 
@@ -629,6 +640,7 @@ void DopplerfeldProcessor::applyParameters()
     {
         wallTarget[w].on         = pp.wallOn[w]->load() > 0.5f;
         wallTarget[w].damping    = (double) pp.wallDamp[w]->load();
+        wallTarget[w].gainLinear = juce::Decibels::decibelsToGain ((double) pp.wallGain[w]->load());
         wallTarget[w].anchor     = metresFromNormalised ((double) pp.wallX[w]->load(),
                                                          (double) pp.wallY[w]->load(), 0.0);
         wallTarget[w].azimuthRad = juce::degreesToRadians ((double) pp.wallAngle[w]->load());
@@ -989,6 +1001,17 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
             bypassSmoothing = (motionPlayer.getInterp() == MotionPlayer::Interp::CatmullRom);
         }
 
+        // M-Jitter (@dpa 20260818): additiv VOR jeglicher Glaettung auf das
+        // Ziel aufgeschlagen, egal ob es von Maus/Automation, Vorbeiflug oder
+        // Wiedergabe kommt - immer aktiv, kein Sonderfall fuer Stillstand
+        // (bei Bewegung geht der kleine Jitter im normalen Doppler unter, im
+        // Stillstand ist er die einzige Bewegung und dominiert von selbst).
+        // Der Jitter selbst ist als Summe stetig driftender Sinusse gebaut
+        // (siehe PositionJitter), braucht also KEINEN nachgeschalteten
+        // Glaetter, um klickfrei zu bleiben - deshalb ist es unbedenklich,
+        // ihn auch im bypassSmoothing-Zweig direkt in target zu addieren.
+        target += sourceJitter.tick (tickDt);
+
         if (bypassSmoothing)
         {
             // Das Nachfuehren des internen Glaetter-Zustands (Kommentar
@@ -1083,8 +1106,9 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
             WallState&       s = wallSmoothed[w];
             const WallState& t = wallTarget[w];
 
-            s.on      = t.on;
-            s.damping = t.damping;
+            s.on         = t.on;
+            s.damping    = t.damping;
+            s.gainLinear = t.gainLinear;
 
             s.anchor += (t.anchor - s.anchor) * yawSmoothCoeff;
 
@@ -1205,7 +1229,7 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         {
             const auto& wall = wallSmoothed[w];
             dopplerEngine.setWall (w, wall.on, wall.anchor, wall.azimuthRad, wall.tiltRad,
-                                   wall.damping);
+                                   wall.damping, wall.gainLinear);
         }
 
         // Fenster auf den Ausgabepuffer, keine Kopie und keine Allokation.
