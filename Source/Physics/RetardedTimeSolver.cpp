@@ -236,7 +236,8 @@ void RetardedTimeSolver::reset()
 
 void RetardedTimeSolver::setMinScanStep (double seconds)
 {
-    minStep = std::max (1.0e-6, seconds);
+    minStep   = std::max (1.0e-6, seconds);
+    trackStep = std::max (1.0e-7, minStep / 64.0);
 }
 
 int RetardedTimeSolver::solve (const SourceTrajectory& traj,
@@ -401,10 +402,11 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
 
         double a, bb, fa, fb;
 
-        if (findBracket (F, guess, dirHint, windowStart, windowEnd, lip, minStep, budget,
+        if (findBracket (F, guess, dirHint, windowStart, windowEnd, lip, trackStep, budget,
                          a, bb, fa, fb))
             addCandidate (brent (F, a, bb, fa, fb, brentTol, 80), b.id);
-        // sonst: Zweig verschwindet, er wird schlicht nicht mehr gemeldet
+        else
+            ++trackLost;   // Zweig verschwindet, er wird nicht mehr gemeldet
     }
 
     if (! supersonicPossible)
@@ -564,7 +566,10 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
 
     for (int i = 0; i < nCand; ++i)
         if (roots[i].id < 0)
+        {
             roots[i].id = nextId++;
+            ++newIdGiven;
+        }
 
     branchCount = nCand;
 

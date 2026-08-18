@@ -35,7 +35,7 @@ class RetardedTimeSolver
 {
 public:
     // K aus Plan 2.6: mehr als vier gleichzeitige Zweige werden verworfen.
-    static constexpr int maxBranches = 4;
+    static constexpr int maxBranches = 8;
 
     // Vergisst alle bekannten Zweige. Nach einem Positionssprung oder einem
     // prepareToPlay aufzurufen, damit keine Wurzel aus der alten Geometrie
@@ -73,6 +73,20 @@ public:
     // entspricht der 1-kHz-Rasterrate aus Plan 2.12.
     void   setMinScanStep (double seconds);
     double minScanStep() const { return minStep; }
+    double trackingStep() const { return trackStep; }
+
+    // Warum ein Zweig aufhoert, gemeldet zu werden - drei sich ausschliessende
+    // Ursachen, damit die Behebung nicht wieder auf einer Vermutung aufsetzt:
+    //
+    //   trackLost   - die Bracket-Suche fand die Wurzel nicht mehr. Der Zweig
+    //                 ist verloren, obwohl er physikalisch da sein duerfte.
+    //   newIdGiven  - eine Wurzel liess sich keinem bekannten Zweig zuordnen
+    //                 und bekam eine neue Identitaet. Fuer den Pfad ist das
+    //                 ein Tod plus eine Geburt am selben Ort: neue Huellkurve,
+    //                 neuer Filter, obwohl derselbe Hoerweg gemeint ist.
+    //   droppedRoot - mehr Wurzeln als Steckplaetze, die aelteste faellt raus.
+    std::uint64_t trackLostCount()  const { return trackLost; }
+    std::uint64_t newIdCount()      const { return newIdGiven; }
 
     // Zähler für verworfene Wurzeln über K hinaus (Plan 2.6: "Ein Überlauf
     // wird verworfen und im Debug-Build gezählt").
@@ -92,7 +106,7 @@ private:
     // Höchstzahl gleichzeitig gesammelter Vorzeichenwechsel. Bewusst größer
     // als maxBranches, damit der Scan erst zählt und dann verwirft, statt
     // mitten im Fenster abzubrechen.
-    static constexpr int scanCapacity = 8;
+    static constexpr int scanCapacity = 16;
 
     struct Branch
     {
@@ -111,4 +125,30 @@ private:
     std::uint64_t evalCount = 0;
 
     double minStep = 1.0e-3;   // 1 kHz Trajektorienraster
+
+    // Untergrenze der Schrittweite beim NACHFUEHREN eines bekannten Zweigs.
+    //
+    // Deutlich feiner als minStep, und das ist kein Feintuning, sondern der
+    // Unterschied zwischen zwei verschiedenen Suchen. minStep deckelt den
+    // Aufwand des VOLLSCANS, der ein Fenster von bis zu 25 Sekunden abgehen
+    // muss; dort waeren feine Schritte unbezahlbar. Das Nachfuehren startet
+    // dagegen von einem bereits guten Schaetzwert und ist ohnehin durch budget
+    // begrenzt.
+    //
+    // Mit minStep als Untergrenze konnte das Nachfuehren nichts aufloesen, was
+    // feiner als 1 ms liegt: selbst bei perfektem Schaetzwert erzwingt
+    // max(|F|/Lip, minStep) einen 1-ms-Sprung, der ueber die Wurzel hinweg
+    // setzt - und bei einem Wurzelpaar gleich ueber beide, also ohne
+    // Vorzeichenwechsel. Der Zweig galt dann als verschwunden, obwohl er noch
+    // da war. Der Loeser laeuft im Ueberschall alle 167 us, die Wurzel bewegt
+    // sich also um Bruchteile davon - eine Untergrenze von 1 ms ist dafuer um
+    // Groessenordnungen zu grob.
+    //
+    // Teurer wird es kaum: |F|/Lip unterschreitet diese Grenze nur in
+    // unmittelbarer Naehe der Wurzel, und genau dort endet die Suche sofort mit
+    // einem Vorzeichenwechsel.
+    double trackStep = 1.0e-3 / 64.0;
+
+    std::uint64_t trackLost  = 0;
+    std::uint64_t newIdGiven = 0;
 };

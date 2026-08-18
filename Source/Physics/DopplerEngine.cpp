@@ -891,6 +891,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
     // auf die Anzeigezeilen verteilt.
     {
         std::uint64_t deaths = 0, loud = 0, evicted = 0, caustic = 0, abrupt = 0;
+        std::uint64_t lost = 0, fresh = 0, dropped = 0;
         double envSum = 0.0, envMax = 0.0, tauSum = 0.0, tauMax = 0.0;
 
         for (size_t i = 0; i < set.paths.size(); ++i)
@@ -906,6 +907,9 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
             tauSum  += d.tauSum;
             tauMax   = std::max (tauMax, d.tauMax);
             abrupt  += d.abruptDeaths;
+            lost    += d.trackLost;
+            fresh   += d.newIds;
+            dropped += d.droppedRoots;
         }
 
         s.branchDeaths       = deaths;
@@ -917,6 +921,9 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         s.deathTauMeanMs     = caustic > 0 ? 1000.0 * tauSum / (double) caustic : 0.0;
         s.deathTauMaxMs      = 1000.0 * tauMax;
         s.abruptDeaths       = abrupt;
+        s.trackLost          = lost;
+        s.newIds             = fresh;
+        s.droppedRoots       = dropped;
     }
 
     for (int w = 0; w < maxWalls && w < FieldSnapshot::maxWalls; ++w)

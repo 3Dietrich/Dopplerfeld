@@ -135,6 +135,9 @@ struct FieldSnapshot
     // Laute Zweige (env >= 0,5), die trotzdem in unter 2 ms verschwunden sind.
     // Das ist der Abbruch als Zahl. Ziel ist null.
     std::uint64_t abruptDeaths    = 0;
+    std::uint64_t trackLost       = 0;
+    std::uint64_t newIds          = 0;
+    std::uint64_t droppedRoots    = 0;
 
     // Lage der Wände, damit die Feldanzeige sie zeichnen kann. Die Wand ist
     // eine unendliche Ebene; in der Draufsicht ist sie eine Gerade durch

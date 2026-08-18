@@ -8,6 +8,7 @@
 #include "Vec3.h"
 
 #include <atomic>
+#include <algorithm>
 #include <cstdint>
 
 namespace pathdetail
@@ -214,6 +215,11 @@ public:
         // abruptSeconds auf null gegangen sind. Das ist der Abbruch, gezaehlt
         // statt gehoert. Null davon ist das Ziel.
         std::uint64_t abruptDeaths = 0;
+
+        // Todesursachen aus dem Loeser, siehe RetardedTimeSolver.
+        std::uint64_t trackLost   = 0;
+        std::uint64_t newIds      = 0;
+        std::uint64_t droppedRoots = 0;
     };
 
     BranchDeathStats branchDeaths() const
@@ -228,6 +234,9 @@ public:
         s.tauSum        = deathTauSum.load();
         s.tauMax        = deathTauMax.load();
         s.abruptDeaths  = abruptCount.load();
+        s.trackLost     = solver.trackLostCount();
+        s.newIds        = solver.newIdCount();
+        s.droppedRoots  = (std::uint64_t) std::max (0, solver.droppedRoots());
         return s;
     }
 

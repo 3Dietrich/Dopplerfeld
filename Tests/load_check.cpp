@@ -86,6 +86,9 @@ struct Stats
     double        tauMeanMs        = 0.0;
     double        tauMaxMs         = 0.0;
     std::uint64_t abruptDeaths     = 0;
+    std::uint64_t trackLost        = 0;
+    std::uint64_t newIds           = 0;
+    std::uint64_t droppedRoots     = 0;
     double        deathEnvMean     = 0.0;
     double        deathEnvMax      = 0.0;
 
@@ -199,6 +202,10 @@ struct Stats
                      (unsigned long long) loudBranchDeaths,
                      loudBranchDeaths > 0
                         ? 100.0 * (double) abruptDeaths / (double) loudBranchDeaths : 0.0);
+        std::printf ("%-22s Ursachen: Nachfuehrung verloren %llu | neue Identitaet %llu "
+                     "| Wurzeln verworfen %llu\n",
+                     "", (unsigned long long) trackLost, (unsigned long long) newIds,
+                     (unsigned long long) droppedRoots);
     }
 };
 
@@ -287,6 +294,9 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
         stats.tauMeanMs        = snapshot.deathTauMeanMs;
         stats.tauMaxMs         = snapshot.deathTauMaxMs;
         stats.abruptDeaths     = snapshot.abruptDeaths;
+        stats.trackLost        = snapshot.trackLost;
+        stats.newIds           = snapshot.newIds;
+        stats.droppedRoots     = snapshot.droppedRoots;
     }
 
     stats.solverEvals += proc.solverEvaluations() - evalsBefore;
