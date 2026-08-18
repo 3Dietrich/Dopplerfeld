@@ -13,6 +13,8 @@ und ein Hörer L (mit Kopf-Orientierung) auf einer 700x400px-Fläche, die eine
 reale Modellgröße n Meter darstellt. Ton entsteht aus echter Laufzeit
 (retarded time), nicht aus einem Doppler-Formelfaktor.
 
+![Dopplerfeld-UI: Feldanzeige links, Regler-Panels rechts](docs/screenshot.png)
+
 Baubar mit CMake (siehe `granular/` als Schwesterprojekt für dasselbe Muster,
 JUCE liegt unter `~/Documents/JUCE`, `add_subdirectory` statt Kopie).
 

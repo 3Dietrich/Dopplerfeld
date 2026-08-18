@@ -7,6 +7,8 @@ Feldfläche, die eine reale Modellgröße von 1 bis 10.000 Metern darstellt. Der
 Ton entsteht aus echter Laufzeitberechnung (retarded time), nicht aus einer
 Doppler-Formel als Abkürzung.
 
+![Dopplerfeld: Feldanzeige mit Wellenfronten, Bewegungsaufzeichnung/-wiedergabe und Vorbeiflug-Generator](docs/screenshot.png)
+
 ## Download
 
 Fertig gebaute Standalone-App, VST3 und AU liegen unter
