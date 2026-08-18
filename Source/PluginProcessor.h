@@ -163,13 +163,12 @@ public:
     float consumeOutputPeakL() { return outPeakL.exchange (0.0f, std::memory_order_relaxed); }
     float consumeOutputPeakR() { return outPeakR.exchange (0.0f, std::memory_order_relaxed); }
 
-    // Groesste vom Scope anzeigbare Zeitbasis (@dpa-Feedback: "max.
-    // Zeitbereich ... etwa 3s"). Bestimmt, wie gross scopeRing in
-    // prepareToPlay() angelegt wird, UND die obere Zoom-Grenze, die der
-    // Editor der ScopeComponent mitgibt (siehe DopplerfeldEditor::
-    // refreshDisplay()) - ein Wert statt zweier, die auseinanderlaufen
-    // koennten.
-    static constexpr double scopeMaxDisplaySeconds = 3.0;
+    // Groesste vom Scope anzeigbare Zeitbasis (@dpa-Feedback: erst 3s, dann
+    // auf 10s erweitert). Bestimmt, wie gross scopeRing in prepareToPlay()
+    // angelegt wird, UND die obere Zoom-Grenze, die der Editor der
+    // ScopeComponent mitgibt (siehe DopplerfeldEditor::refreshDisplay()) -
+    // ein Wert statt zweier, die auseinanderlaufen koennten.
+    static constexpr double scopeMaxDisplaySeconds = 10.0;
 
     // Scope (@dpa-Feedback): liest die juengsten `numSamples` Ausgangs-
     // Samples (nach Gain/Limiter, dieselbe Stelle wie das Levelmeter) aus
@@ -180,6 +179,14 @@ public:
     {
         scopeRing.readLatest (destL, destR, numSamples);
     }
+
+    // Groesse des kompletten Ringpuffers (@dpa-Feedback: "im freezed Scope
+    // frei herumsuchen") - der Editor liest beim Einfrieren die GESAMTE
+    // bisher aufgezeichnete Historie (nicht nur ein Anzeigefenster) und
+    // reicht sie an ScopeComponent::enterHistoryMode() weiter, damit sich
+    // darin frei pannen laesst, ohne dass neue Live-Daten das Bild noch
+    // veraendern.
+    int scopeRingCapacity() const { return scopeRing.capacity(); }
 
     // Geglättete CPU-Auslastung des Audiothreads in Prozent des Echtzeit-
     // Budgets (@dpa-Feedback: "CPU-Echtzeit-Anzeige"). >100% heißt: der Block

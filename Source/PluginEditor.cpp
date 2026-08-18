@@ -203,16 +203,35 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     };
     addAndMakeVisible (scopeToggleButton);
 
-    scopeFreezeButton.setTooltip ("Scope-Bild anhalten - der Ringpuffer laeuft im Hintergrund "
-                                  "weiter, nur die Anzeige friert ein.");
+    scopeFreezeButton.setTooltip ("Scope-Bild anhalten und auf die komplette bisherige Historie "
+                                  "umschalten (@dpa-Feedback: \"frei herumsuchen\") - darin "
+                                  "waagerecht scrollen/ziehen zum Verschieben, senkrecht/Pinch "
+                                  "weiter zum Zoomen. Der Ringpuffer laeuft im Hintergrund "
+                                  "weiter, erst ein erneuter Klick holt wieder Live-Daten.");
     scopeFreezeButton.onClick = [this]
     {
-        const bool frozen = ! scope.isFrozen();
-        scope.setFrozen (frozen);
-        scopeFreezeButton.setButtonText (frozen ? "Freeze: An" : "Freeze");
-        scopeFreezeButton.setColour (juce::TextButton::buttonColourId,
-                                     frozen ? juce::Colours::orangered.withAlpha (0.35f)
-                                            : juce::Colours::transparentBlack);
+        if (! scope.isFrozen())
+        {
+            // Komplette bisherige Historie einmalig ziehen (nicht nur das
+            // kleine Live-Fenster) - danach ist das Bild statisch, darin
+            // laesst sich frei suchen (siehe ScopeComponent::
+            // enterHistoryMode()).
+            const int capacity = dopplerfeldProcessor.scopeRingCapacity();
+            std::vector<float> fullLeft ((size_t) capacity), fullRight ((size_t) capacity);
+            dopplerfeldProcessor.fillScopeWindow (fullLeft.data(), fullRight.data(), capacity);
+            scope.enterHistoryMode (fullLeft.data(), fullRight.data(), capacity);
+
+            scopeFreezeButton.setButtonText ("Freeze: An");
+            scopeFreezeButton.setColour (juce::TextButton::buttonColourId,
+                                         juce::Colours::orangered.withAlpha (0.35f));
+        }
+        else
+        {
+            scope.exitHistoryMode();
+            scopeFreezeButton.setButtonText ("Freeze");
+            scopeFreezeButton.setColour (juce::TextButton::buttonColourId,
+                                         juce::Colours::transparentBlack);
+        }
     };
     scopeFreezeButton.setButtonText ("Freeze");
     addAndMakeVisible (scopeFreezeButton);
@@ -236,11 +255,42 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     scopeZoomInButton.onClick = [this] { scope.zoomStep (0.7f); };
     addAndMakeVisible (scopeZoomInButton);
 
-    scopeZoomOutButton.setTooltip ("Rauszoomen (laengere Zeitbasis, bis zu 3s). Wirkt wie "
-                                   "Mausrad runter oder Pinch-Zusammenziehen direkt auf dem "
-                                   "Scope.");
+    scopeZoomOutButton.setTooltip ("Rauszoomen (laengere Zeitbasis, bis zu "
+                                   + juce::String ((int) DopplerfeldProcessor::scopeMaxDisplaySeconds)
+                                   + "s). Wirkt wie Mausrad runter oder Pinch-Zusammenziehen "
+                                     "direkt auf dem Scope.");
     scopeZoomOutButton.onClick = [this] { scope.zoomStep (1.4f); };
     addAndMakeVisible (scopeZoomOutButton);
+
+    scopeSaveButton.setTooltip ("Sichtbaren Scope-Ausschnitt als CSV in ~/Downloads ablegen "
+                                "(@dpa-Feedback: \"fuer Dich, debuggen\") - Zeitstempel im "
+                                "Dateinamen, eine Zeile je Sample (Index, Zeit ms, L, R).");
+    scopeSaveButton.onClick = [this]
+    {
+        const auto now = juce::Time::getCurrentTime();
+        const juce::String stamp = juce::String::formatted (
+            "%04d%02d%02d_%02d%02d%02d",
+            now.getYear(), now.getMonth() + 1, now.getDayOfMonth(),
+            now.getHours(), now.getMinutes(), now.getSeconds());
+
+        auto downloads = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+                              .getChildFile ("Downloads");
+        downloads.createDirectory();
+
+        auto file = downloads.getChildFile ("dopplerfeld_" + stamp + ".csv");
+        const bool ok = scope.exportVisibleWindow (file);
+
+        scopeSaveStatusLabel.setText (ok ? ("Gespeichert: " + file.getFileName())
+                                         : "Speichern fehlgeschlagen",
+                                     juce::dontSendNotification);
+        scopeSaveStatusUntilMs = juce::Time::getMillisecondCounter() + 4000;
+    };
+    addAndMakeVisible (scopeSaveButton);
+
+    scopeSaveStatusLabel.setJustificationType (juce::Justification::centredLeft);
+    scopeSaveStatusLabel.setColour (juce::Label::textColourId, juce::Colours::limegreen);
+    scopeSaveStatusLabel.setFont (juce::Font (juce::FontOptions (13.0f)));
+    addAndMakeVisible (scopeSaveStatusLabel);
 
     updateScopeVisibility();
 
@@ -256,6 +306,8 @@ void DopplerfeldEditor::updateScopeVisibility()
     scopeSyncButton.setVisible (scopeVisible);
     scopeZoomInButton.setVisible (scopeVisible);
     scopeZoomOutButton.setVisible (scopeVisible);
+    scopeSaveButton.setVisible (scopeVisible);
+    scopeSaveStatusLabel.setVisible (scopeVisible);
 
     setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
              margin * 2 + topBarHeight + 6 + fieldHeight
@@ -335,6 +387,14 @@ void DopplerfeldEditor::refreshDisplay()
 
         dopplerfeldProcessor.fillScopeWindow (scopeRawLeft.data(), scopeRawRight.data(), captureLen);
         scope.feed (scopeRawLeft.data(), scopeRawRight.data());
+
+        // Bestaetigungstext nach dem Speichern nur ein paar Sekunden stehen
+        // lassen, nicht dauerhaft im Toolbar rumstehen.
+        if (scopeSaveStatusUntilMs != 0 && juce::Time::getMillisecondCounter() > scopeSaveStatusUntilMs)
+        {
+            scopeSaveStatusLabel.setText ({}, juce::dontSendNotification);
+            scopeSaveStatusUntilMs = 0;
+        }
     }
 
     // Statuszeile neu zeichnen, nicht das ganze Fenster - die Panels darüber
@@ -483,6 +543,10 @@ void DopplerfeldEditor::resized()
         scopeZoomOutButton.setBounds (scopeToolbar.removeFromLeft (28));
         scopeToolbar.removeFromLeft (4);
         scopeZoomInButton.setBounds (scopeToolbar.removeFromLeft (28));
+        scopeToolbar.removeFromLeft (16);
+        scopeSaveButton.setBounds (scopeToolbar.removeFromLeft (90));
+        scopeToolbar.removeFromLeft (8);
+        scopeSaveStatusLabel.setBounds (scopeToolbar);
 
         fieldArea.removeFromTop (4);
         scope.setBounds (fieldArea.removeFromTop (scopeHeight));

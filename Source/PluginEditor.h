@@ -125,6 +125,15 @@ private:
     juce::TextButton scopeZoomInButton  { "+" };
     juce::TextButton scopeZoomOutButton { "-" };
 
+    // Sichtbaren Scope-Ausschnitt als CSV sichern (@dpa-Feedback: "fuer
+    // Dich, debuggen") - Klartext-Zahlen statt Audio-Format, damit sich die
+    // Datei direkt lesen laesst. scopeSaveStatusUntilMs merkt sich, bis
+    // wann der Bestaetigungstext im Label stehen bleibt (siehe
+    // refreshDisplay()).
+    juce::TextButton scopeSaveButton { "Speichern" };
+    juce::Label      scopeSaveStatusLabel;
+    juce::uint32     scopeSaveStatusUntilMs = 0;
+
     // Zwischenspeicher fuer das Rohfenster aus dem Processor - Mitgliedsvariable
     // statt Stack-Array im Timer. Groesse folgt der aktuellen Zoomstufe
     // (siehe ScopeComponent::captureWindowSampleCount()), deshalb ein Vektor
