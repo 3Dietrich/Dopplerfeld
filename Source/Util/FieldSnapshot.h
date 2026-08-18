@@ -116,6 +116,15 @@ struct FieldSnapshot
     int realCloneCount  = 0;
     int cheapCloneCount = 0;
 
+    // Zweig-Todesmessung, ueber alle gerechneten Pfade aufsummiert (siehe
+    // PropagationPath::branchDeaths()). Beantwortet die Frage, ob der Abbruch
+    // am Ende der Ueberschall-Haelfte die Anti-Klick-Rampe ist: dann sterben
+    // die Zweige bei env nahe 1, nicht nahe 0.
+    std::uint64_t branchDeaths     = 0;
+    std::uint64_t loudBranchDeaths = 0;   // davon mit env >= 0,5
+    double        branchDeathEnvMean = 0.0;
+    double        branchDeathEnvMax  = 0.0;
+
     // Lage der Wände, damit die Feldanzeige sie zeichnen kann. Die Wand ist
     // eine unendliche Ebene; in der Draufsicht ist sie eine Gerade durch
     // anchor mit Richtung (cos azimuth, sin azimuth). Die Neigung ändert daran

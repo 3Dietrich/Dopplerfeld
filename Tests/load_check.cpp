@@ -72,6 +72,17 @@ struct Stats
     double silenceRun          = 0.0;
     bool   heardAnything       = false;
 
+    // Zweig-Todesmessung (@dpa 20260819): mit welchem Hüllkurvenwert stirbt ein
+    // Zweig, den der Löser nicht mehr meldet? Er wird über rampSeconds (1 ms)
+    // auf null gefahren, unabhängig von seinem Pegel. Liegt der Mittelwert nahe
+    // 1, schneidet die Anti-Klick-Rampe mitten im vollen Ton ab - das wäre der
+    // Abbruch am Ende der Überschall-Hälfte. Nahe 0 hieße, der Zweig war
+    // ohnehin schon ausgeklungen und die Rampe ist unschuldig.
+    std::uint64_t branchDeaths     = 0;
+    std::uint64_t loudBranchDeaths = 0;
+    double        deathEnvMean     = 0.0;
+    double        deathEnvMax      = 0.0;
+
     void noteSample (double x, double dt)
     {
         constexpr double audible = 1.0e-4;
@@ -106,6 +117,16 @@ struct Stats
                      "", (unsigned long long) solverEvals,
                      blocks > 0 ? (double) solverEvals / blocks : 0.0,
                      worstSilenceSeconds);
+
+        const double seconds    = blocks > 0 ? (double) blocks * blockSize / sampleRate : 0.0;
+        const double perSecond  = seconds > 0.0 ? (double) branchDeaths / seconds : 0.0;
+        const double loudShare  = branchDeaths > 0
+                                 ? 100.0 * (double) loudBranchDeaths / (double) branchDeaths
+                                 : 0.0;
+
+        std::printf ("%-22s Zweig-Tode %8llu (%6.1f /s) | env beim Tod Ø %.3f max %.3f | env >= 0,5: %5.1f %%\n",
+                     "", (unsigned long long) branchDeaths, perSecond,
+                     deathEnvMean, deathEnvMax, loudShare);
     }
 };
 
@@ -181,6 +202,14 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
             stats.maxMach     = std::max (stats.maxMach, std::abs (snapshot.paths[(size_t) i].machRadial));
             stats.maxBranches = std::max (stats.maxBranches, snapshot.paths[(size_t) i].activeBranches);
         }
+
+        // Zweig-Todesmessung: die Zähler im Pfad laufen seit prepareToPlay()
+        // aufwärts, hier zählt der Endstand des Laufs. Nicht aufaddieren -
+        // sonst stünde die Summe über alle Blöcke statt der Zahl der Todesfälle.
+        stats.branchDeaths     = snapshot.branchDeaths;
+        stats.loudBranchDeaths = snapshot.loudBranchDeaths;
+        stats.deathEnvMean     = snapshot.branchDeathEnvMean;
+        stats.deathEnvMax      = snapshot.branchDeathEnvMax;
     }
 
     stats.solverEvals += proc.solverEvaluations() - evalsBefore;

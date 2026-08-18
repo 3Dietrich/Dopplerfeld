@@ -25,6 +25,11 @@ void PropagationPath::reset()
     dispBranches.store (0);
     dispDelay.store (0.0);
     dispMach.store (0.0);
+
+    deathCount.store (0);
+    deathLoudCount.store (0);
+    deathEnvSum.store (0.0);
+    deathEnvMax.store (0.0);
 }
 
 void PropagationPath::setBoomLimitDb (double dB)
@@ -412,6 +417,24 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
             const Target& tg    = targets[s];
             const bool    alive = tg.present;
+
+            // Todesmessung (siehe branchDeaths() im Header): genau die Flanke
+            // "wurde gemeldet -> wird nicht mehr gemeldet". b.env trägt hier
+            // noch den Wert vom Ende des vorigen Segments, also den Pegel, mit
+            // dem der Zweig in die Abwärtsrampe geht.
+            if (b.wasAlive && ! alive)
+            {
+                deathCount.store (deathCount.load() + 1);
+                deathEnvSum.store (deathEnvSum.load() + b.env);
+
+                if (b.env > deathEnvMax.load())
+                    deathEnvMax.store (b.env);
+
+                if (b.env >= 0.5)
+                    deathLoudCount.store (deathLoudCount.load() + 1);
+            }
+
+            b.wasAlive = alive;
 
             // Verschwundener Zweig: mit der zuletzt bekannten Steigung
             // weiterlaufen lassen, während der Envelope auf 0 fährt. Ein

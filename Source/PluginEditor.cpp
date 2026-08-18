@@ -478,6 +478,24 @@ juce::String DopplerfeldEditor::statusText() const
     else if (dopplerfeldProcessor.isPlayingMotion())
         text << "   Wiedergabe";
 
+    // Zweig-Todesmessung (@dpa 20260819): mit welchem Huellkurvenwert stirbt
+    // ein Zweig? Nahe 1 heisst, die Anti-Klick-Rampe schneidet ihn bei vollem
+    // Pegel ab - das waere der gesuchte Abbruch am Ende der Ueberschall-
+    // Haelfte. Nahe 0 hiesse, er war ohnehin schon ausgeklungen.
+    //
+    // Zaehlt ab dem letzten prepareToPlay() (PropagationPath::reset()), also
+    // pro Audio-Start neu. Feste Zahlenbreite wie der Rest der Zeile.
+    if (snapshot.branchDeaths > 0)
+    {
+        const double loudShare = 100.0 * (double) snapshot.loudBranchDeaths
+                                       / (double) snapshot.branchDeaths;
+
+        text << "   Zw-Tod " << juce::String::formatted ("%6llu", (unsigned long long) snapshot.branchDeaths)
+             << " env " << juce::String::formatted ("%4.2f", snapshot.branchDeathEnvMean)
+             << "/" << juce::String::formatted ("%4.2f", snapshot.branchDeathEnvMax)
+             << " laut " << juce::String::formatted ("%3.0f", loudShare) << " %";
+    }
+
     return text;
 }
 

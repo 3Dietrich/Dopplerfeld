@@ -8,6 +8,7 @@
 #include "Vec3.h"
 
 #include <atomic>
+#include <cstdint>
 
 namespace pathdetail
 {
@@ -176,6 +177,35 @@ public:
     double lastDelaySeconds() const  { return dispDelay.load(); }
     double lastMachRadial() const    { return dispMach.load(); }
 
+    // Messung zur Frage "mit welchem Hüllkurvenwert stirbt ein Zweig?"
+    // (@dpa 20260819, Abbruch am Ende der Überschall-Hälfte).
+    //
+    // Ein Zweig, den der Löser nicht mehr meldet, wird über rampSeconds auf
+    // null gefahren - unabhängig davon, wie laut er in diesem Moment war. Ist
+    // die Rampe die Ursache des Abbruchs, muss env beim Übergang von "gemeldet"
+    // auf "nicht mehr gemeldet" nahe 1 liegen; wäre der Zweig ohnehin schon
+    // ausgeklungen, läge er nahe 0.
+    //
+    // Gezählt wird der Übergang selbst, nicht das spätere Freigeben des Slots:
+    // env ist dort noch der Wert VOR der Abwärtsrampe.
+    struct BranchDeathStats
+    {
+        std::uint64_t deaths     = 0;   // Übergänge gemeldet -> nicht mehr gemeldet
+        std::uint64_t loudDeaths = 0;   // davon mit env >= 0,5
+        double        envSum     = 0.0; // Summe der env-Werte, für den Mittelwert
+        double        envMax     = 0.0;
+    };
+
+    BranchDeathStats branchDeaths() const
+    {
+        BranchDeathStats s;
+        s.deaths     = deathCount.load();
+        s.loudDeaths = deathLoudCount.load();
+        s.envSum     = deathEnvSum.load();
+        s.envMax     = deathEnvMax.load();
+        return s;
+    }
+
     int maxBlockSize() const { return maxBlockSamples; }
 
     // Lastmaß des Lösers dieses Pfades (siehe
@@ -199,6 +229,12 @@ private:
         double lpZ     = 0.0;   // Filterzustand - gehört zum Zweig (Plan 2.9)
         double refZ    = 0.0;   // Reflexionsdämpfung, ebenfalls je Zweig
         double env     = 0.0;   // Anti-Klick-Rampe, 0..1
+
+        // Ob der Löser diesen Zweig im VORIGEN Solver-Segment gemeldet hat.
+        // Nur für die Todesmessung (siehe branchDeaths()): daran hängt die
+        // Flanke, ein Zweig der zwischendurch flackert wird so einmal je
+        // Übergang gezählt und nicht einmal je Segment.
+        bool wasAlive = false;
 
         // --- N-Wellen-Schicht, siehe setNWave() ---
         //
@@ -316,4 +352,12 @@ private:
     pathdetail::DisplayValue<int>    dispBranches;
     pathdetail::DisplayValue<double> dispDelay;
     pathdetail::DisplayValue<double> dispMach;
+
+    // Todesmessung, siehe branchDeaths(). Audiothread schreibt, Message-Thread
+    // liest - dieselbe Bauart wie die Anzeigewerte darüber, damit
+    // PropagationPath kopierbar bleibt (std::vector in DopplerEngine).
+    pathdetail::DisplayValue<std::uint64_t> deathCount;
+    pathdetail::DisplayValue<std::uint64_t> deathLoudCount;
+    pathdetail::DisplayValue<double>        deathEnvSum;
+    pathdetail::DisplayValue<double>        deathEnvMax;
 };

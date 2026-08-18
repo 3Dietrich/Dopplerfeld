@@ -885,6 +885,30 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
 
     s.realCloneCount = realClones;
 
+    // Zweig-Todesmessung über ALLE gerechneten Pfade, auch die oben aus der
+    // Liste gefilterten (Klone, abgeschaltete): gefragt ist, wie oft im ganzen
+    // Modell ein Zweig mitten im Klang abgeschnitten wird, nicht wie sich das
+    // auf die Anzeigezeilen verteilt.
+    {
+        std::uint64_t deaths = 0, loud = 0;
+        double envSum = 0.0, envMax = 0.0;
+
+        for (size_t i = 0; i < set.paths.size(); ++i)
+        {
+            const auto d = set.paths[i].branchDeaths();
+
+            deaths += d.deaths;
+            loud   += d.loudDeaths;
+            envSum += d.envSum;
+            envMax  = std::max (envMax, d.envMax);
+        }
+
+        s.branchDeaths       = deaths;
+        s.loudBranchDeaths   = loud;
+        s.branchDeathEnvMean = deaths > 0 ? envSum / (double) deaths : 0.0;
+        s.branchDeathEnvMax  = envMax;
+    }
+
     for (int w = 0; w < maxWalls && w < FieldSnapshot::maxWalls; ++w)
     {
         auto& info = s.walls[(size_t) w];
