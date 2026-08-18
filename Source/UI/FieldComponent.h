@@ -159,6 +159,7 @@ private:
     void drawPerspectiveSource (juce::Graphics& g) const;
     void drawPerspectiveListener (juce::Graphics& g) const;
     void drawWavefronts (juce::Graphics& g) const;
+    void drawReflectionWavefronts (juce::Graphics& g) const;
     void drawTrail (juce::Graphics& g) const;
 
     // Vorbeiflug-Wegvorschau (@dpa-Feedback): geplante Reststrecke + Punkt

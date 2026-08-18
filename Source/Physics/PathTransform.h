@@ -89,16 +89,23 @@ inline PathTransform groundMirrorTransform()
 //
 // Bei tilt = π/2 fällt das auf ẑ zurück, also exakt auf den Bodenfall - die
 // Formel ist damit an ihrem Grenzfall überprüfbar.
-inline PathTransform wallMirrorTransform (Vec3 anchor, double azimuthRad, double tiltRad)
+// Eigenstaendig herausgezogen (statt nur lokal in wallMirrorTransform), weil
+// DopplerEngine sie zusaetzlich fuer die Seitenerkennung braucht (auf
+// welcher Seite der Wandebene stehen Quelle/Hoerer gerade) - siehe
+// DopplerEngine::wallSideGain().
+inline Vec3 wallNormal (double azimuthRad, double tiltRad)
 {
     const double sa = std::sin (azimuthRad);
     const double ca = std::cos (azimuthRad);
     const double st = std::sin (tiltRad);
     const double ct = std::cos (tiltRad);
 
-    const Vec3 n { -sa * ct, ca * ct, st };
+    return { -sa * ct, ca * ct, st };
+}
 
-    return planeMirrorTransform (n, anchor);
+inline PathTransform wallMirrorTransform (Vec3 anchor, double azimuthRad, double tiltRad)
+{
+    return planeMirrorTransform (wallNormal (azimuthRad, tiltRad), anchor);
 }
 
 // Verkettung: erst inner, dann outer, also x -> outer(inner(x)).

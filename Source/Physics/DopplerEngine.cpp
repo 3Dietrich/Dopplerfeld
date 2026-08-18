@@ -454,6 +454,7 @@ void DopplerEngine::setWall (int index, bool enabled, Vec3 anchorMetres,
     s.enabled   = enabled;
     s.damping   = damping01;
     s.transform = wallMirrorTransform (anchorMetres, azimuthRad, tiltRad);
+    s.normal    = wallNormal (azimuthRad, tiltRad);
 
     // Gain sitzt in der Abbildung selbst, nicht in einem eigenen Surface-
     // Feld: composeTransforms() multipliziert outer.gain * inner.gain bei
@@ -561,7 +562,17 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
         return PathTransform{};
 
     if (r.order() == 1)
-        return surfaces[(size_t) r.first].transform;
+    {
+        PathTransform t = surfaces[(size_t) r.first].transform;
+
+        // Seitenerkennung nur bei Waenden (Index >= 2), nicht beim Boden -
+        // @dpa wollte ausdruecklich die Waende, und beim Boden stehen Quelle/
+        // Hoerer ohnehin so gut wie immer auf derselben Seite (oberhalb).
+        if (r.first >= 2)
+            t.gain *= (float) wallSideGain (r.first - 2);
+
+        return t;
+    }
 
     // Der Schall trifft erst first, dann second; der Empfänger wird deshalb
     // erst an second und dann an first gespiegelt (siehe PathRecipe).
@@ -575,6 +586,32 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
     t.gain *= (float) (bounceGain * bounceGainBoost);
 
     return t;
+}
+
+double DopplerEngine::wallSideGain (int wallIndex) const
+{
+    if (wallIndex < 0 || wallIndex >= maxWalls)
+        return 1.0;
+
+    const Surface& s      = surfaces[(size_t) (2 + wallIndex)];
+    const Vec3&    anchor = wallGeometry[(size_t) wallIndex].anchor;
+
+    const double dSrc = s.normal.dot (sourceTarget  - anchor);
+    const double dLis = s.normal.dot (listener.head - anchor);
+
+    // Vorzeichen von dSrc und dLis gleich => Quelle und Hoerer auf derselben
+    // Seite der Wandebene, genau die Bedingung, unter der eine
+    // Spiegelquellen-Reflexion ueberhaupt entsteht (die reale Wand wirft den
+    // Schall in denselben Raum zurueck, aus dem er kam). dSrc * dLis ist
+    // dafuer ein durchgehend stetiges Mass: positiv bei gleicher Seite,
+    // negativ bei verschiedener, und durchlaeuft exakt 0, wenn Quelle ODER
+    // Hoerer die Ebene passieren - deshalb weich ueber sideFadeMetres statt
+    // hart geschaltet, sonst kliekt es beim Ueberqueren.
+    constexpr double sideFadeMetres = 1.5;
+
+    const double t = 0.5 + 0.5 * (dSrc * dLis) / (sideFadeMetres * sideFadeMetres);
+
+    return std::min (1.0, std::max (0.0, t));
 }
 
 double DopplerEngine::recipeDamping (const PathRecipe& r) const
@@ -769,6 +806,45 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         s.wavefrontEmitTimes[(size_t) s.wavefrontCount] = tEmit;
         s.wavefrontPositions[(size_t) s.wavefrontCount] = p;
         ++s.wavefrontCount;
+    }
+
+    // Bild-Wellenfronten der Reflexionen: dieselben Emissionspunkte wie oben,
+    // nur durch die jeweilige Wandspiegelung geschickt (applyPathTransform
+    // ist eine allgemeine affine Punktabbildung - dieselbe, mit der sonst der
+    // EMPFÄNGER gespiegelt wird, liefert auf die QUELLE angewandt genau die
+    // Bildquelle, weil eine Spiegelung ihre eigene Inverse ist).
+    static_assert (maxWalls == 2,
+                   "wallPairWavefronts unten ist von Hand auf zwei Waende geschrieben.");
+
+    for (int w = 0; w < maxWalls && w < FieldSnapshot::maxWalls; ++w)
+    {
+        auto&          wf   = s.wallWavefronts[(size_t) w];
+        const Surface& surf = surfaces[(size_t) (2 + w)];
+
+        wf.active = surf.enabled;
+
+        if (wf.active)
+            for (int i = 0; i < s.wavefrontCount; ++i)
+                wf.positions[(size_t) i] = applyPathTransform (surf.transform, s.wavefrontPositions[(size_t) i]);
+    }
+
+    {
+        const bool pairsActive = secondOrderOn && surfaces[2].enabled && surfaces[3].enabled;
+
+        const PathTransform orderAB = composeTransforms (surfaces[2].transform, surfaces[3].transform);
+        const PathTransform orderBA = composeTransforms (surfaces[3].transform, surfaces[2].transform);
+
+        const PathTransform* const pairTransforms[FieldSnapshot::maxWallPairs] { &orderAB, &orderBA };
+
+        for (int p = 0; p < FieldSnapshot::maxWallPairs; ++p)
+        {
+            auto& wf = s.wallPairWavefronts[(size_t) p];
+            wf.active = pairsActive;
+
+            if (wf.active)
+                for (int i = 0; i < s.wavefrontCount; ++i)
+                    wf.positions[(size_t) i] = applyPathTransform (*pairTransforms[p], s.wavefrontPositions[(size_t) i]);
+        }
     }
 
     s.pathCount = 0;

@@ -169,6 +169,7 @@ void FieldComponent::paint (juce::Graphics& g)
     drawGrid (g);
     drawWalls (g);
     drawWavefronts (g);
+    drawReflectionWavefronts (g);
     drawTrail (g);
     drawFlyByPreview (g);
     drawSource (g);
@@ -314,6 +315,50 @@ void FieldComponent::drawWavefronts (juce::Graphics& g) const
         g.setColour (juce::Colours::cyan.withAlpha (alpha));
         g.drawEllipse (juce::Rectangle<float> (radiusPx * 2.0f, radiusPx * 2.0f).withCentre (centrePx), 1.2f);
     }
+}
+
+void FieldComponent::drawReflectionWavefronts (juce::Graphics& g) const
+{
+    // Bildquellen-Kreise fuer Wandreflexionen (@dpa: "kannst Du die
+    // Reflektionen ... darstellen, aehnlich den Cyan Kreisen") - dieselbe
+    // Konstruktion wie drawWavefronts(), nur um die gespiegelten Positionen
+    // aus dem Snapshot statt um die echte Quellposition, und in eigener
+    // Farbe, damit man Direktschall und Reflexion auseinanderhaelt.
+    const float pxPerM = pixelsPerMetre();
+
+    auto drawSet = [&] (const FieldSnapshot::ImageWavefronts& wf, juce::Colour colour, float thickness)
+    {
+        if (! wf.active)
+            return;
+
+        for (int i = 0; i < snapshot.wavefrontCount; ++i)
+        {
+            const double age = snapshot.now - snapshot.wavefrontEmitTimes[(size_t) i];
+            if (age <= 0.0)
+                continue;
+
+            const double radiusM  = speedOfSound * age;
+            const float  radiusPx = (float) (radiusM * pxPerM);
+            if (radiusPx <= 0.5f || radiusPx > 4000.0f)
+                continue;
+
+            const auto centrePx = worldToScreen (wf.positions[(size_t) i]);
+
+            const float alpha = juce::jmap ((float) i, 0.0f,
+                                            (float) juce::jmax (1, snapshot.wavefrontCount - 1),
+                                            0.40f, 0.05f);
+            g.setColour (colour.withAlpha (alpha));
+            g.drawEllipse (juce::Rectangle<float> (radiusPx * 2.0f, radiusPx * 2.0f).withCentre (centrePx), thickness);
+        }
+    };
+
+    for (const auto& wf : snapshot.wallWavefronts)
+        drawSet (wf, juce::Colours::violet, 1.0f);
+
+    // Mehrfachreflexion dezenter (duenner, eigene Farbe) - sonst wird das
+    // Feld bei zwei aktiven Waenden schnell unruhig.
+    for (const auto& wf : snapshot.wallPairWavefronts)
+        drawSet (wf, juce::Colours::hotpink, 0.8f);
 }
 
 void FieldComponent::drawTrail (juce::Graphics& g) const

@@ -232,6 +232,11 @@ private:
         // Eckfrequenz bei voller Dämpfung. Modellkonstante je Flächenart, kein
         // Regler: der Regler ist die Stärke.
         double        dampFcHz = 800.0;
+
+        // Nur bei Wänden gesetzt (setWall()) - Normale der Ebene, fürs
+        // Seitenerkennen (wallSideGain()). Beim Boden/Direktschall bleibt sie
+        // {0,0,0} und wird nicht benutzt.
+        Vec3 normal;
     };
 
     // Ein Ausbreitungsweg als Rezept: über welche Flächen er läuft, in der
@@ -301,6 +306,14 @@ private:
     PathTransform recipeTransform (const PathRecipe& r) const;
     double        recipeDamping (const PathRecipe& r) const;
     double        recipeDampFcHz (const PathRecipe& r) const;
+
+    // Wie stark eine einfache Wandreflexion (order()==1) gerade physikalisch
+    // ueberhaupt Sinn ergibt: 1, wenn Quelle und Hoerer auf derselben Seite
+    // der Wandebene stehen (die reale Wand wirft den Schall in denselben
+    // Raum zurueck), weich gegen 0, wenn sie auf verschiedenen Seiten stehen
+    // (die "Reflexion" waere ein Durchschein durch die feste Wand, das gibt
+    // es hier nicht). wallIndex ist 0/1 (nicht der Surface-Index).
+    double wallSideGain (int wallIndex) const;
 
     void pushTrajectory (double blockStart, double blockEnd);
 

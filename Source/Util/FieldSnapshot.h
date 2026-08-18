@@ -54,6 +54,31 @@ struct FieldSnapshot
     int    wavefrontCount = 0;
     double now = 0.0;
 
+    // Bild-Wellenfronten der Reflexionen (@dpa: "kannst Du die Reflektionen
+    // ... darstellen, ähnlich den Cyan Kreisen"). Dieselbe Konstruktion wie
+    // wavefrontPositions/-EmitTimes oben, nur durch die jeweilige
+    // Wandspiegelung geschickt: eine Spiegelung ist eine Isometrie, deshalb
+    // erzeugt "Quelle an der Wand spiegeln" exakt dieselbe Bildquellen-
+    // Position, die auch die Empfänger-Spiegelung (siehe PathTransform.h)
+    // physikalisch benutzt - der Kreis erscheint dort, wo die Reflexion
+    // ihren Ursprung zu haben SCHEINT, wie ein Spiegelbild. Emissionszeiten
+    // und -count sind identisch mit wavefrontEmitTimes/wavefrontCount oben,
+    // nur der Kreis-Mittelpunkt wandert je Wand/Wandpaar.
+    struct ImageWavefronts
+    {
+        bool active = false;
+        std::array<Vec3, maxWavefronts> positions {};
+    };
+
+    // Einfache Reflexion, ein Satz je Wand.
+    std::array<ImageWavefronts, maxWalls> wallWavefronts {};
+
+    // Zweifache Reflexion (Mehrfachreflexion, reflect2ndOn): die zwei
+    // möglichen Reihenfolgen über die zwei Wände (Wand0→Wand1 und
+    // Wand1→Wand0) - jede ist ein eigener Weg mit eigener Bildquelle.
+    static constexpr int maxWallPairs = 2;
+    std::array<ImageWavefronts, maxWallPairs> wallPairWavefronts {};
+
     ListenerState listener;
 
     // Pro Pfad ein Eintrag, parallel zu DopplerEngine::getPath(i).
