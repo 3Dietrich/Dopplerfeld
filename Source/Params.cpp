@@ -83,6 +83,21 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (lisYaw, "Listener Yaw", { -180.0f, 180.0f }, 0.0f, "°"));
     layout.add (floatParam (earSpacing, "Ear Spacing", { 0.10f, 0.25f, 0.001f }, 0.17f, "m"));
 
+    // Position-Jitter der Quelle M. Default 0m/aus, damit bestehende Presets
+    // beim Laden unveraendert klingen. Obergrenzen bewusst weit offen statt
+    // auf einen "vernuenftigen" Wert gedeckelt (keine versteckten Limits) -
+    // Skew haelt den ueblichen, dezenten Bereich trotzdem fein bedienbar.
+    {
+        auto range = juce::NormalisableRange<float> (0.0f, 50.0f);
+        range.setSkewForCentre (0.3f);
+        layout.add (floatParam (srcJitterAmount, "Source Jitter Amount", range, 0.0f, "m"));
+    }
+    {
+        auto range = juce::NormalisableRange<float> (0.01f, 20.0f);
+        range.setSkewForCentre (0.3f);
+        layout.add (floatParam (srcJitterRateHz, "Source Jitter Rate", range, 0.2f, "Hz"));
+    }
+
     // --- Motor ---
     {
         // Skew Richtung niedrige Werte: die Klangänderung beim Hochdrehen ist
@@ -238,12 +253,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Rand des Feldes (y = 0,05 und y = 0,95), jeweils quer zur Blickrichtung.
     // Wer sie einschaltet, ohne etwas zu verstellen, hört damit sofort etwas -
     // eine Wand mitten durch den Hörer wäre der verwirrendere Startpunkt.
+    // Gain je Wand (dB): reiner Amplitudenfaktor, unabhaengig vom Damp-
+    // Tiefpass - Default 0dB, bestehende Presets klingen unveraendert.
+    // Range +/-36dB wie sampleGain (@dpa: die Waende sollen richtig
+    // reinknallen koennen, nicht nur eqXGain-Groessenordnung).
     layout.add (boolParam  (wall1On,    "Wall 1", false));
     layout.add (floatParam (wall1X,     "Wall 1 X",     unitRange(), 0.5f));
     layout.add (floatParam (wall1Y,     "Wall 1 Y",     unitRange(), 0.95f));
     layout.add (floatParam (wall1Angle, "Wall 1 Angle", { -180.0f, 180.0f, 0.1f }, 0.0f, "°"));
     layout.add (floatParam (wall1Tilt,  "Wall 1 Tilt",  { -90.0f, 90.0f, 0.1f }, 0.0f, "°"));
     layout.add (floatParam (wall1Damp,  "Wall 1 Damp",  unitRange(), 0.3f));
+    layout.add (floatParam (wall1Gain,  "Wall 1 Gain",  { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
 
     layout.add (boolParam  (wall2On,    "Wall 2", false));
     layout.add (floatParam (wall2X,     "Wall 2 X",     unitRange(), 0.5f));
@@ -251,6 +271,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (wall2Angle, "Wall 2 Angle", { -180.0f, 180.0f, 0.1f }, 0.0f, "°"));
     layout.add (floatParam (wall2Tilt,  "Wall 2 Tilt",  { -90.0f, 90.0f, 0.1f }, 0.0f, "°"));
     layout.add (floatParam (wall2Damp,  "Wall 2 Damp",  unitRange(), 0.3f));
+    layout.add (floatParam (wall2Gain,  "Wall 2 Gain",  { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
 
     // Mehrfachreflexion. Default aus, und hier mit dem staerksten Grund von
     // allen: sie ist erst ab zwei eingeschalteten Flaechen ueberhaupt moeglich
@@ -262,6 +283,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // allein leistet das nicht, sie ist ein Tiefpass mit
     // Gleichstromverstaerkung 1 und nimmt nur Hoehen.
     layout.add (floatParam (bounceGain, "Bounce Gain", { 0.0f, 0.95f, 0.01f }, 0.6f));
+
+    // Zusaetzlicher Boost obendrauf, darf anders als bounceGain ueber 0dB
+    // hinaus. Range wie bei den Wand-Gains.
+    layout.add (floatParam (bounceGainDb, "Bounce Gain Boost", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
 
     // N-Wellen-Schicht. Default aus - @dpa: "ohne Schalter/Regler sowieso
     // bloed, immer drin wollen die wenigsten".
@@ -289,9 +314,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (boolParam (cloneAuto, "Clones Auto", false));
     {
         // Streuung der Klon-Routen in Metern. Klein gemeint ("die Route weicht
-        // um sehr kleine Betraege ab"), nach oben trotzdem offen.
-        auto range = juce::NormalisableRange<float> (0.0f, 200.0f);
-        range.setSkewForCentre (3.0f);
+        // um sehr kleine Betraege ab"), nach oben trotzdem weit offen (@dpa:
+        // "mehr, weiter, 0 bis 1000 oder so") - Skew bleibt unten fein, oben
+        // ist trotzdem Platz fuer einen buchstaeblich auseinandergezogenen
+        // Schwarm.
+        auto range = juce::NormalisableRange<float> (0.0f, 1000.0f);
+        range.setSkewForCentre (15.0f);
         layout.add (floatParam (cloneSpread, "Clone Spread", range, 3.0f, "m"));
     }
     layout.add (floatParam (cloneLevel, "Clone Level", unitRange(), 0.5f));

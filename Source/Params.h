@@ -26,6 +26,15 @@ namespace Params
     constexpr const char* lisYaw      = "lisYaw";
     constexpr const char* earSpacing  = "earSpacing";
 
+    // Position-Jitter der QUELLE M (Motor/Sender, nicht der Hoerer!) - eine
+    // langsame, additive Mikrobewegung um die eingestellte Position, fuer den
+    // "echten Chorus" bei Stillstand (@dpa 20260818). Nicht zu verwechseln
+    // mit jitterAmount/jitterRateHz weiter unten (Motor--Sektion) - das dort
+    // ist Rauschen auf der Motortonhoehe, hier ist es echte Ortsbewegung.
+    // srcJitter*-Praefix statt lis*, weil "M" die Quelle meint.
+    constexpr const char* srcJitterAmount = "srcJitterAmount";
+    constexpr const char* srcJitterRateHz = "srcJitterRateHz";
+
     // --- Motor ---
     constexpr const char* rpm = "rpm";
 
@@ -125,6 +134,11 @@ namespace Params
     constexpr const char* wall1Angle = "wall1Angle";
     constexpr const char* wall1Tilt  = "wall1Tilt";
     constexpr const char* wall1Damp  = "wall1Damp";
+    // Pegel-Regler (dB) der Reflexion, unabhaengig von Damp: Damp ist ein
+    // Tiefpass mit Gleichstromverstaerkung 1 (nimmt nur Hoehen), Gain ist ein
+    // reiner Amplitudenfaktor - hoert man die Wand trotz Tiefpass zu leise,
+    // ist das hier der Regler dafuer, nicht Damp herunterdrehen.
+    constexpr const char* wall1Gain  = "wall1Gain";
 
     constexpr const char* wall2On    = "wall2On";
     constexpr const char* wall2X     = "wall2X";
@@ -132,11 +146,21 @@ namespace Params
     constexpr const char* wall2Angle = "wall2Angle";
     constexpr const char* wall2Tilt  = "wall2Tilt";
     constexpr const char* wall2Damp  = "wall2Damp";
+    constexpr const char* wall2Gain  = "wall2Gain";
 
     // Mehrfachreflexion: genau eine zusätzliche Generation (Quelle -> Fläche X
     // -> Fläche Y -> Ohr, X != Y), plus der Pegelfaktor je Generation.
     constexpr const char* reflect2ndOn = "reflect2ndOn";
     constexpr const char* bounceGain   = "bounceGain";
+
+    // Zusaetzlicher, unabhaengiger Boost-Gain (dB) obendrauf, der - anders
+    // als bounceGain selbst - ausdruecklich ueber 0dB hinaus verstaerken
+    // darf. bounceGain bleibt der Generationsfaktor <1 (siehe
+    // DopplerEngine::setBounceGain: garantiert, dass jede weitere
+    // Reflexionsgeneration leiser wird als die vorige) - das waere gebrochen,
+    // wenn er selbst zum Boost umgebaut wuerde. bounceGainDb greift deshalb
+    // separat, ebenfalls unabhaengig vom Tiefpass der Flaechendaempfung.
+    constexpr const char* bounceGainDb = "bounceGainDb";
 
     // Druckwellen-/N-Wellen-Schicht für den Überschallknall. Eigener Schalter
     // (Default aus) und ein eigener Größenregler; beides ist ausdrücklich
