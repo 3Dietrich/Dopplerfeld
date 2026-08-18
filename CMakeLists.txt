@@ -50,6 +50,7 @@ target_sources(Dopplerfeld
         Source/Motion/CriticallyDampedSpring.cpp
         Source/Motion/SlewLimiter.cpp
         Source/Motion/OneEuroSmoother.cpp
+        Source/Motion/PositionJitter.cpp
         Source/Physics/RetardedTimeSolver.cpp
         Source/Sources/EngineGenerator.cpp
         Source/Sources/SampleSource.cpp
