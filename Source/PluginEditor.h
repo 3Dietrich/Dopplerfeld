@@ -17,6 +17,7 @@
 #include "Util/FieldSnapshot.h"
 
 #include <array>
+#include <vector>
 
 // Oberfläche nach Plan 3.13: links das Feld mit M und L, rechts die
 // einklappbaren Regler-Panels in einem Viewport.
@@ -118,9 +119,16 @@ private:
     juce::TextButton scopeSyncButton;
 
     // Zwischenspeicher fuer das Rohfenster aus dem Processor - Mitgliedsvariable
-    // statt Stack-Array im Timer, damit pro Tick nicht neu allokiert wird.
-    std::array<float, ScopeComponent::captureWindowSamples> scopeRawLeft {};
-    std::array<float, ScopeComponent::captureWindowSamples> scopeRawRight {};
+    // statt Stack-Array im Timer. Groesse folgt der aktuellen Zoomstufe
+    // (siehe ScopeComponent::captureWindowSampleCount()), deshalb ein Vektor
+    // statt eines Arrays fester Groesse - wird nur bei Zoomaenderung neu
+    // dimensioniert, nicht bei jedem Tick.
+    std::vector<float> scopeRawLeft, scopeRawRight;
+
+    // Letzte an den Scope gemeldete Samplerate (0 = noch keine gemeldet) -
+    // nur bei Aenderung wird setMaxDisplaySampleCount() neu gerechnet, siehe
+    // refreshDisplay().
+    double lastKnownScopeSampleRate = 0.0;
 
     juce::Viewport  panelViewport;
     juce::Component panelHolder;

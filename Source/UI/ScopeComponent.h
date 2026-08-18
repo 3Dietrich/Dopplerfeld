@@ -1,39 +1,35 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
-#include <array>
+#include <vector>
 
 // Oszilloskop fuer den Ausgang (@dpa-Feedback, "Scope einbauen ... gross
-// genug zum analysieren"). Zeitbereichs-Darstellung von L/R, gross genug
-// gezeichnet, um darin einzelne Perioden und den ueberschall-typischen
-// "Knall" auseinanderzuhalten. Hat wie LevelMeter keinen eigenen Timer - der
-// Aufrufer (Editor-Timer) pusht periodisch ein Rohfenster aus dem
-// Ringpuffer (siehe ScopeRingBuffer), die Komponente entscheidet daraus
-// selbst, was angezeigt wird (Freeze/Sync leben deshalb hier, nicht im
-// Editor).
+// genug zum analysieren ... zoombar"). Zeitbereichs-Darstellung von L/R.
+// Hat wie LevelMeter keinen eigenen Timer - der Aufrufer (Editor-Timer)
+// pusht periodisch ein Rohfenster aus dem Ringpuffer (siehe
+// ScopeRingBuffer), die Komponente entscheidet daraus selbst, was
+// angezeigt wird (Freeze/Sync/Zoom leben deshalb hier, nicht im Editor).
+//
+// Zoom laeuft in Samples, nicht in Sekunden - die Komponente kennt die
+// Samplerate nicht (die haengt an dem, was gerade geladen ist, und aendert
+// sich mit dem Host/Projekt). Der Editor rechnet die Samplerate-abhaengige
+// Obergrenze um (siehe setMaxDisplaySampleCount()) und reicht ausserdem
+// einen reinen Anzeige-Hinweis fuer die Zeit-Beschriftung durch
+// (setSampleRateHint()) - beides bewusst getrennt vom DSP-Pfad.
 class ScopeComponent : public juce::Component,
                         public juce::SettableTooltipClient
 {
 public:
-    // Wie viele Samples am Ende angezeigt werden (die "Zeitbasis" des
-    // Scopes). 4096 Samples sind bei 44.1-48 kHz rund 85-93 ms - genug, um
-    // bei den hohen, doppler-verschobenen Frequenzen mehrere Perioden UND
-    // ein kurzes Chaos-Ereignis (Ueberschall-Knall) gleichzeitig zu sehen.
-    static constexpr int displaySamples = 4096;
-
-    // Das Rohfenster, das feed() erwartet: doppelt so lang wie
-    // displaySamples, damit bei aktivem Sync ein Trigger irgendwo in der
-    // mittleren Haelfte gefunden werden kann UND danach noch genug
-    // Samples uebrig sind, um displaySamples/2 nach dem Trigger zu fuellen
-    // (das Trigger-Sample landet exakt in der Mitte der Anzeige).
-    static constexpr int captureWindowSamples = displaySamples * 2;
+    // Untere Zoom-Grenze in Samples, samplerate-unabhaengig - darunter waeren
+    // nur noch ein paar Punkte zu sehen, das bringt nichts mehr.
+    static constexpr int minDisplaySamples = 128;
 
     ScopeComponent();
 
-    // Neues Rohfenster von genau captureWindowSamples Samples (chronolo-
-    // gisch, aeltestes zuerst). Bei gesetztem Freeze wird das Fenster
-    // ignoriert - die zuletzt angezeigten Kurven bleiben stehen, wie am
-    // echten Geraet.
+    // Neues Rohfenster von genau captureWindowSampleCount() Samples
+    // (chronologisch, aeltestes zuerst). Bei gesetztem Freeze wird das
+    // Fenster ignoriert - die zuletzt angezeigten Kurven bleiben stehen, wie
+    // am echten Geraet.
     void feed (const float* rawLeft, const float* rawRight);
 
     void setFrozen (bool shouldFreeze) { frozen = shouldFreeze; }
@@ -46,21 +42,42 @@ public:
     void setSyncEnabled (bool shouldSync) { syncEnabled = shouldSync; }
     bool isSyncEnabled() const { return syncEnabled; }
 
+    // Obere Zoom-Grenze in Samples (Editor: DopplerfeldProcessor::
+    // scopeMaxDisplaySeconds * Samplerate). Klemmt den aktuellen Zoom mit,
+    // falls der gerade darueber liegt (z.B. nach einem Samplerate-Wechsel
+    // auf einen kleineren Wert).
+    void setMaxDisplaySampleCount (int maxSamples);
+
+    // Reiner Anzeige-Wert fuer die Zeit-Beschriftung in paint() - siehe
+    // Klassenkommentar.
+    void setSampleRateHint (double sr) { sampleRateHint = sr; }
+
+    int displaySampleCount() const { return displaySamples; }
+    int captureWindowSampleCount() const { return displaySamples * 2; }
+
     void paint (juce::Graphics& g) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel) override;
 
 private:
-    // Sucht im Bereich [captureWindowSamples/4 .. captureWindowSamples*3/4)
-    // den steigenden Nulldurchgang von rawLeft, der der exakten Fenstermitte
-    // am naechsten liegt. Liefert -1, wenn keiner gefunden wurde (z.B.
-    // Stille oder reiner Gleichanteil) - der Aufrufer faellt dann auf die
+    // Sucht im Bereich [captureWindowSampleCount()/4 .. *3/4) den
+    // steigenden Nulldurchgang von rawLeft, der der exakten Fenstermitte am
+    // naechsten liegt. Liefert -1, wenn keiner gefunden wurde (z.B. Stille
+    // oder reiner Gleichanteil) - der Aufrufer faellt dann auf die
     // ungesynchte Anzeige zurueck, damit das Bild nicht leer bleibt.
-    static int findTriggerIndex (const float* rawLeft);
+    int findTriggerIndex (const float* rawLeft) const;
 
-    bool frozen       = false;
-    bool syncEnabled  = false;
+    // Setzt eine neue Zoomstufe (Samples), klemmt auf [minDisplaySamples,
+    // maxDisplaySamples] und passt die Anzeigepuffer an.
+    void setDisplaySampleCount (int newCount);
 
-    std::array<float, displaySamples> shownLeft {};
-    std::array<float, displaySamples> shownRight {};
+    bool frozen      = false;
+    bool syncEnabled = false;
+
+    int displaySamples    = 4096;          // Default bis der Editor die Samplerate kennt
+    int maxDisplaySamples = 1 << 20;        // vorlaeufig grosszuegig, s. setMaxDisplaySampleCount()
+    double sampleRateHint = 48000.0;
+
+    std::vector<float> shownLeft, shownRight;
 
     // Ob gerade eine Sync-Ausrichtung gelungen ist (fuer die Trigger-Linie
     // in paint() - bei fehlgeschlagener Suche wuerde sonst eine Trigger-

@@ -394,6 +394,12 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
 
     monoScratch.setSize (1, maxBlock, false, true, true);
 
+    // Scope (@dpa-Feedback: Zoom bis ~3s Zeitbasis): der Ringpuffer muss das
+    // Doppelte der max. Zeitbasis fassen (ScopeComponent liest ein
+    // Rohfenster, das doppelt so lang ist wie die Anzeige - Sicherheitsabstand
+    // fuer die Trigger-Suche bei Sync, siehe dortigen Klassenkommentar).
+    scopeRing.prepare (sampleRate, 2.0 * scopeMaxDisplaySeconds);
+
     cloneSpray.prepare (sampleRate, 2);
 
     engineGenerator.prepare (sampleRate, maxBlock);

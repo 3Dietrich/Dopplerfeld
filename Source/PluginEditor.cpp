@@ -300,8 +300,27 @@ void DopplerfeldEditor::refreshDisplay()
     // selbst spart sich der Editor, solange gar nicht sichtbar ist.
     if (scopeVisible)
     {
-        dopplerfeldProcessor.fillScopeWindow (scopeRawLeft.data(), scopeRawRight.data(),
-                                              ScopeComponent::captureWindowSamples);
+        // Samplerate kann sich aendern (Host-Wechsel des Projekts) - nur bei
+        // echter Aenderung neu rechnen, nicht bei jedem 33ms-Tick.
+        const double sr = dopplerfeldProcessor.getSampleRate();
+
+        if (sr > 0.0 && std::abs (sr - lastKnownScopeSampleRate) > 0.5)
+        {
+            lastKnownScopeSampleRate = sr;
+            scope.setSampleRateHint (sr);
+            scope.setMaxDisplaySampleCount (
+                (int) (sr * DopplerfeldProcessor::scopeMaxDisplaySeconds));
+        }
+
+        const int captureLen = scope.captureWindowSampleCount();
+
+        if ((int) scopeRawLeft.size() != captureLen)
+        {
+            scopeRawLeft.resize ((size_t) captureLen);
+            scopeRawRight.resize ((size_t) captureLen);
+        }
+
+        dopplerfeldProcessor.fillScopeWindow (scopeRawLeft.data(), scopeRawRight.data(), captureLen);
         scope.feed (scopeRawLeft.data(), scopeRawRight.data());
     }
 

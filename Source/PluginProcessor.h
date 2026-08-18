@@ -163,11 +163,19 @@ public:
     float consumeOutputPeakL() { return outPeakL.exchange (0.0f, std::memory_order_relaxed); }
     float consumeOutputPeakR() { return outPeakR.exchange (0.0f, std::memory_order_relaxed); }
 
+    // Groesste vom Scope anzeigbare Zeitbasis (@dpa-Feedback: "max.
+    // Zeitbereich ... etwa 3s"). Bestimmt, wie gross scopeRing in
+    // prepareToPlay() angelegt wird, UND die obere Zoom-Grenze, die der
+    // Editor der ScopeComponent mitgibt (siehe DopplerfeldEditor::
+    // refreshDisplay()) - ein Wert statt zweier, die auseinanderlaufen
+    // koennten.
+    static constexpr double scopeMaxDisplaySeconds = 3.0;
+
     // Scope (@dpa-Feedback): liest die juengsten `numSamples` Ausgangs-
     // Samples (nach Gain/Limiter, dieselbe Stelle wie das Levelmeter) aus
     // dem Ringpuffer. numSamples liegt in der Hand des Aufrufers (Editor/
-    // ScopeComponent::captureWindowSamples) - der Processor kennt die
-    // Anzeige-Konstante bewusst nicht, das ist reine UI-Sache.
+    // ScopeComponent) - der Processor kennt die aktuelle Zoomstufe bewusst
+    // nicht, das ist reine UI-Sache.
     void fillScopeWindow (float* destL, float* destR, int numSamples) const
     {
         scopeRing.readLatest (destL, destR, numSamples);

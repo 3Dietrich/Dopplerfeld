@@ -1,16 +1,57 @@
 #include "ScopeComponent.h"
 
+#include <cmath>
+
 ScopeComponent::ScopeComponent()
 {
-    setTooltip ("Oszilloskop des Ausgangs (nach Gain/Limiter). Freeze haelt das Bild an, "
-               "Sync richtet einen steigenden Nulldurchgang von L in der Mitte des Scopes aus.");
+    setTooltip ("Oszilloskop des Ausgangs (nach Gain/Limiter). Mausrad zoomt die Zeitbasis, "
+               "Freeze haelt das Bild an, Sync richtet einen steigenden Nulldurchgang von L in "
+               "der Mitte des Scopes aus.");
+
+    shownLeft.resize ((size_t) displaySamples, 0.0f);
+    shownRight.resize ((size_t) displaySamples, 0.0f);
 }
 
-int ScopeComponent::findTriggerIndex (const float* rawLeft)
+void ScopeComponent::setDisplaySampleCount (int newCount)
 {
-    constexpr int centre = captureWindowSamples / 2;
-    constexpr int lo     = captureWindowSamples / 4;
-    constexpr int hi     = (captureWindowSamples * 3) / 4;
+    newCount = juce::jlimit (minDisplaySamples, juce::jmax (minDisplaySamples, maxDisplaySamples), newCount);
+
+    if (newCount == displaySamples)
+        return;
+
+    displaySamples = newCount;
+    shownLeft.assign ((size_t) displaySamples, 0.0f);
+    shownRight.assign ((size_t) displaySamples, 0.0f);
+    repaint();
+}
+
+void ScopeComponent::setMaxDisplaySampleCount (int maxSamples)
+{
+    maxDisplaySamples = juce::jmax (minDisplaySamples, maxSamples);
+
+    if (displaySamples > maxDisplaySamples)
+        setDisplaySampleCount (maxDisplaySamples);
+}
+
+void ScopeComponent::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+{
+    if (wheel.deltaY == 0.0f)
+        return;
+
+    // Hoch scrollen = reinzoomen (weniger Samples, kuerzere Zeitbasis),
+    // runter = rauszoomen - wie in jedem DAW-Editor. Multiplikativ statt
+    // additiv, sonst waere ein Schritt bei kleiner Zoomstufe riesig und bei
+    // grosser winzig.
+    const float factor = wheel.deltaY > 0.0f ? 0.8f : 1.25f;
+    setDisplaySampleCount ((int) std::lround ((float) displaySamples * factor));
+}
+
+int ScopeComponent::findTriggerIndex (const float* rawLeft) const
+{
+    const int captureLen = captureWindowSampleCount();
+    const int centre = captureLen / 2;
+    const int lo     = captureLen / 4;
+    const int hi     = (captureLen * 3) / 4;
 
     // Von der Mitte aus in beide Richtungen wachsend suchen, damit bei
     // mehreren Treffern automatisch der naechste zur Mitte gewinnt - kein
@@ -81,10 +122,10 @@ void ScopeComponent::paint (juce::Graphics& g)
         g.drawLine (centreX, area.getY(), centreX, area.getBottom(), 1.0f);
     }
 
-    auto drawTrace = [&] (const std::array<float, displaySamples>& samples, juce::Colour colour)
+    auto drawTrace = [&] (const std::vector<float>& samples, juce::Colour colour)
     {
         juce::Path path;
-        const float xStep = area.getWidth() / (float) (displaySamples - 1);
+        const float xStep = area.getWidth() / (float) juce::jmax (1, displaySamples - 1);
 
         for (int n = 0; n < displaySamples; ++n)
         {
@@ -107,6 +148,18 @@ void ScopeComponent::paint (juce::Graphics& g)
 
     g.setColour (juce::Colours::white.withAlpha (0.4f));
     g.drawRect (area, 1.0f);
+
+    // Zeitbasis-Beschriftung (@dpa-Feedback: "zoombar") - reine Anzeige aus
+    // sampleRateHint, damit man sieht, wie weit man gerade reingezoomt ist.
+    const double windowMs = 1000.0 * (double) displaySamples / juce::jmax (1.0, sampleRateHint);
+    juce::String label = windowMs >= 1000.0
+                        ? juce::String (windowMs / 1000.0, 2) + " s"
+                        : juce::String (windowMs, 1) + " ms";
+
+    g.setColour (juce::Colours::white.withAlpha (0.5f));
+    g.setFont (12.0f);
+    g.drawText (label, area.reduced (6.0f).removeFromTop (16.0f),
+               juce::Justification::topLeft);
 
     if (frozen)
     {
