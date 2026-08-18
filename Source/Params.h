@@ -187,5 +187,14 @@ namespace Params
     constexpr const char* outputGain = "outputGain";
     constexpr const char* limiterOn  = "limiterOn";
 
+    // Zusaetzlicher Boost obendrauf (@dpa-Feedback: "Lauter", 0..+36dB) - die
+    // hohe Dynamik des Doppler-Materials (leiser Direktschall neben lauten
+    // Ueberschall-Knallen) lässt outputGain allein oft zu leise wirken, ohne
+    // dass @dpa outputGain selbst staendig ins Plus schieben will (das bleibt
+    // die Regel-Fahrt um 0dB). Eigener Regler statt outputGain-Range
+    // aufzubohren, weil beide unterschiedliche Rollen haben: outputGain ist
+    // der Feinabgleich, loudBoost ist "mehr drauf, Punkt".
+    constexpr const char* loudBoost = "loudBoost";
+
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 }

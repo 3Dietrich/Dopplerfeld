@@ -42,6 +42,12 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
                "Ausgangslautstaerke (dB). Der Pegel folgt 1/Abstand ohne Referenzdistanz - "
                "bei grossen Feldern ist das leise, hier laesst sich gegensteuern.");
 
+    setupKnob (loudBoostKnob,   apvts, Params::loudBoost,       "Lauter",
+               "Zusaetzlicher Boost obendrauf, 0 bis +36dB (@dpa-Feedback). Fuer die hohe "
+               "Dynamik des Doppler-Materials - leiser Direktschall neben lauten "
+               "Ueberschall-Knallen macht Output Gain allein oft zu leise. Addiert sich auf "
+               "Output Gain, derselbe Signalweg/derselbe Limiter dahinter.");
+
     setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve",
                "Wie stark die Entfernung auf die Lautstaerke wirkt. Mitte (0) = "
                "physikalisch korrektes 1/R, wie bisher. Nach rechts: faellt schneller "
@@ -156,7 +162,7 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto jitterRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob })
+    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &loudBoostKnob })
     {
         layoutKnob (*k, jitterRow.removeFromLeft (knobW));
         jitterRow.removeFromLeft (4);

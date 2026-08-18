@@ -231,6 +231,17 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     scopeSyncButton.setButtonText ("Sync");
     addAndMakeVisible (scopeSyncButton);
 
+    scopeZoomInButton.setTooltip ("Reinzoomen (kuerzere Zeitbasis). Wirkt wie Mausrad hoch "
+                                  "oder Pinch-Auseinanderziehen direkt auf dem Scope.");
+    scopeZoomInButton.onClick = [this] { scope.zoomStep (0.7f); };
+    addAndMakeVisible (scopeZoomInButton);
+
+    scopeZoomOutButton.setTooltip ("Rauszoomen (laengere Zeitbasis, bis zu 3s). Wirkt wie "
+                                   "Mausrad runter oder Pinch-Zusammenziehen direkt auf dem "
+                                   "Scope.");
+    scopeZoomOutButton.onClick = [this] { scope.zoomStep (1.4f); };
+    addAndMakeVisible (scopeZoomOutButton);
+
     updateScopeVisibility();
 
     // 30 Hz: schnell genug, dass eine gezogene Quelle nicht ruckelt, und
@@ -243,6 +254,8 @@ void DopplerfeldEditor::updateScopeVisibility()
     scope.setVisible (scopeVisible);
     scopeFreezeButton.setVisible (scopeVisible);
     scopeSyncButton.setVisible (scopeVisible);
+    scopeZoomInButton.setVisible (scopeVisible);
+    scopeZoomOutButton.setVisible (scopeVisible);
 
     setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
              margin * 2 + topBarHeight + 6 + fieldHeight
@@ -466,6 +479,10 @@ void DopplerfeldEditor::resized()
         scopeFreezeButton.setBounds (scopeToolbar.removeFromLeft (90));
         scopeToolbar.removeFromLeft (8);
         scopeSyncButton.setBounds (scopeToolbar.removeFromLeft (90));
+        scopeToolbar.removeFromLeft (16);
+        scopeZoomOutButton.setBounds (scopeToolbar.removeFromLeft (28));
+        scopeToolbar.removeFromLeft (4);
+        scopeZoomInButton.setBounds (scopeToolbar.removeFromLeft (28));
 
         fieldArea.removeFromTop (4);
         scope.setBounds (fieldArea.removeFromTop (scopeHeight));

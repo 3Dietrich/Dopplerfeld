@@ -33,6 +33,11 @@ void ScopeComponent::setMaxDisplaySampleCount (int maxSamples)
         setDisplaySampleCount (maxDisplaySamples);
 }
 
+void ScopeComponent::zoomStep (float factor)
+{
+    setDisplaySampleCount ((int) std::lround ((float) displaySamples * factor));
+}
+
 void ScopeComponent::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
 {
     if (wheel.deltaY == 0.0f)
@@ -42,8 +47,13 @@ void ScopeComponent::mouseWheelMove (const juce::MouseEvent&, const juce::MouseW
     // runter = rauszoomen - wie in jedem DAW-Editor. Multiplikativ statt
     // additiv, sonst waere ein Schritt bei kleiner Zoomstufe riesig und bei
     // grosser winzig.
-    const float factor = wheel.deltaY > 0.0f ? 0.8f : 1.25f;
-    setDisplaySampleCount ((int) std::lround ((float) displaySamples * factor));
+    zoomStep (wheel.deltaY > 0.0f ? 0.8f : 1.25f);
+}
+
+void ScopeComponent::mouseMagnify (const juce::MouseEvent&, float scaleFactor)
+{
+    if (scaleFactor > 0.0f)
+        zoomStep (1.0f / scaleFactor);
 }
 
 int ScopeComponent::findTriggerIndex (const float* rawLeft) const

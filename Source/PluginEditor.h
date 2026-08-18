@@ -118,6 +118,13 @@ private:
     juce::TextButton scopeFreezeButton;
     juce::TextButton scopeSyncButton;
 
+    // Zoom (@dpa-Feedback: "zoombar", brauchbar auch ohne verlaessliche
+    // Scroll-/Pinch-Geste) - Klick-Knoepfe als garantiert funktionierender
+    // Weg, zusaetzlich zu Mausrad/Pinch direkt auf dem Scope (siehe
+    // ScopeComponent).
+    juce::TextButton scopeZoomInButton  { "+" };
+    juce::TextButton scopeZoomOutButton { "-" };
+
     // Zwischenspeicher fuer das Rohfenster aus dem Processor - Mitgliedsvariable
     // statt Stack-Array im Timer. Groesse folgt der aktuellen Zoomstufe
     // (siehe ScopeComponent::captureWindowSampleCount()), deshalb ein Vektor

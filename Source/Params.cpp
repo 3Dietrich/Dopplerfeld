@@ -330,6 +330,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
     // --- Ausgang ---
     layout.add (floatParam (outputGain, "Output Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+    layout.add (floatParam (loudBoost, "Lauter", { 0.0f, 36.0f, 0.1f }, 0.0f, "dB"));
     layout.add (boolParam (limiterOn, "Limiter", true));
 
     return layout;

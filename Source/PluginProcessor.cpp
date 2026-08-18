@@ -302,6 +302,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.fadeManualMs = raw (Params::fadeManualMs);
 
     pp.outputGain = raw (Params::outputGain);
+    pp.loudBoost  = raw (Params::loudBoost);
     pp.limiterOn  = raw (Params::limiterOn);
 
     // Übergabepuffer der geladenen Aufzeichnung einmal auf Höchstlänge
@@ -461,7 +462,8 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     lastFieldMetres = fieldMetresValue;
 
     outputGainLinear.reset (sampleRate, 0.02);
-    outputGainLinear.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (pp.outputGain->load()));
+    outputGainLinear.setCurrentAndTargetValue (
+        juce::Decibels::decibelsToGain (pp.outputGain->load() + pp.loudBoost->load()));
 }
 
 void DopplerfeldProcessor::restartEngine()
@@ -685,7 +687,11 @@ void DopplerfeldProcessor::applyParameters()
     dopplerEngine.setManualFade (manualFade, manualSeconds);
 
     // --- Ausgang ---
-    outputGainLinear.setTargetValue (juce::Decibels::decibelsToGain (pp.outputGain->load()));
+    // "Lauter" (@dpa-Feedback, 0..+36dB) addiert sich auf outputGain drauf -
+    // eigener Regler fuer den Boost, gemeinsame Rampe/Signalkette mit dem
+    // Feinabgleich (siehe Params::loudBoost).
+    outputGainLinear.setTargetValue (
+        juce::Decibels::decibelsToGain (pp.outputGain->load() + pp.loudBoost->load()));
     limiterEnabled = pp.limiterOn->load() > 0.5f;
 }
 

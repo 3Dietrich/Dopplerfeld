@@ -55,8 +55,20 @@ public:
     int displaySampleCount() const { return displaySamples; }
     int captureWindowSampleCount() const { return displaySamples * 2; }
 
+    // Ein Zoom-Schritt, multiplikativ: factor < 1 verkuerzt die Zeitbasis
+    // (reinzoomen), factor > 1 verlaengert sie (rauszoomen). Oeffentlich,
+    // damit der Editor zusaetzliche +/- Knoepfe daran haengen kann - Wheel
+    // und Pinch (unten) rufen intern dasselbe.
+    void zoomStep (float factor);
+
     void paint (juce::Graphics& g) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel) override;
+
+    // Pinch-Geste auf dem Trackpad (@dpa-Feedback: "fuer Mac mit Touchpad") -
+    // die naheliegendste Zoom-Geste auf dem Mac, unabhaengig davon, ob/wie
+    // vertikales Scrollen gerade belegt ist. scaleFactor > 1 = Finger
+    // spreizen (reinzoomen), < 1 = zusammenziehen (rauszoomen).
+    void mouseMagnify (const juce::MouseEvent&, float scaleFactor) override;
 
 private:
     // Sucht im Bereich [captureWindowSampleCount()/4 .. *3/4) den

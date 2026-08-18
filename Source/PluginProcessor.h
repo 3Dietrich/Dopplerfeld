@@ -401,6 +401,7 @@ private:
         std::atomic<float>* fadeManualMs = nullptr;
 
         std::atomic<float>* outputGain = nullptr;
+        std::atomic<float>* loudBoost  = nullptr;
         std::atomic<float>* limiterOn  = nullptr;
     };
 
