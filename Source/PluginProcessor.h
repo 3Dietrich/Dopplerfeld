@@ -240,6 +240,14 @@ private:
         // benutzten Glätters aus wieder anfährt.
         void setType (int index, Vec3 currentPos);
 
+        // Wie reset(), aber ohne den Slew-Limiter: der läuft während der
+        // Catmull-Rom-Clip-Wiedergabe aktiv als Überschwinger-Wächter mit
+        // (siehe wasMotionSlewGuardActive in DopplerfeldProcessor) und
+        // braucht sein eigenes vel über die Ticks hinweg, um zu bremsen/zu
+        // beschleunigen - ein Reset hier würde ihn jeden Tick auf Stillstand
+        // zurückwerfen und faktisch lahmlegen.
+        void resetExceptSlew (Vec3 pos);
+
         void applyParameters (double tauSeconds, double vMax, double aMax);
 
         void setTarget (Vec3 pos) { current->setTarget (pos); }
@@ -408,6 +416,22 @@ private:
     // Samplerate-Änderung erneut gerufen, ein zweites Mal würde eine bereits
     // geladene/aufgenommene Bewegung mit einem leeren Clip überschreiben.
     bool motionPlayerCapacityWarmed = false;
+
+    // Wächter gegen Catmull-Rom-Überschwinger (@dpa 20260818, "Thor swings
+    // Hammer"-Repro): bei Clip-Wiedergabe mit Catmull-Rom-Interpolation
+    // überspringt advanceMotion() den kompletten sourceSmoothers-Schritt
+    // (siehe Kommentar dort) - eine scharfe Schwungumkehr im aufgezeichneten
+    // Pfad kann die Spline dabei kurz über Schallgeschwindigkeit hinausschiessen
+    // lassen, ungebremst von slewVmax/slewAmax. Der Wächter ist die eigene
+    // SlewLimiter-Instanz aus sourceSmoothers (Params::slewVmax/slewAmax
+    // werden ihr ohnehin immer nachgeführt, siehe SmootherSet::
+    // applyParameters - unabhängig davon, ob "Slew Limiter" als Verfahren
+    // ausgewählt ist), NICHT der von @dpa gewählte Smoother-Typ: eine
+    // Tau-basierte Glättung würde auch legitime grosse Bewegungen abrunden/
+    // verlangsamen (das war der eigentliche Einwand), ein Slew-Limiter mit
+    // ausreichend hohem Vmax/Amax lässt normales Tempo praktisch unverändert
+    // durch und kappt nur den Überschwinger-Spitzenwert.
+    bool wasMotionSlewGuardActive = false;
 
     // Mono-Zwischenpuffer für die Quellstufe. Die Engine schreibt ihn nicht,
     // sie liest ihn nur - deshalb genau einer, unabhängig von der Pfadanzahl.

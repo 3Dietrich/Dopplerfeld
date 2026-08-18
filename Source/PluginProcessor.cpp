@@ -124,6 +124,17 @@ void DopplerfeldProcessor::SmootherSet::reset (Vec3 pos)
     oneEuro.setTarget (pos);
 }
 
+void DopplerfeldProcessor::SmootherSet::resetExceptSlew (Vec3 pos)
+{
+    onePole.reset (pos);
+    spring.reset  (pos);
+    oneEuro.reset (pos);
+
+    onePole.setTarget (pos);
+    spring.setTarget  (pos);
+    oneEuro.setTarget (pos);
+}
+
 void DopplerfeldProcessor::SmootherSet::setType (int index, Vec3 currentPos)
 {
     index = juce::jlimit (0, 3, index);
@@ -1014,12 +1025,19 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
 
         if (bypassSmoothing)
         {
-            // Das Nachfuehren des internen Glaetter-Zustands (Kommentar
-            // weiter unten) passiert erst NACH dem Tempo-Deckel, mit der
-            // eventuell gekappten Position - sonst stuende der interne
-            // Zustand auf dem ungekappten Ziel, und ein spaeterer Wechsel
-            // zurueck zu Maus/Automation spraenge genau dorthin.
-            smoothedSourcePos = target;
+            // Ueberschwinger-Waechter (siehe Klassenkommentar zu
+            // wasMotionSlewGuardActive im Header): beim Einstieg in den
+            // Bypass-Zweig auf der aktuellen Position aufsetzen, damit kein
+            // Sprung entsteht (der erste Tick liefert dann exakt target,
+            // wie zuvor) - danach begrenzt der Waechter jeden weiteren Tick
+            // auf slewVmax/slewAmax.
+            if (! wasMotionSlewGuardActive)
+                sourceSmoothers.slew.reset (target);
+
+            sourceSmoothers.slew.setTarget (target);
+
+            Vec3 guardVel;
+            sourceSmoothers.slew.tick (smoothedSourcePos, guardVel);
         }
         else
         {
@@ -1028,6 +1046,8 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
             Vec3 sourceVel;
             sourceSmoothers.tick (smoothedSourcePos, sourceVel);
         }
+
+        wasMotionSlewGuardActive = bypassSmoothing;
 
         listenerSmoothers.setTarget (listenerTargetMetres);
 
@@ -1077,12 +1097,13 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
 
         if (bypassSmoothing)
         {
-            // Alle vier internen Verfahren synchron mitführen (nicht nur das
-            // aktive) - sonst setzt ein Wechsel zurück zu Maus/Automation nach
-            // dem Stop mit einem veralteten, "eingefrorenen" Zustand wieder
-            // ein und springt. Mit der (eventuell durch den Tempo-Deckel
-            // gekappten) Position, nicht dem rohen Ziel von oben.
-            sourceSmoothers.reset (smoothedSourcePos);
+            // One-Pole/Spring/One-Euro synchron mitführen (nicht den aktiven
+            // Ueberschwinger-Waechter slew, siehe resetExceptSlew) - sonst
+            // setzt ein Wechsel zurück zu Maus/Automation nach dem Stop mit
+            // einem veralteten, "eingefrorenen" Zustand wieder ein und
+            // springt. Mit der (eventuell durch den Tempo-Deckel gekappten)
+            // Position, nicht dem rohen Ziel von oben.
+            sourceSmoothers.resetExceptSlew (smoothedSourcePos);
         }
 
         // Yaw bekommt einen eigenen One-Pole statt durch den Positionsglätter
