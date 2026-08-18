@@ -44,9 +44,17 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
                "(schon normale Mausbewegungen ueber wenige Meter koennen dann hohe "
                "Geschwindigkeiten und starken Doppler erzeugen), groesser = traeger.");
     setupKnob (slewVmaxKnob,    apvts, Params::slewVmax,    "Slew Vmax",
-               "Nur bei Glaettung 'Slew Limiter': maximale Geschwindigkeit in m/s.");
+               "Maximale Geschwindigkeit in m/s. Wirkt in zwei Faellen: als gewaehltes "
+               "Glaettungsverfahren 'Slew Limiter' selbst - UND, unabhaengig davon, immer "
+               "als Ueberschwinger-Waechter waehrend Catmull-Rom-Clip-Wiedergabe (dort "
+               "begrenzt er nur Ausreisser an scharfen Bahn-Umkehrpunkten, ohne normale "
+               "Bewegung abzurunden).");
     setupKnob (slewAmaxKnob,    apvts, Params::slewAmax,    "Slew Amax",
-               "Nur bei Glaettung 'Slew Limiter': maximale Beschleunigung in m/s^2.");
+               "Maximale Beschleunigung in m/s^2 - dieselbe Doppelrolle wie Slew Vmax "
+               "(gewaehlter Smoother UND Catmull-Rom-Ueberschwinger-Waechter). Bei einer "
+               "energiereichen Aufnahme (viele schnelle Richtungswechsel) muss dieser Wert "
+               "deutlich ueber der natuerlichen Beschleunigung der Aufnahme liegen, sonst "
+               "bremst der Waechter durchgehend statt nur an Ausreissern.");
     setupKnob (playSpeedKnob,   apvts, Params::playSpeed,   "Play Speed",
                "Wiedergabegeschwindigkeit einer Aufnahme (0.25-4x). Skaliert die Bewegung "
                "und damit den Doppler - schnelle Wiedergabe kann Ueberschall erzeugen.");
@@ -79,6 +87,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     playInterpCombo.setTooltip (playInterpLabel.getTooltip());
     addAndMakeVisible (playInterpCombo);
     playInterpAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::playInterp, playInterpCombo);
+    playInterpCombo.onChange = [this] { updateSlewControlsVisibility(); };
 
     playLoopButton.setTooltip ("Wiedergabe am Ende des Clips von vorn beginnen statt zu stoppen.");
     addAndMakeVisible (playLoopButton);
@@ -150,11 +159,22 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 
 void MotionPanel::updateSlewControlsVisibility()
 {
+    // Die Slew-Regler wirken in zwei unabhaengigen Faellen (siehe
+    // DopplerfeldProcessor::advanceMotion): als gewaehltes Glaettungs-
+    // verfahren ODER als Ueberschwinger-Waechter waehrend Catmull-Rom-
+    // Wiedergabe, ganz unabhaengig davon, welcher Smoother sonst gewaehlt
+    // ist. Ausgegraut duerfen sie nur sein, wenn WEDER das eine NOCH das
+    // andere zutrifft - alles andere waere ein Regler, der wirkt, obwohl er
+    // inaktiv aussieht (@dpa-Repro: "fast Drone" nutzt Critically Damped
+    // Spring, Slew Amax stand trotzdem grau UND wirkte).
     const bool isSlewLimiter = smootherTypeCombo.getText() == "Slew Limiter";
-    slewVmaxKnob.slider.setEnabled (isSlewLimiter);
-    slewVmaxKnob.label.setEnabled (isSlewLimiter);
-    slewAmaxKnob.slider.setEnabled (isSlewLimiter);
-    slewAmaxKnob.label.setEnabled (isSlewLimiter);
+    const bool isCatmullClip = playInterpCombo.getText() == "Catmull-Rom";
+    const bool active = isSlewLimiter || isCatmullClip;
+
+    slewVmaxKnob.slider.setEnabled (active);
+    slewVmaxKnob.label.setEnabled (active);
+    slewAmaxKnob.slider.setEnabled (active);
+    slewAmaxKnob.label.setEnabled (active);
 }
 
 void MotionPanel::setPlaying (bool isPlaying)
