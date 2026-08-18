@@ -344,21 +344,25 @@ void FieldComponent::drawReflectionWavefronts (juce::Graphics& g) const
 
             const auto centrePx = worldToScreen (wf.positions[(size_t) i]);
 
+            // Deutlich kraeftiger als der erste Wurf (@dpa: "muessen
+            // sichtbarer sein, 'leise' vom Gemuet her, aber sichtbar") -
+            // jetzt in der Naehe der Direktschall-Kreise (0.55/0.08), nicht
+            // mehr darunter.
             const float alpha = juce::jmap ((float) i, 0.0f,
                                             (float) juce::jmax (1, snapshot.wavefrontCount - 1),
-                                            0.40f, 0.05f);
+                                            0.65f, 0.12f);
             g.setColour (colour.withAlpha (alpha));
             g.drawEllipse (juce::Rectangle<float> (radiusPx * 2.0f, radiusPx * 2.0f).withCentre (centrePx), thickness);
         }
     };
 
     for (const auto& wf : snapshot.wallWavefronts)
-        drawSet (wf, juce::Colours::violet, 1.0f);
+        drawSet (wf, juce::Colours::violet, 1.6f);
 
-    // Mehrfachreflexion dezenter (duenner, eigene Farbe) - sonst wird das
-    // Feld bei zwei aktiven Waenden schnell unruhig.
+    // Mehrfachreflexion etwas duenner (eigene Farbe) - sonst wird das Feld
+    // bei zwei aktiven Waenden schnell unruhig.
     for (const auto& wf : snapshot.wallPairWavefronts)
-        drawSet (wf, juce::Colours::hotpink, 0.8f);
+        drawSet (wf, juce::Colours::hotpink, 1.3f);
 }
 
 void FieldComponent::drawTrail (juce::Graphics& g) const
