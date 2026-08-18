@@ -147,7 +147,55 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
-## Stand 2026-08-17 (spät nachts: Nachlauf-Fix, Motor-Gating, Record-Diagnose)
+## Stand 2026-08-18 (Wand-/Bounce-Gain, Schwarm-Streuung, M-Source-Jitter)
+
+Drei @dpa-Wünsche aus `dd.md` umgesetzt, `solver_check`/`load_check` grün,
+Bau warnungsfrei.
+
+- **Wand-Gain und Bounce-Gain-Boost.** `wall1Damp`/`wall2Damp` waren schon
+  immer reine Tiefpässe mit Gleichstromverstärkung 1 (nehmen nur Höhen,
+  keinen Gesamtpegel) - eine einzelne Wandreflexion (`order()==1` in
+  `DopplerEngine::recipeTransform()`) hatte deshalb bislang **keinen**
+  Pegelregler. Neue Parameter `wall1Gain`/`wall2Gain` (dB, ±36) landen in
+  `Surface::transform.gain`; `composeTransforms()` (`PathTransform.h`)
+  verkettet `outer.gain * inner.gain` ohnehin schon automatisch, die
+  Mehrfachreflexion bekommt den Wandgain also geschenkt mit. `bounceGain`
+  (der Generationsfaktor <1, siehe Stand 2026-08-17 "Mehrfachreflexion")
+  bleibt unverändert - die Garantie "jede weitere Generation wird leiser"
+  wäre sonst gebrochen. Stattdessen neuer, unabhängiger Boost-Parameter
+  `bounceGainDb` (`DopplerEngine::bounceGainBoost`, ohne Klemmung nach oben)
+  obendrauf. Alle drei Gains wirken nur auf `.gain`, nie auf den Tiefpass -
+  die Wand bleibt trotz Höhenverlust im Pegel steuerbar.
+- **`cloneSpread`-Range** 0-200 m → 0-1000 m (Skew-Centre 3 → 15 m), sonst
+  unverändert - @dpa wollte den Schwarm "mehr, weiter" auseinanderziehen
+  können.
+- **`PositionJitter`** (neu, `Source/Motion/`, JUCE-frei wie der Rest des
+  Ordners): additive Mikrobewegung der Quelle M (**nicht** des Hörers -
+  M meint Motor/Sender, das runde Symbol in `FieldComponent::drawSource()`).
+  Drei unabhängige Sinusoszillatoren je Achse, deren Momentanfrequenz über
+  einen zweckentfremdeten `OnePoleSmoother` (glättet ein Vec3-Frequenztripel
+  statt einer Position) langsam zwischen zufällig gewürfelten Zielwerten
+  driftet - dadurch bleibt `d(position)/dt` stetig und die Bewegung klickfrei,
+  ganz ohne eigenen Positions-Glätter. Zwei neue Parameter `srcJitterAmount`
+  (m, Default 0 = aus) und `srcJitterRateHz` ("Hektik", Default 0,2 Hz).
+  Eingehakt in `PluginProcessor::advanceMotion()` **additiv auf `target`,
+  bevor** `sourceSmoothers`/`bypassSmoothing` greifen (@dpa-Vorgabe: "Jitter
+  Addition vor den Smoothern") - dadurch läuft die gejitterte Position durch
+  denselben Weg wie jedes andere Bewegungsziel und landet unverändert in
+  `smoothedSourcePos` → `dopplerEngine.setSourceTarget()` →
+  `snapshot.sourcePos`. Das sichtbare Quellensymbol wackelt damit automatisch
+  mit, ohne dass `FieldComponent`/`FieldSnapshot` angefasst werden mussten.
+  Immer additiv aktiv (kein Sonderfall für Stillstand): bei Bewegung geht der
+  kleine Jitter im normalen Doppler unter, im Stillstand ist er die einzige
+  Bewegung und dominiert von selbst - "echter Chorus" ergibt sich ohne
+  Zustandsautomat.
+- **UI:** `WallPanel` bekam je Wand einen sechsten Knob (Gain) - die Reihe
+  wurde dafür von 84px auf 70px Knopfbreite verschmälert, damit sie in der
+  Panel-Breite bleibt; dazu ein `Bounce Boost`-Knob neben `Bounce Gain`.
+  `FieldPanel` bekam eine dritte Knob-Reihe (`Jitter`/`Hektik`) unter der
+  Höhen-Reihe (`fieldContentHeight` 218 → 306).
+
+
 
 Nachlauf hatte einen echten Bug (@dpa-Repro): bei "Slew Limiter" lief er ein
 Stück, bremste aber nicht sichtbar. Ursache war ein Design-Fehler der
