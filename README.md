@@ -11,7 +11,7 @@ Doppler-Formel als Abkürzung.
 
 ## Download
 
-Fertig gebaute Standalone-App, VST3 und AU liegen unter
+Fertig gebaute (Mac) Standalone-App, VST3 und AU liegen unter
 [Releases](../../releases) – herunterladen, entpacken, benutzen. Kein Xcode,
 kein CMake nötig.
 
