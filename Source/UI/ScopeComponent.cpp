@@ -40,7 +40,13 @@ void ScopeComponent::zoomStep (float factor)
 
 void ScopeComponent::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
 {
-    if (wheel.deltaY == 0.0f)
+    // Achsen-Unterscheidung wie im Vorbild (@dpa: ~/hass/sensor-archive/mac/
+    // index.html, gesturePlugin()) - waagerechtes 2-Finger-Scrollen soll NIE
+    // als Zoom durchschlagen. Dort wird waagerecht zum Pannen benutzt; der
+    // Scope hat kein Pan (er zeigt immer die frischesten Samples), deshalb
+    // bewirkt eine waagerechte Geste hier schlicht nichts, statt ins Leere
+    // zu pannen oder ungewollt mitzuzoomen.
+    if (wheel.deltaY == 0.0f || std::abs (wheel.deltaX) > std::abs (wheel.deltaY))
         return;
 
     // Hoch scrollen = reinzoomen (weniger Samples, kuerzere Zeitbasis),
