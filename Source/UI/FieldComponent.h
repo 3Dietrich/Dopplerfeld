@@ -31,6 +31,14 @@ public:
     // anders als im Audiothread.
     void setSnapshot (const FieldSnapshot& snapshotIn);
 
+    // @dpa-Feedback ("Langsamkeit der Anzeigewahrnehmung"): das Cockpit-HUD
+    // zeigt NICHT das Tempo aus dem 30Hz-Snapshot, sonst blinkert die Zahl bei
+    // jeder kleinen Schwankung. Der Editor mittelt selbst ueber ein
+    // 0.5s-Fenster (DopplerfeldEditor::updateDisplayAverages()) und reicht das
+    // Ergebnis hier separat rein - getrennt von setSnapshot(), damit die
+    // Feldgrafik (Position, Wellenfronten) weiter fluessig bei 30Hz bleibt.
+    void setDisplaySpeed (double speedMps, double speedOfSoundMps);
+
     // Zwei Ansichten derselben Szene. Die Draufsicht ist die gewohnte
     // 700x400-Flaeche; die perspektivische blickt in die Tiefe (Welt-y in den
     // Bildschirm hinein) und macht damit die Hoehe z sichtbar, die in der
@@ -215,6 +223,12 @@ private:
     FieldSnapshot snapshot;
     double fieldMetres = 100.0;
     double speedOfSound = 343.2; // Plan 2.2: c(20 C) = 343,21 m/s
+
+    // Fuers Cockpit-HUD (drawSpeedReadout), separat vom 30Hz-Snapshot oben -
+    // s. setDisplaySpeed(). Startwert egal, wird vor dem ersten Zeichnen vom
+    // Editor gesetzt.
+    double displaySpeedMps = 0.0;
+    double displaySpeedOfSoundMps = 343.2;
 
     static constexpr float headRadiusPx = 13.0f; // rein symbolische Groesse, nicht massstabsgetreu
     static constexpr float sourceRadiusPx = 6.0f;

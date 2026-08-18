@@ -52,10 +52,44 @@ private:
     // Feld-Drag und Regler nie auseinanderlaufen.
     void setParameter (const char* paramID, double value);
 
-    // Feldgröße und Kanalstatus als Text unter dem Feld - das ist die
-    // schnellste Kontrolle, ob die Physik läuft (Laufzeit pro Ohr, M_r,
-    // Anzahl der Wurzelzweige).
+    // Statuszeile unter dem Feld: Tempo, L-M-Abstand, CPU-Last, Reflexions-
+    // und Aufnahme/Wiedergabe-Status. Liest die gemittelten Werte aus
+    // displayAverages, nicht den rohen 30Hz-Snapshot (s. updateDisplayAverages()).
     juce::String statusText() const;
+
+    // @dpa-Feedback ("Langsamkeit der Anzeigewahrnehmung", 20260818): Tempo,
+    // L-M-Abstand und CPU-Last werden ueber ein 0.5s-Fenster gemittelt und nur
+    // alle 0.5s aktualisiert, statt bei jedem 33ms-Tick den zappelnden Rohwert
+    // zu zeigen - eine wechselnde Ziffernzahl (z.B. 0,0 -> 1013,7) sonst
+    // "blinkert" bei jedem Tick, egal wie fest die Zeichenbreite ist. Die
+    // Feldgrafik (Position, Wellenfronten) bleibt unabhaengig davon bei vollen
+    // 30Hz, nur die Zahlen-Anzeigen (Statuszeile, Cockpit-HUD) sind betroffen.
+    void updateDisplayAverages();
+
+    struct DisplayAverages
+    {
+        double speedMps          = 0.0;
+        double speedOfSoundMps   = 343.2;
+        double listenerDistanceM = 0.0;
+        double cpuPercent        = 0.0;
+    };
+
+    DisplayAverages displayAverages;
+
+    // Laufende Summen fuers aktuelle Mittelungsfenster, s. updateDisplayAverages().
+    struct DisplayAccumulator
+    {
+        double speedSum            = 0.0;
+        double speedOfSoundSum     = 0.0;
+        double listenerDistanceSum = 0.0;
+        double cpuSum              = 0.0;
+        int    sampleCount         = 0;
+        double elapsedMs           = 0.0;
+    };
+
+    DisplayAccumulator displayAccumulator;
+
+    static constexpr double displayAverageWindowMs = 500.0;
 
     DopplerfeldProcessor& dopplerfeldProcessor;
 

@@ -44,6 +44,15 @@ void FieldComponent::setSnapshot (const FieldSnapshot& snapshotIn)
     repaint();
 }
 
+void FieldComponent::setDisplaySpeed (double speedMps, double speedOfSoundMps)
+{
+    displaySpeedMps = speedMps;
+    displaySpeedOfSoundMps = speedOfSoundMps;
+    // Kein eigener repaint() noetig - setSnapshot() wird ohnehin bei jedem
+    // 30Hz-Tick aufgerufen und zeichnet neu; hier wuerde ein zusaetzlicher
+    // repaint() nur denselben Frame doppelt anstossen.
+}
+
 void FieldComponent::setFieldMetres (double metresIn)
 {
     fieldMetres = juce::jlimit (1.0, 10000.0, metresIn); // Plan 3.11: n in [1, 10000]
@@ -186,7 +195,7 @@ void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
     g.setColour (hudYellow.withAlpha (0.22f));
     g.drawRoundedRectangle (box.toFloat().reduced (0.5f), 4.0f, 1.0f);
 
-    const juce::String text = formatSpeed (snapshot.sourceSpeed, snapshot.speedOfSound, speedUnit);
+    const juce::String text = formatSpeed (displaySpeedMps, displaySpeedOfSoundMps, speedUnit);
 
     // Monospace statt Proportionalschrift (@dpa-Feedback "Langsamkeit der
     // Anzeigewahrnehmung"): erst bei fester Zeichenbreite pro Glyphe haelt die

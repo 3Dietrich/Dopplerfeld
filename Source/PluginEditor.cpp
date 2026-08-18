@@ -212,10 +212,12 @@ void DopplerfeldEditor::timerCallback()
 void DopplerfeldEditor::refreshDisplay()
 {
     dopplerfeldProcessor.fillFieldSnapshot (snapshot);
+    updateDisplayAverages();
 
     field.setFieldMetres ((double) *dopplerfeldProcessor.apvts.getRawParameterValue (Params::fieldMetres));
     field.setSpeedUnit (speedUnit);
     field.setSnapshot (snapshot);
+    field.setDisplaySpeed (displayAverages.speedMps, displayAverages.speedOfSoundMps);
 
     {
         using Kind = DopplerfeldProcessor::SourceKind;
@@ -247,31 +249,63 @@ void DopplerfeldEditor::refreshDisplay()
     repaint (margin, getHeight() - statusHeight, fieldWidth, statusHeight);
 }
 
+void DopplerfeldEditor::updateDisplayAverages()
+{
+    // @dpa-Feedback ("Langsamkeit der Anzeigewahrnehmung", 20260818): erst
+    // aufsummieren, dann alle 0.5s einmal umrechnen - dazwischen bleibt
+    // displayAverages unveraendert, egal wie oft der 30Hz-Timer inzwischen
+    // tickt. Damit zeigt die Anzeige einen ruhigen Momentanschnitt statt bei
+    // jedem Tick den zappelnden Rohwert.
+    auto& acc = displayAccumulator;
+
+    acc.speedSum            += snapshot.sourceSpeed;
+    acc.speedOfSoundSum     += snapshot.speedOfSound;
+    acc.listenerDistanceSum += (snapshot.sourcePos - snapshot.listener.head).length();
+    acc.cpuSum               += (double) dopplerfeldProcessor.cpuLoadPercent();
+    ++acc.sampleCount;
+
+    // 30Hz-Timer = ~33ms zwischen zwei Aufrufen (siehe startTimerHz), fest
+    // verdrahtet statt gemessen - reicht fuer ein 0.5s-Mittelungsfenster.
+    acc.elapsedMs += 1000.0 / 30.0;
+
+    if (acc.elapsedMs < displayAverageWindowMs || acc.sampleCount == 0)
+        return;
+
+    displayAverages.speedMps          = acc.speedSum          / acc.sampleCount;
+    displayAverages.speedOfSoundMps   = acc.speedOfSoundSum    / acc.sampleCount;
+    displayAverages.listenerDistanceM = acc.listenerDistanceSum / acc.sampleCount;
+    displayAverages.cpuPercent        = acc.cpuSum             / acc.sampleCount;
+
+    acc = {};
+}
+
 juce::String DopplerfeldEditor::statusText() const
 {
     juce::String text;
 
     // Feste Breite pro Zahl (printf-Padding), zusammen mit dem Monospace-Font
-    // in paint(): bei jedem Timer-Tick ändern sich diese Werte, ohne feste
-    // Breite verschiebt eine kürzer werdende Zahl (z.B. "9.3" -> "-9.3")
-    // allen nachfolgenden Text um ein wechselndes Stück - die ganze Zeile
-    // "wackelt". Mit fester Zeichenbreite bleiben Spalten stehen.
+    // in paint(): ohne feste Breite verschiebt eine kürzer werdende Zahl
+    // (z.B. "9.3" -> "-9.3") allen nachfolgenden Text um ein wechselndes
+    // Stück - die ganze Zeile "wackelt". Mit fester Zeichenbreite bleiben
+    // Spalten stehen. Alle drei Werte unten kommen zusaetzlich aus
+    // displayAverages statt direkt aus snapshot - s. updateDisplayAverages()
+    // fuer das 0.5s-Mittelungsfenster (@dpa-Feedback "Langsamkeit der
+    // Anzeigewahrnehmung").
 
     // @dpa-Feedback: Tempo der Quelle, Einheit per speedUnitButton umschaltbar.
     // Mach kommt aus derselben Momentangeschwindigkeit, nicht aus M_r (das ist
     // radial zum jeweiligen Ohr, hier geht es um die Quelle selbst). Feste
     // Breite kommt schon aus FieldComponent::formatSpeed() selbst (auch vom
     // Cockpit-Display im Feld genutzt) - hier kein zweites Padding noetig.
-    text << FieldComponent::formatSpeed (snapshot.sourceSpeed, snapshot.speedOfSound, speedUnit);
+    text << FieldComponent::formatSpeed (displayAverages.speedMps, displayAverages.speedOfSoundMps, speedUnit);
 
     // @dpa-Feedback: L-M-Abstand immer sichtbar, nicht nur bei Vorbeiflug.
-    text << "   L-M " << juce::String::formatted ("%7.1f", (snapshot.sourcePos - snapshot.listener.head).length()) << " m";
+    text << "   L-M " << juce::String::formatted ("%7.1f", displayAverages.listenerDistanceM) << " m";
 
     // @dpa-Feedback: CPU-Echtzeit-Anzeige (Wanduhrzeit/Audiozeit, geglättet -
     // siehe cpuLoadPercent()). Über 100% färbt paint() die ganze Statuszeile
     // rot (siehe dort) - reiner Text reicht hier, kein eigener Meter nötig.
-    const float cpu = dopplerfeldProcessor.cpuLoadPercent();
-    text << "   CPU " << juce::String::formatted ("%4.0f", (double) cpu) << " %";
+    text << "   CPU " << juce::String::formatted ("%4.0f", displayAverages.cpuPercent) << " %";
 
     // @dpa-Feedback: Einzelne Pfade (L/R, M_r, Zweige) sind zu klein und zu
     // viel für die Statuszeile - nur die Anzahl aktiver Mehrfachreflexionen
@@ -309,11 +343,16 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
                             : juce::Colours::white.withAlpha (0.6f));
     // Monospace statt Proportionalschrift: nur bei fester Zeichenbreite pro
     // Glyphe hält das Zahlen-Padding in statusText() die Spalten auch
-    // tatsaechlich stabil (siehe Kommentar dort).
+    // tatsaechlich stabil (siehe Kommentar dort). drawText() statt
+    // drawFittedText(): Letzteres skaliert die Schrift nach, wenn die Zeile
+    // (durch "+N Mehrfachrefl." oder "Aufnahme"/"Wiedergabe" am Ende) mal
+    // laenger, mal kuerzer wird - dann "atmet" die ganze Zeile mit, selbst
+    // die fest gepaddeten Spalten davor. drawText() zeichnet immer in der
+    // gesetzten Groesse und schneidet im Zweifel einfach ab.
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 16.0f, juce::Font::plain)));
-    g.drawFittedText (statusText(),
-                      margin, getHeight() - statusHeight, fieldWidth, statusHeight,
-                      juce::Justification::centredLeft, 1);
+    g.drawText (statusText(),
+                margin, getHeight() - statusHeight, fieldWidth, statusHeight,
+                juce::Justification::centredLeft, false);
 }
 
 void DopplerfeldEditor::resized()
