@@ -113,8 +113,21 @@ private:
     // Setzt eine neue Zoomstufe (Samples), klemmt auf [minDisplaySamples,
     // maxDisplaySamples]. Im History-Modus bleibt dabei die Bildmitte
     // (Sample-Position) stehen, im Live-Modus passt sich einfach die
-    // naechste feed()-Anzeige an.
+    // naechste feed()-Anzeige an. Fuer Aufrufer ohne Mausposition (die
+    // +/- Knoepfe im Editor) - Wheel/Pinch nutzen stattdessen
+    // zoomAroundFraction() unten, das den Cursor als Anker nimmt.
     void setDisplaySampleCount (int newCount);
+
+    // Wie setDisplaySampleCount(), haelt aber im History-Modus den Sample
+    // unter anchorFraction (0 = linker, 1 = rechter Bildrand) an seiner
+    // Bildschirmposition fest statt der Fenstermitte - macht "Zoom um den
+    // Mauszeiger" moeglich, wie im Vorbild (@dpa: ~/hass/sensor-archive/mac/
+    // index.html, gesturePlugin(): cursorVal bleibt fix, die Distanzen
+    // links/rechts skalieren beide mit factor). Im Live-Modus ist der
+    // rechte Rand immer "jetzt" und damit fix - da gibt es keinen Anker,
+    // s. Klassenkommentar oben, faellt also auf setDisplaySampleCount()
+    // zurueck.
+    void zoomAroundFraction (float factor, float anchorFraction);
 
     // Verschiebt den sichtbaren Ausschnitt in der History um deltaSamples
     // (positiv = weiter in die Vergangenheit/nach links), geklemmt auf
@@ -157,6 +170,36 @@ private:
     // Klick-Ziehen zum Pannen (nur History-Modus, s. mouseDown/mouseDrag).
     int dragStartX          = 0;
     int dragStartPanOffset  = 0;
+
+    // Achsen-Lock fuer zwei-Finger-Wheel-Gesten, wie im Vorbild (@dpa:
+    // ~/hass/sensor-archive/mac/index.html, gesturePlugin()): die Achse
+    // wird beim ersten Event einer Geste per groesserem Delta entschieden
+    // und bleibt dann fix, bis wheelGestureGapMs lang kein Wheel-Event mehr
+    // kam (Finger abgehoben) - verhindert, dass eine eigentlich waagerechte
+    // oder senkrechte Geste durch ein kleines Gegen-Delta mittendrin
+    // zwischen Pan und Zoom hin- und herspringt. Statt eines echten Timers
+    // (JS setTimeout) reicht hier ein fauler Check am naechsten Event: liegt
+    // der schon laenger als wheelGestureGapMs zurueck, ist die alte Geste
+    // vorbei und wird neu entschieden.
+    enum class WheelGestureAxis { none, horizontal, vertical };
+    WheelGestureAxis wheelGestureAxis = WheelGestureAxis::none;
+    juce::int64 lastWheelEventMs      = 0;
+    static constexpr int wheelGestureGapMs = 140;
+
+    // Zoom-Empfindlichkeit fuers Mausrad-/Trackpad-deltaY (s.
+    // mouseWheelMove): kalibriert auf JUCEs macOS-Wheel-Skala (0.5/256, s.
+    // juce_NSViewComponentPeer_mac.mm redirectMouseWheel()) - angelehnt ans
+    // Vorbild (~/hass/sensor-archive/mac/index.html: dort 0.006 auf rohe
+    // Browser-Pixel-Deltas; JUCEs Deltas sind ca. 40-50x kleiner, deshalb
+    // hier entsprechend groesser).
+    static constexpr double zoomWheelSensitivity = 3.0;
+
+    // Rueckrechnung von JUCEs (macOS-)Wheel-Delta auf echte Bildschirm-
+    // Pixel (s. juce_NSViewComponentPeer_mac.mm redirectMouseWheel(): dort
+    // deltaX/deltaY = 0.5/256 * echte Scroll-Pixel) - damit sich waagerecht
+    // Scrollen genauso 1:1 anfuehlt wie Ziehen (mouseDrag), das dieselbe
+    // deltaPixels/width*displaySamples-Rechnung nutzt.
+    static constexpr double wheelPixelDeltaScale = 0.5 / 256.0;
 
     static constexpr float amplitudeRange = 1.2f;   // etwas ueber Vollausschlag, Clipping bleibt sichtbar
 

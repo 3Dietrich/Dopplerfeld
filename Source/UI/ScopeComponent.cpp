@@ -75,6 +75,42 @@ void ScopeComponent::zoomStep (float factor)
     setDisplaySampleCount ((int) std::lround ((float) displaySamples * factor));
 }
 
+void ScopeComponent::zoomAroundFraction (float factor, float anchorFraction)
+{
+    if (! historyMode)
+    {
+        // Rechter Rand ist immer "jetzt" und damit fix - kein Anker
+        // moeglich, s. Klassenkommentar oben und Header.
+        setDisplaySampleCount ((int) std::lround ((double) displaySamples * (double) factor));
+        return;
+    }
+
+    anchorFraction = juce::jlimit (0.0f, 1.0f, anchorFraction);
+
+    // Absoluter Sample-Index in der Historie unter dem Cursor - bleibt beim
+    // Zoomen an derselben Bildschirmposition stehen, weil beide Distanzen
+    // (Anker zu linkem/rechtem Rand) mit demselben factor skaliert werden -
+    // genau wie im Vorbild (cursorVal - (cursorVal - xMin) * f).
+    const double anchorAbsolute = (double) panOffset + (double) anchorFraction * (double) displaySamples;
+
+    const int newCount = juce::jlimit (minDisplaySamples, juce::jmax (minDisplaySamples, maxDisplaySamples),
+                                       (int) std::lround ((double) displaySamples * (double) factor));
+
+    if (newCount == displaySamples)
+        return;
+
+    const int maxOffset = juce::jmax (0, frozenLength - newCount);
+    const int newPanOffset = juce::jlimit (0, maxOffset,
+                                           (int) std::lround (anchorAbsolute - (double) anchorFraction * (double) newCount));
+
+    displaySamples = newCount;
+    panOffset      = newPanOffset;
+
+    shownLeft.assign ((size_t) displaySamples, 0.0f);
+    shownRight.assign ((size_t) displaySamples, 0.0f);
+    repaint();
+}
+
 void ScopeComponent::panBy (int deltaSamples)
 {
     if (! historyMode)
@@ -85,33 +121,62 @@ void ScopeComponent::panBy (int deltaSamples)
     repaint();
 }
 
-void ScopeComponent::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+void ScopeComponent::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
     if (wheel.deltaX == 0.0f && wheel.deltaY == 0.0f)
         return;
 
-    // Achsen-Unterscheidung wie im Vorbild (@dpa: ~/hass/sensor-archive/mac/
-    // index.html, gesturePlugin()): waagerecht = pannen, senkrecht = zoomen.
-    // Waagerecht wirkt nur im History-Modus (dort gibt es etwas zum
-    // Verschieben) - im Live-Betrieb tut eine waagerechte Geste bewusst
-    // nichts, statt ins Leere zu pannen.
-    if (std::abs (wheel.deltaX) > std::abs (wheel.deltaY))
+    // Achsen-Lock (s. Header): eine laufende Geste behaelt ihre Achse, eine
+    // schon wheelGestureGapMs alte gilt als beendet und wird neu entschieden.
+    const juce::int64 now = juce::Time::currentTimeMillis();
+
+    if (now - lastWheelEventMs > wheelGestureGapMs)
+        wheelGestureAxis = WheelGestureAxis::none;
+
+    lastWheelEventMs = now;
+
+    if (wheelGestureAxis == WheelGestureAxis::none)
+        wheelGestureAxis = std::abs (wheel.deltaX) > std::abs (wheel.deltaY)
+                          ? WheelGestureAxis::horizontal : WheelGestureAxis::vertical;
+
+    // Waagerecht = pannen. Wirkt nur im History-Modus (dort gibt es etwas
+    // zum Verschieben) - im Live-Betrieb tut eine waagerechte Geste bewusst
+    // nichts, statt ins Leere zu pannen (s. Klassenkommentar oben).
+    if (wheelGestureAxis == WheelGestureAxis::horizontal)
     {
-        if (historyMode)
-            panBy ((int) std::lround (-(double) wheel.deltaX * displaySamples * 0.15));
+        if (historyMode && getWidth() > 0)
+        {
+            // JUCEs Wheel-Delta zurueck auf echte Bildschirm-Pixel gerechnet
+            // und wie mouseDrag ueber die Breite normiert - genau die
+            // dxData = deltaX/width*span-Formel aus dem Vorbild, nur mit
+            // vorgeschalteter Skala-Rueckrechnung, s. Header.
+            const double scrolledPixels = (double) wheel.deltaX / wheelPixelDeltaScale;
+            const double deltaSamples   = -scrolledPixels / (double) getWidth() * (double) displaySamples;
+            panBy ((int) std::lround (deltaSamples));
+        }
 
         return;
     }
 
-    // Senkrecht = zoomen. Hoch scrollen verkuerzt die Zeitbasis
-    // (reinzoomen), runter verlaengert sie - wie in jedem DAW-Editor.
-    zoomStep (wheel.deltaY > 0.0f ? 0.8f : 1.25f);
+    // Senkrecht = zoomen, um den Mauszeiger herum. Stetige Exponentialkurve
+    // proportional zum tatsaechlichen deltaY (wie im Vorbild:
+    // Math.exp(deltaY * k)) statt fixem 0.8/1.25-Sprung pro Event - bei
+    // Trackpad-Gesten kommen viele Events mit sehr kleinem deltaY, ein
+    // fixer Sprung pro Event macht das sonst viel zu schnell/ruckelig.
+    // Hoch scrollen (deltaY > 0) verkuerzt die Zeitbasis (reinzoomen), wie
+    // bisher.
+    const float anchorFraction = getWidth() > 0 ? (float) e.x / (float) getWidth() : 0.5f;
+    const float factor = (float) std::exp (-(double) wheel.deltaY * zoomWheelSensitivity);
+    zoomAroundFraction (factor, anchorFraction);
 }
 
-void ScopeComponent::mouseMagnify (const juce::MouseEvent&, float scaleFactor)
+void ScopeComponent::mouseMagnify (const juce::MouseEvent& e, float scaleFactor)
 {
-    if (scaleFactor > 0.0f)
-        zoomStep (1.0f / scaleFactor);
+    if (scaleFactor <= 0.0f)
+        return;
+
+    const float anchorFraction = getWidth() > 0 ? (float) e.x / (float) getWidth() : 0.5f;
+    zoomAroundFraction (1.0f / scaleFactor, anchorFraction);
 }
 
 void ScopeComponent::mouseDown (const juce::MouseEvent& e)
@@ -140,7 +205,17 @@ void ScopeComponent::feed (const float* rawLeft, const float* rawRight)
     if (frozen)
         return;
 
-    int start = displaySamples / 2;   // ungesynct: juengste Haelfte des Rohfensters
+    // Ungesynct: juengste Haelfte des Rohfensters zeigen - rawLeft/rawRight
+    // haben captureWindowSampleCount() == 2*displaySamples Samples, das
+    // letzte Sample ist "jetzt" (s. ScopeRingBuffer::readLatest()), also
+    // beginnt die juengste Haelfte bei Index displaySamples (NICHT
+    // displaySamples/2 - das war ein Bug: zeigte die MITTE des Rohfensters,
+    // liess das juengste Viertel komplett unangezeigt liegen und lag damit
+    // permanent um displaySamples/2 Samples hinter "jetzt" zurueck, bei
+    // grossem Zoom-Out mehrere hundert ms - @dpa: "zeigt den Inhalt immer
+    // erst sehr spaet an, aber beim Freeze ist es ploetzlich weiter vorn",
+    // weil enterHistoryMode() unten korrekt das aktuelle Ende zeigt).
+    int start = displaySamples;
     lastFrameWasSynced = false;
 
     if (syncEnabled)
