@@ -30,6 +30,7 @@ void PropagationPath::reset()
     deathLoudCount.store (0);
     deathEnvSum.store (0.0);
     deathEnvMax.store (0.0);
+    evictionCount.store (0);
 }
 
 void PropagationPath::setBoomLimitDb (double dB)
@@ -170,13 +171,41 @@ int PropagationPath::findSlot (int id) const
     return -1;
 }
 
-int PropagationPath::freeSlot() const
+int PropagationPath::freeSlot()
 {
     for (int i = 0; i < maxBranchSlots; ++i)
         if (! branches[i].used)
             return i;
 
-    return -1;
+    // Kein Steckplatz frei: den leisesten AUSKLINGENDEN Zweig hergeben.
+    //
+    // Ohne das könnte der längere Ausklang (siehe maxDeathTailSeconds) einen
+    // neu ankommenden Zweig verdrängen - der Kegel käme an, fände keinen Platz
+    // und bliebe stumm. Das wäre genau der Aussetzer, den der Ausklang
+    // beseitigen soll, nur an anderer Stelle. Lebende Zweige bleiben
+    // unantastbar; unter den sterbenden geht der leiseste, weil sein Verlust am
+    // wenigsten zu hören ist.
+    int    victim = -1;
+    double lowest = 0.0;
+
+    for (int i = 0; i < maxBranchSlots; ++i)
+    {
+        const Branch& b = branches[i];
+
+        if (b.wasAlive)
+            continue;
+
+        if (victim < 0 || b.env < lowest)
+        {
+            victim = i;
+            lowest = b.env;
+        }
+    }
+
+    if (victim >= 0)
+        evictionCount.store (evictionCount.load() + 1);
+
+    return victim;
 }
 
 void PropagationPath::evaluateRoot (const SourceTrajectory& traj,
@@ -418,10 +447,17 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const Target& tg    = targets[s];
             const bool    alive = tg.present;
 
+            // Wie schnell dieser Hörweg gerade durch die Kaustik läuft. Aus
+            // zwei aufeinanderfolgenden Solver-Punkten; beim allerersten Punkt
+            // eines Zweigs gibt es noch keinen Vorwert (machSeen), dort bleibt
+            // die Rate stehen statt aus einem Sprung gebildet zu werden.
+            if (alive && b.machSeen && h > 0.0)
+                b.machRate = std::abs (tg.mach - b.prevMach) / h;
+
             // Todesmessung (siehe branchDeaths() im Header): genau die Flanke
             // "wurde gemeldet -> wird nicht mehr gemeldet". b.env trägt hier
             // noch den Wert vom Ende des vorigen Segments, also den Pegel, mit
-            // dem der Zweig in die Abwärtsrampe geht.
+            // dem der Zweig in den Ausklang geht.
             if (b.wasAlive && ! alive)
             {
                 deathCount.store (deathCount.load() + 1);
@@ -432,9 +468,38 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
                 if (b.env >= 0.5)
                     deathLoudCount.store (deathLoudCount.load() + 1);
+
+                // Der Schattenausläufer gilt NUR für den Tod an der Kaustik.
+                //
+                // Ein Zweig kann auch aus ganz anderen Gründen verschwinden -
+                // die Nachführung verliert die Wurzel, ein Vollscan kommt zu
+                // spät, ein Sprung in der Geometrie. Solche Tode haben mit der
+                // Mach-Front nichts zu tun, und ihnen einen langen Ausklang zu
+                // geben wäre keine Physik, sondern nur ein Hall. Sie behalten
+                // deshalb die lineare Anti-Klick-Rampe von Plan 3.7 (deathTau
+                // bleibt 0 und markiert genau das).
+                //
+                // "An der Kaustik" heißt: M_r liegt innerhalb der Breite, auf
+                // die eps die Divergenz ohnehin glättet. Ausserhalb davon ist
+                // der Fokussierungsfaktor unauffällig, dort gibt es auch nichts
+                // abzuschneiden.
+                const double distanceToCone = std::abs (1.0 - b.mach);
+
+                b.deathTau = (distanceToCone < causticWidths * eps)
+                            ? std::min (maxDeathTailSeconds,
+                                        std::max (rampSeconds,
+                                                  eps / std::max (b.machRate, 1.0e-9)))
+                            : 0.0;
             }
 
             b.wasAlive = alive;
+
+            // Ein Faktor je Sample für den Kaustik-Ausklang. Exponentiell statt
+            // linear, weil ein Schattenausläufer so aussieht und weil eine
+            // lineare Rampe an ihrem Ende wieder eine Ecke hätte.
+            const double deathDecay = (! alive && b.deathTau > 0.0)
+                                     ? std::exp (-1.0 / std::max (1.0, b.deathTau * sr))
+                                     : 0.0;
 
             // Verschwundener Zweig: mit der zuletzt bekannten Steigung
             // weiterlaufen lassen, während der Envelope auf 0 fährt. Ein
@@ -444,7 +509,6 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const double dTau1  = alive ? tg.dTau    : b.dTau;
             const double amp1   = alive ? tg.amp     : b.amp;
             const double coeff  = alive ? tg.lpCoeff : b.lpCoeff;
-            const double target = alive ? 1.0 : 0.0;
 
             // Hermite-Tangenten müssen auf den Parameter u in [0,1] skaliert
             // sein, deshalb dτ/dt_h mal Segmentlänge (siehe Interpolation.h).
@@ -539,13 +603,21 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                     y = b.refZ;
                 }
 
-                // Envelope nach dem Filter: so ist der Zweig bei env = 0 exakt
-                // still und kann sofort freigegeben werden, ohne dass ein
-                // abgeschnittener Filterschwanz knackt.
-                if (b.env < target)
-                    b.env = std::min (target, b.env + envInc);
-                else if (b.env > target)
-                    b.env = std::max (target, b.env - envInc);
+                // Envelope nach dem Filter, damit ein leiser Zweig freigegeben
+                // werden kann, ohne dass ein abgeschnittener Filterschwanz
+                // knackt.
+                //
+                // Einsatz und Ausklang sind bewusst NICHT symmetrisch: der
+                // Einsatz bleibt die lineare Anti-Klick-Rampe aus Plan 3.7 (eine
+                // Kegelankunft ist eine echte Stoßfront und darf steil sein),
+                // der Ausklang folgt der Kaustik, aus der der Zweig
+                // verschwindet - siehe maxDeathTailSeconds im Header.
+                if (alive)
+                    b.env = std::min (1.0, b.env + envInc);
+                else if (b.deathTau > 0.0)
+                    b.env *= deathDecay;
+                else
+                    b.env = std::max (0.0, b.env - envInc);
 
                 // Die N-Welle kommt ADDITIV oben drauf und läuft bewusst NICHT
                 // durch die Filterkette der Amplitudenformel: sie ist eine
@@ -579,9 +651,13 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 b.R    = tg.R;
                 b.mach = tg.mach;
             }
-            else if (b.env <= 0.0)
+            else if (b.env < envFloor)
             {
-                b.used = false;   // ausgelaufen, Slot frei für den nächsten Zweig
+                // Ausgelaufen, Slot frei für den nächsten Zweig. Ein
+                // exponentieller Ausklang erreicht die Null nie exakt, deshalb
+                // eine Schwelle statt eines Vergleichs mit 0 (siehe envFloor).
+                b.env  = 0.0;
+                b.used = false;
             }
         }
 

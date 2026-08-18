@@ -125,6 +125,10 @@ struct FieldSnapshot
     double        branchDeathEnvMean = 0.0;
     double        branchDeathEnvMax  = 0.0;
 
+    // Verdraengungen: neu ankommender Zweig hat einen noch ausklingenden aus
+    // seinem Steckplatz geworfen (siehe PropagationPath::freeSlot()).
+    std::uint64_t branchEvictions = 0;
+
     // Lage der Wände, damit die Feldanzeige sie zeichnen kann. Die Wand ist
     // eine unendliche Ebene; in der Draufsicht ist sie eine Gerade durch
     // anchor mit Richtung (cos azimuth, sin azimuth). Die Neigung ändert daran

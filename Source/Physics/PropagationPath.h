@@ -194,6 +194,13 @@ public:
         std::uint64_t loudDeaths = 0;   // davon mit env >= 0,5
         double        envSum     = 0.0; // Summe der env-Werte, für den Mittelwert
         double        envMax     = 0.0;
+
+        // Wie oft ein neu ankommender Zweig einen noch ausklingenden verdrängt
+        // hat, weil kein Steckplatz frei war (siehe freeSlot()). Der Ausklang
+        // hält einen Platz länger besetzt als die alte 1-ms-Rampe, deshalb ist
+        // das die Zahl, an der man sieht, ob der Ausklang sich selbst im Weg
+        // steht. Bleibt sie klein, ist der Fall theoretisch.
+        std::uint64_t evictions = 0;
     };
 
     BranchDeathStats branchDeaths() const
@@ -203,6 +210,7 @@ public:
         s.loudDeaths = deathLoudCount.load();
         s.envSum     = deathEnvSum.load();
         s.envMax     = deathEnvMax.load();
+        s.evictions  = evictionCount.load();
         return s;
     }
 
@@ -231,10 +239,19 @@ private:
         double env     = 0.0;   // Anti-Klick-Rampe, 0..1
 
         // Ob der Löser diesen Zweig im VORIGEN Solver-Segment gemeldet hat.
-        // Nur für die Todesmessung (siehe branchDeaths()): daran hängt die
-        // Flanke, ein Zweig der zwischendurch flackert wird so einmal je
-        // Übergang gezählt und nicht einmal je Segment.
+        // Daran hängt die Flanke "gemeldet -> nicht mehr gemeldet": sie zählt
+        // die Todesmessung (siehe branchDeaths()) und legt gleichzeitig die
+        // Länge des Ausklangs fest (siehe deathTau).
         bool wasAlive = false;
+
+        // |dM_r/dt| aus den letzten beiden Solver-Punkten, in 1/s. Das ist die
+        // Geschwindigkeit, mit der dieser Hörweg durch die Kaustik läuft, und
+        // damit das Maß für die Breite des Übergangs - siehe deathTau.
+        double machRate = 0.0;
+
+        // Zeitkonstante des Ausklangs, in Sekunden, beim Tod einmal aus
+        // machRate berechnet und danach fest. Siehe maxDeathTailSeconds.
+        double deathTau = 0.0;
 
         // --- N-Wellen-Schicht, siehe setNWave() ---
         //
@@ -273,7 +290,7 @@ private:
     void   evaluateRoot (const SourceTrajectory& traj, const Root& root,
                          Vec3 recvPos, Vec3 recvVel, double c, Target& out) const;
     int    findSlot (int id) const;
-    int    freeSlot() const;
+    int    freeSlot();
     double lowpassCoeff (double R) const;
 
     // Phase-2-Vorbereitung (Plan 2.7). Liefert in Phase 1 konstant 0, der
@@ -335,6 +352,60 @@ private:
     double trajGridSeconds = 1.0e-3;   // 1 kHz Rasterrate (Plan 2.12)
     double rampSeconds     = 1.0e-3;   // Mitte von 0,5..2 ms (Plan 3.7)
 
+    // Ausklang eines Zweigs, den der Löser nicht mehr meldet.
+    //
+    // Der EINSATZ eines Zweigs bleibt die lineare Rampe aus Plan 3.7: eine
+    // Kegelankunft ist eine echte Stoßfront, die darf steil sein. Sein ENDE
+    // ist aber etwas anderes. Zwei Wurzeln laufen an der Mach-Front zusammen
+    // und verschwinden dort - und zwar bei ihrer GRÖSSTEN Amplitude, weil der
+    // Fokussierungsfaktor 1/sqrt((1-M_r)²+eps²) genau dort sein Maximum hat.
+    // Sie mit derselben festen Rampe auf null zu fahren, schneidet den Klang
+    // bei vollem Pegel ab; gemessen (Zweig-Tod-Zählwerk, load_check) stirbt ein
+    // Zweig im Überschall mit env im Mittel 0,69 bis 0,95 und Maximum 1,000.
+    // Das ist der von @dpa beschriebene Abbruch am Ende der Überschall-Hälfte.
+    //
+    // Physikalisch endet das Feld an einer Faltungskaustik nicht, es geht mit
+    // einem Ausläufer in den Schattenbereich weiter. Dessen Breite ist keine
+    // freie Wahl: sie hängt davon ab, wie schnell die Geometrie durch die
+    // Kaustik läuft. Deshalb
+    //
+    //     tau = eps / |dM_r/dt|
+    //
+    // also die Zeit, die M_r braucht, um sich um genau eine
+    // Regularisierungsbreite zu bewegen. eps ist dabei nicht neu erfunden,
+    // sondern dasselbe eps, mit dem "Boom Limit" die Divergenz schon glättet -
+    // der Ausläufer bekommt damit exakt die Breite, auf die das Modell den
+    // Kaustik-Übergang ohnehin festgelegt hat. Ein Durchflug knapp durch Mach 1
+    // ist damit von selbst kurz und knackig, ein langsames Hineingleiten von
+    // selbst weich, ohne dass irgendwo eine Zeit eingestellt werden müsste.
+    //
+    // Nach unten begrenzt rampSeconds (kürzer als die Anti-Klick-Rampe darf der
+    // Ausklang nie werden, sonst wäre er wieder ein Knacks). Nach oben begrenzt
+    // maxDeathTailSeconds: bei dM_r/dt gegen null ginge tau gegen unendlich,
+    // der Zweig bliebe für immer hörbar und würde einen Steckplatz belegen.
+    // 100 ms ist grosszügig gewählt - das Zehn- bis Hundertfache dessen, was
+    // die Messung als typischen Kaustik-Durchlauf zeigt - und steht hier
+    // ausdrücklich sichtbar, statt als stiller Deckel im Code zu verschwinden.
+    static constexpr double maxDeathTailSeconds = 0.1;
+
+    // Wie viele Regularisierungsbreiten um M_r = 1 herum noch als "an der
+    // Kaustik" gelten. Nur dort bekommt ein sterbender Zweig den Ausläufer;
+    // ausserhalb ist der Fokussierungsfaktor unauffällig und die alte lineare
+    // Anti-Klick-Rampe bleibt, wie sie war (siehe Auswertung im .cpp).
+    //
+    // Ohne diese Eingrenzung bekamen auch Tode einen langen Ausklang, die gar
+    // nichts mit der Mach-Front zu tun haben (verlorene Nachführung) - gemessen
+    // an den Verdraengungen im load_check hielten die dann Steckplätze besetzt,
+    // bis ein neu ankommender Zweig sie hart hinauswarf. Das hätte den
+    // abgeschnittenen Zweig nur an eine andere Stelle verschoben.
+    static constexpr double causticWidths = 4.0;
+
+    // Unterhalb dieses Hüllkurvenwerts gilt ein sterbender Zweig als fertig und
+    // sein Steckplatz wird frei. Nötig, weil ein exponentieller Ausklang die
+    // Null nie erreicht. -80 dB liegt unter allem, was neben dem Direktschall
+    // noch hörbar wäre.
+    static constexpr double envFloor = 1.0e-4;
+
     bool   nearFieldOn     = false;
     double dominantFreqHz  = 0.0;
 
@@ -360,4 +431,5 @@ private:
     pathdetail::DisplayValue<std::uint64_t> deathLoudCount;
     pathdetail::DisplayValue<double>        deathEnvSum;
     pathdetail::DisplayValue<double>        deathEnvMax;
+    pathdetail::DisplayValue<std::uint64_t> evictionCount;
 };

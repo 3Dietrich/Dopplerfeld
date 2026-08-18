@@ -58,6 +58,17 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   Der Löser trennt **Nachführen** (jeder Solver-Punkt) vom **Entdecken**
   (Vollscan, höchstens alle 0,5 ms, `setDiscoveryIntervalSeconds`) - siehe
   Stand-Abschnitt zur Löser-Last.
+  **Einsatz und Ende eines Zweigs sind nicht symmetrisch.** Der Einsatz ist die
+  lineare Anti-Klick-Rampe (`rampSeconds`, 0,5..2 ms) - eine Kegelankunft ist
+  eine echte Stoßfront und darf steil sein. Stirbt ein Zweig dagegen **an der
+  Kaustik** (`|1 - M_r|` innerhalb `causticWidths * eps`), bekommt er einen
+  exponentiellen Schattenausläufer mit `tau = eps / |dM_r/dt|`, also der Zeit,
+  in der sich `M_r` um genau eine Regularisierungsbreite bewegt. Nur so
+  verschwindet er nicht bei seiner grössten Amplitude. Tode aus anderen Gründen
+  (verlorene Nachführung) behalten die lineare Rampe.
+  Gemessen wird das vom **Zweig-Tod-Zählwerk** (`branchDeaths()`, über den
+  `FieldSnapshot` in Statuszeile und `load_check`): Anzahl, `env` beim Tod
+  (Mittel/Maximum/Anteil ≥ 0,5) und Verdrängungen.
   **Bekannte Schwachstelle:** `lpZ` ist
   persistenter Filterzustand - ein einzelner nicht-endlicher Wert würde ihn
   für immer vergiften (siehe `git log` Commit "Fix: dauerhafter Sound-Ausfall"

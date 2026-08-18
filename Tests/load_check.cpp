@@ -80,6 +80,7 @@ struct Stats
     // ohnehin schon ausgeklungen und die Rampe ist unschuldig.
     std::uint64_t branchDeaths     = 0;
     std::uint64_t loudBranchDeaths = 0;
+    std::uint64_t branchEvictions  = 0;
     double        deathEnvMean     = 0.0;
     double        deathEnvMax      = 0.0;
 
@@ -124,9 +125,10 @@ struct Stats
                                  ? 100.0 * (double) loudBranchDeaths / (double) branchDeaths
                                  : 0.0;
 
-        std::printf ("%-22s Zweig-Tode %8llu (%6.1f /s) | env beim Tod Ø %.3f max %.3f | env >= 0,5: %5.1f %%\n",
+        std::printf ("%-22s Zweig-Tode %8llu (%6.1f /s) | env beim Tod Ø %.3f max %.3f | env >= 0,5: %5.1f %% | verdraengt %llu\n",
                      "", (unsigned long long) branchDeaths, perSecond,
-                     deathEnvMean, deathEnvMax, loudShare);
+                     deathEnvMean, deathEnvMax, loudShare,
+                     (unsigned long long) branchEvictions);
     }
 };
 
@@ -210,6 +212,7 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
         stats.loudBranchDeaths = snapshot.loudBranchDeaths;
         stats.deathEnvMean     = snapshot.branchDeathEnvMean;
         stats.deathEnvMax      = snapshot.branchDeathEnvMax;
+        stats.branchEvictions  = snapshot.branchEvictions;
     }
 
     stats.solverEvals += proc.solverEvaluations() - evalsBefore;
