@@ -125,10 +125,10 @@ private:
     juce::TextButton scopeZoomInButton  { "+" };
     juce::TextButton scopeZoomOutButton { "-" };
 
-    // Sichtbaren Scope-Ausschnitt als CSV sichern (@dpa-Feedback: "fuer
-    // Dich, debuggen") - Klartext-Zahlen statt Audio-Format, damit sich die
-    // Datei direkt lesen laesst. scopeSaveStatusUntilMs merkt sich, bis
-    // wann der Bestaetigungstext im Label stehen bleibt (siehe
+    // Sichtbaren Scope-Ausschnitt als WAV sichern (@dpa-Feedback: "fuer Dich,
+    // debuggen" - erst als CSV gebaut, @dpa-Korrektur: "doch nicht als csv",
+    // ein echtes Audioformat zum Abspielen). scopeSaveStatusUntilMs merkt
+    // sich, bis wann der Bestaetigungstext im Label stehen bleibt (siehe
     // refreshDisplay()).
     juce::TextButton scopeSaveButton { "Speichern" };
     juce::Label      scopeSaveStatusLabel;

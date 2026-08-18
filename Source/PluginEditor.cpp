@@ -262,9 +262,10 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     scopeZoomOutButton.onClick = [this] { scope.zoomStep (1.4f); };
     addAndMakeVisible (scopeZoomOutButton);
 
-    scopeSaveButton.setTooltip ("Sichtbaren Scope-Ausschnitt als CSV in ~/Downloads ablegen "
-                                "(@dpa-Feedback: \"fuer Dich, debuggen\") - Zeitstempel im "
-                                "Dateinamen, eine Zeile je Sample (Index, Zeit ms, L, R).");
+    scopeSaveButton.setTooltip ("Sichtbaren Scope-Ausschnitt als WAV (32bit float, stereo) in "
+                                "~/Downloads ablegen (@dpa-Feedback: \"fuer Dich, debuggen\") - "
+                                "Zeitstempel im Dateinamen, abspielbar mit der richtigen "
+                                "Samplerate/Tonhoehe.");
     scopeSaveButton.onClick = [this]
     {
         const auto now = juce::Time::getCurrentTime();
@@ -277,7 +278,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
                               .getChildFile ("Downloads");
         downloads.createDirectory();
 
-        auto file = downloads.getChildFile ("dopplerfeld_" + stamp + ".csv");
+        auto file = downloads.getChildFile ("dopplerfeld_" + stamp + ".wav");
         const bool ok = scope.exportVisibleWindow (file);
 
         scopeSaveStatusLabel.setText (ok ? ("Gespeichert: " + file.getFileName())

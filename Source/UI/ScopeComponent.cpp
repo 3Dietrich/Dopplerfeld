@@ -1,5 +1,7 @@
 #include "ScopeComponent.h"
 
+#include <juce_audio_formats/juce_audio_formats.h>
+
 #include <cmath>
 
 ScopeComponent::ScopeComponent()
@@ -224,25 +226,35 @@ const float* ScopeComponent::visibleRight() const
 
 bool ScopeComponent::exportVisibleWindow (const juce::File& file) const
 {
-    const float* left  = visibleLeft();
-    const float* right = visibleRight();
+    // Vorherige Datei am selben Pfad (sollte es die geben) wegraeumen -
+    // FileOutputStream haengt sonst an eine bestehende Datei an.
+    file.deleteFile();
 
-    juce::String csv;
-    csv << "# dopplerfeld scope export\n";
-    csv << "# samples=" << displaySamples << " sampleRateHint=" << sampleRateHint << "\n";
-    csv << "# mode=" << (historyMode ? "history" : "live")
-        << " frozen=" << (frozen ? 1 : 0)
-        << " sync=" << (syncEnabled ? 1 : 0) << "\n";
-    csv << "sample,time_ms,left,right\n";
+    auto* rawStream = file.createOutputStream().release();
 
-    for (int n = 0; n < displaySamples; ++n)
+    if (rawStream == nullptr)
+        return false;
+
+    juce::WavAudioFormat wavFormat;
+    std::unique_ptr<juce::AudioFormatWriter> writer (
+        wavFormat.createWriterFor (rawStream, juce::jmax (1.0, sampleRateHint),
+                                   2, 32, {}, 0));
+
+    if (writer == nullptr)
     {
-        const double timeMs = 1000.0 * (double) n / juce::jmax (1.0, sampleRateHint);
-        csv << n << ',' << juce::String (timeMs, 3) << ','
-            << juce::String (left[n], 6) << ',' << juce::String (right[n], 6) << '\n';
+        delete rawStream;   // createWriterFor loescht den Stream nur bei Erfolg
+        return false;
     }
 
-    return file.replaceWithText (csv);
+    // AudioBuffer referenziert nur die vorhandenen Daten (kein Umkopieren) -
+    // visibleLeft()/visibleRight() liefern schon zusammenhaengende Bereiche
+    // (Live-Puffer bzw. History mit Offset). const_cast ist hier sicher:
+    // writeFromAudioSampleBuffer liest nur, die referenzierte AudioBuffer
+    // schreibt nirgends hinein.
+    float* channels[2] { const_cast<float*> (visibleLeft()), const_cast<float*> (visibleRight()) };
+    juce::AudioBuffer<float> buffer (channels, 2, displaySamples);
+
+    return writer->writeFromAudioSampleBuffer (buffer, 0, displaySamples);
 }
 
 void ScopeComponent::paint (juce::Graphics& g)

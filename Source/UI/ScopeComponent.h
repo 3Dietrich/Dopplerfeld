@@ -87,11 +87,10 @@ public:
     void zoomStep (float factor);
 
     // Speichert den aktuell sichtbaren Ausschnitt (genau das, was gerade
-    // gezeichnet wird - Live oder History) als CSV nach `file`: eine
-    // Kommentarzeile mit Metadaten (Samplerate, Zeitfenster, Modus), dann
-    // eine Zeile je Sample (Index, Zeit in ms relativ zum Fensteranfang, L,
-    // R). @dpa-Feedback: "fuer Dich, debuggen" - reiner Text statt Audio-
-    // Format, damit sich die Werte direkt lesen/greppen lassen.
+    // gezeichnet wird - Live oder History) als WAV-Datei nach `file`
+    // (@dpa-Korrektur: erst CSV gebaut, "doch nicht als csv" - ein echtes
+    // Audioformat, damit man es abspielen kann). Stereo, 32-bit-Float, mit
+    // sampleRateHint als Samplerate, damit Tonhoehe/Tempo stimmen.
     bool exportVisibleWindow (const juce::File& file) const;
 
     void paint (juce::Graphics& g) override;
