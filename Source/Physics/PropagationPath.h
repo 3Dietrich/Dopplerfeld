@@ -201,6 +201,19 @@ public:
         // das die Zahl, an der man sieht, ob der Ausklang sich selbst im Weg
         // steht. Bleibt sie klein, ist der Fall theoretisch.
         std::uint64_t evictions = 0;
+
+        // Wie viele der Tode ueberhaupt den Kaustik-Ausklang bekommen haben
+        // (deathTau > 0), und wie lang der dann war. Ohne diese zwei Zahlen
+        // laesst sich nicht unterscheiden, ob der Ausklang wirkt oder ob er
+        // rechnerisch existiert und praktisch immer auf rampSeconds faellt.
+        std::uint64_t causticDeaths = 0;
+        double        tauSum        = 0.0;
+        double        tauMax        = 0.0;
+
+        // Die Pruefgroesse: Tode mit env >= 0,5, die schneller als
+        // abruptSeconds auf null gegangen sind. Das ist der Abbruch, gezaehlt
+        // statt gehoert. Null davon ist das Ziel.
+        std::uint64_t abruptDeaths = 0;
     };
 
     BranchDeathStats branchDeaths() const
@@ -210,7 +223,11 @@ public:
         s.loudDeaths = deathLoudCount.load();
         s.envSum     = deathEnvSum.load();
         s.envMax     = deathEnvMax.load();
-        s.evictions  = evictionCount.load();
+        s.evictions     = evictionCount.load();
+        s.causticDeaths = causticCount.load();
+        s.tauSum        = deathTauSum.load();
+        s.tauMax        = deathTauMax.load();
+        s.abruptDeaths  = abruptCount.load();
         return s;
     }
 
@@ -252,6 +269,13 @@ private:
         // Zeitkonstante des Ausklangs, in Sekunden, beim Tod einmal aus
         // machRate berechnet und danach fest. Siehe maxDeathTailSeconds.
         double deathTau = 0.0;
+
+        // env im Moment des Todes und die seither vergangenen Samples. Daraus
+        // entsteht die eigentliche Pruefgroesse: ein LAUTER Zweig, der in
+        // wenigen Millisekunden auf null geht, ist genau der Abbruch. Siehe
+        // abruptDeaths in BranchDeathStats.
+        double deathEnvValue   = 0.0;
+        int    deathSampleCount = 0;
 
         // --- N-Wellen-Schicht, siehe setNWave() ---
         //
@@ -406,6 +430,12 @@ private:
     // noch hörbar wäre.
     static constexpr double envFloor = 1.0e-4;
 
+    // Ab wann ein Ausklang als "schlagartig" gilt. 2 ms deshalb, weil @dpas
+    // Aufnahme den Abbruch mit ueber 20 dB in 0,75 ms zeigt und die alte feste
+    // Rampe 1 ms lang war - beides liegt klar darunter, ein Ausklang, der der
+    // Kaustik folgt, klar darueber.
+    static constexpr double abruptSeconds = 2.0e-3;
+
     bool   nearFieldOn     = false;
     double dominantFreqHz  = 0.0;
 
@@ -432,4 +462,8 @@ private:
     pathdetail::DisplayValue<double>        deathEnvSum;
     pathdetail::DisplayValue<double>        deathEnvMax;
     pathdetail::DisplayValue<std::uint64_t> evictionCount;
+    pathdetail::DisplayValue<std::uint64_t> causticCount;
+    pathdetail::DisplayValue<double>        deathTauSum;
+    pathdetail::DisplayValue<double>        deathTauMax;
+    pathdetail::DisplayValue<std::uint64_t> abruptCount;
 };

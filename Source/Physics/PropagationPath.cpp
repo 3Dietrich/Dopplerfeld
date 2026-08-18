@@ -31,6 +31,10 @@ void PropagationPath::reset()
     deathEnvSum.store (0.0);
     deathEnvMax.store (0.0);
     evictionCount.store (0);
+    causticCount.store (0);
+    deathTauSum.store (0.0);
+    deathTauMax.store (0.0);
+    abruptCount.store (0);
 }
 
 void PropagationPath::setBoomLimitDb (double dB)
@@ -203,7 +207,18 @@ int PropagationPath::freeSlot()
     }
 
     if (victim >= 0)
+    {
         evictionCount.store (evictionCount.load() + 1);
+
+        // Eine Verdraengung ist selbst ein Abbruch: der Zweig wird sofort auf
+        // null gesetzt, nicht ausgeblendet. Sie muss deshalb nach derselben
+        // Regel mitzaehlen wie ein natuerlich zu schnell verschwundener Zweig,
+        // sonst verschwaende die Messung genau die Faelle, die sie finden soll.
+        const Branch& v = branches[victim];
+
+        if (v.deathEnvValue >= 0.5 && (double) v.deathSampleCount < abruptSeconds * sr)
+            abruptCount.store (abruptCount.load() + 1);
+    }
 
     return victim;
 }
@@ -490,6 +505,18 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                                         std::max (rampSeconds,
                                                   eps / std::max (b.machRate, 1.0e-9)))
                             : 0.0;
+
+                b.deathEnvValue    = b.env;
+                b.deathSampleCount = 0;
+
+                if (b.deathTau > 0.0)
+                {
+                    causticCount.store (causticCount.load() + 1);
+                    deathTauSum.store (deathTauSum.load() + b.deathTau);
+
+                    if (b.deathTau > deathTauMax.load())
+                        deathTauMax.store (b.deathTau);
+                }
             }
 
             b.wasAlive = alive;
@@ -614,10 +641,15 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // verschwindet - siehe maxDeathTailSeconds im Header.
                 if (alive)
                     b.env = std::min (1.0, b.env + envInc);
-                else if (b.deathTau > 0.0)
-                    b.env *= deathDecay;
                 else
-                    b.env = std::max (0.0, b.env - envInc);
+                {
+                    ++b.deathSampleCount;
+
+                    if (b.deathTau > 0.0)
+                        b.env *= deathDecay;
+                    else
+                        b.env = std::max (0.0, b.env - envInc);
+                }
 
                 // Die N-Welle kommt ADDITIV oben drauf und läuft bewusst NICHT
                 // durch die Filterkette der Amplitudenformel: sie ist eine
@@ -656,6 +688,14 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // Ausgelaufen, Slot frei für den nächsten Zweig. Ein
                 // exponentieller Ausklang erreicht die Null nie exakt, deshalb
                 // eine Schwelle statt eines Vergleichs mit 0 (siehe envFloor).
+                //
+                // Hier steht fest, wie lange der Ausklang wirklich gedauert
+                // hat. War der Zweig beim Tod laut und ist trotzdem in wenigen
+                // Millisekunden verschwunden, ist genau das der Abbruch.
+                if (b.deathEnvValue >= 0.5
+                    && (double) b.deathSampleCount < abruptSeconds * sr)
+                    abruptCount.store (abruptCount.load() + 1);
+
                 b.env  = 0.0;
                 b.used = false;
             }

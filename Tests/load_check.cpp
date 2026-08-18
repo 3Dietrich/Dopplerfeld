@@ -25,6 +25,7 @@
 
 namespace
 {
+constexpr double decelSeconds = 5.0;
 constexpr double sampleRate = 48000.0;
 constexpr int    blockSize  = 512;
 
@@ -81,12 +82,69 @@ struct Stats
     std::uint64_t branchDeaths     = 0;
     std::uint64_t loudBranchDeaths = 0;
     std::uint64_t branchEvictions  = 0;
+    std::uint64_t causticDeaths    = 0;
+    double        tauMeanMs        = 0.0;
+    double        tauMaxMs         = 0.0;
+    std::uint64_t abruptDeaths     = 0;
     double        deathEnvMean     = 0.0;
     double        deathEnvMax      = 0.0;
+
+    // --- Pegelsturz-Messung (@dpa 20260819) ---
+    //
+    // Genau das, was @dpa als "Abbruch" beschreibt und was bisher nur er hoeren
+    // konnte: der Pegel faellt innerhalb weniger Millisekunden um zig dB, obwohl
+    // der Klang weitergeht. An seiner Aufnahme von Hand nachgemessen waren es
+    // ueber 20 dB in 0,75 ms.
+    //
+    // Gemessen wird der schlimmste Abfall zwischen dem lautesten der letzten
+    // envLookback Fenster und dem aktuellen Fenster - also ueber ein Zeitfenster
+    // von envLookback Millisekunden. Kurze Wellenform-Nulldurchgaenge fallen
+    // dabei nicht ins Gewicht, weil ueber ein ganzes Millisekunden-Fenster
+    // effektivwertgemittelt wird.
+    //
+    // Der Wert ist NICHT absolut zu lesen. Er wird gegen dasselbe Mass im
+    // Unterschall-Szenario verglichen, das nachweislich in Ordnung klingt -
+    // siehe die Pruefung in main().
+    static constexpr int    envWindow   = 48;      // 1 ms bei 48 kHz
+    static constexpr int    envLookback = 2;       // bis 2 ms zurueck
+    static constexpr double envAudible  = 1.0e-3;  // darunter ist der Sturz belanglos
+
+    double envWinSum   = 0.0;
+    int    envWinCount = 0;
+    double envHistory[envLookback] {};
+    double worstDropDb = 0.0;
+
+    void noteLevelWindow (double rms)
+    {
+        double before = 0.0;
+
+        for (double v : envHistory)
+            before = std::max (before, v);
+
+        if (before > envAudible)
+        {
+            const double drop = 20.0 * std::log10 ((rms + 1.0e-12) / before);
+            worstDropDb = std::min (worstDropDb, drop);
+        }
+
+        for (int i = envLookback - 1; i > 0; --i)
+            envHistory[i] = envHistory[i - 1];
+
+        envHistory[0] = rms;
+    }
 
     void noteSample (double x, double dt)
     {
         constexpr double audible = 1.0e-4;
+
+        envWinSum += x * x;
+
+        if (++envWinCount >= envWindow)
+        {
+            noteLevelWindow (std::sqrt (envWinSum / (double) envWindow));
+            envWinSum   = 0.0;
+            envWinCount = 0;
+        }
 
         if (std::abs (x) >= audible)
         {
@@ -129,6 +187,18 @@ struct Stats
                      "", (unsigned long long) branchDeaths, perSecond,
                      deathEnvMean, deathEnvMax, loudShare,
                      (unsigned long long) branchEvictions);
+
+        std::printf ("%-22s steilster Pegelsturz %6.1f dB in %d ms\n",
+                     "", worstDropDb, envLookback);
+        std::printf ("%-22s davon an der Kaustik %llu (%5.1f %%) | Ausklang tau Ø %6.3f ms max %6.3f ms\n",
+                     "", (unsigned long long) causticDeaths,
+                     branchDeaths > 0 ? 100.0 * (double) causticDeaths / (double) branchDeaths : 0.0,
+                     tauMeanMs, tauMaxMs);
+        std::printf ("%-22s HARTE ABBRUECHE %llu von %llu lauten Toden (%5.1f %%)\n",
+                     "", (unsigned long long) abruptDeaths,
+                     (unsigned long long) loudBranchDeaths,
+                     loudBranchDeaths > 0
+                        ? 100.0 * (double) abruptDeaths / (double) loudBranchDeaths : 0.0);
     }
 };
 
@@ -213,6 +283,10 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
         stats.deathEnvMean     = snapshot.branchDeathEnvMean;
         stats.deathEnvMax      = snapshot.branchDeathEnvMax;
         stats.branchEvictions  = snapshot.branchEvictions;
+        stats.causticDeaths    = snapshot.causticDeaths;
+        stats.tauMeanMs        = snapshot.deathTauMeanMs;
+        stats.tauMaxMs         = snapshot.deathTauMaxMs;
+        stats.abruptDeaths     = snapshot.abruptDeaths;
     }
 
     stats.solverEvals += proc.solverEvaluations() - evalsBefore;
@@ -1381,6 +1455,127 @@ int main()
             std::snprintf (title2, sizeof (title2), "1500kmh d=%.0fm", distanceM);
             fast.report (title1);
             slow.report (title2);
+        }
+    }
+
+    //==================================================================
+    // Kaustik-Abbruch (@dpa 20260819): faellt der Pegel schlagartig ab, wenn
+    // ein Ueberschall-Zweig verschwindet?
+    //
+    // Das ist der Fall, den @dpa bisher als einziger pruefen konnte ("da gibt
+    // es wieder diesen Abbruch"). Zwei Dinge machen ihn hier messbar statt
+    // hoerbar:
+    //
+    //   1. TONALE Quelle. Die Rauschanteile werden abgeschaltet. Mit der
+    //      normalen Motorquelle schwankt ein Millisekunden-Effektivwert von
+    //      selbst um zwanzig und mehr dB - darin verschwindet jeder echte
+    //      Sturz. Ohne Rauschen ist die Huellkurve glatt und ein Sturz sticht
+    //      heraus. Die N-Wellen-Schicht ist ebenfalls aus: sie ist eine eigene,
+    //      additive Schicht und wuerde die Luecke zuschuetten, um die es geht.
+    //
+    //   2. VERGLEICH statt absoluter Schwelle. Dieselbe Bahn wird zweimal
+    //      geflogen, einmal mit Ueberschall und einmal knapp darunter. Der
+    //      Unterschall-Lauf ist der Nachweis, dass Bahn, Bremsen und Messung
+    //      selbst keinen Sturz erzeugen. Erst der Abstand zwischen beiden ist
+    //      die Aussage.
+    //
+    // Die Bahn bremst gleichmaessig von v0 auf null, fliegt also bei v0 ueber
+    // der Schallgeschwindigkeit genau einmal durch Mach 1 - der Moment, in dem
+    // die zusaetzlichen Zweige zusammenlaufen und verschwinden.
+    {
+        constexpr double fieldM   = 2000.0;
+        constexpr double lateralM = 150.0;
+
+        auto flyDecelerating = [&] (double v0, Stats& stats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, (float) fieldM);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcZ, 50.0f);
+
+            // Tonale Quelle, siehe Kommentar oben.
+            setParam (proc, Params::noiseGainLo, 0.0f);
+            setParam (proc, Params::noiseGainHi, 0.0f);
+            setParam (proc, Params::nWaveOn, 0.0f);
+            setParam (proc, Params::limiterOn, 0.0f);
+
+            const double startX = 0.05;
+            const double travel = v0 * decelSeconds / 2.0;   // gleichmaessig auf null gebremst
+
+            setParam (proc, Params::srcX, (float) startX);
+            setParam (proc, Params::srcY,
+                      (float) (0.5 + lateralM / (fieldM * DopplerfeldProcessor::fieldAspect)));
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            render (proc, buffer, decelSeconds, stats, [&proc, v0, startX, travel] (double t)
+            {
+                // x(t) = v0*(t - t^2/(2T)), also v(t) = v0*(1 - t/T).
+                const double u = std::min (1.0, t / decelSeconds);
+                const double x = v0 * decelSeconds * (u - 0.5 * u * u);
+
+                setParam (proc, Params::srcX, (float) (startX + x / fieldM));
+
+                (void) travel;
+            });
+        };
+
+        Stats supersonic, subsonic;
+
+        flyDecelerating (700.0, supersonic);   // Mach 2,04 herunter auf null
+        flyDecelerating (300.0, subsonic);     // bleibt durchgehend unter Mach 1
+
+        supersonic.report ("Bremsflug Mach 2,04");
+        subsonic.report   ("Bremsflug Mach 0,87");
+
+        std::printf ("%-22s Pegelsturz Ueberschall %.1f dB gegen Unterschall %.1f dB "
+                     "(Abstand %.1f dB)\n",
+                     "", supersonic.worstDropDb, subsonic.worstDropDb,
+                     supersonic.worstDropDb - subsonic.worstDropDb);
+
+        if (supersonic.maxMach <= 1.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Bremsflug erreicht keinen Ueberschall "
+                         "(M_r max %.2f) - der Fall greift nicht\n", supersonic.maxMach);
+            failed = true;
+        }
+
+        // Das eigentliche Kriterium. Nicht am Summensignal gemessen - dort
+        // schwankt der Pegel von selbst zu stark, um einen Abbruch von einer
+        // gewoehnlichen Pegelbewegung zu unterscheiden (der Unterschall-Lauf
+        // zeigt hier sogar den STEILEREN Sturz, obwohl er nachweislich in
+        // Ordnung klingt). Gemessen wird stattdessen am Zweig selbst:
+        //
+        //     Ein Zweig, der mit env >= 0,5 stirbt, darf nicht in unter 2 ms
+        //     auf null gehen.
+        //
+        // Das ist der Abbruch als pruefbare Aussage. Verdraengungen zaehlen
+        // mit, sie sind selbst ein sofortiges Abschneiden.
+        if (supersonic.abruptDeaths > 0)
+        {
+            std::printf ("FEHLGESCHLAGEN: %llu von %llu lauten Zweigtoden brechen in unter "
+                         "2 ms ab (%.1f %%) - der Pegel faellt beim Verschwinden eines "
+                         "Zweigs schlagartig ab\n",
+                         (unsigned long long) supersonic.abruptDeaths,
+                         (unsigned long long) supersonic.loudBranchDeaths,
+                         supersonic.loudBranchDeaths > 0
+                            ? 100.0 * (double) supersonic.abruptDeaths
+                                    / (double) supersonic.loudBranchDeaths : 0.0);
+            failed = true;
+        }
+
+        if (subsonic.abruptDeaths > 0)
+        {
+            std::printf ("FEHLGESCHLAGEN: schon im Unterschall brechen %llu laute Zweigtode "
+                         "hart ab - dort darf gar keiner sterben\n",
+                         (unsigned long long) subsonic.abruptDeaths);
+            failed = true;
         }
     }
 

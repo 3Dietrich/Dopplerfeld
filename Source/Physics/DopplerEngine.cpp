@@ -890,8 +890,8 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
     // Modell ein Zweig mitten im Klang abgeschnitten wird, nicht wie sich das
     // auf die Anzeigezeilen verteilt.
     {
-        std::uint64_t deaths = 0, loud = 0, evicted = 0;
-        double envSum = 0.0, envMax = 0.0;
+        std::uint64_t deaths = 0, loud = 0, evicted = 0, caustic = 0, abrupt = 0;
+        double envSum = 0.0, envMax = 0.0, tauSum = 0.0, tauMax = 0.0;
 
         for (size_t i = 0; i < set.paths.size(); ++i)
         {
@@ -902,6 +902,10 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
             evicted += d.evictions;
             envSum  += d.envSum;
             envMax   = std::max (envMax, d.envMax);
+            caustic += d.causticDeaths;
+            tauSum  += d.tauSum;
+            tauMax   = std::max (tauMax, d.tauMax);
+            abrupt  += d.abruptDeaths;
         }
 
         s.branchDeaths       = deaths;
@@ -909,6 +913,10 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         s.branchDeathEnvMean = deaths > 0 ? envSum / (double) deaths : 0.0;
         s.branchDeathEnvMax  = envMax;
         s.branchEvictions    = evicted;
+        s.causticDeaths      = caustic;
+        s.deathTauMeanMs     = caustic > 0 ? 1000.0 * tauSum / (double) caustic : 0.0;
+        s.deathTauMaxMs      = 1000.0 * tauMax;
+        s.abruptDeaths       = abrupt;
     }
 
     for (int w = 0; w < maxWalls && w < FieldSnapshot::maxWalls; ++w)
