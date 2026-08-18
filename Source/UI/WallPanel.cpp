@@ -31,6 +31,7 @@ WallPanel::WallPanel (juce::AudioProcessorValueTreeState& apvts)
     const char* const angleIds[wallCount] { Params::wall1Angle, Params::wall2Angle };
     const char* const tiltIds[wallCount]  { Params::wall1Tilt,  Params::wall2Tilt };
     const char* const dampIds[wallCount]  { Params::wall1Damp,  Params::wall2Damp };
+    const char* const gainIds[wallCount]  { Params::wall1Gain,  Params::wall2Gain };
 
     for (int w = 0; w < wallCount; ++w)
     {
@@ -65,6 +66,10 @@ WallPanel::WallPanel (juce::AudioProcessorValueTreeState& apvts)
                    "Flaeche, 1 = weich/absorbierend. Wandflaechen sind in der Regel haerter "
                    "als Gras oder Erde, deshalb wirkt derselbe Reglerwert hier heller als "
                    "beim Boden.");
+        setupKnob (wall.gain, apvts, gainIds[w], "Gain " + nr,
+                   "Pegel der Reflexion in dB, unabhaengig von Damp. Damp ist ein Tiefpass "
+                   "mit Gleichstromverstaerkung 1 (nimmt nur Hoehen, keinen Gesamtpegel) - "
+                   "hoert man die Wand trotzdem zu leise, ist das hier der Regler dafuer.");
     }
 
     secondOrderButton.setTooltip (
@@ -82,13 +87,20 @@ WallPanel::WallPanel (juce::AudioProcessorValueTreeState& apvts)
                "Flaechendaempfung allein reicht dafuer nicht: die ist ein Tiefpass mit "
                "Gleichstromverstaerkung 1 und nimmt nur Hoehen, keinen Pegel. Kleinere "
                "Werte = die zweite Reflexion tritt weiter zurueck.");
-
+    setupKnob (bounceGainBoostKnob, apvts, Params::bounceGainDb, "Bounce Boost",
+               "Zusaetzlicher, unabhaengiger Pegel-Boost (dB) obendrauf - anders als Bounce "
+               "Gain darf dieser Regler auch ueber 0dB hinaus verstaerken, damit die "
+               "zweifache Reflexion trotz Tiefpass hoerbar bleibt.");
 }
 
 void WallPanel::resized()
 {
-    constexpr int knobW = 84;
-    constexpr int knobH = 82;
+    // Sechs statt fuenf Regler pro Wandreihe (Gain kam dazu) - schmaler als
+    // die 84px sonst ueblich, damit die Reihe in der Panel-Breite bleibt
+    // (Kompaktheit vor gleicher Knopfbreite ueberall).
+    constexpr int wallKnobW = 70;
+    constexpr int knobW     = 84;
+    constexpr int knobH     = 82;
 
     auto area = getLocalBounds().reduced (8);
 
@@ -102,9 +114,9 @@ void WallPanel::resized()
 
         auto knobRow = area.removeFromTop (knobH);
 
-        for (auto* k : { &wall.x, &wall.y, &wall.angle, &wall.tilt, &wall.damp })
+        for (auto* k : { &wall.x, &wall.y, &wall.angle, &wall.tilt, &wall.damp, &wall.gain })
         {
-            layoutKnob (*k, knobRow.removeFromLeft (knobW));
+            layoutKnob (*k, knobRow.removeFromLeft (wallKnobW));
             knobRow.removeFromLeft (4);
         }
 
@@ -117,4 +129,6 @@ void WallPanel::resized()
 
     auto gainRow = area.removeFromTop (knobH);
     layoutKnob (bounceGainKnob, gainRow.removeFromLeft (knobW));
+    gainRow.removeFromLeft (4);
+    layoutKnob (bounceGainBoostKnob, gainRow.removeFromLeft (knobW));
 }

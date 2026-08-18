@@ -56,6 +56,15 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
                "Ohrhoehe des Hoerers ueber dem Boden in Metern (Standard 1.75 = stehend). "
                "Erst ein Hoehenunterschied zwischen Quelle und Hoerer macht die "
                "Bodenreflexion hoerbar.");
+    setupKnob (srcJitterAmountKnob, apvts, Params::srcJitterAmount, "Jitter",
+               "Auslenkung einer langsamen, staendigen Mikrobewegung der Quelle M in "
+               "Metern - 0 = aus (Default). Wirkt immer additiv, auch waehrend normaler "
+               "Bewegung; im Stillstand ist es der 'echte Chorus', bei Bewegung geht es im "
+               "normalen Doppler unter.");
+    setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik",
+               "Wie schnell/unruhig sich die Jitter-Bewegung aendert (Hz). Kleine Werte = "
+               "langsames Driften, grosse Werte = nervoeses Zittern.");
+
     setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",
                "Wie stark der Boden bei der Reflexion die Hoehen schluckt. 0 = ideal "
                "harte Flaeche (Reflexion klingt wie der Direktschall), 1 = weicher Boden "
@@ -140,5 +149,16 @@ void FieldPanel::resized()
     {
         layoutKnob (*k, geoRow.removeFromLeft (knobW));
         geoRow.removeFromLeft (4);
+    }
+
+    // Dritte Reihe: M-Jitter, eigenstaendig statt in die schon volle
+    // Hoehen-Reihe gequetscht.
+    area.removeFromTop (6);
+
+    auto jitterRow = area.removeFromTop (knobH);
+    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob })
+    {
+        layoutKnob (*k, jitterRow.removeFromLeft (knobW));
+        jitterRow.removeFromLeft (4);
     }
 }

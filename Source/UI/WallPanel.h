@@ -43,7 +43,7 @@ private:
         juce::ToggleButton onButton;
         std::unique_ptr<ButtonAttachment> onAttachment;
 
-        Knob x, y, angle, tilt, damp;
+        Knob x, y, angle, tilt, damp, gain;
     };
 
     static constexpr int wallCount = 2;
@@ -55,6 +55,7 @@ private:
     juce::ToggleButton secondOrderButton { "Mehrfachreflexion" };
     std::unique_ptr<ButtonAttachment> secondOrderAttachment;
     Knob bounceGainKnob;
+    Knob bounceGainBoostKnob;
 
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WallPanel)

@@ -53,6 +53,11 @@ private:
     // es dort keine Achse - deshalb sind das die einzigen Positionsregler.
     Knob srcZKnob, lisZKnob;
 
+    // Additive Mikrobewegung der Quelle M ("echter Chorus" bei Stillstand,
+    // @dpa 20260818) - eigene Reihe, weil in der Höhen-Reihe kein Platz mehr
+    // frei ist.
+    Knob srcJitterAmountKnob, srcJitterRateKnob;
+
     // Höhendämpfung der Bodenreflexion - steht neben den z-Reglern, weil sie
     // ohne Höhenunterschied nichts zu tun hat.
     Knob groundDampKnob;

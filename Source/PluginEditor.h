@@ -153,7 +153,7 @@ private:
     static constexpr int engineContentHeight = 520;         // 608 minus die ausgelagerte RPM-Reihe
     static constexpr int sampleContentHeight = 220;
     static constexpr int motionContentHeight = 384;
-    static constexpr int fieldContentHeight  = 218;
+    static constexpr int fieldContentHeight  = 306;   // 218 + dritte Reihe (M-Jitter)
     static constexpr int wallContentHeight   = 360;
     static constexpr int swarmContentHeight  = 226;
 
