@@ -147,6 +147,47 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-18 (Wand-Seitenerkennung, Bildquellen-Wellenfronten)
+
+Zwei weitere @dpa-Wünsche zu den Wänden, `solver_check`/`load_check` grün,
+Bau warnungsfrei.
+
+- **Seitenerkennung ("Wand von der Rückseite muten").** Die Spiegelquellen-
+  Reflexion war bislang unbedingt aktiv, egal auf welcher Seite der
+  Wandebene Quelle und Hörer standen - physikalisch nur korrekt, wenn
+  **beide auf derselben Seite** stehen (die reale Wand wirft den Schall in
+  denselben Raum zurück, aus dem er kam; stehen sie auf verschiedenen
+  Seiten, wäre die "Reflexion" ein Durchschein durch die feste Wand, das
+  gibt es hier nicht). Neuer `Surface::normal` (aus `PathTransform::
+  wallNormal()`, jetzt eigenständig statt nur lokal in
+  `wallMirrorTransform()`) plus `DopplerEngine::wallSideGain()`: multipliziert
+  bei einfacher Wandreflexion (`order()==1`, nur Wände - Index ≥ 2, nicht der
+  Boden) einen Faktor auf `t.gain`, der **weich** (stetige Funktion von
+  `dSrc*dLis`, keine harte Fallunterscheidung) von 1 auf 0 fällt, wenn Quelle
+  und Hörer die Seite wechseln - ±1,5 m Übergangsband um den
+  Ebenendurchgang, damit ein Durchqueren der Wandebene nicht klickt.
+  Mehrfachreflexion (`order()==2`) bleibt davon unberührt (@dpa fragte
+  ausdrücklich nur nach den Wänden; eine korrekte Erweiterung auf zwei
+  Flächen wäre deutlich komplexer). Gewählt wurde **Mute statt Lowpass**
+  (beides war von @dpa als Option genannt) - einfacher, kein zusätzlicher
+  Filterzweig nötig, der bestehende `.gain`-Mechanismus aus dem Wand-Gain-
+  Feature trägt das direkt mit.
+- **Bildquellen-Wellenfronten.** Die cyan Kreise (`drawWavefronts()`) zeigen
+  bislang nur den Direktschall. Neu: `FieldSnapshot::wallWavefronts[2]` und
+  `wallPairWavefronts[2]` (die zwei Reihenfolgen einer Mehrfachreflexion,
+  Wand0→Wand1 und Wand1→Wand0) - dieselben `wavefrontPositions`/
+  `wavefrontEmitTimes` wie beim Direktschall, aber durch `applyPathTransform()`
+  mit der jeweiligen Wandspiegelung geschickt. Funktioniert, weil eine
+  Spiegelung ihre eigene Inverse ist: dieselbe Abbildung, die sonst den
+  EMPFÄNGER spiegelt, liefert auf die QUELLE angewandt exakt die
+  Bildquellen-Position - kein zusätzlicher Löser- oder Trajektorien-Code
+  nötig, nur eine weitere affine Abbildung auf bereits vorhandene Punkte.
+  `FieldComponent::drawReflectionWavefronts()` zeichnet sie in eigener Farbe
+  (violet fuer einfache, hotpink fuer doppelte Reflexion, dünner/blasser als
+  der Direktschall) - nur in der Draufsicht, nicht in der perspektivischen
+  Ansicht (dort wäre die Projektion der gekippten Bildquellen auf den Boden
+  ein eigenes Stück Arbeit, zurückgestellt).
+
 ## Stand 2026-08-18 (Wand-/Bounce-Gain, Schwarm-Streuung, M-Source-Jitter)
 
 Drei @dpa-Wünsche aus `dd.md` umgesetzt, `solver_check`/`load_check` grün,
