@@ -555,6 +555,20 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     g.setFont (13.0f);
     g.drawText ("dopplerfeld", margin, margin, 100, topBarHeight, juce::Justification::centredLeft);
 
+    // Bauzeit dieser Fassung, klein daneben. Ohne sie laesst sich von aussen
+    // nicht unterscheiden, ob eine Aenderung nicht wirkt oder ob schlicht eine
+    // aeltere Fassung laeuft - und diese Frage hat schon mehrere Anlaeufe
+    // gekostet. __DATE__/__TIME__ stehen beim Uebersetzen fest, es gibt also
+    // nichts zu pflegen.
+    g.setColour (juce::Colours::white.withAlpha (0.30f));
+    g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
+                                              10.0f, juce::Font::plain)));
+    g.drawText (juce::String ("Build ") + __DATE__ + " " + __TIME__,
+                margin + 104, margin, 200, topBarHeight, juce::Justification::centredLeft);
+
+    g.setColour (juce::Colours::white.withAlpha (0.75f));
+    g.setFont (13.0f);
+
     // CPU über 100% ist hörbar (Aussetzer) - die ganze Statuszeile färbt sich
     // dafür rot, statt nur die Zahl selbst hervorzuheben. Einfacher als ein
     // gemischtfarbiger Text und im Zweifel eher zu auffällig als übersehen.

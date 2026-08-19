@@ -48,6 +48,15 @@ public:
     // ankommt. Der Weg Processor -> Editor -> FieldComponent ist der, den das
     // Plugin geht; ihn direkt am Processor zu pruefen laesst genau die Stelle
     // aus, an der es klemmen kann.
+    // Nur fuer den Test: das Feld allein als Bild, um nachzusehen, was
+    // tatsaechlich gezeichnet wird.
+    juce::Image fieldSnapshotImageForTest()
+    {
+        refreshDisplay();
+        field.setBounds (0, 0, 900, 600);
+        return field.createComponentSnapshot (field.getLocalBounds(), false);
+    }
+
     int clonesInFieldForTest()
     {
         refreshDisplay();
