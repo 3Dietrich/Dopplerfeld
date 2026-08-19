@@ -759,6 +759,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
     s.sourcePos  = set.lastPos;
     s.listener   = listener;
     s.speedOfSound = medium.speedOfSound();
+    s.groundReflectionOn = isGroundReflectionEnabled();
 
     {
         Vec3 p, v;

@@ -27,6 +27,14 @@ public:
     FieldComponent();
     ~FieldComponent() override = default;
 
+    // PluginEditor.cpp setzt hier den Basistext (Ziehen an M/Kopf/Nase, siehe
+    // Konstruktoraufruf dort). Die Bedienung der Perspektive (Zoom, Horizont,
+    // Hoerer-Sicht, Klick auf den gelben Marker) haengt sich in der .cpp
+    // dahinter an, statt PluginEditor.cpp fuer diesen Zusatztext anfassen zu
+    // muessen - der Basistext bleibt dort, wo die restlichen Tooltips auch
+    // stehen.
+    void setTooltip (const juce::String& newTooltip) override;
+
     // Kopiert die Daten (kein Alias auf den Aufrufer-Speicher) - Snapshot ist
     // klein und wertartig (FieldSnapshot.h), Kopieren ist hier unkritisch,
     // anders als im Audiothread.
@@ -53,6 +61,16 @@ public:
 
     void setViewMode (ViewMode mode);
     ViewMode getViewMode() const { return viewMode; }
+
+    // "Aus L Sicht" (@dpa-Feedback): zusaetzlicher Kameramodus INNERHALB der
+    // Perspektive, kein eigener ViewMode - die Kamera steht dann direkt an
+    // der Hoererposition und blickt entlang seiner Nase (Listener.h) statt
+    // wie im Standardfall fest in Richtung Welt-+y hinter ihm. Oeffentliche
+    // Methode statt Editor-Umschalter (der waere eine Panel-Aenderung),
+    // zusaetzlich per Tastendruck ('L') oder Doppelklick erreichbar, siehe
+    // .cpp.
+    void setPerspectiveFromListener (bool shouldUseListenerView);
+    bool isPerspectiveFromListener() const { return perspectiveFromListener; }
 
     // Tempo-Einheit fuer Umrechnung/Textdarstellung (convertSpeed/formatSpeed
     // unten). Das Cockpit-Display selbst zeigt seit 20260819 immer alle drei
@@ -109,6 +127,17 @@ public:
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseDrag (const juce::MouseEvent& e) override;
     void mouseUp (const juce::MouseEvent& e) override;
+    void mouseDoubleClick (const juce::MouseEvent& e) override;
+
+    // Nur in der Perspektive: Mausrad zoomt (perspectiveZoom), Umschalt+
+    // Mausrad hebt/senkt den Horizont (perspectiveHorizonFraction). @dpa-
+    // Feedback: "Man braucht aber auch ein Zoom regler und ob (mit Boden)
+    // mehr oben oder mittig" - beides reines Bedienungsgefuehl wie
+    // coastEnabled, deshalb kein Parameter, siehe .cpp.
+    void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
+
+    // Tastatur-Zugang zur Hoerer-Sicht ('L'), siehe setPerspectiveFromListener().
+    bool keyPressed (const juce::KeyPress& key) override;
 
     // Rueckmeldung nach aussen in normierten [0,1]-Koordinaten, passend zu
     // den APVTS-Parametern srcX/srcY/lisX/lisY (Params.h, normiert laut
@@ -160,10 +189,31 @@ private:
     };
 
     Vec3  cameraPosition() const;
+
+    // Blickrichtung/"rechts" der Kamera. Im Standardmodus fest die
+    // Weltachsen (+y vorwaerts, +x rechts) - deshalb zerfaellt project()
+    // unten in diesem Fall exakt in die feste x/y-Rechnung von vorher. "Aus
+    // L Sicht" (perspectiveFromListener) sind es stattdessen die Hoerer-
+    // Achsen aus Listener.h (Nase/rechts), dieselbe Konvention wie
+    // listenerScreenYaw() in der Draufsicht.
+    Vec3 cameraForward() const;
+    Vec3 cameraRight() const;
+
     float focalPixels() const;
     float horizonYPx() const;
 
     Projected project (Vec3 worldMetres) const;
+
+    // Bildposition + Radius des gelben Quellen-Markers in der Perspektive -
+    // egal ob M gerade normal im Bild sitzt, an den Rand geklemmt ist
+    // (ausserhalb des Sichtfelds, aber vor der Kamera) oder nur als fixer
+    // Hinweis-Punkt hinter der Kamera steht. EINE Stelle fuer Zeichnen
+    // (drawPerspectiveSource) UND Hit-Test (dragTargetAt) - ein Klick auf
+    // den Marker trifft dadurch immer genau dort, wo er zu sehen ist, auch
+    // wenn das nicht M's wahre Bildposition ist (@dpa: "auf dem gelben
+    // Marker via Mausklick M an diese Stelle holen").
+    struct SourceMarker { juce::Point<float> px; float radiusPx; };
+    SourceMarker perspectiveSourceMarker() const;
 
     // Weltpunkte als Linienzug zeichnen, Teilstuecke hinter der Kamera
     // auslassen. Jede perspektivische Linie laeuft hierueber, statt die
@@ -263,6 +313,23 @@ private:
     DragTarget dragTarget = DragTarget::none;
 
     ViewMode viewMode = ViewMode::TopDown;
+
+    // "Aus L Sicht" (s. setPerspectiveFromListener()) - nur in der
+    // Perspektive wirksam.
+    bool perspectiveFromListener = false;
+
+    // Perspektiv-Zoom (@dpa-Feedback), 1.0 = Ausgangswert. Multipliziert die
+    // Brennweite in focalPixels(). Bedienung: Mausrad in der Perspektive.
+    float perspectiveZoom = 1.0f;
+    static constexpr float perspectiveZoomMin = 0.3f;
+    static constexpr float perspectiveZoomMax = 4.0f;
+
+    // Horizontlage als Anteil der Bildhoehe von oben (@dpa-Feedback: "ob mit
+    // Boden mehr oben oder mittig"), 0.40 = bisheriger fester Wert. Bedienung:
+    // Umschalt+Mausrad in der Perspektive.
+    float perspectiveHorizonFraction = 0.40f;
+    static constexpr float perspectiveHorizonFractionMin = 0.15f;
+    static constexpr float perspectiveHorizonFractionMax = 0.70f;
 
     // Naheste Tiefe, die noch abgebildet wird. Alles davor waechst ins
     // Unendliche und gehoert nicht ins Bild.

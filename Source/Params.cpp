@@ -63,7 +63,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Flugzeuge, statt den Regler auf einen "vernünftigen" Wert zu deckeln.
     auto heightRange = []
     {
-        auto r = juce::NormalisableRange<float> (0.0f, 10000.0f);
+        // Unter die Grundflaeche ist erlaubt, solange sie nichts zurueckwirft:
+        // dann ist sie nur ein Massstab zum Abschaetzen der Weite und keine
+        // Flaeche (@dpa: "und man kann auch z<0 setzen"). Reflektiert sie, haelt
+        // die Anzeige die Quelle beim Ziehen darueber, siehe FieldComponent.
+        //
+        // Der Schwerpunkt bleibt bei zehn Metern, damit die uebliche Hoehe fein
+        // einstellbar bleibt und die Extreme nicht den halben Reglerweg fressen.
+        auto r = juce::NormalisableRange<float> (-1000.0f, 10000.0f);
         r.setSkewForCentre (10.0f);
         return r;
     };

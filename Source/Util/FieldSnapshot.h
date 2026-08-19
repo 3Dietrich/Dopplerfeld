@@ -110,6 +110,12 @@ struct FieldSnapshot
     std::array<PathInfo, maxPaths> paths {};
     int pathCount = 0;
 
+    // Ob die Bodenreflexion gerade rechnet. Die Anzeige zeichnet den Boden
+    // danach verschieden: reflektiert er, ist er eine echte Flaeche und die
+    // Quelle gehoert darueber; reflektiert er nicht, ist er nur ein Raster zum
+    // Abschaetzen der Weite und die Quelle darf darunter.
+    bool groundReflectionOn = false;
+
     // Klone werden NICHT einzeln aufgelistet - bei zwanzig Stueck waere die
     // Liste unbrauchbar und die Werte saehen ohnehin fast gleich aus. Was
     // zaehlt, ist wie viele gerade gerechnet werden.
