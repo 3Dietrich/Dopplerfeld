@@ -928,6 +928,7 @@ void DopplerfeldProcessor::startFlyBy()
 
     const Vec3 runUp = flyBy.startPosition() - direction * (speed * tickDt * (double) primeTicks);
 
+    // ERSTER DURCHLAUF: nur messen, wie gross der Nachlauf ueberhaupt ist.
     sourceSmoothers.reset (runUp);
 
     Vec3 primedVel;
@@ -938,33 +939,41 @@ void DopplerfeldProcessor::startFlyBy()
         sourceSmoothers.tick (smoothedSourcePos, primedVel);
     }
 
-    // Nachlauf des Glaetters ausgleichen (@dpa 20260819: "Start und Endpunkt
-    // des Vorbeifluges oft falsch", Preset woandersVorbeiflug).
+    // Nachlauf des Glaetters (@dpa 20260819: "Start und Endpunkt des
+    // Vorbeifluges oft falsch", Preset woandersVorbeiflug).
     //
     // Nach dem Vorwaermen steht das ZIEL auf flyBy.startPosition(), die
-    // geglaettete Position aber um den eingeschwungenen Nachlauf dahinter -
-    // bei smootherTau 0,64 s und 1107 m/s sind das 705 m, ein Drittel der
-    // 2191 m langen Bahn. Die Quelle begann und endete damit sichtbar
-    // woanders als geplant, und zwar umso weiter daneben, je schneller sie
-    // flog. Deshalb "oft" und nicht "immer".
+    // geglaettete Position aber um den eingeschwungenen Nachlauf dahinter - bei
+    // smootherTau 0,64 s und 1107 m/s sind das 705 m, ein Drittel der 2191 m
+    // langen Bahn. Gemessen statt aus tau*v geschaetzt, denn diese Formel gilt
+    // nur fuer einen der vier Glaetter.
+    const double lag = (flyBy.startPosition() - smoothedSourcePos).dot (direction);
+
+    // ZWEITER DURCHLAUF, um genau diesen Nachlauf nach vorn verschoben. Danach
+    // steht die POSITION auf dem Startpunkt und das Ziel genau einen Nachlauf
+    // davor - also exakt im eingeschwungenen Zustand.
     //
-    // Der Nachlauf wird hier nicht aus tau*v geschaetzt, sondern gemessen: die
-    // Luecke, die nach dem Vorwaermen tatsaechlich dasteht. Das gilt damit fuer
-    // alle vier Glaettungsverfahren gleichermassen, auch fuer die, deren
-    // Nachlauf keine einfache Formel hat.
-    //
-    // Ausgeglichen wird, indem die Bahn um genau diese Strecke vorgespult wird:
-    // das Ziel laeuft dann von Anfang an so weit voraus, dass die geglaettete
-    // Position exakt auf dem Startpunkt sitzt - und am Ende exakt auf dem
-    // Endpunkt, weil der Nachlauf ueber die ganze Bahn derselbe bleibt.
-    //
-    // NICHT ueber einen Bypass des Glaetters geloest (erster Versuch, @dpa
-    // 20260819): dann uebernimmt der Ueberschwinger-Waechter, und sobald
-    // slewVmax unter der Fluggeschwindigkeit liegt (1000 gegen 1107 im Preset),
-    // faellt die Quelle dauerhaft hinter ihr Ziel zurueck. Sichtbar als
-    // Stosswelle, die hinter der Quelle haengt, und als CPU-Last, die durch die
-    // Decke geht.
-    flyBy.advanceBy ((flyBy.startPosition() - smoothedSourcePos).dot (direction));
+    // Beide Seiten muessen verschoben werden. Nur das Ziel vorzuspulen (erster
+    // Versuch, cb0d13a) hinterlaesst eine Luecke von zwei Nachlaeufen, die der
+    // Glaetter im ersten Moment aufholen muss - eine Beschleunigung, die es im
+    // Flug gar nicht geben darf. Sie schreibt eine zusaetzliche Mach-Front in
+    // die Trajektorie, die spaeter als zweite Welle eintrifft (@dpa: "es
+    // scheint mit Mach1 zu starten ... wieder mit rotem CPU peak, natuerlich
+    // mit Aussetzern").
+    const Vec3 runUpShifted = runUp + direction * lag;
+
+    sourceSmoothers.reset (runUpShifted);
+
+    for (int i = 1; i <= primeTicks; ++i)
+    {
+        sourceSmoothers.setTarget (runUpShifted + direction * (speed * tickDt * (double) i));
+        sourceSmoothers.tick (smoothedSourcePos, primedVel);
+    }
+
+    // Und die Bahn um denselben Nachlauf vorspulen, damit das Ziel dort
+    // weitermacht, wo das Vorwaermen es hinterlassen hat. Ohne das saehe der
+    // Glaetter im ersten echten Tick einen Ruecksprung.
+    flyBy.advanceBy (lag);
 
     // Der Unterschied zwischen den beiden Startvarianten steckt allein in der
     // Vorgeschichte, die der neue Geometriesatz mitbekommt:

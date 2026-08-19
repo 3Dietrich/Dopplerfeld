@@ -93,6 +93,13 @@ struct Stats
     std::array<std::uint64_t, 8> rootHist {};
     std::uint64_t countFlips       = 0;
     std::uint64_t collapsedTracks  = 0;
+
+    // Beobachtete Quellgeschwindigkeit, aus dem Snapshot. Fuer die Pruefung,
+    // dass ein Vorbeiflug vom ersten Moment an mit voller Geschwindigkeit
+    // fliegt und nicht erst anlaeuft.
+    double speedMin =  1.0e30;
+    double speedMax = -1.0e30;
+    double speedFirst = -1.0;
     std::uint64_t handovers        = 0;
     std::uint64_t tightPairs       = 0;
     std::uint64_t adjacentPairs    = 0;
@@ -328,6 +335,12 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
         stats.rootHist         = snapshot.rootHist;
         stats.countFlips       = snapshot.countFlips;
         stats.collapsedTracks  = snapshot.collapsedTracks;
+
+        stats.speedMin = std::min (stats.speedMin, snapshot.sourceSpeed);
+        stats.speedMax = std::max (stats.speedMax, snapshot.sourceSpeed);
+
+        if (stats.speedFirst < 0.0)
+            stats.speedFirst = snapshot.sourceSpeed;
         stats.handovers        = snapshot.handovers;
         stats.tightPairs       = snapshot.tightPairs;
         stats.adjacentPairs    = snapshot.adjacentPairs;
@@ -923,6 +936,47 @@ int main()
 
         smoothEarly.report ("Vorbeiflug weich, Start");
         abruptEarly.report ("Vorbeiflug Knall, Start");
+
+        // Ein Vorbeiflug fliegt vom ERSTEN Moment an mit voller Geschwindigkeit
+        // (@dpa 20260819: "es scheint mit Mach1 zu starten ... wieder mit rotem
+        // CPU peak, natuerlich mit Aussetzern").
+        //
+        // Laeuft die Quelle stattdessen an, durchfaehrt sie dabei alle
+        // Geschwindigkeiten bis zur eingestellten - bei einem Ueberschallflug
+        // also auch Mach 1. Das schreibt eine zusaetzliche Mach-Front in die
+        // Trajektorie, die spaeter als zweite Welle eintrifft, mit allem was
+        // dazugehoert: Kaustik, Lastspitze, Aussetzer.
+        //
+        // Geprueft wird auf der Geschwindigkeit selbst, nicht am Klang: sie
+        // muss ab dem ersten Snapshot bei den eingestellten 200 m/s stehen und
+        // ueber den ganzen Anflug dort bleiben.
+        {
+            constexpr double flySpeedMps = 200.0;
+            constexpr double tolerance   = 0.05;   // 5 %
+
+            std::printf ("%-22s Quelltempo beim Start %7.1f m/s (Soll %.0f) | Fenster %7.1f .. %7.1f m/s\n",
+                         "Vorbeiflug Anlauf", smoothEarly.speedFirst, flySpeedMps,
+                         smoothEarly.speedMin, smoothEarly.speedMax);
+
+            if (std::abs (smoothEarly.speedFirst - flySpeedMps) > tolerance * flySpeedMps)
+            {
+                std::printf ("FEHLGESCHLAGEN: der Vorbeiflug startet mit %.1f m/s statt %.0f - "
+                             "die Quelle laeuft erst an und durchfaehrt dabei jede "
+                             "Geschwindigkeit darunter\n",
+                             smoothEarly.speedFirst, flySpeedMps);
+                failed = true;
+            }
+
+            if (smoothEarly.speedMin < flySpeedMps * (1.0 - tolerance)
+                || smoothEarly.speedMax > flySpeedMps * (1.0 + tolerance))
+            {
+                std::printf ("FEHLGESCHLAGEN: das Quelltempo schwankt im Anflug zwischen %.1f und "
+                             "%.1f m/s, erlaubt sind %.0f +/- %.0f %%\n",
+                             smoothEarly.speedMin, smoothEarly.speedMax,
+                             flySpeedMps, 100.0 * tolerance);
+                failed = true;
+            }
+        }
         smoothRest.report  ("Vorbeiflug weich, Rest");
 
         std::printf ("%-22s M_r im Startfenster: weich %.2f, Knall %.2f\n",
