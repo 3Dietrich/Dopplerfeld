@@ -500,6 +500,13 @@ private:
     // liegt wie der Direktschall - beurteilen muss ihn @dpas Ohr.
     static constexpr double nWaveLevel = 8.0;
 
+    // Abstandsgesetz der N-Welle, siehe ausführliche Begründung an der
+    // Verwendungsstelle. Der Exponent 3/4 ist der Standardwert für eine
+    // nichtlinear alternde N-Welle (gegenüber 1 für gewöhnlichen Kugelschall);
+    // die Bezugsentfernung hält den bisher eingehörten Nahbereich fest.
+    static constexpr double nWaveDistanceExponent = 0.75;
+    static constexpr double nWaveRefMetres        = 20.0;
+
     pathdetail::DisplayValue<int>    dispBranches;
     pathdetail::DisplayValue<double> dispDelay;
     pathdetail::DisplayValue<double> dispMach;

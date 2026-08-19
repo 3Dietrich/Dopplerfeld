@@ -72,6 +72,11 @@ void FlyByGenerator::start()
     running       = true;
 }
 
+void FlyByGenerator::advanceBy (double metres)
+{
+    travelled = std::min (2.0 * halfLength(), std::max (0.0, travelled + metres));
+}
+
 Vec3 FlyByGenerator::tick (double dt)
 {
     if (! running)

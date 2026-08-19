@@ -81,6 +81,12 @@ public:
     // Aktuelle Zielposition, ohne die Bahn weiterzudrehen.
     Vec3 currentPosition() const { return positionAt (travelled); }
 
+    // Bahn um metres vorspulen, ohne Zeit vergehen zu lassen. Gedacht fuer den
+    // Ausgleich des Glaetter-Nachlaufs beim Start (siehe
+    // DopplerfeldProcessor::startFlyBy): das Ziel laeuft danach genau so weit
+    // voraus, wie die geglaettete Position hinterherhinkt.
+    void advanceBy (double metres);
+
     // Ende der geplanten Bahn (@dpa: "voraussichtlichen Weg einzeichnen") -
     // für die Restanzeige zusammen mit currentPosition().
     Vec3 plannedEnd() const { return positionAt (2.0 * halfLength()); }

@@ -938,6 +938,34 @@ void DopplerfeldProcessor::startFlyBy()
         sourceSmoothers.tick (smoothedSourcePos, primedVel);
     }
 
+    // Nachlauf des Glaetters ausgleichen (@dpa 20260819: "Start und Endpunkt
+    // des Vorbeifluges oft falsch", Preset woandersVorbeiflug).
+    //
+    // Nach dem Vorwaermen steht das ZIEL auf flyBy.startPosition(), die
+    // geglaettete Position aber um den eingeschwungenen Nachlauf dahinter -
+    // bei smootherTau 0,64 s und 1107 m/s sind das 705 m, ein Drittel der
+    // 2191 m langen Bahn. Die Quelle begann und endete damit sichtbar
+    // woanders als geplant, und zwar umso weiter daneben, je schneller sie
+    // flog. Deshalb "oft" und nicht "immer".
+    //
+    // Der Nachlauf wird hier nicht aus tau*v geschaetzt, sondern gemessen: die
+    // Luecke, die nach dem Vorwaermen tatsaechlich dasteht. Das gilt damit fuer
+    // alle vier Glaettungsverfahren gleichermassen, auch fuer die, deren
+    // Nachlauf keine einfache Formel hat.
+    //
+    // Ausgeglichen wird, indem die Bahn um genau diese Strecke vorgespult wird:
+    // das Ziel laeuft dann von Anfang an so weit voraus, dass die geglaettete
+    // Position exakt auf dem Startpunkt sitzt - und am Ende exakt auf dem
+    // Endpunkt, weil der Nachlauf ueber die ganze Bahn derselbe bleibt.
+    //
+    // NICHT ueber einen Bypass des Glaetters geloest (erster Versuch, @dpa
+    // 20260819): dann uebernimmt der Ueberschwinger-Waechter, und sobald
+    // slewVmax unter der Fluggeschwindigkeit liegt (1000 gegen 1107 im Preset),
+    // faellt die Quelle dauerhaft hinter ihr Ziel zurueck. Sichtbar als
+    // Stosswelle, die hinter der Quelle haengt, und als CPU-Last, die durch die
+    // Decke geht.
+    flyBy.advanceBy ((flyBy.startPosition() - smoothedSourcePos).dot (direction));
+
     // Der Unterschied zwischen den beiden Startvarianten steckt allein in der
     // Vorgeschichte, die der neue Geometriesatz mitbekommt:
     //
@@ -999,24 +1027,6 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
         {
             target = flyBy.tick (tickDt);
 
-            // Kein fester Glaetter auf dem Vorbeiflug (@dpa 20260819: "Start-
-            // und Endpunkt des Vorbeifluges oft falsch", Preset
-            // woandersVorbeiflug).
-            //
-            // Die Bahn ist eine Gerade mit konstanter Geschwindigkeit, also
-            // ohnehin C1-glatt - dieselbe Lage wie bei der CatmullRom-
-            // Wiedergabe unten. Ein Glaetter mit fester Zeitkonstante kann hier
-            // nichts verbessern, kostet aber im eingeschwungenen Zustand einen
-            // festen Nachlauf von tau*v. Bei smootherTau 0,64 s und 1107 m/s
-            // sind das 705 m - ein Drittel der ganzen 2191-m-Bahn. Die Quelle
-            // begann und endete damit sichtbar woanders als geplant, und zwar
-            // umso weiter daneben, je schneller sie flog. Genau deshalb "oft"
-            // und nicht immer.
-            //
-            // Der Ueberschwinger-Waechter (slew) bleibt aktiv, siehe
-            // bypassSmoothing weiter unten - er setzt beim Einstieg auf den
-            // Startpunkt auf und begrenzt danach nur noch slewVmax/slewAmax.
-            bypassSmoothing = true;
 
             // Endpunkt merken: sobald der Flug endet (isRunning() faellt in
             // diesem tick() auf false), faellt der naechste Durchlauf auf

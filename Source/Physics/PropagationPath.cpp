@@ -599,11 +599,32 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // in 3 km 6 ms (dumpfes Grollen).
                 b.nRise = 0.05 * b.nDuration + 2.0e-6 * b.R;
 
-                // Eigenes, gutartiges Abstandsgesetz statt des regularisierten
+                // Eigenes Abstandsgesetz statt des regularisierten
                 // Fokussierungsfaktors: die Druckwelle ist eine separate
                 // Schicht und soll nicht an demselben eps hängen, das "Boom
                 // Limit" für die Amplitudenformel deckelt.
-                b.nAmp = nWaveLevel / std::max (b.R, minRadius);
+                //
+                // Und ausdrücklich NICHT 1/R (@dpa 20260819: "das passt nicht
+                // zu den Duesenjaegern, die irgendwo im Himmel sind, kilometer
+                // entfernt, und man hoert ploetzlich einen lauten Knall").
+                //
+                // Eine N-Welle ist keine gewöhnliche Kugelwelle. Sie ist
+                // nichtlinear: die Druckspitze läuft schneller als der Fuss,
+                // die Welle zieht sich auf ihrem Weg selbst in die Länge und
+                // wird dabei flacher statt einfach leiser. Der Überdruck fällt
+                // deshalb nur mit rund R^(-3/4). Über 15 km macht das gegenüber
+                // 1/R etwa den Faktor 10 aus, also 20 dB - genau der
+                // Unterschied zwischen "in 12 km Höhe unhörbar" und "man hört
+                // plötzlich einen lauten Knall".
+                //
+                // Bezugsentfernung, damit nWaveLevel weiter dasselbe bedeutet
+                // wie bisher: bei nWaveRefMetres ist das Ergebnis bitgleich zum
+                // alten 1/R, näher dran etwas leiser, weiter weg deutlich
+                // lauter. 20 m ist bewusst nah gewählt - dort war die Schicht
+                // eingehört, und dieser Stand soll erhalten bleiben.
+                b.nAmp = (nWaveLevel / nWaveRefMetres)
+                       * std::pow (nWaveRefMetres / std::max (b.R, minRadius),
+                                   nWaveDistanceExponent);
 
                 b.nPhase = 0.0;
             }
