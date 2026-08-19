@@ -16,13 +16,22 @@
 //
 // juce::Slider bietet dafuer keinen std::function-Hook, deshalb die
 // Unterklasse: getTextFromValue() ist genau dafuer vorgesehen (virtuell,
-// JUCE ruft sie fuers Textfeld). getValueFromText() bleibt Standard (JUCE
-// parst die eingetippte Zahl unveraendert).
+// JUCE ruft sie fuers Textfeld).
+//
+// Wer eine eigene Darstellung braucht, setzt weiterhin textFromValueFunction
+// bzw. valueFromTextFunction wie bei jedem juce::Slider - die haben Vorrang.
+// Das ist der Weg, ueber den die Tempo-Regler ihre Einheit umschalten (siehe
+// MotionPanel::setSpeedUnit): eine ueberschriebene virtuelle Methode setzt
+// diese Hooks sonst still ausser Kraft, weil JUCE sie nur in der Basisfassung
+// abfragt.
 class RoundedSlider : public juce::Slider
 {
 public:
     juce::String getTextFromValue (double value) override
     {
+        if (textFromValueFunction != nullptr)
+            return textFromValueFunction (value);
+
         const double a = std::abs (value);
         int decimals = 0;
         if (a < 1.0)        decimals = 3;
@@ -30,5 +39,13 @@ public:
         else if (a < 100.0) decimals = 1;
 
         return juce::String (value, decimals) + getTextValueSuffix();
+    }
+
+    double getValueFromText (const juce::String& text) override
+    {
+        if (valueFromTextFunction != nullptr)
+            return valueFromTextFunction (text);
+
+        return juce::Slider::getValueFromText (text);
     }
 };

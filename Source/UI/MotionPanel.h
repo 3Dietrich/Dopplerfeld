@@ -61,6 +61,10 @@ public:
     // Gespeichert wird weiterhin in m/s - umgerechnet wird nur die Beschriftung.
     void setSpeedUnit (FieldComponent::SpeedUnit unit, double speedOfSoundMps);
 
+    // Was im Textfeld von Fly Speed steht, fuer den Test der Einheiten-
+    // umschaltung (siehe DopplerfeldEditor::flySpeedTextForTest).
+    juce::String flySpeedTextForTest() { return flySpeedKnob.slider.getTextFromValue (flySpeedKnob.slider.getValue()); }
+
 private:
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 

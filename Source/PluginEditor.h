@@ -35,6 +35,14 @@ public:
     void paint (juce::Graphics& g) override;
     void resized() override;
 
+    // Nur fuer den Test: was der Einheitenschalter gerade zeigt, was im
+    // Textfeld von Fly Speed steht, und ein Klick auf den Schalter. Ohne diese
+    // drei Griffe laesst sich die Einheitenumschaltung nur mit einem echten
+    // Fenster pruefen, und genau dieser Weg war schon einmal still kaputt.
+    juce::String speedUnitLabelForTest() const { return speedUnitButton.getButtonText(); }
+    juce::String flySpeedTextForTest() { return motionPanel.flySpeedTextForTest(); }
+    void         cycleSpeedUnitForTest() { speedUnitButton.onClick(); }
+
     // Holt den Anzeige-Snapshot aus dem Audiothread und fuehrt alle
     // Anzeigeelemente nach. Der Timer ruft genau das - herausgezogen, damit es
     // auch ohne laufende Nachrichtenschleife aufgerufen werden kann (der

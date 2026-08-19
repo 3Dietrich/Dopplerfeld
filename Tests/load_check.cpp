@@ -1340,6 +1340,55 @@ int main()
     }
 
     //==================================================================
+    // 1g4. Einheitenumschaltung der Tempo-Regler (@dpa 20260819: "ich kann mit
+    //      m/s schlecht rechnen ... ich muss m/s eingeben, ohne information was
+    //      das in km/h oder Mach ist").
+    //
+    //      Geprueft wird das Textfeld selbst, nicht der gespeicherte Wert: der
+    //      bleibt immer in m/s, und genau deshalb faellt es nicht auf, wenn die
+    //      Umrechnung stillschweigend nicht mehr ankommt. Ein ueberschriebenes
+    //      getTextFromValue() reicht dafuer schon aus (siehe RoundedSlider).
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+        setParam (proc, Params::flySpeed, 358.07f);
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        std::unique_ptr<juce::AudioProcessorEditor> owner (proc.createEditor());
+        auto* editor = dynamic_cast<DopplerfeldEditor*> (owner.get());
+
+        if (editor == nullptr)
+        {
+            std::printf ("FEHLGESCHLAGEN: kein Editor zum Pruefen der Einheiten\n");
+            failed = true;
+        }
+        else
+        {
+            // Einmal im Kreis: der Schalter hat drei Stellungen, und in jeder
+            // muss die Beschriftung des Reglers zur Stellung passen.
+            for (int i = 0; i < 3; ++i)
+            {
+                const juce::String unit  = editor->speedUnitLabelForTest();
+                const juce::String shown = editor->flySpeedTextForTest();
+
+                std::printf ("%-22s Schalter %-5s -> Fly Speed steht als \"%s\"\n",
+                             i == 0 ? "Reglereinheit" : "", unit.toRawUTF8(), shown.toRawUTF8());
+
+                if (! shown.contains (unit))
+                {
+                    std::printf ("FEHLGESCHLAGEN: der Schalter steht auf %s, der Regler zeigt "
+                                 "\"%s\" - die Umrechnung kommt am Textfeld nicht an\n",
+                                 unit.toRawUTF8(), shown.toRawUTF8());
+                    failed = true;
+                }
+
+                editor->cycleSpeedUnitForTest();
+            }
+        }
+    }
+
+    //==================================================================
     // 1h. N-Wellen-Schicht. Zwei Dinge sind hier zu zeigen, und das zweite ist
     //     das wichtigere:
     //
