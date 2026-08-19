@@ -654,11 +654,16 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // Die N-Welle kommt ADDITIV oben drauf und läuft bewusst NICHT
                 // durch die Filterkette der Amplitudenformel: sie ist eine
                 // eigene Schicht, ihre Entfernungsabhängigkeit steckt in
-                // nAmp und ihre Höhen in der Breite der Stoßfront. Der
-                // Anti-Klick-Envelope gilt trotzdem für beide - ein
-                // verschwindender Zweig darf auch seine Druckwelle nicht
-                // abschneiden.
-                double outSample = y;
+                // nAmp und ihre Höhen in der Breite der Stoßfront.
+                //
+                // Sie läuft AUCH NICHT durch den Anti-Klick-Envelope. Eine
+                // einmal ausgelöste Stoßfront ist unterwegs - ob der Löser
+                // danach noch eine Wurzel für diesen Hörweg findet, ändert an
+                // ihr nichts. Sie an env zu hängen hiess, dass ein sterbender
+                // Zweig seinen eigenen Knall mitten im Puls abschneidet. Ihre
+                // Hüllkurve hat sie in nRise/nDuration selbst (siehe
+                // nWaveAt), sie braucht keine zweite.
+                double outSample = y * b.env;
 
                 if (b.nPhase >= 0.0)
                 {
@@ -670,7 +675,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                         b.nPhase = -1.0;
                 }
 
-                out[n0 + i] += (float) (outSample * b.env * gain);
+                out[n0 + i] += (float) (outSample * gain);
             }
 
             b.tau     = tau1;
