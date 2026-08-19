@@ -77,6 +77,15 @@ public:
     // Klassenkommentar.
     void setSampleRateHint (double sr) { sampleRateHint = sr; }
 
+    // Zeitbasis direkt setzen, in Samples. Oeffentlich, damit der Editor die
+    // Voreinstellung in Sekunden umrechnen kann - die Komponente selbst kennt
+    // die Abtastrate nicht (siehe Klassenkommentar).
+    void setDisplaySeconds (double seconds, double sampleRate)
+    {
+        if (seconds > 0.0 && sampleRate > 0.0)
+            setDisplaySampleCount ((int) (seconds * sampleRate));
+    }
+
     int displaySampleCount() const { return displaySamples; }
     int captureWindowSampleCount() const { return displaySamples * 2; }
 

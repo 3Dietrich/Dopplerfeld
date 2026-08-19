@@ -231,7 +231,23 @@ double PropagationPath::panoramaGain (Vec3 incoming) const
     // bei einem gewoehnlichen Panorama-Regler, der auch nur eine Achse kennt.
     // Die Unterscheidung vorn/hinten macht weiterhin die Ohrgeometrie ueber die
     // Laufzeit; dieses Panning legt sich nur darueber.
-    const double side = std::clamp (incoming.dot (panRight), -1.0, 1.0);
+    //
+    // Gerechnet wird in der WAAGERECHTEN: die Einfallsrichtung wird erst auf die
+    // Grundflaeche projiziert und dann normiert. Sonst zieht die Hoehe das
+    // Panning zusammen, und zwar um so mehr, je kleiner das Feld ist - Hoehen
+    // stehen in Metern und wachsen nicht mit der Feldgroesse mit. Eine Quelle
+    // seitlich vom Hoerer landete dann bei 400 m Feld sauber rechts, bei 10 m
+    // Feld fast in der Mitte (gemessen 78 dB gegen 18 dB Seitenunterschied),
+    // obwohl sie in beiden Faellen genau rechts steht.
+    const Vec3   flatIn    = { incoming.x, incoming.y, 0.0 };
+    const Vec3   flatRight = { panRight.x, panRight.y, 0.0 };
+    const double lenIn     = flatIn.length();
+    const double lenRight  = flatRight.length();
+
+    if (lenIn < 1.0e-9 || lenRight < 1.0e-9)
+        return 1.0;   // genau von oben oder von unten: keine Seite
+
+    const double side = std::clamp (flatIn.dot (flatRight) / (lenIn * lenRight), -1.0, 1.0);
 
     // Gleichbleibende Leistung: L = cos(x), R = sin(x) mit x von 0 (ganz links)
     // bis pi/2 (ganz rechts). Durch cos(pi/4) geteilt, damit eine Quelle genau

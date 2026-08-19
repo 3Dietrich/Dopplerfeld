@@ -234,6 +234,9 @@ private:
 
     static constexpr int margin       = 10;
     static constexpr int topBarHeight = 26;
+    // Zeitbasis, mit der der Scope startet (@dpa: "default auf 10s").
+    static constexpr double scopeDefaultSeconds = 10.0;
+
     static constexpr int statusHeight = 44;
     static constexpr int panelColumnWidth = 470;   // breitestes Panel (Sample) plus Scrollbalken
 

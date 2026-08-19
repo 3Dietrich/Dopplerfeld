@@ -382,10 +382,20 @@ void DopplerfeldEditor::refreshDisplay()
 
         if (sr > 0.0 && std::abs (sr - lastKnownScopeSampleRate) > 0.5)
         {
+            const bool firstTime = lastKnownScopeSampleRate <= 0.0;
+
             lastKnownScopeSampleRate = sr;
             scope.setSampleRateHint (sr);
             scope.setMaxDisplaySampleCount (
                 (int) (sr * DopplerfeldProcessor::scopeMaxDisplaySeconds));
+
+            // Voreinstellung 10 s (@dpa 20260819: "Der Scope soll default auf
+            // 10s gesetzt werden"). Erst hier, nicht in der Komponente: die
+            // kennt die Abtastrate nicht und rechnet in Samples. Nur beim ersten
+            // Mal, damit ein spaeterer Wechsel der Abtastrate nicht die
+            // eingestellte Zoomstufe ueberschreibt.
+            if (firstTime)
+                scope.setDisplaySeconds (scopeDefaultSeconds, sr);
         }
 
         const int captureLen = scope.captureWindowSampleCount();

@@ -1279,13 +1279,13 @@ int main()
     //          damit ist gezeigt, dass das Panning am KOPF haengt und nicht an
     //          der Weltachse.
     {
-        auto sideTest = [&] (float panPercent, float yawDegrees, Stats& stats)
+        auto sideTestField = [&] (float fieldSize, float panPercent, float yawDegrees, Stats& stats)
         {
             DopplerfeldProcessor proc;
 
             proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
 
-            setParam (proc, Params::fieldMetres, 400.0f);
+            setParam (proc, Params::fieldMetres, fieldSize);
             setParam (proc, Params::lisX,   0.5f);
             setParam (proc, Params::lisY,   0.5f);
             setParam (proc, Params::lisYaw, yawDegrees);
@@ -1299,11 +1299,60 @@ int main()
             render (proc, buffer, 1.0, stats, [] (double) {});
         };
 
+        auto sideTest = [&] (float panPercent, float yawDegrees, Stats& stats)
+        {
+            sideTestField (400.0f, panPercent, yawDegrees, stats);
+        };
+
         Stats flat, panned, turned;
 
         sideTest (0.0f,   0.0f,   flat);
         sideTest (100.0f, 0.0f,   panned);
         sideTest (100.0f, 180.0f, turned);
+
+        // Das Panning muss bei jeder Feldgroesse gleich stark sein (@dpa
+        // 20260819: "Panning (also L/R) bei 'Field Size' < 100 ist defekt").
+        //
+        // Es haengt an der Richtung, und die Quelle steht in allen Faellen an
+        // derselben normierten Stelle, also seitlich vom Hoerer. Gemessen wird
+        // bei 50 %, weil dort beide Seiten noch Pegel haben; bei 100 % ist die
+        // abgewandte Seite exakt stumm und ein Verhaeltnis nicht mehr bildbar.
+        //
+        // Die Hoehen von Quelle und Hoerer stehen in Metern und wachsen NICHT
+        // mit der Feldgroesse mit. Auf einem kleinen Feld steht die Quelle
+        // deshalb vor allem oben statt rechts - wer die Seitlichkeit im Raum
+        // statt in der Waagerechten misst, verliert genau dort das Panning.
+        {
+            double firstDb   = 0.0;
+            bool   haveFirst = false;
+
+            for (float field : { 400.0f, 100.0f, 50.0f, 20.0f, 10.0f })
+            {
+                Stats s;
+                sideTestField (field, 50.0f, 0.0f, s);
+
+                const double half = std::max (1.0, (double) s.samples * 0.5);
+                const double l  = std::max (1.0e-12, std::sqrt (s.sumSquares[0] / half));
+                const double r  = std::max (1.0e-12, std::sqrt (s.sumSquares[1] / half));
+                const double db = 20.0 * std::log10 (r / l);
+
+                std::printf ("%-22s Feld %4.0f m -> R gegen L %+6.2f dB\n",
+                             haveFirst ? "" : "Panning je Feld", field, db);
+
+                if (! haveFirst)
+                {
+                    firstDb   = db;
+                    haveFirst = true;
+                }
+                else if (std::abs (db - firstDb) > 1.0)
+                {
+                    std::printf ("FEHLGESCHLAGEN: bei %.0f m Feld pannt es %+.2f dB statt %+.2f dB "
+                                 "wie bei 400 m - die Feldgroesse darf das Panning nicht "
+                                 "veraendern\n", field, db, firstDb);
+                    failed = true;
+                }
+            }
+        }
 
         auto ratioDb = [] (const Stats& s)
         {
@@ -1665,6 +1714,92 @@ int main()
             std::printf ("FEHLGESCHLAGEN: der Ausgangspegel wandert bei jedem Laden weiter "
                          "(%+.1f -> %+.1f -> %+.1f dB) - eingestellt bleibt so nichts\n",
                          gains[0], gains[1], gains[2]);
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // 1g7. Liegt das Spiegelbild des Ohres wirklich bei -z? (@dpa 20260819:
+    //      "Kannst Du nochmal pruefen ob mein Vorstellung: 'Ohrhoehe z mit -z
+    //      der Grundflaechen reflection' ist? Mir scheint ich muss es halb hoch
+    //      einstellen..")
+    //
+    //      Nachgerechnet an den Laufzeiten, die der Loeser selbst meldet. Steht
+    //      die Quelle in der Hoehe hs und das Ohr in hl, im waagerechten Abstand
+    //      d, dann ist
+    //          Direktschall     R1 = sqrt(d^2 + (hs - hl)^2)
+    //          ueber den Boden  R2 = sqrt(d^2 + (hs + hl)^2)
+    //      genau dann, wenn das Spiegelbild bei -hl sitzt. Jede andere
+    //      Spiegelebene ergibt eine andere Laufzeit - etwa eine Ebene auf halber
+    //      Hoererhoehe, die R2 = sqrt(d^2 + hs^2) liefern wuerde.
+    {
+        constexpr double hs = 30.0;    // Quellhoehe
+        constexpr double hl = 8.0;     // Ohrhoehe
+        constexpr double c  = 343.0;
+
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres, 400.0f);
+        setParam (proc, Params::lisX, 0.25f);
+        setParam (proc, Params::lisY, 0.5f);
+        setParam (proc, Params::lisZ, (float) hl);
+        setParam (proc, Params::srcX, 0.75f);
+        setParam (proc, Params::srcY, 0.5f);
+        setParam (proc, Params::srcZ, (float) hs);
+        setParam (proc, Params::groundReflectionOn, 1.0f);
+        setParam (proc, Params::earSpacing, 0.0f);   // beide Ohren auf den Kopfpunkt
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        juce::MidiBuffer midi;
+        FieldSnapshot    snapshot;
+
+        Stats settle;
+        render (proc, buffer, 1.0, settle, [] (double) {});
+        proc.fillFieldSnapshot (snapshot);
+
+        const double d = (snapshot.sourcePos - snapshot.listener.head).length() > 0.0
+                           ? std::sqrt (std::pow (snapshot.sourcePos.x - snapshot.listener.head.x, 2.0)
+                                      + std::pow (snapshot.sourcePos.y - snapshot.listener.head.y, 2.0))
+                           : 0.0;
+
+        const double expectedDirect = std::sqrt (d * d + (hs - hl) * (hs - hl)) / c;
+        const double expectedGround = std::sqrt (d * d + (hs + hl) * (hs + hl)) / c;
+
+        double gotDirect = 0.0, gotGround = 0.0;
+
+        for (int i = 0; i < snapshot.pathCount; ++i)
+        {
+            const auto& p = snapshot.paths[(size_t) i];
+
+            if (p.order == 0 && gotDirect == 0.0)
+                gotDirect = p.delaySeconds;
+            else if (p.surface == 1 && p.order == 1 && gotGround == 0.0)
+                gotGround = p.delaySeconds;
+        }
+
+        std::printf ("%-22s Abstand %.1f m | Direktschall %.4f s (erwartet %.4f) | "
+                     "ueber Boden %.4f s (erwartet %.4f)\n",
+                     "Bodenspiegel", d, gotDirect, expectedDirect, gotGround, expectedGround);
+
+        // Zwei Millisekunden Spielraum: die Laufzeit wird an einem Solver-Punkt
+        // abgelesen, nicht exakt zum Zeitpunkt des Snapshots.
+        if (std::abs (gotDirect - expectedDirect) > 0.002)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Direktschall braucht %.4f s statt %.4f s\n",
+                         gotDirect, expectedDirect);
+            failed = true;
+        }
+
+        if (std::abs (gotGround - expectedGround) > 0.002)
+        {
+            const double halfHeight = std::sqrt (d * d + hs * hs) / c;
+
+            std::printf ("FEHLGESCHLAGEN: der Bodenweg braucht %.4f s statt %.4f s - das "
+                         "Spiegelbild sitzt nicht bei -%.1f m (eine Ebene auf halber Hoehe "
+                         "ergaebe %.4f s)\n", gotGround, expectedGround, hl, halfHeight);
             failed = true;
         }
     }
