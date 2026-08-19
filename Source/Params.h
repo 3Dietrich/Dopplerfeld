@@ -190,6 +190,12 @@ namespace Params
     // waere sie dann schlicht weg statt dumpf.
     // Oktavlage der Unwucht im Motor. 0 ist der Zuendtakt (halbe Grundfrequenz),
     // jede Stufe verdoppelt bzw. halbiert ihn.
+    // Pegel der ECHTEN Klone, 0..1. Die billigen haben mit cloneLevel laengst
+    // einen; die echten kamen bisher mit vollem Pegel dazu, sodass schon acht
+    // Stueck den Ausgang an den Limiter druecken und der Schwarm zu einem Brei
+    // zusammengefahren wird, statt breiter zu klingen.
+    constexpr const char* cloneRealLevel = "cloneRealLevel";
+
     constexpr const char* imbalanceOctave = "imbalanceOctave";
 
     constexpr const char* groundGain = "groundGain";

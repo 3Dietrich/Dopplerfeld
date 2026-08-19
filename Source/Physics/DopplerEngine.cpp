@@ -505,10 +505,11 @@ Vec3 DopplerEngine::cloneOffset (int index, double spreadMetres)
              r * 0.35 * std::sin (a2) };
 }
 
-void DopplerEngine::setRealClones (int count, double spreadMetres)
+void DopplerEngine::setRealClones (int count, double spreadMetres, double level01)
 {
-    realClones  = std::min (maxRealClones, std::max (0, count));
-    cloneSpread = std::max (0.0, spreadMetres);
+    realClones     = std::min (maxRealClones, std::max (0, count));
+    cloneSpread    = std::max (0.0, spreadMetres);
+    cloneRealLevel = std::min (1.0, std::max (0.0, level01));
 }
 
 void DopplerEngine::setSecondOrderEnabled (bool shouldBeEnabled)
@@ -573,6 +574,12 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
         PathTransform t;
         t.offset = -(cloneOffset (r.clone, cloneSpread)
                      + cloneJitterOffset[(size_t) r.clone]);
+
+        // Eigener Pegel, wie bei den Waenden in der Abbildung: ohne ihn kommt
+        // jeder Klon mit vollem Pegel dazu, und schon acht Stueck druecken den
+        // Ausgang an den Limiter - dann klingt der Schwarm nicht breiter,
+        // sondern zusammengefahren.
+        t.gain = (float) cloneRealLevel;
         return t;
     }
 

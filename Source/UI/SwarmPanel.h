@@ -59,6 +59,8 @@ private:
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     Knob totalKnob, realKnob, spreadKnob, levelKnob;
+    // Pegel der echten Klone, siehe Params::cloneRealLevel.
+    Knob realLevelKnob;
 
     juce::ToggleButton autoButton { "Automatik" };
 

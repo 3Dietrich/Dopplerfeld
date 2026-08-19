@@ -406,6 +406,7 @@ private:
         std::atomic<float>* cloneTotal  = nullptr;
         std::atomic<float>* cloneReal   = nullptr;
         std::atomic<float>* cloneAuto   = nullptr;
+        std::atomic<float>* cloneRealLevel = nullptr;
         std::atomic<float>* cloneSpread = nullptr;
         std::atomic<float>* cloneLevel  = nullptr;
 

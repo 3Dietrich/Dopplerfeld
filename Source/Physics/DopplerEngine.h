@@ -216,7 +216,7 @@ public:
     // keinem Verhältnis zu dem, was man davon hört.
     static constexpr int maxRealClones = 20;
 
-    void setRealClones (int count, double spreadMetres);
+    void setRealClones (int count, double spreadMetres, double level01);
     int  realCloneCount() const { return realClones; }
 
     // Alles außer dem Direktschall aus - die minimale sichere Konfiguration.
@@ -401,6 +401,9 @@ private:
 
     int    realClones  = 0;
     double cloneSpread = 3.0;
+
+    // Pegel der echten Klone, siehe Params::cloneRealLevel.
+    double cloneRealLevel = 1.0;
 
     // Wackler je Klon, siehe setCloneJitterOffset().
     std::array<Vec3, (size_t) maxRealClones> cloneJitterOffset {};

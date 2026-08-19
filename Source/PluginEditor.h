@@ -43,6 +43,16 @@ public:
     juce::String speedUnitLabelForTest() const { return speedUnitButton.getButtonText(); }
     juce::String flySpeedTextForTest() { return motionPanel.flySpeedTextForTest(); }
     juce::String slewAmaxTextForTest() { return motionPanel.slewAmaxTextForTest(); }
+
+    // Nur fuer den Test: was nach einem Anzeige-Durchlauf wirklich im Feld
+    // ankommt. Der Weg Processor -> Editor -> FieldComponent ist der, den das
+    // Plugin geht; ihn direkt am Processor zu pruefen laesst genau die Stelle
+    // aus, an der es klemmen kann.
+    int clonesInFieldForTest()
+    {
+        refreshDisplay();
+        return field.clonePositionCountForTest();
+    }
     void         cycleSpeedUnitForTest() { speedUnitButton.onClick(); }
 
     // Holt den Anzeige-Snapshot aus dem Audiothread und fuehrt alle

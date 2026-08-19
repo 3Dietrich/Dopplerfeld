@@ -332,6 +332,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (cloneSpread, "Clone Spread", range, 3.0f, "m"));
     }
     layout.add (floatParam (cloneLevel, "Clone Level", unitRange(), 0.5f));
+    layout.add (floatParam (cloneRealLevel, "Clone Real Level", unitRange(), 1.0f));
 
     // --- Crossfade ---
     layout.add (boolParam (fadeAuto, "Fade Auto", true));

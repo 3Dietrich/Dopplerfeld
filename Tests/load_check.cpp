@@ -1892,6 +1892,67 @@ int main()
             std::printf ("%-22s weitester Klon %.2f m von der Quelle (Streuung 5 m)\n",
                          "", maxDistance);
 
+            // Tragen sie ueberhaupt Ton bei? Acht zusaetzliche Quellen muessen den
+            // Pegel deutlich anheben - tun sie das nicht, werden sie zwar
+            // gerechnet und angezeigt, sind aber stumm.
+            {
+                auto renderWith = [&] (float totalClones, Stats& stats)
+                {
+                    DopplerfeldProcessor p2;
+                    p2.setRateAndBufferSizeDetails (sampleRate, blockSize);
+                    setParam (p2, Params::fieldMetres, 200.0f);
+                    setParam (p2, Params::cloneTotal,  totalClones);
+                    setParam (p2, Params::cloneReal,   totalClones);
+                    setParam (p2, Params::cloneSpread, 5.0f);
+                    setParam (p2, Params::cloneAuto,   0.0f);
+                    p2.prepareToPlay (sampleRate, blockSize);
+                    render (p2, buffer, 1.0, stats, [] (double) {});
+                };
+
+                Stats alone, swarm;
+
+                renderWith (0.0f, alone);
+                renderWith (8.0f, swarm);
+
+                const double half = std::max (1.0, (double) alone.samples * 0.5);
+                const double rmsAlone = std::sqrt (alone.sumSquares[0] / half);
+                const double rmsSwarm = std::sqrt (swarm.sumSquares[0] / half);
+                const double gainDb   = rmsAlone > 0.0
+                                          ? 20.0 * std::log10 (rmsSwarm / rmsAlone) : 0.0;
+
+                std::printf ("%-22s Pegel ohne Klone %.5f, mit acht %.5f (%+.1f dB) | "
+                             "Spitze %.3f gegen %.3f\n",
+                             "", rmsAlone, rmsSwarm, gainDb, alone.peak, swarm.peak);
+
+                if (gainDb < 3.0)
+                {
+                    std::printf ("FEHLGESCHLAGEN: acht Klone heben den Pegel nur um %+.1f dB - "
+                                 "sie werden gerechnet, tragen aber keinen Ton bei\n", gainDb);
+                    failed = true;
+                }
+            }
+
+            // Und jetzt der Weg, den das Plugin wirklich geht: durch den Editor
+            // bis in die Anzeige. Am Processor zu messen laesst genau die
+            // Stelle aus, an der es klemmen kann.
+            {
+                std::unique_ptr<juce::AudioProcessorEditor> owner (proc.createEditor());
+
+                if (auto* editor = dynamic_cast<DopplerfeldEditor*> (owner.get()))
+                {
+                    const int shown = editor->clonesInFieldForTest();
+
+                    std::printf ("%-22s im Feld angekommen: %d Punkte\n", "", shown);
+
+                    if (shown != 8)
+                    {
+                        std::printf ("FEHLGESCHLAGEN: 8 Klone gerechnet, im Feld kommen %d an - "
+                                     "der Schwarm bleibt unsichtbar\n", shown);
+                        failed = true;
+                    }
+                }
+            }
+
             if (maxDistance < 0.5)
             {
                 std::printf ("FEHLGESCHLAGEN: alle Klone sitzen auf der Quelle (weitester %.2f m) - "

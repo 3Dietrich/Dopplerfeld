@@ -118,6 +118,7 @@ namespace Tooltips
         CloneTotal,
         CloneReal,
         CloneSpread,
+        CloneRealLevel,
         CloneLevel,
         CloneShow,
         CloneAuto,
@@ -786,6 +787,17 @@ namespace Tooltips
                           "For the cheap clones the same value is converted into delay "
                           "via the speed of sound - three metres is just under nine "
                           "milliseconds, exactly as for a real clone at that distance.";
+                case Key::CloneRealLevel:
+                    return lang == Language::De
+                        ? "Pegel der ECHTEN Klone. Jeder von ihnen ist eine vollwertige Quelle "
+                          "mit eigener Laufzeit - ohne Absenkung summieren sich acht Stueck bis "
+                          "an den Limiter, und dann klingt der Schwarm nicht breiter, sondern "
+                          "zusammengefahren. Faustregel: je mehr Klone, desto weiter herunter."
+                        : "Level of the REAL clones. Each is a full source with its own delay - "
+                          "without attenuation eight of them add up to the limiter, and then the "
+                          "swarm does not sound wider but squashed. Rule of thumb: the more "
+                          "clones, the further down.";
+
                 case Key::CloneLevel:
                     return lang == Language::De
                         ? "Pegel der billigen Klone, relativ zum Original. Wirkt nur auf die "

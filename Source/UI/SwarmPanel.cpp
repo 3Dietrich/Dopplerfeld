@@ -36,6 +36,7 @@ SwarmPanel::SwarmPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (realKnob, apvts, Params::cloneReal, "davon echt", Tooltips::Key::CloneReal);
     setupKnob (spreadKnob, apvts, Params::cloneSpread, "Streuung", Tooltips::Key::CloneSpread);
     setupKnob (levelKnob, apvts, Params::cloneLevel, "Pegel billig", Tooltips::Key::CloneLevel);
+    setupKnob (realLevelKnob, apvts, Params::cloneRealLevel, "Pegel echt", Tooltips::Key::CloneRealLevel);
 
     autoButton.setTooltip (Tooltips::text (Tooltips::Key::CloneAuto));
     addAndMakeVisible (autoButton);
@@ -67,12 +68,14 @@ void SwarmPanel::updateEnabledState()
     spreadKnob.label.setEnabled (anyClones);
     levelKnob.slider.setEnabled (anyClones);
     levelKnob.label.setEnabled (anyClones);
+    realLevelKnob.slider.setEnabled (anyClones);
+    realLevelKnob.label.setEnabled (anyClones);
     showButton.setEnabled (anyClones);
 }
 
 void SwarmPanel::refreshTooltips()
 {
-    for (auto* k : { &totalKnob, &realKnob, &spreadKnob, &levelKnob })
+    for (auto* k : { &totalKnob, &realKnob, &spreadKnob, &realLevelKnob, &levelKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -150,7 +153,7 @@ void SwarmPanel::resized()
 
     auto knobRow = area.removeFromTop (knobH);
 
-    for (auto* k : { &totalKnob, &realKnob, &spreadKnob, &levelKnob })
+    for (auto* k : { &totalKnob, &realKnob, &spreadKnob, &realLevelKnob, &levelKnob })
     {
         layoutKnob (*k, knobRow.removeFromLeft (knobW));
         knobRow.removeFromLeft (4);

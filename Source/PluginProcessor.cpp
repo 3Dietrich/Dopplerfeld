@@ -266,6 +266,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.cloneTotal  = raw (Params::cloneTotal);
     pp.cloneReal   = raw (Params::cloneReal);
     pp.cloneAuto   = raw (Params::cloneAuto);
+    pp.cloneRealLevel = raw (Params::cloneRealLevel);
     pp.cloneSpread = raw (Params::cloneSpread);
     pp.cloneLevel  = raw (Params::cloneLevel);
 
@@ -815,7 +816,8 @@ void DopplerfeldProcessor::applyCloneParameters()
 
     const int cheap = std::max (0, total - effectiveRealClones);
 
-    dopplerEngine.setRealClones (effectiveRealClones, (double) pp.cloneSpread->load());
+    dopplerEngine.setRealClones (effectiveRealClones, (double) pp.cloneSpread->load(),
+                                 (double) pp.cloneRealLevel->load());
 
     cloneSpray.setCount (cheap);
     cloneSpray.setLevel ((double) pp.cloneLevel->load());

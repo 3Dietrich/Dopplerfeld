@@ -107,6 +107,9 @@ public:
     void setShowClones (bool shouldShow) { showClones = shouldShow; repaint(); }
     bool isShowingClones() const { return showClones; }
 
+    // Nur fuer den Test: wie viele Klon-Punkte das Feld gerade zeichnen wuerde.
+    int clonePositionCountForTest() const { return showClones ? snapshot.clonePositionCount : 0; }
+
 
     // Nachlauf nach mouseUp() (@dpa-Feedback): Quelle/Hoerer laufen mit der
     // zuletzt gezogenen Geschwindigkeit noch kurz weiter und bremsen dann ab,
