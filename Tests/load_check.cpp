@@ -1842,6 +1842,64 @@ int main()
         run (0.0f, still);
         run (2.0f, wobbly);
 
+        // Kommen die Klone ueberhaupt an? (@dpa 20260820: "sie sind derzeit
+        // weder hoerbar noch sichtbar", nachdem er sie aufgedreht hatte.)
+        // Geprueft wird der Weg, den das Plugin geht: der Snapshot meldet, wie
+        // viele echte Klone gerechnet werden und wo sie sitzen.
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            setParam (proc, Params::fieldMetres, 200.0f);
+            setParam (proc, Params::cloneTotal,  8.0f);
+            setParam (proc, Params::cloneReal,   8.0f);
+            setParam (proc, Params::cloneSpread, 5.0f);
+            setParam (proc, Params::cloneAuto,   0.0f);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            juce::MidiBuffer midi;
+            FieldSnapshot    snapshot;
+            Stats            warm;
+
+            render (proc, buffer, 0.5, warm, [] (double) {});
+            proc.fillFieldSnapshot (snapshot);
+
+            std::printf ("%-22s eingestellt 8 -> gerechnet %d, angezeigt %d\n",
+                         "Klone kommen an", snapshot.realCloneCount, snapshot.clonePositionCount);
+
+            if (snapshot.realCloneCount != 8)
+            {
+                std::printf ("FEHLGESCHLAGEN: 8 echte Klone eingestellt, gerechnet werden %d\n",
+                             snapshot.realCloneCount);
+                failed = true;
+            }
+
+            if (snapshot.clonePositionCount != 8)
+            {
+                std::printf ("FEHLGESCHLAGEN: 8 echte Klone gerechnet, aber %d Positionen fuer die "
+                             "Anzeige - der Schwarm bleibt unsichtbar\n",
+                             snapshot.clonePositionCount);
+                failed = true;
+            }
+
+            // Und sie muessen auseinanderliegen, nicht alle auf der Quelle.
+            double maxDistance = 0.0;
+
+            for (int i = 0; i < snapshot.clonePositionCount; ++i)
+                maxDistance = std::max (maxDistance,
+                                        (snapshot.clonePositions[(size_t) i] - snapshot.sourcePos).length());
+
+            std::printf ("%-22s weitester Klon %.2f m von der Quelle (Streuung 5 m)\n",
+                         "", maxDistance);
+
+            if (maxDistance < 0.5)
+            {
+                std::printf ("FEHLGESCHLAGEN: alle Klone sitzen auf der Quelle (weitester %.2f m) - "
+                             "der Versatz kommt nicht an\n", maxDistance);
+                failed = true;
+            }
+        }
+
         auto rms = [] (const Stats& s)
         {
             const double half = std::max (1.0, (double) s.samples * 0.5);

@@ -965,6 +965,29 @@ void FieldComponent::drawPerspectiveTrail (juce::Graphics& g) const
 
 void FieldComponent::drawPerspectiveSource (juce::Graphics& g) const
 {
+    // Der Schwarm zuerst, damit die Quelle obenauf bleibt - gleiche Regel wie in
+    // der Draufsicht. In der Perspektive haben die Klone eine echte Tiefe: sie
+    // stehen wirklich vor und hinter der Quelle, nicht nur neben ihr.
+    if (showClones)
+    {
+        g.setColour (juce::Colours::yellow.withAlpha (0.35f));
+
+        for (int i = 0; i < snapshot.clonePositionCount; ++i)
+        {
+            const auto cp = project (snapshot.clonePositions[(size_t) i]);
+
+            if (! cp.visible)
+                continue;
+
+            // Groesse folgt der Tiefe wie bei der Quelle, nur kleiner - und mit
+            // einer Untergrenze, damit ein weit entfernter Klon nicht ganz
+            // verschwindet.
+            const float r = juce::jlimit (1.0f, sourceRadiusPx, cp.scale * sourceRadiusPx * 0.4f);
+
+            g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (cp.px));
+        }
+    }
+
     const Vec3 pos = snapshot.sourcePos;
 
     const auto pr     = project (pos);
