@@ -2,11 +2,17 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-// Slider mit wertabhaengig gerundeter Anzeige (@dpa-Feedback): der
+// Slider mit wertabhaengig gerundeter Anzeige (@dpa 20260819): der
 // gespeicherte/automatisierte Wert bleibt in voller Praezision, nur der
-// Text im Textfeld rundet je nach Groessenordnung unterschiedlich fein -
-// sonst stehen bei kleinen Werten (z.B. Track 0..1) sinnlose Nachkommaketten,
-// bei grossen Werten (z.B. RPM) dagegen unnoetig viele Stellen.
+// Text im Textfeld rundet je nach Groessenordnung unterschiedlich fein.
+//
+// @dpa: "Anzeigen mit sauvielen nullen (1.00000000) oder gar darunter
+// (0.9999997) ist fuer eine 'Anzeige' Gift". Vier Gruende, alle praktisch:
+// man muss zu viel lesen, um die Zahl zu erfassen; der Blick muss ueber
+// mehrere Stellen wandern; eine Einheit dahinter springt mit der wechselnden
+// Zahlenlaenge mit; und bei jeder Aenderung faengt das Lesen von vorn an.
+//
+// Die Regel gilt fuer ALLE Regler, nicht nur fuer einzelne.
 //
 //   Bereich        Nachkommastellen
 //   |Wert| < 1      3
@@ -27,18 +33,39 @@
 class RoundedSlider : public juce::Slider
 {
 public:
+    // Die Rundungsregel als eigene Funktion, damit jede Wertanzeige dieselbe
+    // benutzt - auch die, die ihren Text ueber textFromValueFunction selbst
+    // bilden (etwa die Tempo-Regler, die zusaetzlich die Einheit umrechnen).
+    // Waere sie nur hier unten eingebaut, faenden solche Anzeigen an, eigene
+    // Stellenzahlen zu erfinden.
+    static int decimalsFor (double value)
+    {
+        const double a = std::abs (value);
+
+        if (a < 1.0)   return 3;
+        if (a < 10.0)  return 2;
+        if (a < 100.0) return 1;
+
+        return 0;
+    }
+
+    // Wert nach der Regel gerundet, ohne Einheit.
+    //
+    // Formatiert wird ueber printf und NICHT ueber juce::String (double, int):
+    // dort bedeutet die Null "kuerzestmoegliche Darstellung", nicht "keine
+    // Nachkommastellen". Werte ueber 100 kaemen damit weiterhin voll ausgedruckt
+    // heraus (708.301 statt 708) - also genau das, was die Regel verhindern soll.
+    static juce::String roundedText (double value)
+    {
+        return juce::String::formatted ("%.*f", decimalsFor (value), value);
+    }
+
     juce::String getTextFromValue (double value) override
     {
         if (textFromValueFunction != nullptr)
             return textFromValueFunction (value);
 
-        const double a = std::abs (value);
-        int decimals = 0;
-        if (a < 1.0)        decimals = 3;
-        else if (a < 10.0)  decimals = 2;
-        else if (a < 100.0) decimals = 1;
-
-        return juce::String (value, decimals) + getTextValueSuffix();
+        return roundedText (value) + getTextValueSuffix();
     }
 
     double getValueFromText (const juce::String& text) override

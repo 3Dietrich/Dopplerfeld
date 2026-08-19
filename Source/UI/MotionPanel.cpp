@@ -22,23 +22,47 @@ void MotionPanel::setSpeedUnit (FieldComponent::SpeedUnit unit, double speedOfSo
     // Die drei Regler, die ein Tempo einstellen. Der gespeicherte Wert bleibt in
     // m/s - umgerechnet wird nur, was im Textfeld steht, und was jemand dort
     // eintippt, wird zurueckgerechnet.
-    for (auto* k : { &flySpeedKnob, &globalMaxSpeedKnob, &slewVmaxKnob })
+    // Tempo und Beschleunigung teilen sich die Umrechnung: eine Beschleunigung
+    // ist ein Tempo pro Sekunde, es kommt nur "/s" an die Einheit. Slew Amax
+    // gehoert deshalb mit dazu - er stellt das Geschwindigkeitsverhalten ein
+    // und war ohne Einheit genauso wenig lesbar wie die drei anderen.
+    struct Target { Knob* knob; bool perSecond; };
+
+    const Target targets[] =
     {
-        const auto suffix = unit == FieldComponent::SpeedUnit::KmH  ? " km/h"
-                          : unit == FieldComponent::SpeedUnit::Mach ? " Mach"
-                                                                    : " m/s";
+        { &flySpeedKnob,       false },
+        { &globalMaxSpeedKnob, false },
+        { &slewVmaxKnob,       false },
+        { &slewAmaxKnob,       true  },
+    };
 
-        k->slider.textFromValueFunction = [unit, speedOfSoundMps, suffix] (double mps)
+    for (const auto& target : targets)
+    {
+        const auto base = unit == FieldComponent::SpeedUnit::KmH  ? juce::String (" km/h")
+                        : unit == FieldComponent::SpeedUnit::Mach ? juce::String (" Mach")
+                                                                  : juce::String (" m/s");
+
+        // m/s wird zu m/s^2, km/h zu (km/h)/s, Mach zu Mach/s.
+        const juce::String suffix = ! target.perSecond ? base
+                                  : unit == FieldComponent::SpeedUnit::Ms
+                                        ? juce::String::fromUTF8 (" m/s\xc2\xb2")
+                                        : (unit == FieldComponent::SpeedUnit::KmH
+                                               ? juce::String (" (km/h)/s")
+                                               : juce::String (" Mach/s"));
+
+        auto& slider = target.knob->slider;
+
+        slider.textFromValueFunction = [unit, speedOfSoundMps, suffix] (double raw)
         {
-            const double shown = FieldComponent::convertSpeed (mps, speedOfSoundMps, unit);
+            // Stellenzahl nach der gemeinsamen Regel, gebildet aus dem WERT, der
+            // dasteht - nicht aus dem gespeicherten m/s-Wert. Sonst haette
+            // dieselbe Einstellung je nach Einheit verschieden viele Stellen.
+            const double shown = FieldComponent::convertSpeed (raw, speedOfSoundMps, unit);
 
-            // Mach braucht zwei Nachkommastellen, um ueberhaupt etwas zu zeigen;
-            // die beiden anderen Einheiten laufen bis in die Zehntausender und
-            // werden mit Nachkommastellen nur unleserlich.
-            return juce::String (shown, unit == FieldComponent::SpeedUnit::Mach ? 2 : 0) + suffix;
+            return RoundedSlider::roundedText (shown) + suffix;
         };
 
-        k->slider.valueFromTextFunction = [unit, speedOfSoundMps] (const juce::String& text)
+        slider.valueFromTextFunction = [unit, speedOfSoundMps] (const juce::String& text)
         {
             const double typed = text.getDoubleValue();
 
@@ -53,7 +77,7 @@ void MotionPanel::setSpeedUnit (FieldComponent::SpeedUnit unit, double speedOfSo
 
         // Ohne das behaelt das Textfeld die alte Beschriftung, bis jemand den
         // Regler anfasst.
-        k->slider.updateText();
+        slider.updateText();
     }
 }
 

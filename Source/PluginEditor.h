@@ -41,6 +41,7 @@ public:
     // Fenster pruefen, und genau dieser Weg war schon einmal still kaputt.
     juce::String speedUnitLabelForTest() const { return speedUnitButton.getButtonText(); }
     juce::String flySpeedTextForTest() { return motionPanel.flySpeedTextForTest(); }
+    juce::String slewAmaxTextForTest() { return motionPanel.slewAmaxTextForTest(); }
     void         cycleSpeedUnitForTest() { speedUnitButton.onClick(); }
 
     // Holt den Anzeige-Snapshot aus dem Audiothread und fuehrt alle
