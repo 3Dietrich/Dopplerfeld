@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <functional>
 
 // Slider mit wertabhaengig gerundeter Anzeige (@dpa 20260819): der
 // gespeicherte/automatisierte Wert bleibt in voller Praezision, nur der
@@ -60,18 +61,29 @@ public:
         return juce::String::formatted ("%.*f", decimalsFor (value), value);
     }
 
+    // Eigene Darstellung, wenn ein Regler mehr braucht als Wert plus festes
+    // Suffix - etwa die Tempo-Regler, die zusaetzlich die Einheit umrechnen.
+    //
+    // Ausdruecklich NICHT ueber textFromValueFunction: die setzt die
+    // SliderAttachment beim Verbinden selbst (juce_ParameterAttachments.cpp),
+    // und sie liefert den Parameterwert in voller Praezision. Wer sie
+    // vorgehen laesst, schaltet damit die Stellenregel fuer JEDEN Regler ab,
+    // der an einem Parameter haengt - also fuer alle.
+    std::function<juce::String (double)>       displayText;
+    std::function<double (const juce::String&)> parseText;
+
     juce::String getTextFromValue (double value) override
     {
-        if (textFromValueFunction != nullptr)
-            return textFromValueFunction (value);
+        if (displayText != nullptr)
+            return displayText (value);
 
         return roundedText (value) + getTextValueSuffix();
     }
 
     double getValueFromText (const juce::String& text) override
     {
-        if (valueFromTextFunction != nullptr)
-            return valueFromTextFunction (text);
+        if (parseText != nullptr)
+            return parseText (text);
 
         return juce::Slider::getValueFromText (text);
     }

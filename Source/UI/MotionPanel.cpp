@@ -52,7 +52,7 @@ void MotionPanel::setSpeedUnit (FieldComponent::SpeedUnit unit, double speedOfSo
 
         auto& slider = target.knob->slider;
 
-        slider.textFromValueFunction = [unit, speedOfSoundMps, suffix] (double raw)
+        slider.displayText = [unit, speedOfSoundMps, suffix] (double raw)
         {
             // Stellenzahl nach der gemeinsamen Regel, gebildet aus dem WERT, der
             // dasteht - nicht aus dem gespeicherten m/s-Wert. Sonst haette
@@ -62,7 +62,7 @@ void MotionPanel::setSpeedUnit (FieldComponent::SpeedUnit unit, double speedOfSo
             return RoundedSlider::roundedText (shown) + suffix;
         };
 
-        slider.valueFromTextFunction = [unit, speedOfSoundMps] (const juce::String& text)
+        slider.parseText = [unit, speedOfSoundMps] (const juce::String& text)
         {
             const double typed = text.getDoubleValue();
 

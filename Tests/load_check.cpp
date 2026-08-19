@@ -1435,6 +1435,78 @@ int main()
                              RoundedSlider::roundedText (50.27).toRawUTF8(),
                              RoundedSlider::roundedText (708.301).toRawUTF8());
             }
+
+            // Und jetzt JEDER Regler der Oberflaeche, nicht nur die gerade
+            // angefassten (@dpa 20260819: "bitte alle ALLE alle. immer.").
+            //
+            // Geprueft wird das, was tatsaechlich im Textfeld steht. Ein Regler
+            // haengt an einem Parameter, und dessen Attachment bringt eine
+            // eigene Textfunktion mit, die den Wert in voller Praezision
+            // ausgibt - ohne diese Schleife faellt es nicht auf, wenn sie an
+            // einem einzelnen Regler wieder durchschlaegt.
+            {
+                struct Walker
+                {
+                    int checked = 0, wrong = 0;
+
+                    void visit (juce::Component& parent, bool& failedOut)
+                    {
+                        for (auto* child : parent.getChildren())
+                        {
+                            if (auto* slider = dynamic_cast<juce::Slider*> (child))
+                                check (*slider, failedOut);
+
+                            visit (*child, failedOut);
+                        }
+                    }
+
+                    void check (juce::Slider& slider, bool& failedOut)
+                    {
+                        // Nicht nur den gerade eingestellten Wert: die
+                        // Stellenzahl haengt an der Groessenordnung, und ein
+                        // Fehler zeigt sich oft erst am oberen Ende. Abgetastet
+                        // wird deshalb der ganze Weg des Reglers. Gesetzt wird
+                        // dabei nichts - getTextFromValue beantwortet die Frage
+                        // fuer jeden Wert direkt.
+                        const double lo = slider.getMinimum();
+                        const double hi = slider.getMaximum();
+
+                        for (int step = 0; step <= 8; ++step)
+                        {
+                            const double value = lo + (hi - lo) * (double) step / 8.0;
+                            const juce::String shown = slider.getTextFromValue (value);
+
+                            // Zahlenteil abtrennen: eine Einheit haengt immer
+                            // hinter einem Leerzeichen.
+                            const juce::String number = shown.upToFirstOccurrenceOf (" ", false, false);
+                            const int dot      = number.indexOfChar ('.');
+                            const int decimals = dot < 0 ? 0 : number.length() - dot - 1;
+                            const int expected = RoundedSlider::decimalsFor (number.getDoubleValue());
+
+                            ++checked;
+
+                            if (decimals != expected)
+                            {
+                                ++wrong;
+
+                                if (wrong <= 5)
+                                    std::printf ("FEHLGESCHLAGEN: Regler \"%s\" zeigt bei %g "
+                                                 "\"%s\" - %d Nachkommastellen statt %d\n",
+                                                 slider.getName().toRawUTF8(), value,
+                                                 shown.toRawUTF8(), decimals, expected);
+
+                                failedOut = true;
+                            }
+                        }
+                    }
+                };
+
+                Walker walker;
+                walker.visit (*editor, failed);
+
+                std::printf ("%-22s %d Regler geprueft, %d davon mit falscher Stellenzahl\n",
+                             "Alle Regler", walker.checked, walker.wrong);
+            }
         }
     }
 
@@ -1509,6 +1581,90 @@ int main()
             std::printf ("FEHLGESCHLAGEN: der teuerste Block kostet das %.1f-fache des Schnitts "
                          "(bei t=%.2fs, |M_r| dort %.2f) - an dieser Stelle setzt der Ton aus\n",
                          spike, flight.worstBlockAtSec, flight.worstBlockMach);
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // 1g6. Zustand laden und wieder speichern (@dpa 20260819: "Output scheint
+    //      nicht zu recallen..? es ist immer wenn ich neu starte auf +36").
+    //
+    //      Geprueft wird die Eigenschaft, an der es haengt: Speichern und
+    //      Laden muss den Zustand unveraendert lassen, und zwar auch beim
+    //      zweiten und dritten Mal. Ein Zustand aus einer aelteren Fassung
+    //      wird beim Laden umgerechnet - passiert das bei JEDEM Laden erneut,
+    //      wandert der Wert bei jedem Programmstart weiter, bis er am Anschlag
+    //      steht.
+    {
+        auto outputGainOf = [] (DopplerfeldProcessor& p)
+        {
+            return (double) *p.apvts.getRawParameterValue (Params::outputGain);
+        };
+
+        // Ein gespeicherter Zustand aus der Fassung MIT eigenem Lauter-Regler.
+        juce::MemoryBlock legacyState;
+
+        {
+            DopplerfeldProcessor proc;
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            setParam (proc, Params::outputGain, 6.0f);
+            proc.getStateInformation (legacyState);
+
+            // Den alten Regler von Hand einhaengen, wie ihn eine aeltere
+            // Fassung geschrieben haette.
+            auto xml = juce::AudioProcessor::getXmlFromBinary (legacyState.getData(),
+                                                               (int) legacyState.getSize());
+            if (xml != nullptr)
+            {
+                auto tree = juce::ValueTree::fromXml (*xml);
+                juce::ValueTree old ("PARAM");
+                old.setProperty ("id", "loudBoost", nullptr);
+                old.setProperty ("value", 12.0, nullptr);
+                tree.addChild (old, -1, nullptr);
+
+                const auto rewritten = tree.createXml();
+                legacyState.reset();
+                juce::AudioProcessor::copyXmlToBinary (*rewritten, legacyState);
+            }
+        }
+
+        // Dreimal laden und dazwischen jeweils neu speichern, wie es ein
+        // Programmstart tut.
+        DopplerfeldProcessor proc;
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        juce::MemoryBlock state = legacyState;
+        double gains[3] {};
+
+        for (int round = 0; round < 3; ++round)
+        {
+            proc.setStateInformation (state.getData(), (int) state.getSize());
+            gains[round] = outputGainOf (proc);
+
+            state.reset();
+            proc.getStateInformation (state);
+        }
+
+        std::printf ("%-22s Output Gain nach 1./2./3. Laden: %+.1f / %+.1f / %+.1f dB\n",
+                     "Zustand laden", gains[0], gains[1], gains[2]);
+
+        // Erste Runde rechnet um: 6 + 12 = 18 dB. Danach muss es dort stehen
+        // bleiben.
+        if (std::abs (gains[0] - 18.0) > 0.05)
+        {
+            std::printf ("FEHLGESCHLAGEN: der alte Lauter-Wert wird beim Laden nicht auf den "
+                         "Ausgangspegel gerechnet (%+.1f statt %+.1f dB)\n", gains[0], 18.0);
+            failed = true;
+        }
+
+        if (std::abs (gains[1] - gains[0]) > 0.05 || std::abs (gains[2] - gains[0]) > 0.05)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Ausgangspegel wandert bei jedem Laden weiter "
+                         "(%+.1f -> %+.1f -> %+.1f dB) - eingestellt bleibt so nichts\n",
+                         gains[0], gains[1], gains[2]);
             failed = true;
         }
     }

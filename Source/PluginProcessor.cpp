@@ -1534,7 +1534,7 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
     if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))
         return;
 
-    const auto tree = juce::ValueTree::fromXml (*xml);
+    auto tree = juce::ValueTree::fromXml (*xml);
 
     if (! tree.isValid())
         return;
@@ -1544,28 +1544,43 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
     // Ohne das faellt der Boost beim Laden ersatzlos weg, und alles, was @dpa
     // damit auf Pegel gebracht hat, waere danach bis zu 36 dB zu leise.
     {
-        double legacyBoostDb = 0.0;
+        double         legacyBoostDb = 0.0;
+        juce::ValueTree legacyNode;
 
         for (int i = 0; i < tree.getNumChildren(); ++i)
         {
             const auto child = tree.getChild (i);
 
             if (child.getProperty ("id").toString() == Params::loudBoostLegacy)
+            {
                 legacyBoostDb = (double) child.getProperty ("value");
+                legacyNode    = child;
+            }
         }
 
-        if (legacyBoostDb > 0.0)
+        if (legacyNode.isValid())
         {
-            for (int i = 0; i < tree.getNumChildren(); ++i)
+            if (legacyBoostDb > 0.0)
             {
-                auto child = tree.getChild (i);
-
-                if (child.getProperty ("id").toString() == Params::outputGain)
+                for (int i = 0; i < tree.getNumChildren(); ++i)
                 {
-                    const double merged = (double) child.getProperty ("value") + legacyBoostDb;
-                    child.setProperty ("value", juce::jlimit (-36.0, 36.0, merged), nullptr);
+                    auto child = tree.getChild (i);
+
+                    if (child.getProperty ("id").toString() == Params::outputGain)
+                    {
+                        const double merged = (double) child.getProperty ("value") + legacyBoostDb;
+                        child.setProperty ("value", juce::jlimit (-36.0, 36.0, merged), nullptr);
+                    }
                 }
             }
+
+            // Danach muss der alte Eintrag WEG. Der Zustandsbaum behaelt Kinder,
+            // die zu keinem Parameter mehr gehoeren, und wird beim naechsten
+            // Speichern samt ihnen wieder abgelegt. Bliebe er stehen, addierte
+            // sich derselbe Boost bei JEDEM Laden erneut auf den Ausgangspegel,
+            // bis der am oberen Anschlag steht - eingestellt bleibt dann gar
+            // nichts mehr.
+            tree.removeChild (legacyNode, nullptr);
         }
     }
 
