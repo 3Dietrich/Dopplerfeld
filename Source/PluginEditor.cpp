@@ -389,7 +389,8 @@ void DopplerfeldEditor::refreshDisplay()
 
     swarmPanel.setLoad (dopplerfeldProcessor.cpuLoadPercent(),
                         dopplerfeldProcessor.realCloneCount(),
-                        dopplerfeldProcessor.cheapCloneCount());
+                        dopplerfeldProcessor.cheapCloneCount(),
+                        dopplerfeldProcessor.limiterHits() > 0);
 
     // 30Hz-Timer = ~33ms zwischen zwei Aufrufen (siehe startTimerHz weiter
     // unten) - fest verdrahtet statt gemessen, das Levelmeter braucht nur

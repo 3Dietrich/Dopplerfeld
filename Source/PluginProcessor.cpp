@@ -1303,6 +1303,8 @@ void DopplerfeldProcessor::applyOutputStage (juce::AudioBuffer<float>& buffer)
     const int numSamples = buffer.getNumSamples();
     const int numCh      = buffer.getNumChannels();
 
+    int limiterHits = 0;
+
     float* const* data = buffer.getArrayOfWritePointers();
 
     for (int i = 0; i < numSamples; ++i)
@@ -1322,7 +1324,17 @@ void DopplerfeldProcessor::applyOutputStage (juce::AudioBuffer<float>& buffer)
                 x = 0.0;
 
             if (limiterEnabled)
+            {
+                // Mitzaehlen, wie oft der Begrenzer wirklich eingreift. Ohne
+                // diese Zahl sieht man dem Ausgang nicht an, ob er gerade
+                // zusammengefahren wird - und ein Schwarm, der in die
+                // Begrenzung laeuft, klingt dann nach einer einzigen Stimme
+                // statt nach vielen.
+                if (std::abs (x) > 0.95)
+                    ++limiterHits;
+
                 x = softClip (x);
+            }
 
             data[ch][i] = (float) x;
 
@@ -1339,6 +1351,8 @@ void DopplerfeldProcessor::applyOutputStage (juce::AudioBuffer<float>& buffer)
         const float scopeR = numCh > 1 ? data[1][i] : scopeL;
         scopeRing.push (scopeL, scopeR);
     }
+
+    limiterHitCount.store (limiterHits, std::memory_order_relaxed);
 }
 
 void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)

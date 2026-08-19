@@ -129,6 +129,10 @@ public:
     void stopFlyBy()    { flyStopRequest.store (true); }
     bool isFlyingBy() const { return flyByActive.load(); }
 
+    // Wie oft der Begrenzer im letzten Block eingegriffen hat. Null heisst: der
+    // Ausgang laeuft frei.
+    int limiterHits() const { return limiterHitCount.load (std::memory_order_relaxed); }
+
     // Was gerade tatsaechlich gerechnet wird - bei eingeschalteter Automatik
     // weicht die Zahl der echten Klone vom Regler ab, und genau das soll man
     // sehen koennen (@dpa: kein stiller Deckel).
@@ -585,6 +589,9 @@ private:
 
     juce::SmoothedValue<float> outputGainLinear;
     bool limiterEnabled = true;
+
+    // Wie oft der Begrenzer eingegriffen hat, fuer die Statuszeile.
+    std::atomic<int> limiterHitCount { 0 };
 
     // Scope-Ringpuffer (@dpa-Feedback), gefuellt in applyOutputStage() an
     // derselben Stelle wie das Levelmeter. Immer aktiv, unabhaengig davon,

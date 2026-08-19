@@ -536,14 +536,22 @@ void FieldComponent::drawSource (juce::Graphics& g) const
     // Quelle darin untergeht.
     if (showClones)
     {
-        g.setColour (juce::Colours::yellow.withAlpha (0.35f));
+        // Deutlich genug, um sie zwischen Bewegungsspur und Wellenringen zu
+        // finden: ein gefuellter Punkt mit Rand. Zu klein und zu blass sind sie
+        // im Feld schlicht nicht auffindbar, und dann wirkt ein funktionierender
+        // Schwarm wie ein kaputter.
+        const float r = sourceRadiusPx * 0.7f;
 
         for (int i = 0; i < snapshot.clonePositionCount; ++i)
         {
             const auto p = worldToScreen (snapshot.clonePositions[(size_t) i]);
-            const float r = sourceRadiusPx * 0.4f;
+            const auto box = juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (p);
 
-            g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (p));
+            g.setColour (juce::Colours::yellow.withAlpha (0.45f));
+            g.fillEllipse (box);
+
+            g.setColour (juce::Colours::yellow.withAlpha (0.85f));
+            g.drawEllipse (box, 1.0f);
         }
     }
 
@@ -982,9 +990,14 @@ void FieldComponent::drawPerspectiveSource (juce::Graphics& g) const
             // Groesse folgt der Tiefe wie bei der Quelle, nur kleiner - und mit
             // einer Untergrenze, damit ein weit entfernter Klon nicht ganz
             // verschwindet.
-            const float r = juce::jlimit (1.0f, sourceRadiusPx, cp.scale * sourceRadiusPx * 0.4f);
+            const float r = juce::jlimit (2.0f, sourceRadiusPx, cp.scale * sourceRadiusPx * 0.7f);
+            const auto box = juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (cp.px);
 
-            g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (cp.px));
+            g.setColour (juce::Colours::yellow.withAlpha (0.45f));
+            g.fillEllipse (box);
+
+            g.setColour (juce::Colours::yellow.withAlpha (0.85f));
+            g.drawEllipse (box, 1.0f);
         }
     }
 

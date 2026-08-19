@@ -28,7 +28,7 @@ public:
     // Echtzeit-Budgets und was gerade tatsaechlich gerechnet wird. Beides
     // gehoert zusammen - die Zahl der echten Klone kann bei eingeschalteter
     // Automatik unter dem Regler liegen, und genau das soll ablesbar sein.
-    void setLoad (float cpuPercent, int realClones, int cheapClones);
+    void setLoad (float cpuPercent, int realClones, int cheapClones, bool limiterActive);
 
     // Notaus. Kein Parameter, weil er mehrere auf einmal zurueckstellt.
     std::function<void()> onPanic;
@@ -76,6 +76,9 @@ private:
     float cpuPercent = 0.0f;
     int   realCount  = 0;
     int   cheapCount = 0;
+
+    // Ob der Begrenzer gerade eingreift, siehe paint().
+    bool  limiting   = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SwarmPanel)
 };

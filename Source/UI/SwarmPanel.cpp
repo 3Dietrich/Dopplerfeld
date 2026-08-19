@@ -86,21 +86,13 @@ void SwarmPanel::refreshTooltips()
     panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));
 }
 
-void SwarmPanel::setLoad (float cpuPercentIn, int realClones, int cheapClones)
+void SwarmPanel::setLoad (float cpu, int realClones, int cheapClones, bool limiterActive)
 {
-    // Nur zeichnen, wenn sich etwas sichtbar geaendert hat - der Timer laeuft
-    // mit 30 Hz, und ein Balken, der sich um ein Zehntelprozent bewegt, ist
-    // kein Grund fuer eine Neuzeichnung.
-    const bool changed = std::abs (cpuPercentIn - cpuPercent) > 0.5f
-                      || realClones != realCount
-                      || cheapClones != cheapCount;
-
-    cpuPercent = cpuPercentIn;
+    cpuPercent = cpu;
     realCount  = realClones;
     cheapCount = cheapClones;
-
-    if (changed)
-        repaint (meterArea.expanded (0, 20));
+    limiting   = limiterActive;
+    repaint();
 }
 
 void SwarmPanel::paint (juce::Graphics& g)
@@ -138,8 +130,12 @@ void SwarmPanel::paint (juce::Graphics& g)
     g.setColour (juce::Colours::white.withAlpha (0.75f));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
                                               11.0f, juce::Font::plain)));
-    g.drawText (juce::String::formatted ("CPU %4.0f %%   Klone: %d echt / %d billig",
-                                         (double) cpuPercent, realCount, cheapCount),
+    // Der Begrenzer gehoert hier hin: laeuft er, klingt ein Schwarm nach einer
+    // einzigen Stimme, weil alles auf dieselbe Obergrenze zusammengefahren wird.
+    // Ohne diese Anzeige sieht man dem Ausgang das nicht an.
+    g.drawText (juce::String::formatted ("CPU %4.0f %%   Klone: %d echt / %d billig%s",
+                                         (double) cpuPercent, realCount, cheapCount,
+                                         limiting ? "   BEGRENZER AKTIV" : ""),
                 meterArea.getX(), meterArea.getBottom() + 2, meterArea.getWidth(), 16,
                 juce::Justification::centredLeft);
 }
