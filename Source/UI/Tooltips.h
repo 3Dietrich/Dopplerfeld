@@ -29,6 +29,7 @@ namespace Tooltips
         // --- EngineControlPanel ---
         FieldPerspectiveHelp,
         EngineRpm,
+        EngineImbalanceOctave,
         EngineImbalance,
         EngineMotorGate,
 
@@ -187,6 +188,15 @@ namespace Tooltips
                           "Rauschband + Jitter mit ein - der zentrale Regler des Motorklangs."
                         : "Engine speed. Drives the fundamental frequency (f = RPM/60) and also "
                           "colours the noise band and jitter - the central control of the engine sound.";
+                case Key::EngineImbalanceOctave:
+                    return lang == Language::De
+                        ? "Oktavlage der Unwucht. 0 ist der Zuendtakt, also die halbe "
+                          "Grundfrequenz - jede Stufe nach oben verdoppelt sie, jede nach unten "
+                          "halbiert sie. Damit wird aus dem Stampfen ein Schnarren und umgekehrt."
+                        : "Octave of the imbalance. 0 is the firing rate, i.e. half the "
+                          "fundamental - each step up doubles it, each step down halves it. This "
+                          "turns a thumping into a rattle and back.";
+
                 case Key::EngineImbalance:
                     return lang == Language::De
                         ? "Zusaetzliche Amplitudenmodulation bei der halben Grundfrequenz - simuliert "

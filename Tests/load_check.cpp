@@ -1805,6 +1805,72 @@ int main()
     }
 
     //==================================================================
+    // 1g8. Wackeln die echten Klone einzeln? (@dpa 20260820: "die (echten)
+    //      clone haben doch hoffentlich auch ihre eigenen Jitterkanaele?")
+    //
+    //      Nachweisbar ohne Ohr: bei ruhender Quelle und ruhendem Hoerer ist der
+    //      Ausgang ohne Jitter ein stehender Klang. Wackeln die Klone einzeln,
+    //      laufen ihre Laufzeiten gegeneinander und der Summenpegel atmet. Ein
+    //      GEMEINSAMER Wackler wuerde das nicht tun: er verschoebe alle Klone
+    //      gleich und liesse ihr Verhaeltnis zueinander unveraendert.
+    {
+        auto run = [&] (float jitterMetres, Stats& stats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 200.0f);
+            setParam (proc, Params::srcX, 0.7f);
+            setParam (proc, Params::srcY, 0.5f);
+            // Beide Regler: cloneTotal ist die Gesamtzahl, cloneReal wie viele
+            // davon echt gerechnet werden. Ohne die Gesamtzahl entstehen gar
+            // keine Klone, und der Jitter haette nichts, woran er wackeln
+            // koennte.
+            setParam (proc, Params::cloneTotal,  10.0f);
+            setParam (proc, Params::cloneReal,   10.0f);
+            setParam (proc, Params::cloneSpread, 6.0f);
+            setParam (proc, Params::srcJitterAmount, jitterMetres);
+            setParam (proc, Params::srcJitterRateHz, 3.0f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+            render (proc, buffer, 4.0, stats, [] (double) {});
+        };
+
+        Stats still, wobbly;
+
+        run (0.0f, still);
+        run (2.0f, wobbly);
+
+        auto rms = [] (const Stats& s)
+        {
+            const double half = std::max (1.0, (double) s.samples * 0.5);
+            return std::sqrt (s.sumSquares[0] / half);
+        };
+
+        // Verglichen wird die SPITZE, nicht der Mittelwert: ein atmender Pegel
+        // hat denselben RMS wie ein stehender, die Modulation faellt darin
+        // heraus. In den Momenten, in denen die wackelnden Klone gleichphasig
+        // zusammentreffen, steigt dagegen die Spitze.
+        const double stillPeak  = still.peak;
+        const double wobblyPeak = wobbly.peak;
+        const double change     = stillPeak > 0.0
+                                    ? 100.0 * std::abs (wobblyPeak - stillPeak) / stillPeak
+                                    : 0.0;
+
+        std::printf ("%-22s 10 Klone: Spitze ohne Jitter %.5f, mit %.5f (%.1f %% Unterschied) | "
+                     "RMS %.5f gegen %.5f\n",
+                     "Klon-Jitter", stillPeak, wobblyPeak, change, rms (still), rms (wobbly));
+
+        if (change < 1.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Jitter aendert am Klon-Klang nichts (%.2f %%) - "
+                         "er kommt bei den Klonen nicht an\n", change);
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 1h. N-Wellen-Schicht. Zwei Dinge sind hier zu zeigen, und das zweite ist
     //     das wichtigere:
     //

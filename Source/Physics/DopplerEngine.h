@@ -8,6 +8,7 @@
 #include "SourceSignalBuffer.h"
 #include "SourceTrajectory.h"
 #include "Vec3.h"
+#include <array>
 
 #include "Sources/SoundSource.h"
 #include "Util/Crossfader.h"
@@ -160,6 +161,16 @@ public:
     // bis 100 Hz zumacht, der Reflexion fast die ganze Energie nimmt - ohne
     // Nachregeln waere sie dann weg statt dumpf.
     void setGroundGain (double gainLinear);
+
+    // Eigener Wackler je echtem Klon (@dpa 20260820: "die (echten) clone haben
+    // doch hoffentlich auch ihre eigenen Jitterkanaele?"). Der Versatz kommt
+    // fertig aus dem Processor, wo er auf der Bewegungsrate tickt - hier wird er
+    // nur zum festen Klon-Versatz addiert.
+    void setCloneJitterOffset (int index, Vec3 offsetMetres)
+    {
+        if (index >= 0 && index < maxRealClones)
+            cloneJitterOffset[(size_t) index] = offsetMetres;
+    }
 
     // Mehrfachreflexionen: genau EINE zusätzliche Generation, also Wege der
     // Form Quelle -> Fläche X -> Fläche Y -> Ohr mit X != Y. Mehr nicht, und
@@ -390,6 +401,9 @@ private:
 
     int    realClones  = 0;
     double cloneSpread = 3.0;
+
+    // Wackler je Klon, siehe setCloneJitterOffset().
+    std::array<Vec3, (size_t) maxRealClones> cloneJitterOffset {};
 
     SoundSource* source = nullptr;
 

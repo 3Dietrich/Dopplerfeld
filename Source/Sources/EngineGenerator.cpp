@@ -114,7 +114,13 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     const double jitterDepthPercent = (double) jitterAmountPercent.load() * u;
 
     const double imbalance = (double) imbalanceAmount.load();
-    const double halfPhaseInc = (fBaseNominal * 0.5) / currentSampleRate;
+    // Unwucht-Frequenz: von Haus aus die halbe Grundfrequenz (Zuendtakt), per
+    // Oktavregler nach oben oder unten verschiebbar (@dpa 20260820: "Imbalance:
+    // zusaetzlicher Octave Regler [-2 .. 6]"). Bei 0 bleibt es beim Zuendtakt,
+    // jede Stufe verdoppelt bzw. halbiert.
+    const double imbalanceOctaves = (double) imbalanceOctave.load();
+    const double halfPhaseInc = (fBaseNominal * 0.5 * std::pow (2.0, imbalanceOctaves))
+                                / currentSampleRate;
 
     struct HarmSnapshot
     {
@@ -232,4 +238,9 @@ void EngineGenerator::setJitter (float amountPercent, float rateHz)
 void EngineGenerator::setImbalance (float amount)
 {
     imbalanceAmount.store (amount);
+}
+
+void EngineGenerator::setImbalanceOctave (float octaves)
+{
+    imbalanceOctave.store (octaves);
 }

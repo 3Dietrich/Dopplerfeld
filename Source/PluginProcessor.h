@@ -416,6 +416,7 @@ private:
         std::atomic<float>* fadeAuto     = nullptr;
         std::atomic<float>* fadeManualMs = nullptr;
 
+        std::atomic<float>* imbalanceOctave = nullptr;
         std::atomic<float>* groundGain = nullptr;
         std::atomic<float>* panAmount  = nullptr;
         std::atomic<float>* outputGain = nullptr;
@@ -447,6 +448,9 @@ private:
     // Additive Mikrobewegung der Quelle M, vor sourceSmoothers eingehakt
     // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.
     PositionJitter  sourceJitter;
+
+    // Eigener Wackler je echtem Klon, siehe advanceMotion().
+    std::array<PositionJitter, (size_t) DopplerEngine::maxRealClones> cloneJitter;
 
     // Die Kapazitäts-Vorwärmung in prepareToPlay() darf nur beim allerersten
     // Mal laufen - prepareToPlay() wird vom Host bei jeder Blockgrößen-/

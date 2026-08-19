@@ -152,6 +152,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (jitterAmount, "Jitter Amount", { 0.0f, 20.0f, 0.01f }, 1.5f, "%"));
     layout.add (floatParam (jitterRateHz, "Jitter Rate", { 3.0f, 15.0f, 0.01f }, 8.0f, "Hz"));
     layout.add (floatParam (imbalance, "Imbalance", unitRange(), 0.0f));
+    layout.add (floatParam (imbalanceOctave, "Imbalance Octave", { -2.0f, 6.0f, 1.0f }, 0.0f, "Okt"));
 
     // --- Sample ---
     // Obergrenze bewusst hoch (@dpa: leise Samples brauchen bei den hohen

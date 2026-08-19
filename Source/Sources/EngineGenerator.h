@@ -34,6 +34,8 @@ public:
     void setNoiseParams (float fcLoHz, float fcHiHz, float gainLoDb, float gainHiDb, float q);
     void setJitter (float amountPercent, float rateHz);
     void setImbalance (float amount);
+    // Oktavlage der Unwucht, siehe Params::imbalanceOctave.
+    void setImbalanceOctave (float octaves);
 
 private:
     // Ein Sägezahn-Teilton: Reglerwerte atomar, Phase ist reiner Audio-Thread-
@@ -78,6 +80,7 @@ private:
     // "Unwucht": periodische Amplitudenkomponente bei f_base/2 für den
     // Zündtakt eines Viertakters (Plan 3.10, optional, Default 0 = aus).
     std::atomic<float> imbalanceAmount { 0.0f };
+    std::atomic<float> imbalanceOctave { 0.0f };
 
     // TPT-Struktur ist explizit für Modulation pro Sample ausgelegt (siehe
     // JUCE-Doku), darum werden Cutoff/Resonanz hier ohne Zögern block- bzw.

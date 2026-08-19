@@ -48,6 +48,9 @@ private:
 
     Knob rpmKnob, imbalanceKnob;
 
+    // Oktavlage der Unwucht, siehe Params::imbalanceOctave.
+    Knob imbalanceOctaveKnob;
+
     juce::ToggleButton motorGateButton { "Motor bei Griff" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EngineControlPanel)

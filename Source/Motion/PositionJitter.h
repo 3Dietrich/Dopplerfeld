@@ -33,6 +33,15 @@ class PositionJitter
 {
 public:
     void prepare (double tickRateHz);
+
+    // Eigener Startwert des Zufallsgenerators. Damit wackeln mehrere Jitter
+    // nebeneinander wirklich unabhaengig, statt dieselbe Folge zu durchlaufen -
+    // ohne das haetten alle Klone denselben Wackler, nur zeitversetzt um nichts.
+    void setSeed (std::uint32_t newSeed)
+    {
+        rngState = newSeed | 1u;   // 0 waere ein Fixpunkt des xorshift
+        reset();
+    }
     void reset();
 
     // Auslenkung der Wackelbewegung in Metern, 0 = aus (Default).

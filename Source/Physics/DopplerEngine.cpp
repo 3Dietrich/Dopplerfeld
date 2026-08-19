@@ -567,8 +567,12 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
         // Quelle um s verschieben == Empfänger um -s verschieben. Die
         // Abbildung ist deshalb eine reine Verschiebung, die lineare Matrix
         // bleibt die Einheitsmatrix.
+        // Fester Versatz plus eigener Wackler dieses Klons. Ohne den zweiten
+        // Teil stehen alle Klone starr zueinander, und was als Schwarm gedacht
+        // ist, klingt wie ein einziger breiter Ton.
         PathTransform t;
-        t.offset = -cloneOffset (r.clone, cloneSpread);
+        t.offset = -(cloneOffset (r.clone, cloneSpread)
+                     + cloneJitterOffset[(size_t) r.clone]);
         return t;
     }
 

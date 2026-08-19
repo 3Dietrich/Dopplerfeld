@@ -301,6 +301,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.fadeAuto     = raw (Params::fadeAuto);
     pp.fadeManualMs = raw (Params::fadeManualMs);
 
+    pp.imbalanceOctave = raw (Params::imbalanceOctave);
     pp.groundGain = raw (Params::groundGain);
     pp.panAmount  = raw (Params::panAmount);
     pp.outputGain = raw (Params::outputGain);
@@ -418,6 +419,15 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     sourceSmoothers.prepare (DopplerEngine::trajectoryRateHz);
     listenerSmoothers.prepare (DopplerEngine::trajectoryRateHz);
     sourceJitter.prepare (DopplerEngine::trajectoryRateHz);
+
+    // Jeder echte Klon bekommt seinen eigenen Wackler, mit eigenem Startwert -
+    // sonst durchlaufen alle dieselbe Zufallsfolge und wackeln im Gleichtakt,
+    // was den Schwarm wieder zu einer einzigen Quelle zusammenzieht.
+    for (size_t i = 0; i < cloneJitter.size(); ++i)
+    {
+        cloneJitter[i].prepare (DopplerEngine::trajectoryRateHz);
+        cloneJitter[i].setSeed (0x9e3779b9u * (std::uint32_t) (i + 1) + 0x5eed4a11u);
+    }
 
     recorderTickAccum = 0.0;
 
@@ -578,6 +588,15 @@ void DopplerfeldProcessor::applyParameters()
     sourceJitter.setAmount ((double) pp.srcJitterAmount->load());
     sourceJitter.setRate   ((double) pp.srcJitterRateHz->load());
 
+    // Dieselben Regler wie fuer die Quelle: @dpa hat den Jitter dort
+    // ausprobiert und will genau diesen auf den Klonen, nicht einen zweiten
+    // Satz Regler.
+    for (auto& j : cloneJitter)
+    {
+        j.setAmount ((double) pp.srcJitterAmount->load());
+        j.setRate   ((double) pp.srcJitterRateHz->load());
+    }
+
     const bool fieldJustChanged = std::abs (fieldMetresValue - lastFieldMetres) > 1.0e-9;
 
     if (fieldJustChanged)
@@ -644,6 +663,7 @@ void DopplerfeldProcessor::applyParameters()
                                     pp.noiseQ->load());
     engineGenerator.setJitter (pp.jitterAmount->load(), pp.jitterRateHz->load());
     engineGenerator.setImbalance (pp.imbalance->load());
+    engineGenerator.setImbalanceOctave (pp.imbalanceOctave->load());
 
     // --- Sample ---
     sampleSource.setGainDb (pp.sampleGain->load());
@@ -1135,6 +1155,13 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         // Glaetter, um klickfrei zu bleiben - deshalb ist es unbedenklich,
         // ihn auch im bypassSmoothing-Zweig direkt in target zu addieren.
         target += sourceJitter.tick (tickDt);
+
+        // Die Klone wackeln auf derselben Rate wie die Quelle, jeder fuer sich.
+        // Ihr Versatz sitzt in der Geometrie der Engine, nicht in der Bahn -
+        // alle Klone lesen dieselbe Trajektorie und unterscheiden sich nur
+        // darin, von wo aus sie gehoert werden.
+        for (int i = 0; i < (int) cloneJitter.size(); ++i)
+            dopplerEngine.setCloneJitterOffset (i, cloneJitter[(size_t) i].tick (tickDt));
 
         if (bypassSmoothing)
         {

@@ -188,6 +188,10 @@ namespace Params
     // lauter gestellt werden muesste"). Ein Tiefpass, der bis 100 Hz zumacht,
     // nimmt der Reflexion fast die ganze Energie - ohne einen eigenen Pegel
     // waere sie dann schlicht weg statt dumpf.
+    // Oktavlage der Unwucht im Motor. 0 ist der Zuendtakt (halbe Grundfrequenz),
+    // jede Stufe verdoppelt bzw. halbiert ihn.
+    constexpr const char* imbalanceOctave = "imbalanceOctave";
+
     constexpr const char* groundGain = "groundGain";
 
     // Anteil des gewoehnlichen Pegel-Pannings, 0..100 % (@dpa 20260819: "bitte

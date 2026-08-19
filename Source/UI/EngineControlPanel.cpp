@@ -30,6 +30,8 @@ EngineControlPanel::EngineControlPanel (juce::AudioProcessorValueTreeState& apvt
 {
     setupKnob (rpmKnob, apvts, Params::rpm, "RPM", Tooltips::Key::EngineRpm);
     setupKnob (imbalanceKnob, apvts, Params::imbalance, "Imbalance", Tooltips::Key::EngineImbalance);
+    setupKnob (imbalanceOctaveKnob, apvts, Params::imbalanceOctave, "Imb Octave",
+               Tooltips::Key::EngineImbalanceOctave);
 
     motorGateButton.setTooltip (Tooltips::text (Tooltips::Key::EngineMotorGate));
     motorGateButton.onClick = [this]
@@ -47,7 +49,7 @@ void EngineControlPanel::setMotorGateEnabled (bool shouldGate)
 
 void EngineControlPanel::refreshTooltips()
 {
-    for (auto* k : { &rpmKnob, &imbalanceKnob })
+    for (auto* k : { &rpmKnob, &imbalanceKnob, &imbalanceOctaveKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -64,7 +66,7 @@ void EngineControlPanel::resized()
     auto area = getLocalBounds().reduced (8);
 
     auto row = area.removeFromTop (knobH);
-    for (auto* k : { &rpmKnob, &imbalanceKnob })
+    for (auto* k : { &rpmKnob, &imbalanceKnob, &imbalanceOctaveKnob })
     {
         layoutKnob (*k, row.removeFromLeft (knobW));
         row.removeFromLeft (4);
