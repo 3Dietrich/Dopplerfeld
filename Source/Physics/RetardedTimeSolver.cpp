@@ -1,4 +1,5 @@
 #include "RetardedTimeSolver.h"
+#include "StraightLineRetardedTime.h"
 
 #include <algorithm>
 #include <cmath>
@@ -474,33 +475,125 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
     }
     else if (allowFullScan || nCand == 0)
     {
-        // Schritt 4 (Plan 2.10): Vollscan mit Lipschitz-Sprüngen. F ist
-        // Lipschitz-stetig mit Lip = c + vmax; ist |F(t)| > Lip*step, kann im
-        // Intervall keine Nullstelle liegen. Weit weg grosse Sprünge, nahe an
-        // der Wurzel automatisch fein.
-        double t     = windowEnd;
-        double fPrev = F (t);
+        // Schritt 4a: geschlossene Lösung, wenn das ganze Suchfenster in einer
+        // geradlinig gleichförmigen Phase der Bahn liegt.
+        //
+        // Genau das ist der Vorbeiflug, und genau der ist der teuerste Fall:
+        // an der Mach-Front wird das Residuum flach, die Lipschitz-Schritte
+        // fallen auf die Mindestweite, und der Vollscan tastet ein mehrere
+        // Sekunden langes Fenster im Millisekundenraster ab. Gemessen kostete
+        // ein einzelner Block dort 13211 us bei 10667 us Budget - der Ton setzt
+        // ausgerechnet dort aus, wo der Mach-Kegel eintrifft.
+        //
+        // Hier gibt es nichts zu suchen: die Gleichung ist eine quadratische
+        // (siehe StraightLineRetardedTime.h). Nachgeprüft wird trotzdem, und
+        // zwar am echten Residuum gegen die tatsächlich geschriebene Bahn -
+        // hält eine Wurzel dem nicht stand, übernimmt der Vollscan.
+        bool solvedInClosedForm = false;
 
-        if (fPrev == 0.0)
-            addCandidate (t, -1);
-
-        while (t > windowStart)
+        if (traj.linearSince() <= windowStart)
         {
-            const double step = std::max (std::abs (fPrev) / lip, minStep);
+            Vec3 linePoint, lineVelocity;
+            traj.linearMotion (linePoint, lineVelocity);
 
-            double tNext = t - step;
-            if (tNext < windowStart)
-                tNext = windowStart;
+            const straightline::Roots exact =
+                straightline::solve (linePoint, lineVelocity, receiverPos, c, t_h);
 
-            const double fNext = F (tNext);
+            // Die Formel gilt fuer die IDEALE Gerade, geschrieben wird die
+            // geglaettete Bahn. Jede Wurzel wird deshalb gegen das echte
+            // Residuum nachgezogen: ein Bracket um den Startwert herum
+            // aufziehen und darin genau lösen. Weil der Startwert schon nahe
+            // liegt, sind das eine Handvoll Auswertungen statt eines Vollscans
+            // ueber mehrere Sekunden.
+            //
+            // Findet auch nur eine Wurzel kein Bracket, gilt der ganze Versuch
+            // als gescheitert und der Vollscan uebernimmt. Lieber einmal zu oft
+            // suchen als einen Hoerweg verlieren.
+            constexpr double residualTolMetres = 1.0e-6;
 
-            if (fNext == 0.0)
-                addCandidate (tNext, -1);
-            else if (oppositeSign (fPrev, fNext))
-                addCandidate (brent (F, tNext, t, fNext, fPrev, brentTol, 80), -1);
+            solvedInClosedForm = exact.count > 0;
 
-            fPrev = fNext;
-            t     = tNext;
+            double refined[2] {};
+            int    nRefined = 0;
+
+            for (int i = 0; i < exact.count && solvedInClosedForm; ++i)
+            {
+                const double guess  = std::min (windowEnd, std::max (windowStart, exact.t_e[i]));
+                const double fGuess = F (guess);
+
+                if (std::abs (fGuess) <= residualTolMetres)
+                {
+                    refined[nRefined++] = guess;
+                    continue;
+                }
+
+                // Schrittweite aus derselben Lipschitz-Schranke wie im
+                // Vollscan: naeher als |F|/lip kann die Wurzel nicht liegen.
+                const double step = std::max (std::abs (fGuess) / lip, minStep);
+
+                bool bracketed = false;
+
+                for (int k = 1; k <= 8 && ! bracketed; ++k)
+                {
+                    const double lo = std::max (windowStart, guess - (double) k * step);
+                    const double hi = std::min (windowEnd,   guess + (double) k * step);
+
+                    const double fLo = F (lo);
+                    const double fHi = F (hi);
+
+                    if (oppositeSign (fLo, fGuess))
+                    {
+                        refined[nRefined++] = brent (F, lo, guess, fLo, fGuess, brentTol, 60);
+                        bracketed = true;
+                    }
+                    else if (oppositeSign (fGuess, fHi))
+                    {
+                        refined[nRefined++] = brent (F, guess, hi, fGuess, fHi, brentTol, 60);
+                        bracketed = true;
+                    }
+                }
+
+                if (! bracketed)
+                    solvedInClosedForm = false;
+            }
+
+            if (solvedInClosedForm)
+            {
+                for (int i = 0; i < nRefined; ++i)
+                    addCandidate (refined[i], -1);
+            }
+        }
+
+        if (! solvedInClosedForm)
+        {
+            // Schritt 4b (Plan 2.10): Vollscan mit Lipschitz-Sprüngen. F ist
+            // Lipschitz-stetig mit Lip = c + vmax; ist |F(t)| > Lip*step, kann
+            // im Intervall keine Nullstelle liegen. Weit weg grosse Sprünge,
+            // nahe an der Wurzel automatisch fein.
+            double t     = windowEnd;
+            double fPrev = F (t);
+
+            if (fPrev == 0.0)
+                addCandidate (t, -1);
+
+            while (t > windowStart)
+            {
+                const double step = std::max (std::abs (fPrev) / lip, minStep);
+
+                double tNext = t - step;
+                if (tNext < windowStart)
+                    tNext = windowStart;
+
+                const double fNext = F (tNext);
+
+                if (fNext == 0.0)
+                    addCandidate (tNext, -1);
+                else if (oppositeSign (fPrev, fNext))
+                    addCandidate (brent (F, tNext, t, fNext, fPrev, brentTol, 80), -1);
+
+                fPrev = fNext;
+                t     = tNext;
+            }
         }
     }
 

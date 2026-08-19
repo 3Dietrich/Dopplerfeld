@@ -97,6 +97,19 @@ public:
     double oldestTime() const;
     double newestTime() const;
 
+    // Ab wann die Bewegung geradlinig und gleichfoermig ist: der aelteste
+    // Zeitpunkt, ab dem sich die Geschwindigkeit nicht mehr geaendert hat.
+    // Beim Schreiben mitgefuehrt, kostet also nichts beim Abfragen.
+    //
+    // Wozu: liegt das ganze Suchfenster des Loesers in dieser Phase, laesst
+    // sich die Retarded-Time-Gleichung geschlossen loesen, statt sie
+    // abzutasten (siehe StraightLineRetardedTime.h). Genau das ist der
+    // Vorbeiflug, und genau der ist der teuerste Fall.
+    double linearSince() const { return linearSinceTime; }
+
+    // Die Gerade selbst, gueltig ab linearSince(): M(t) = point + velocity*t.
+    void linearMotion (Vec3& point, Vec3& velocity) const;
+
 private:
     void fillConstant (Vec3 pos, double newestSampleTime);
     void pushSpeedSample (double t, double speed);
@@ -126,4 +139,7 @@ private:
 
     // (Zeit, |p|) nach demselben Muster wie speedDeque.
     std::deque<std::pair<double, double>> distDeque;
+
+    // Anfang der laufenden gleichfoermigen Phase, siehe linearSince().
+    double linearSinceTime = 0.0;
 };

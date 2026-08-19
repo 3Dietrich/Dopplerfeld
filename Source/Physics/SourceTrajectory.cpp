@@ -57,6 +57,10 @@ void SourceTrajectory::fillConstant (Vec3 pos, double newestSampleTime)
     distDeque.clear();
     writeIndex = 0;
 
+    // Eine ruhende Quelle ist der Sonderfall v = 0 einer gleichfoermigen
+    // Bewegung, die geschlossene Loesung deckt ihn mit ab.
+    linearSinceTime = newestSampleTime - (double) (capacity - 1) * gridDt;
+
     const double posNorm = pos.length();
 
     for (int i = 0; i < capacity; ++i)
@@ -92,6 +96,11 @@ void SourceTrajectory::fillLinear (Vec3 pos, Vec3 vel, double time, double spanS
 
     const double speed = vel.length();
     const double span  = std::max (0.0, spanSeconds);
+
+    // Vor dem Beginn der Geraden ruht die Quelle, dort gilt eine ANDERE
+    // gleichfoermige Bewegung (v = 0). Die Phase faengt deshalb genau am
+    // Knick an, nicht am Pufferanfang.
+    linearSinceTime = time - span;
 
     for (int i = 0; i < capacity; ++i)
     {
@@ -129,6 +138,24 @@ void SourceTrajectory::push (Vec3 pos, double time)
     // Geschwindigkeit beibehalten statt durch ~0 zu teilen.
     s.v = (dt > 1.0e-9) ? (pos - prev.p) * (1.0 / dt) : prev.v;
     s.speed = (float) s.v.length();
+
+    // Aendert sich die Geschwindigkeit, faengt hier eine neue gleichfoermige
+    // Phase an - und zwar beim VORGAENGER, denn erst ab dort gilt die neue
+    // Gerade. Die Schranke ist so eng, dass nur Rundung darunter faellt: eine
+    // echte Aenderung der Bewegung ist um Groessenordnungen groesser.
+    //
+    // Die Schranke ist bewusst grosszuegig (ein Promille): ein Glaetter
+    // naehert sich einer gleichfoermigen Bewegung nur asymptotisch, seine
+    // Geschwindigkeit steht also nie exakt still. Auf eine exakte Gerade zu
+    // pruefen hiesse, den Sonderfall nie zu erkennen. Der Loeser nimmt die
+    // geschlossene Loesung deshalb nur als Startwert und zieht jede Wurzel
+    // gegen die tatsaechliche Bahn nach.
+    {
+        const double tol = 1.0e-3 * std::max (1.0, s.v.length());
+
+        if ((s.v - prev.v).length() > tol)
+            linearSinceTime = prev.t;
+    }
 
     ring[(size_t) ringSlot (writeIndex)] = s;
     pushSpeedSample (s.t, (double) s.speed);
@@ -296,6 +323,15 @@ double SourceTrajectory::maxSpeedSince (double t0) const
 double SourceTrajectory::maxDistanceSince (double t0) const
 {
     return maxSince (distDeque, t0);
+}
+
+void SourceTrajectory::linearMotion (Vec3& point, Vec3& velocity) const
+{
+    // Verankert am juengsten Punkt: M(t) = p_neu + v_neu * (t - t_neu).
+    const TrajectorySample& newest = ring[(size_t) ringSlot (writeIndex - 1)];
+
+    velocity = newest.v;
+    point    = newest.p - newest.v * newest.t;
 }
 
 double SourceTrajectory::oldestTime() const

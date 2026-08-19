@@ -1389,6 +1389,69 @@ int main()
     }
 
     //==================================================================
+    // 1g5. Vorbeiflug knapp ueber Mach 1 (@dpa 20260819: "der Vorbeiflug mit
+    //      358m/s hat aber immernoch das gleiche Problem, und zwar beim
+    //      Auftreffen des Kegels ... bei diesem Speed noch kein Durchflug zu
+    //      hoeren, weil in diesem Moment der CPU blockiert ist", CPU 135 %).
+    //
+    //      358 m/s sind Mach 1,04. Das ist der teuerste Punkt ueberhaupt: an
+    //      der Mach-Front laeuft die Verzoegerung mit unendlicher Steigung
+    //      durch, der Loeser muss dort seine Wurzeln aus einem beliebig steilen
+    //      Verlauf holen, und genau in dem Moment trifft der Kegel ein.
+    //
+    //      Werte aus @dpas Bildschirmfoto. Gemessen wird die Blockzeit, nicht
+    //      der Klang: ein Block, der laenger braucht als sein Zeitbudget,
+    //      erzeugt eine Luecke, und genau die ist der fehlende Durchflug.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres,    5000.0f);
+        setParam (proc, Params::lisX,           0.4f);
+        setParam (proc, Params::lisY,           0.5f);
+        setParam (proc, Params::srcZ,           30.0f);
+        setParam (proc, Params::smootherType,   1.0f);
+        setParam (proc, Params::smootherTau,    0.531f);
+        setParam (proc, Params::slewVmax,       1000.0f);
+        setParam (proc, Params::slewAmax,       2004.95f);
+        setParam (proc, Params::globalMaxSpeed, 687.62f);
+        setParam (proc, Params::flyKind,        1.0f);
+        setParam (proc, Params::flyStart,       0.0f);
+        setParam (proc, Params::flyDistance,    589.711f);
+        setParam (proc, Params::flyApproach,    708.301f);
+        setParam (proc, Params::flySpeed,       358.07f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        Stats settle;
+        render (proc, buffer, 0.3, settle, [] (double) {});
+
+        proc.triggerFlyBy();
+
+        Stats flight;
+        render (proc, buffer, 6.0, flight, [] (double) {});
+
+        flight.report ("Vorbeiflug Mach 1,04");
+
+        // Zeitbudget eines Blocks. Wer laenger braucht, liefert zu spaet - der
+        // Host bekommt eine Luecke statt Ton.
+        const double budgetMicros = 1.0e6 * (double) blockSize / sampleRate;
+
+        std::printf ("%-22s teuerster Block %.0f us gegen %.0f us Budget (%.0f %%)\n",
+                     "", flight.worstMicros, budgetMicros,
+                     100.0 * flight.worstMicros / budgetMicros);
+
+        if (flight.worstMicros > budgetMicros)
+        {
+            std::printf ("FEHLGESCHLAGEN: der teuerste Block braucht %.0f us bei %.0f us Budget "
+                         "(bei t=%.2fs) - an dieser Stelle setzt der Ton aus\n",
+                         flight.worstMicros, budgetMicros, flight.worstAtSeconds);
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 1h. N-Wellen-Schicht. Zwei Dinge sind hier zu zeigen, und das zweite ist
     //     das wichtigere:
     //
