@@ -913,6 +913,15 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
 
     s.realCloneCount = realClones;
 
+    // Die Punkte, von denen aus gehoert wird: der Klon-Versatz sitzt in der
+    // Geometrie mit umgekehrtem Vorzeichen (Empfaenger verschieben statt
+    // Quelle), fuer die Anzeige wird er deshalb wieder umgedreht.
+    s.clonePositionCount = std::min (realClones, FieldSnapshot::maxShownClones);
+
+    for (int i = 0; i < s.clonePositionCount; ++i)
+        s.clonePositions[(size_t) i] = set.lastPos + cloneOffset (i, cloneSpread)
+                                     + cloneJitterOffset[(size_t) i];
+
     // Zweig-Todesmessung über ALLE gerechneten Pfade, auch die oben aus der
     // Liste gefilterten (Klone, abgeschaltete): gefragt ist, wie oft im ganzen
     // Modell ein Zweig mitten im Klang abgeschnitten wird, nicht wie sich das

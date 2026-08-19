@@ -32,6 +32,7 @@ public:
 
     // Notaus. Kein Parameter, weil er mehrere auf einmal zurueckstellt.
     std::function<void()> onPanic;
+    std::function<void (bool)> onShowClonesToggled;
 
     // Setzt die Tooltips aller Regler/Schalter dieses Panels neu, in der
     // aktuell an Tooltips::currentLanguage() gewaehlten Sprache - fuer den
@@ -58,6 +59,9 @@ private:
     Knob totalKnob, realKnob, spreadKnob, levelKnob;
 
     juce::ToggleButton autoButton { "Automatik" };
+
+    // Klon-Schwarm im Feld anzeigen, siehe FieldComponent::setShowClones().
+    juce::ToggleButton showButton { "Zeigen" };
     std::unique_ptr<ButtonAttachment> autoAttachment;
 
     juce::TextButton panicButton { "Notaus: minimale Konfiguration" };

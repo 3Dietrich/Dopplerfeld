@@ -116,6 +116,14 @@ struct FieldSnapshot
     // Abschaetzen der Weite und die Quelle darf darunter.
     bool groundReflectionOn = false;
 
+    // Wo die echten Klone gerade sitzen, damit die Anzeige den Schwarm zeigen
+    // kann (@dpa 20260820: "Geht die Darstellung der Klone? zuschaltbar?").
+    // Fester Versatz plus eigener Wackler, also genau die Punkte, von denen aus
+    // gehoert wird.
+    static constexpr int maxShownClones = 20;
+    std::array<Vec3, (size_t) maxShownClones> clonePositions {};
+    int clonePositionCount = 0;
+
     // Klone werden NICHT einzeln aufgelistet - bei zwanzig Stueck waere die
     // Liste unbrauchbar und die Werte saehen ohnehin fast gleich aus. Was
     // zaehlt, ist wie viele gerade gerechnet werden.

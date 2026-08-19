@@ -530,6 +530,23 @@ void FieldComponent::drawFlyByPreview (juce::Graphics& g) const
 
 void FieldComponent::drawSource (juce::Graphics& g) const
 {
+    // Der Schwarm zuerst, damit die Quelle selbst obenauf liegt. Klein und
+    // blass: die Klone sind ein Umfeld, kein zweites M - man soll sehen, wie
+    // weit sie streuen und dass sie einzeln wackeln, ohne dass die eigentliche
+    // Quelle darin untergeht.
+    if (showClones)
+    {
+        g.setColour (juce::Colours::yellow.withAlpha (0.35f));
+
+        for (int i = 0; i < snapshot.clonePositionCount; ++i)
+        {
+            const auto p = worldToScreen (snapshot.clonePositions[(size_t) i]);
+            const float r = sourceRadiusPx * 0.4f;
+
+            g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (p));
+        }
+    }
+
     const auto centrePx = worldToScreen (snapshot.sourcePos);
 
     g.setColour (juce::Colours::yellow);

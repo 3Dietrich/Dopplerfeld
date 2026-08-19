@@ -101,6 +101,12 @@ public:
     // zuletzt gesehene Mausposition gleichmaessig nach.
     void setMouseFrameSmoothing (bool shouldBeEnabled);
 
+    // Klon-Schwarm anzeigen (@dpa 20260820: "Geht die Darstellung der Klone?
+    // zuschaltbar?"). Zeigt, wo die echten Klone sitzen und wie sie einzeln
+    // wackeln - klein und blass, damit die Quelle selbst erkennbar bleibt.
+    void setShowClones (bool shouldShow) { showClones = shouldShow; repaint(); }
+    bool isShowingClones() const { return showClones; }
+
 
     // Nachlauf nach mouseUp() (@dpa-Feedback): Quelle/Hoerer laufen mit der
     // zuletzt gezogenen Geschwindigkeit noch kurz weiter und bremsen dann ab,
@@ -325,6 +331,9 @@ private:
 
     static constexpr float headRadiusPx = 13.0f; // rein symbolische Groesse, nicht massstabsgetreu
     static constexpr float sourceRadiusPx = 6.0f;
+
+    // Ob der Klon-Schwarm mitgezeichnet wird, siehe setShowClones().
+    bool showClones = true;
     static constexpr float dragHitRadiusPx = 16.0f;
 
     DragTarget dragTarget = DragTarget::none;

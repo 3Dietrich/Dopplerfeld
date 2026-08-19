@@ -37,6 +37,11 @@ SwarmPanel::SwarmPanel (juce::AudioProcessorValueTreeState& apvts)
     addAndMakeVisible (autoButton);
     autoAttachment = std::make_unique<ButtonAttachment> (apvts, Params::cloneAuto, autoButton);
 
+    showButton.setTooltip (Tooltips::text (Tooltips::Key::CloneShow));
+    showButton.setToggleState (true, juce::dontSendNotification);
+    showButton.onClick = [this] { if (onShowClonesToggled != nullptr) onShowClonesToggled (showButton.getToggleState()); };
+    addAndMakeVisible (showButton);
+
     panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));
     panicButton.onClick = [this] { if (onPanic) onPanic(); };
     addAndMakeVisible (panicButton);
@@ -129,7 +134,12 @@ void SwarmPanel::resized()
     }
 
     area.removeFromTop (6);
-    autoButton.setBounds (area.removeFromTop (26).removeFromLeft (140));
+    {
+        auto row = area.removeFromTop (26);
+        autoButton.setBounds (row.removeFromLeft (140));
+        row.removeFromLeft (12);
+        showButton.setBounds (row.removeFromLeft (110));
+    }
 
     area.removeFromTop (8);
     meterArea = area.removeFromTop (14);

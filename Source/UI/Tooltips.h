@@ -119,6 +119,7 @@ namespace Tooltips
         CloneReal,
         CloneSpread,
         CloneLevel,
+        CloneShow,
         CloneAuto,
         Panic,
 
@@ -790,6 +791,15 @@ namespace Tooltips
                         : "Level of the cheap clones, relative to the original. Only "
                           "affects the emulation - the real clones get their level from "
                           "the physics (1/R) and need no control.";
+                case Key::CloneShow:
+                    return lang == Language::De
+                        ? "Zeigt im Feld, wo die echten Klone sitzen: kleine, blasse Punkte um "
+                          "die Quelle herum. Daran ist zu sehen, wie weit sie streuen und dass "
+                          "jeder fuer sich wackelt. Reine Anzeige, kostet keine Rechenzeit im Ton."
+                        : "Shows where the real clones sit in the field: small, faint dots around "
+                          "the source. This makes their spread visible, and that each one wobbles "
+                          "on its own. Display only, it costs no audio processing time.";
+
                 case Key::CloneAuto:
                     return lang == Language::De
                         ? "Zieht die Zahl der ECHTEN Klone bei hoher Auslastung selbsttaetig zurueck und "
