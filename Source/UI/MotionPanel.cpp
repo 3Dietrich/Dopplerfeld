@@ -2,8 +2,11 @@
 
 void MotionPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                               const juce::String& paramID, const juce::String& labelText,
-                              const juce::String& tooltip)
+                              Tooltips::Key tooltipKey)
 {
+    knob.tooltipKey = tooltipKey;
+    const auto tooltip = Tooltips::text (tooltipKey);
+
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
     knob.slider.setTooltip (tooltip);
@@ -102,79 +105,50 @@ void MotionPanel::populateChoices (juce::ComboBox& combo, juce::AudioProcessorVa
 
 MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 {
-    setupKnob (smootherTauKnob, apvts, Params::smootherTau, "Tau",
-               "Zeitkonstante der Bewegungsglaettung: so lange braucht die geglaettete "
-               "Position, um einer Zielaenderung zu folgen. Kleiner = direkter/schneller "
-               "(schon normale Mausbewegungen ueber wenige Meter koennen dann hohe "
-               "Geschwindigkeiten und starken Doppler erzeugen), groesser = traeger.");
-    setupKnob (slewVmaxKnob,    apvts, Params::slewVmax,    "Slew Vmax",
-               "Maximale Geschwindigkeit in m/s. Wirkt in zwei Faellen: als gewaehltes "
-               "Glaettungsverfahren 'Slew Limiter' selbst - UND, unabhaengig davon, immer "
-               "als Ueberschwinger-Waechter waehrend Catmull-Rom-Clip-Wiedergabe (dort "
-               "begrenzt er nur Ausreisser an scharfen Bahn-Umkehrpunkten, ohne normale "
-               "Bewegung abzurunden).");
-    setupKnob (slewAmaxKnob,    apvts, Params::slewAmax,    "Slew Amax",
-               "Maximale Beschleunigung in m/s^2 - dieselbe Doppelrolle wie Slew Vmax "
-               "(gewaehlter Smoother UND Catmull-Rom-Ueberschwinger-Waechter). Bei einer "
-               "energiereichen Aufnahme (viele schnelle Richtungswechsel) muss dieser Wert "
-               "deutlich ueber der natuerlichen Beschleunigung der Aufnahme liegen, sonst "
-               "bremst der Waechter durchgehend statt nur an Ausreissern.");
-    setupKnob (playSpeedKnob,   apvts, Params::playSpeed,   "Play Speed",
-               "Wiedergabegeschwindigkeit einer Aufnahme (0.25-4x). Skaliert die Bewegung "
-               "und damit den Doppler - schnelle Wiedergabe kann Ueberschall erzeugen.");
-    setupKnob (globalMaxSpeedKnob, apvts, Params::globalMaxSpeed, "Max Speed",
-               "Gemeinsamer Tempo-Deckel fuer ALLE Bewegung - Maus/Automation-Glaettung "
-               "UND Vorbeiflug zusammen, unabhaengig vom gewaehlten Smoother. Anders als "
-               "'Slew Vmax' (nur bei Slew Limiter, begrenzt dessen eigene Dynamik) wirkt "
-               "das hier immer, als letzte Sicherung. Default sehr hoch = wirkungslos, "
-               "bis bewusst heruntergestellt.");
+    setupKnob (smootherTauKnob, apvts, Params::smootherTau, "Tau", Tooltips::Key::SmootherTau);
+    setupKnob (slewVmaxKnob,    apvts, Params::slewVmax,    "Slew Vmax", Tooltips::Key::SlewVmax);
+    setupKnob (slewAmaxKnob,    apvts, Params::slewAmax,    "Slew Amax", Tooltips::Key::SlewAmax);
+    setupKnob (playSpeedKnob,   apvts, Params::playSpeed,   "Play Speed", Tooltips::Key::PlaySpeed);
+    setupKnob (globalMaxSpeedKnob, apvts, Params::globalMaxSpeed, "Max Speed", Tooltips::Key::GlobalMaxSpeed);
 
     smootherTypeLabel.setText ("Smoother", juce::dontSendNotification);
     smootherTypeLabel.setJustificationType (juce::Justification::centredLeft);
-    smootherTypeLabel.setTooltip ("Glaettungsverfahren fuer die Quell-/Hoererbewegung - "
-                                  "bestimmt, wie aus ruckartigen Mausbewegungen eine "
-                                  "'bewegte Maschine' statt einer 'digitalen Maus' wird.");
+    smootherTypeLabel.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
     addAndMakeVisible (smootherTypeLabel);
     populateChoices (smootherTypeCombo, apvts, Params::smootherType);
-    smootherTypeCombo.setTooltip (smootherTypeLabel.getTooltip());
+    smootherTypeCombo.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
     addAndMakeVisible (smootherTypeCombo);
     smootherTypeAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::smootherType, smootherTypeCombo);
     smootherTypeCombo.onChange = [this] { updateSlewControlsVisibility(); };
 
     playInterpLabel.setText ("Play Interp", juce::dontSendNotification);
     playInterpLabel.setJustificationType (juce::Justification::centredLeft);
-    playInterpLabel.setTooltip ("Interpolation der Wiedergabe zwischen aufgezeichneten "
-                                "Punkten: Linear (einfach) oder Catmull-Rom (weich, "
-                                "ohne Tonhoehensprung an den Stuetzstellen).");
+    playInterpLabel.setTooltip (Tooltips::text (Tooltips::Key::PlayInterp));
     addAndMakeVisible (playInterpLabel);
     populateChoices (playInterpCombo, apvts, Params::playInterp);
-    playInterpCombo.setTooltip (playInterpLabel.getTooltip());
+    playInterpCombo.setTooltip (Tooltips::text (Tooltips::Key::PlayInterp));
     addAndMakeVisible (playInterpCombo);
     playInterpAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::playInterp, playInterpCombo);
     playInterpCombo.onChange = [this] { updateSlewControlsVisibility(); };
 
-    playLoopButton.setTooltip ("Wiedergabe am Ende des Clips von vorn beginnen statt zu stoppen.");
+    playLoopButton.setTooltip (Tooltips::text (Tooltips::Key::PlayLoop));
     addAndMakeVisible (playLoopButton);
     playLoopAttachment = std::make_unique<ButtonAttachment> (apvts, Params::playLoop, playLoopButton);
 
-    coastButton.setTooltip ("Nach dem Loslassen von Quelle/Hoerer im Feld noch kurz mit Schwung "
-                            "weiterlaufen und abbremsen, statt abrupt zu stoppen.");
+    coastButton.setTooltip (Tooltips::text (Tooltips::Key::Coast));
     coastButton.onClick = [this] { if (onCoastToggled != nullptr) onCoastToggled (coastButton.getToggleState()); };
     addAndMakeVisible (coastButton);
 
-    mouseFrameButton.setTooltip ("Die Maus wird auf einem festen Bildtakt abgefragt statt bei "
-                                 "jedem Ereignis. Mausereignisse kommen unregelmaessig, und dieser "
-                                 "Takt steckt sonst in der Bewegung - und damit im Doppler, dessen "
-                                 "Tonhoehe an der Geschwindigkeit haengt, nicht an der Position.");
+    mouseFrameButton.setTooltip (Tooltips::text (Tooltips::Key::MouseFrame));
     mouseFrameButton.setToggleState (true, juce::dontSendNotification);
     mouseFrameButton.onClick = [this] { if (onMouseFrameToggled != nullptr) onMouseFrameToggled (mouseFrameButton.getToggleState()); };
     addAndMakeVisible (mouseFrameButton);
 
-    recordButton.setTooltip ("Aufnahme der (geglaetteten) Quellbewegung starten/stoppen.");
+    recordButton.setTooltip (Tooltips::text (Tooltips::Key::Record));
     addAndMakeVisible (recordButton);
     recordButton.onClick = [this] { if (onRecordClicked != nullptr) onRecordClicked(); };
 
-    playButton.setTooltip ("Aufgezeichnete Bewegung abspielen bzw. stoppen.");
+    playButton.setTooltip (Tooltips::text (Tooltips::Key::Play));
     addAndMakeVisible (playButton);
     playButton.onClick = [this] { if (onPlayClicked != nullptr) onPlayClicked(); };
 
@@ -182,9 +156,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 
     flyKindLabel.setText ("Vorbeiflug-Bahn", juce::dontSendNotification);
     flyKindLabel.setJustificationType (juce::Justification::centredLeft);
-    flyKindLabel.setTooltip ("Bahnart des Generators. 'Durch den Bildschirm' fliegt in die "
-                             "Tiefe an einem seitlich versetzten Hoerer vorbei, 'Waagerecht "
-                             "querend' von links nach rechts in n Metern Abstand.");
+    flyKindLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyKind));
     addAndMakeVisible (flyKindLabel);
     populateChoices (flyKindCombo, apvts, Params::flyKind);
     addAndMakeVisible (flyKindCombo);
@@ -192,34 +164,17 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 
     flyStartLabel.setText ("Startvariante", juce::dontSendNotification);
     flyStartLabel.setJustificationType (juce::Justification::centredLeft);
-    flyStartLabel.setTooltip (
-        "'Kontinuierlich' belegt die Vorgeschichte mit genau derselben Geraden vor - der "
-        "Loeser sieht eine Quelle, die schon immer geflogen ist, es gibt keinen Sprung. "
-        "'Knall-Start' laesst die Quelle schlagartig in voller Fahrt erscheinen: bewusst "
-        "unphysikalisch, dafuer ein reproduzierbarer Testfall fuer den Ueberschallknall.");
+    flyStartLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyStart));
     addAndMakeVisible (flyStartLabel);
     populateChoices (flyStartCombo, apvts, Params::flyStart);
     addAndMakeVisible (flyStartCombo);
     flyStartAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::flyStart, flyStartCombo);
 
-    setupKnob (flyDistanceKnob, apvts, Params::flyDistance, "Fly Dist",
-               "Abstand, in dem die Bahn am Hoerer vorbeilaeuft - senkrecht zur "
-               "Flugrichtung. Kleiner Abstand = kraeftigerer Doppler-Umschlag beim "
-               "Vorbeiflug. Aendert NICHT die Bahnlaenge, dafuer 'Fly Approach'.");
-    setupKnob (flyApproachKnob, apvts, Params::flyApproach, "Fly Approach",
-               "Anflug-/Abflugstrecke: wie weit vor (und nach) dem naechsten Punkt die "
-               "Bahn beginnt bzw. endet. Unabhaengig von 'Fly Dist' (das ist nur der "
-               "seitliche Abstand) - laenger heisst mehr hoerbare Annaeherung vor dem "
-               "eigentlichen Vorbeiflug, besonders bei hoher Fluggeschwindigkeit sinnvoll.");
-    setupKnob (flySpeedKnob, apvts, Params::flySpeed, "Fly Speed",
-               "Fluggeschwindigkeit in m/s, live veraenderbar und automatisierbar - die "
-               "Bahn integriert den jeweils aktuellen Wert, ein Automationsverlauf "
-               "beschleunigt die Quelle also wirklich. Ueber 343 m/s wird der Flug "
-               "ueberschallschnell.");
+    setupKnob (flyDistanceKnob, apvts, Params::flyDistance, "Fly Dist", Tooltips::Key::FlyDistance);
+    setupKnob (flyApproachKnob, apvts, Params::flyApproach, "Fly Approach", Tooltips::Key::FlyApproach);
+    setupKnob (flySpeedKnob, apvts, Params::flySpeed, "Fly Speed", Tooltips::Key::FlySpeed);
 
-    flyButton.setTooltip ("Vorbeiflug starten bzw. laufenden Flug abbrechen. Die Bahnart und "
-                          "die Startvariante gelten ab dem naechsten Start, das Tempo wirkt "
-                          "sofort.");
+    flyButton.setTooltip (Tooltips::text (Tooltips::Key::Fly));
     addAndMakeVisible (flyButton);
     flyButton.onClick = [this] { if (onFlyClicked != nullptr) onFlyClicked(); };
 
@@ -262,6 +217,30 @@ void MotionPanel::setFlying (bool isFlying)
 void MotionPanel::setCoastEnabled (bool shouldCoast)
 {
     coastButton.setToggleState (shouldCoast, juce::dontSendNotification);
+}
+
+void MotionPanel::refreshTooltips()
+{
+    for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob,
+                      &globalMaxSpeedKnob, &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
+    {
+        const auto tooltip = Tooltips::text (k->tooltipKey);
+        k->slider.setTooltip (tooltip);
+        k->label.setTooltip (tooltip);
+    }
+
+    smootherTypeLabel.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
+    smootherTypeCombo.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
+    playInterpLabel.setTooltip (Tooltips::text (Tooltips::Key::PlayInterp));
+    playInterpCombo.setTooltip (Tooltips::text (Tooltips::Key::PlayInterp));
+    playLoopButton.setTooltip (Tooltips::text (Tooltips::Key::PlayLoop));
+    coastButton.setTooltip (Tooltips::text (Tooltips::Key::Coast));
+    mouseFrameButton.setTooltip (Tooltips::text (Tooltips::Key::MouseFrame));
+    recordButton.setTooltip (Tooltips::text (Tooltips::Key::Record));
+    playButton.setTooltip (Tooltips::text (Tooltips::Key::Play));
+    flyKindLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyKind));
+    flyStartLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyStart));
+    flyButton.setTooltip (Tooltips::text (Tooltips::Key::Fly));
 }
 
 void MotionPanel::resized()

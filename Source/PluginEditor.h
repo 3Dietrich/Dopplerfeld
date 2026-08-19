@@ -13,6 +13,7 @@
 #include "UI/SwarmPanel.h"
 #include "UI/WallPanel.h"
 #include "UI/ToggleableTooltipWindow.h"
+#include "UI/Tooltips.h"
 
 #include "Util/FieldSnapshot.h"
 
@@ -191,6 +192,14 @@ private:
     // (setTooltip in den Panels) - hier sitzt nur der globale Schalter.
     ToggleableTooltipWindow tooltipWindow { this };
     juce::ToggleButton tooltipsButton { "Hilfehinweise" };
+
+    // Sprache der Hilfehinweise (deutsch/englisch, siehe Tooltips.h) - der
+    // Text selbst liegt zentral in Tooltips.h, hier nur der Umschalter.
+    // setTooltip() speichert den Text einmalig im Component, ein spaeterer
+    // Sprachwechsel muss ihn deshalb an jeder betroffenen Komponente neu
+    // setzen - siehe refreshAllTooltips().
+    juce::TextButton languageButton;
+    void refreshAllTooltips();
 
     // Umschalter Draufsicht <-> perspektivische Ansicht. Kein Parameter: das
     // ist eine Frage der Ansicht, nicht des Klangs, und gehoert damit nicht in

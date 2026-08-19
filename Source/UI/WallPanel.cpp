@@ -2,8 +2,11 @@
 
 void WallPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                            const juce::String& paramID, const juce::String& labelText,
-                           const juce::String& tooltip)
+                           Tooltips::Key tooltipKey)
 {
+    knob.tooltipKey = tooltipKey;
+    const auto tooltip = Tooltips::text (tooltipKey);
+
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
     knob.slider.setTooltip (tooltip);
@@ -40,57 +43,49 @@ WallPanel::WallPanel (juce::AudioProcessorValueTreeState& apvts)
         const juce::String nr (w + 1);
 
         wall.onButton.setButtonText ("Wand " + nr);
-        wall.onButton.setTooltip (
-            "Zusaetzlicher Ausbreitungsweg pro Ohr ueber eine unendlich grosse Ebene "
-            "(Spiegelquelle wie beim Boden), mit eigener Laufzeit, eigenem Doppler und "
-            "eigener Daempfung. Kostet ein weiteres Pfadpaar Loeserlast, deshalb "
-            "standardmaessig aus. Die Wand ist im Feld als Linie eingezeichnet.");
+        wall.onButton.setTooltip (Tooltips::text (Tooltips::Key::WallOn));
         addAndMakeVisible (wall.onButton);
         wall.onAttachment = std::make_unique<ButtonAttachment> (apvts, onIds[w], wall.onButton);
 
-        setupKnob (wall.x, apvts, xIds[w], "X " + nr,
-                   "Fusspunkt der Wand, waagerecht - dieselbe normierte Feldkoordinate wie "
-                   "Quelle und Hoerer. Die Wand ist unendlich gross, der Punkt legt nur "
-                   "fest, wo sie durchlaeuft.");
-        setupKnob (wall.y, apvts, yIds[w], "Y " + nr,
-                   "Fusspunkt der Wand, in die Tiefe. Siehe X.");
-        setupKnob (wall.angle, apvts, angleIds[w], "Winkel " + nr,
-                   "Richtung der Wandlinie in der Draufsicht. 0 Grad = die Wand laeuft quer "
-                   "von links nach rechts, 90 Grad = von vorn nach hinten.");
-        setupKnob (wall.tilt, apvts, tiltIds[w], "Neigung " + nr,
-                   "Neigung der Wand um genau ihre eigene Linie. 0 = senkrecht stehend, "
-                   "+/-90 = flach liegend - dann ist sie eine zweite Bodenebene in der Hoehe "
-                   "ihres Fusspunkts (also auf z = 0, deckungsgleich mit dem Boden).");
-        setupKnob (wall.damp, apvts, dampIds[w], "Damp " + nr,
-                   "Wie stark die Wand bei der Reflexion die Hoehen schluckt. 0 = ideal harte "
-                   "Flaeche, 1 = weich/absorbierend. Wandflaechen sind in der Regel haerter "
-                   "als Gras oder Erde, deshalb wirkt derselbe Reglerwert hier heller als "
-                   "beim Boden.");
-        setupKnob (wall.gain, apvts, gainIds[w], "Gain " + nr,
-                   "Pegel der Reflexion in dB, unabhaengig von Damp. Damp ist ein Tiefpass "
-                   "mit Gleichstromverstaerkung 1 (nimmt nur Hoehen, keinen Gesamtpegel) - "
-                   "hoert man die Wand trotzdem zu leise, ist das hier der Regler dafuer.");
+        setupKnob (wall.x, apvts, xIds[w], "X " + nr, Tooltips::Key::WallX);
+        setupKnob (wall.y, apvts, yIds[w], "Y " + nr, Tooltips::Key::WallY);
+        setupKnob (wall.angle, apvts, angleIds[w], "Winkel " + nr, Tooltips::Key::WallAngle);
+        setupKnob (wall.tilt, apvts, tiltIds[w], "Neigung " + nr, Tooltips::Key::WallTilt);
+        setupKnob (wall.damp, apvts, dampIds[w], "Damp " + nr, Tooltips::Key::WallDamp);
+        setupKnob (wall.gain, apvts, gainIds[w], "Gain " + nr, Tooltips::Key::WallGain);
     }
 
-    secondOrderButton.setTooltip (
-        "Genau EINE zusaetzliche Reflexionsgeneration: Wege der Form Quelle -> Flaeche X "
-        "-> Flaeche Y -> Ohr, mit X ungleich Y. Braucht mindestens zwei eingeschaltete "
-        "Flaechen, sonst gibt es solche Wege gar nicht. Zwei parallele Waende ergeben so "
-        "das typische Flatterecho. Kostet bis zu sechs weitere Pfadpaare - der CPU-Wert "
-        "in der Statuszeile zeigt, was man sich einkauft.");
+    secondOrderButton.setTooltip (Tooltips::text (Tooltips::Key::SecondOrder));
     addAndMakeVisible (secondOrderButton);
     secondOrderAttachment = std::make_unique<ButtonAttachment> (apvts, Params::reflect2ndOn,
                                                                 secondOrderButton);
 
-    setupKnob (bounceGainKnob, apvts, Params::bounceGain, "Bounce Gain",
-               "Pegelfaktor je zusaetzlicher Reflexionsgeneration, immer unter 1. Die "
-               "Flaechendaempfung allein reicht dafuer nicht: die ist ein Tiefpass mit "
-               "Gleichstromverstaerkung 1 und nimmt nur Hoehen, keinen Pegel. Kleinere "
-               "Werte = die zweite Reflexion tritt weiter zurueck.");
-    setupKnob (bounceGainBoostKnob, apvts, Params::bounceGainDb, "Bounce Boost",
-               "Zusaetzlicher, unabhaengiger Pegel-Boost (dB) obendrauf - anders als Bounce "
-               "Gain darf dieser Regler auch ueber 0dB hinaus verstaerken, damit die "
-               "zweifache Reflexion trotz Tiefpass hoerbar bleibt.");
+    setupKnob (bounceGainKnob, apvts, Params::bounceGain, "Bounce Gain", Tooltips::Key::BounceGain);
+    setupKnob (bounceGainBoostKnob, apvts, Params::bounceGainDb, "Bounce Boost", Tooltips::Key::BounceGainBoost);
+}
+
+void WallPanel::refreshTooltips()
+{
+    for (auto& wall : walls)
+    {
+        wall.onButton.setTooltip (Tooltips::text (Tooltips::Key::WallOn));
+
+        for (auto* k : { &wall.x, &wall.y, &wall.angle, &wall.tilt, &wall.damp, &wall.gain })
+        {
+            const auto tooltip = Tooltips::text (k->tooltipKey);
+            k->slider.setTooltip (tooltip);
+            k->label.setTooltip (tooltip);
+        }
+    }
+
+    secondOrderButton.setTooltip (Tooltips::text (Tooltips::Key::SecondOrder));
+
+    for (auto* k : { &bounceGainKnob, &bounceGainBoostKnob })
+    {
+        const auto tooltip = Tooltips::text (k->tooltipKey);
+        k->slider.setTooltip (tooltip);
+        k->label.setTooltip (tooltip);
+    }
 }
 
 void WallPanel::resized()

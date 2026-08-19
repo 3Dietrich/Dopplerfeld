@@ -2,6 +2,7 @@
 
 #include "../Params.h"
 #include "RoundedSlider.h"
+#include "Tooltips.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 
 // "Motorsteuerung" (@dpa-Feedback): RPM und Imbalance aus dem Motor-Panel
@@ -24,6 +25,11 @@ public:
     void setMotorGateEnabled (bool shouldGate);
     std::function<void (bool)> onMotorGateToggled;
 
+    // Setzt die Tooltips aller Regler/Schalter dieses Panels neu, in der
+    // aktuell an Tooltips::currentLanguage() gewaehlten Sprache - fuer den
+    // Sprachumschalter in der Kopfzeile (siehe PluginEditor).
+    void refreshTooltips();
+
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
 
@@ -32,11 +38,12 @@ private:
         RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
+        Tooltips::Key tooltipKey = Tooltips::Key::EngineRpm;
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                      const juce::String& paramID, const juce::String& labelText,
-                     const juce::String& tooltip = {});
+                     Tooltips::Key tooltipKey);
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     Knob rpmKnob, imbalanceKnob;

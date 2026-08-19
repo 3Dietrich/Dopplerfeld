@@ -2,8 +2,11 @@
 
 void SwarmPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                             const juce::String& paramID, const juce::String& labelText,
-                            const juce::String& tooltip)
+                            Tooltips::Key tooltipKey)
 {
+    knob.tooltipKey = tooltipKey;
+    const auto tooltip = Tooltips::text (tooltipKey);
+
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
     knob.slider.setTooltip (tooltip);
@@ -25,47 +28,31 @@ void SwarmPanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 
 SwarmPanel::SwarmPanel (juce::AudioProcessorValueTreeState& apvts)
 {
-    setupKnob (totalKnob, apvts, Params::cloneTotal, "Klone",
-               "Gesamtzahl der Klone. Ein Klon ist eine zweite Quelle, deren Route um "
-               "einen kleinen Betrag von der echten abweicht - zusammen ergibt das ein "
-               "Schrotmuster statt eines Einzelobjekts. 0 = aus, kostet dann auch nichts.");
+    setupKnob (totalKnob, apvts, Params::cloneTotal, "Klone", Tooltips::Key::CloneTotal);
+    setupKnob (realKnob, apvts, Params::cloneReal, "davon echt", Tooltips::Key::CloneReal);
+    setupKnob (spreadKnob, apvts, Params::cloneSpread, "Streuung", Tooltips::Key::CloneSpread);
+    setupKnob (levelKnob, apvts, Params::cloneLevel, "Pegel billig", Tooltips::Key::CloneLevel);
 
-    setupKnob (realKnob, apvts, Params::cloneReal, "davon echt",
-               "Wie viele der Klone volle Loeserphysik bekommen: eigene Laufzeit, eigener "
-               "Doppler, eigener Ueberschall. Jeder davon kostet genau ein Pfadpaar - die "
-               "Loeserlast waechst also linear mit dieser Zahl, siehe CPU-Balken darunter. "
-               "Der Rest laeuft ueber die billige Nachbildung: leicht versetzte, in der "
-               "Verzoegerung langsam wandernde Kopien des fertigen Signals, ohne einen "
-               "einzigen Loeseraufruf.");
-
-    setupKnob (spreadKnob, apvts, Params::cloneSpread, "Streuung",
-               "Wie weit die Klon-Routen von der echten abweichen, in Metern. Bei den "
-               "billigen Klonen wird derselbe Wert ueber die Schallgeschwindigkeit in "
-               "Laufzeit umgerechnet - drei Meter sind also knapp neun Millisekunden, "
-               "genau wie bei einem echten Klon in dieser Entfernung.");
-
-    setupKnob (levelKnob, apvts, Params::cloneLevel, "Pegel billig",
-               "Pegel der billigen Klone, relativ zum Original. Wirkt nur auf die "
-               "Nachbildung - die echten Klone haben ihren Pegel aus der Physik (1/R) und "
-               "brauchen keinen Regler.");
-
-    autoButton.setTooltip (
-        "Zieht die Zahl der ECHTEN Klone bei hoher Auslastung selbsttaetig zurueck und "
-        "holt sie zurueck, wenn wieder Luft ist. Der Regler bleibt dabei die Obergrenze. "
-        "Bewusst nur ein Angebot und nicht der Standard: was gerechnet wird, soll man "
-        "einstellen koennen, nicht erraten muessen. Was die Automatik daraus macht, steht "
-        "unter dem CPU-Balken.");
+    autoButton.setTooltip (Tooltips::text (Tooltips::Key::CloneAuto));
     addAndMakeVisible (autoButton);
     autoAttachment = std::make_unique<ButtonAttachment> (apvts, Params::cloneAuto, autoButton);
 
-    panicButton.setTooltip (
-        "Sofort zurueck auf die minimale sichere Konfiguration: nur der Direktpfad pro Ohr, "
-        "keine Bodenreflexion, keine Waende, keine Mehrfachreflexion, keine Klone. Wirkt im "
-        "Audiothread beim naechsten Block und haengt nicht daran, dass die Oberflaeche noch "
-        "durchkommt. Gedacht fuer den Fall, dass die Auslastung hochgeht und der Ton "
-        "wegbleibt - dann muss ein Weg zurueck da sein, ohne das Plugin neu zu laden.");
+    panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));
     panicButton.onClick = [this] { if (onPanic) onPanic(); };
     addAndMakeVisible (panicButton);
+}
+
+void SwarmPanel::refreshTooltips()
+{
+    for (auto* k : { &totalKnob, &realKnob, &spreadKnob, &levelKnob })
+    {
+        const auto tooltip = Tooltips::text (k->tooltipKey);
+        k->slider.setTooltip (tooltip);
+        k->label.setTooltip (tooltip);
+    }
+
+    autoButton.setTooltip (Tooltips::text (Tooltips::Key::CloneAuto));
+    panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));
 }
 
 void SwarmPanel::setLoad (float cpuPercentIn, int realClones, int cheapClones)

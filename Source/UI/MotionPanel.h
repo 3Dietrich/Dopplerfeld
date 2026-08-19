@@ -3,6 +3,7 @@
 #include "../Params.h"
 #include "RoundedSlider.h"
 #include "FieldComponent.h"
+#include "Tooltips.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -39,6 +40,11 @@ public:
     std::function<void (bool)> onCoastToggled;
     std::function<void (bool)> onMouseFrameToggled;
 
+    // Setzt die Tooltips aller Regler/Schalter dieses Panels neu, in der
+    // aktuell an Tooltips::currentLanguage() gewaehlten Sprache - fuer den
+    // Sprachumschalter in der Kopfzeile (siehe PluginEditor).
+    void refreshTooltips();
+
 private:
     using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -49,11 +55,12 @@ private:
         RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
+        Tooltips::Key tooltipKey = Tooltips::Key::SmootherTau;
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                      const juce::String& paramID, const juce::String& labelText,
-                     const juce::String& tooltip = {});
+                     Tooltips::Key tooltipKey);
 
 public:
     // Einheit der drei Tempo-Regler (@dpa 20260819: "ich kann mit m/s schlecht

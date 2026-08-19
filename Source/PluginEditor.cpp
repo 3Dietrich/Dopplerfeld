@@ -112,8 +112,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
             dopplerfeldProcessor.triggerPlayback();
     };
 
-    sourceButton.setTooltip ("Klangquelle umschalten: Motor-Generator, geladenes Sample oder "
-                             "Audio-Eingang (live, sofern der Host/das Format einen bereitstellt).");
+    sourceButton.setTooltip (Tooltips::text (Tooltips::Key::SourceButton));
     sourceButton.onClick = [this]
     {
         using Kind = DopplerfeldProcessor::SourceKind;
@@ -125,16 +124,11 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     };
     addAndMakeVisible (sourceButton);
 
-    field.setTooltip ("Ziehen an M verschiebt die Schallquelle. Ziehen am Kopf verschiebt "
-                      "den Hoerer, Ziehen an der Nase dreht ihn.");
+    field.setTooltip (Tooltips::text (Tooltips::Key::FieldDrag));
 
     // @dpa-Feedback: Hilfehinweise abschaltbar. Start an, weil neue Regler
     // ohne Erklaerung sonst raten heisst.
-    viewButton.setTooltip ("Zwischen Draufsicht und perspektivischem Blick in die Tiefe "
-                           "umschalten. Die perspektivische Ansicht zeigt die Hoehe z, die in "
-                           "der Draufsicht gar nicht vorkommt - und in ihr laesst sich die "
-                           "Quellhoehe auch mit der Maus ziehen (waagerecht = Seite, "
-                           "senkrecht = Hoehe, die Tiefe bleibt).");
+    viewButton.setTooltip (Tooltips::text (Tooltips::Key::ViewToggle));
     viewButton.onClick = [this]
     {
         const bool toPerspective = field.getViewMode() == FieldComponent::ViewMode::TopDown;
@@ -147,9 +141,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     viewButton.setButtonText ("Ansicht: Draufsicht");
     addAndMakeVisible (viewButton);
 
-    speedUnitButton.setTooltip ("Tempo-Einheit umschalten (km/h, m/s, Mach). Gilt fuer die "
-                                "Anzeige im Feld, die Statuszeile UND die Werte an den "
-                                "Tempo-Reglern Fly Speed, Max Speed und Slew Vmax.");
+    speedUnitButton.setTooltip (Tooltips::text (Tooltips::Key::SpeedUnitToggle));
     speedUnitButton.setButtonText ("km/h");
     speedUnitButton.onClick = [this]
     {
@@ -171,12 +163,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     // beim Umschalten wird der gemessene Wert benutzt.
     motionPanel.setSpeedUnit (speedUnit, 343.0);
 
-    engineResetButton.setTooltip ("Audiomotor neu anlassen: kompletter prepareToPlay()-"
-                                  "Durchlauf wie bei einem Wechsel der Audio-Puffergroesse "
-                                  "(Klangquelle, Ausbreitungswege und beide Positions-"
-                                  "glaetter neu aufgesetzt), falls nach einer CPU-Spitze "
-                                  "kein Ton mehr kommt. Haelt processBlock() kurz an, "
-                                  "kein Datenrennen mit dem Audiothread.");
+    engineResetButton.setTooltip (Tooltips::text (Tooltips::Key::EngineReset));
     engineResetButton.setButtonText ("Engine Restart");
     engineResetButton.setColour (juce::TextButton::buttonColourId,
                                  juce::Colours::orangered.withAlpha (0.35f));
@@ -184,9 +171,24 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     addAndMakeVisible (engineResetButton);
 
     tooltipsButton.setToggleState (true, juce::dontSendNotification);
-    tooltipsButton.setTooltip ("Hilfehinweise beim Ueberfahren der Regler ein-/ausblenden.");
+    tooltipsButton.setTooltip (Tooltips::text (Tooltips::Key::TooltipsToggle));
     tooltipsButton.onClick = [this] { tooltipWindow.enabled = tooltipsButton.getToggleState(); };
     addAndMakeVisible (tooltipsButton);
+
+    // Sprachumschalter DE/EN fuer die Hilfehinweise (@dpa-Auftrag). Setzt nur
+    // den Zustand in Tooltips.h um und ruft refreshAllTooltips() - der
+    // eigentliche Text bleibt zentral in Tooltips.h, hier wird er nur an
+    // jeder Komponente neu gesetzt (setTooltip() speichert einmalig, es gibt
+    // keine dynamische Nachschau bei jedem Hover).
+    languageButton.setButtonText (Tooltips::currentLanguage() == Tooltips::Language::De ? "DE" : "EN");
+    languageButton.setTooltip (Tooltips::text (Tooltips::Key::LanguageToggle));
+    languageButton.onClick = [this]
+    {
+        Tooltips::toggleLanguage();
+        languageButton.setButtonText (Tooltips::currentLanguage() == Tooltips::Language::De ? "DE" : "EN");
+        refreshAllTooltips();
+    };
+    addAndMakeVisible (languageButton);
 
     // @dpa-Feedback: der Schalter sitzt im "Bewegung"-Panel (MotionPanel),
     // nicht in der Kopfzeile - der Zustand selbst gehoert weiterhin der
@@ -204,7 +206,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     // Scope (@dpa-Feedback): gross, wegschaltbar, mit Freeze und Sync.
     addAndMakeVisible (scope);
 
-    scopeToggleButton.setTooltip ("Oszilloskop ein-/ausblenden.");
+    scopeToggleButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeToggle));
     scopeToggleButton.setButtonText (scopeVisible ? "Scope ausblenden" : "Scope");
     scopeToggleButton.onClick = [this]
     {
@@ -214,11 +216,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     };
     addAndMakeVisible (scopeToggleButton);
 
-    scopeFreezeButton.setTooltip ("Scope-Bild anhalten und auf die komplette bisherige Historie "
-                                  "umschalten (@dpa-Feedback: \"frei herumsuchen\") - darin "
-                                  "waagerecht scrollen/ziehen zum Verschieben, senkrecht/Pinch "
-                                  "weiter zum Zoomen. Der Ringpuffer laeuft im Hintergrund "
-                                  "weiter, erst ein erneuter Klick holt wieder Live-Daten.");
+    scopeFreezeButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeFreeze));
     scopeFreezeButton.onClick = [this]
     {
         if (! scope.isFrozen())
@@ -247,8 +245,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     scopeFreezeButton.setButtonText ("Freeze");
     addAndMakeVisible (scopeFreezeButton);
 
-    scopeSyncButton.setTooltip ("Sync: richtet einen steigenden Nulldurchgang von L in der Mitte "
-                                "des Scopes aus - der Trigger-Moment steht dann immer zentriert.");
+    scopeSyncButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeSync));
     scopeSyncButton.onClick = [this]
     {
         const bool sync = ! scope.isSyncEnabled();
@@ -261,22 +258,17 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     scopeSyncButton.setButtonText ("Sync");
     addAndMakeVisible (scopeSyncButton);
 
-    scopeZoomInButton.setTooltip ("Reinzoomen (kuerzere Zeitbasis). Wirkt wie Mausrad hoch "
-                                  "oder Pinch-Auseinanderziehen direkt auf dem Scope.");
+    scopeZoomInButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeZoomIn));
     scopeZoomInButton.onClick = [this] { scope.zoomStep (0.7f); };
     addAndMakeVisible (scopeZoomInButton);
 
-    scopeZoomOutButton.setTooltip ("Rauszoomen (laengere Zeitbasis, bis zu "
+    scopeZoomOutButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeZoomOutPrefix)
                                    + juce::String ((int) DopplerfeldProcessor::scopeMaxDisplaySeconds)
-                                   + "s). Wirkt wie Mausrad runter oder Pinch-Zusammenziehen "
-                                     "direkt auf dem Scope.");
+                                   + Tooltips::text (Tooltips::Key::ScopeZoomOutSuffix));
     scopeZoomOutButton.onClick = [this] { scope.zoomStep (1.4f); };
     addAndMakeVisible (scopeZoomOutButton);
 
-    scopeSaveButton.setTooltip ("Sichtbaren Scope-Ausschnitt als WAV (32bit float, stereo) in "
-                                "~/Downloads ablegen (@dpa-Feedback: \"fuer Dich, debuggen\") - "
-                                "Zeitstempel im Dateinamen, abspielbar mit der richtigen "
-                                "Samplerate/Tonhoehe.");
+    scopeSaveButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeSave));
     scopeSaveButton.onClick = [this]
     {
         const auto now = juce::Time::getCurrentTime();
@@ -309,6 +301,39 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     // 30 Hz: schnell genug, dass eine gezogene Quelle nicht ruckelt, und
     // langsam genug, dass die Wellenfronten nicht flimmern.
     startTimerHz (30);
+}
+
+void DopplerfeldEditor::refreshAllTooltips()
+{
+    // FieldComponent selbst setzt keine Tooltips (siehe grep), field traegt
+    // seinen einzigen Tooltip von aussen (s. Konstruktor oben) - deshalb
+    // reicht es, ihn hier direkt neu zu setzen, ohne FieldComponent
+    // anzufassen.
+    sourceButton.setTooltip (Tooltips::text (Tooltips::Key::SourceButton));
+    field.setTooltip (Tooltips::text (Tooltips::Key::FieldDrag));
+    viewButton.setTooltip (Tooltips::text (Tooltips::Key::ViewToggle));
+    speedUnitButton.setTooltip (Tooltips::text (Tooltips::Key::SpeedUnitToggle));
+    engineResetButton.setTooltip (Tooltips::text (Tooltips::Key::EngineReset));
+    tooltipsButton.setTooltip (Tooltips::text (Tooltips::Key::TooltipsToggle));
+    languageButton.setTooltip (Tooltips::text (Tooltips::Key::LanguageToggle));
+
+    scopeToggleButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeToggle));
+    scopeFreezeButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeFreeze));
+    scopeSyncButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeSync));
+    scopeZoomInButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeZoomIn));
+    scopeZoomOutButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeZoomOutPrefix)
+                                   + juce::String ((int) DopplerfeldProcessor::scopeMaxDisplaySeconds)
+                                   + Tooltips::text (Tooltips::Key::ScopeZoomOutSuffix));
+    scopeSaveButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeSave));
+    scope.refreshTooltips();
+
+    engineControlPanel.refreshTooltips();
+    enginePanel.refreshTooltips();
+    samplePanel.refreshTooltips();
+    motionPanel.refreshTooltips();
+    fieldPanel.refreshTooltips();
+    wallPanel.refreshTooltips();
+    swarmPanel.refreshTooltips();
 }
 
 void DopplerfeldEditor::updateScopeVisibility()
@@ -566,6 +591,9 @@ void DopplerfeldEditor::resized()
     engineResetButton.setBounds (topBar.removeFromLeft (110));
     topBar.removeFromLeft (8);
     scopeToggleButton.setBounds (topBar.removeFromLeft (140));
+    topBar.removeFromLeft (8);
+    // Sprachumschalter DE/EN, bewusst schmal (Kompaktheit auf dem Panel).
+    languageButton.setBounds (topBar.removeFromLeft (40));
 
     area.removeFromTop (6);
 

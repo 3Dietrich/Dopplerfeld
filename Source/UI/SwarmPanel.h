@@ -2,6 +2,7 @@
 
 #include "../Params.h"
 #include "RoundedSlider.h"
+#include "Tooltips.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -32,6 +33,11 @@ public:
     // Notaus. Kein Parameter, weil er mehrere auf einmal zurueckstellt.
     std::function<void()> onPanic;
 
+    // Setzt die Tooltips aller Regler/Schalter dieses Panels neu, in der
+    // aktuell an Tooltips::currentLanguage() gewaehlten Sprache - fuer den
+    // Sprachumschalter in der Kopfzeile (siehe PluginEditor).
+    void refreshTooltips();
+
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
@@ -41,11 +47,12 @@ private:
         RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
+        Tooltips::Key tooltipKey = Tooltips::Key::CloneTotal;
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                     const juce::String& paramID, const juce::String& labelText,
-                    const juce::String& tooltip);
+                    Tooltips::Key tooltipKey);
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     Knob totalKnob, realKnob, spreadKnob, levelKnob;

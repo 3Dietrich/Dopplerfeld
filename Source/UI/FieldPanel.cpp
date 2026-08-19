@@ -2,8 +2,11 @@
 
 void FieldPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                              const juce::String& paramID, const juce::String& labelText,
-                             const juce::String& tooltip)
+                             Tooltips::Key tooltipKey)
 {
+    knob.tooltipKey = tooltipKey;
+    const auto tooltip = Tooltips::text (tooltipKey);
+
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
     knob.slider.setTooltip (tooltip);
@@ -25,101 +28,61 @@ void FieldPanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 
 FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 {
-    setupKnob (fieldMetresKnob, apvts, Params::fieldMetres,     "Field Size",
-               "Breite der Feldflaeche in Metern (1-10000) - der Massstab des 700x400px-"
-               "Feldes. Aenderung ueberblendet weich (kein Klick), Positionen bleiben "
-               "normiert erhalten.");
-    setupKnob (boomLimitKnob,   apvts, Params::boomLimitDb,     "Boom Limit",
-               "Regularisierung der Amplitude bei Ueberschall (1-M_r nahe 0). Kleinere "
-               "Werte = staerkerer, spitzerer Knall; groessere Werte = sanftere Begrenzung.");
-    setupKnob (airAbsorbKnob,   apvts, Params::airAbsorbAmount, "Air Absorb",
-               "Staerke der distanzabhaengigen Luftdaempfung (Hoehenverlust ueber "
-               "Entfernung). 0 = aus, 1 = voll.");
-    setupKnob (fadeManualKnob,  apvts, Params::fadeManualMs,    "Fade Manual",
-               "Feste Ueberblendzeit (ms) bei unstetigen Aenderungen, wirkt nur wenn "
-               "'Fade Auto' ausgeschaltet ist.");
-    setupKnob (outputGainKnob,  apvts, Params::outputGain,      "Output Gain",
-               "Ausgangslautstaerke, -36 bis +36 dB. Der Pegel folgt 1/Abstand ohne "
-               "Referenzdistanz - bei grossen Feldern ist das leise, hier laesst sich "
-               "gegensteuern. Der Bereich nach oben deckt die hohe Dynamik des "
-               "Doppler-Materials ab: leiser Direktschall neben lauten Ueberschall-Knallen.");
+    setupKnob (fieldMetresKnob, apvts, Params::fieldMetres,     "Field Size",    Tooltips::Key::FieldSize);
+    setupKnob (boomLimitKnob,   apvts, Params::boomLimitDb,     "Boom Limit",    Tooltips::Key::BoomLimit);
+    setupKnob (airAbsorbKnob,   apvts, Params::airAbsorbAmount, "Air Absorb",    Tooltips::Key::AirAbsorb);
+    setupKnob (fadeManualKnob,  apvts, Params::fadeManualMs,    "Fade Manual",   Tooltips::Key::FadeManual);
+    setupKnob (outputGainKnob,  apvts, Params::outputGain,      "Output Gain",   Tooltips::Key::OutputGain);
 
-    setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",
-               "Anteil eines gewoehnlichen Panorama-Reglers, 0 bis 100 %. Bei 0 entsteht das "
-               "Stereobild allein aus der Ohrgeometrie - dort verschiebt eine Kopfdrehung vor "
-               "allem die Laufzeit, der Pegelunterschied zwischen den Ohren ist bei weiter "
-               "Quelle winzig. Hoehere Werte legen den Pegelunterschied darueber. Gerechnet "
-               "wird mit der Richtung, aus der der Schall wirklich kommt, nicht mit der "
-               "aktuellen Position - jede Spiegelung bekommt so ihre eigene Seite.");
+    setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",       Tooltips::Key::Panning);
 
-    setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve",
-               "Wie stark die Entfernung auf die Lautstaerke wirkt. Mitte (0) = "
-               "physikalisch korrektes 1/R, wie bisher. Nach rechts: faellt schneller "
-               "ab (schaerfer abgegrenzt). Nach links: faellt flacher ab (traegt "
-               "weiter, verschwimmt mehr).");
+    setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve", Tooltips::Key::DistanceCurve);
 
-    setupKnob (srcZKnob,        apvts, Params::srcZ,            "Source Z",
-               "Hoehe der Quelle ueber dem Boden in Metern. 0 = auf dem Boden (Auto, "
-               "Motorrad), groessere Werte fuer Ueberflug o.ae. x/y stellt man mit der "
-               "Maus im Feld ein, die Hoehe nur hier.");
-    setupKnob (lisZKnob,        apvts, Params::lisZ,            "Listener Z",
-               "Ohrhoehe des Hoerers ueber dem Boden in Metern (Standard 1.75 = stehend). "
-               "Erst ein Hoehenunterschied zwischen Quelle und Hoerer macht die "
-               "Bodenreflexion hoerbar.");
-    setupKnob (srcJitterAmountKnob, apvts, Params::srcJitterAmount, "Jitter",
-               "Auslenkung einer langsamen, staendigen Mikrobewegung der Quelle M in "
-               "Metern - 0 = aus (Default). Wirkt immer additiv, auch waehrend normaler "
-               "Bewegung; im Stillstand ist es der 'echte Chorus', bei Bewegung geht es im "
-               "normalen Doppler unter.");
-    setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik",
-               "Wie schnell/unruhig sich die Jitter-Bewegung aendert (Hz). Kleine Werte = "
-               "langsames Driften, grosse Werte = nervoeses Zittern.");
+    setupKnob (srcZKnob,        apvts, Params::srcZ,            "Source Z",      Tooltips::Key::SourceZ);
+    setupKnob (lisZKnob,        apvts, Params::lisZ,            "Listener Z",    Tooltips::Key::ListenerZ);
+    setupKnob (srcJitterAmountKnob, apvts, Params::srcJitterAmount, "Jitter",    Tooltips::Key::SrcJitterAmount);
+    setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik",    Tooltips::Key::SrcJitterRate);
 
-    setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",
-               "Wie stark der Boden bei der Reflexion die Hoehen schluckt. 0 = ideal "
-               "harte Flaeche (Reflexion klingt wie der Direktschall), 1 = weicher Boden "
-               "(Gras/Erde). Wirkt nur auf den gespiegelten Pfad, nicht auf den "
-               "Direktschall - und nur bei eingeschalteter Bodenreflexion.");
+    setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",  Tooltips::Key::GroundDamp);
 
-    groundReflectionButton.setTooltip (
-        "Zweiter Ausbreitungsweg pro Ohr ueber den Boden (Spiegelquelle an der Ebene "
-        "z=0), mit eigener Laufzeit, eigenem Doppler und eigener Daempfung. "
-        "Achtung: bei Source Z = 0 liegt die Spiegelquelle exakt auf der echten "
-        "Quelle, die Reflexion ist dann nur eine gedaempfte Verdopplung ohne eigene "
-        "Laufzeit - hoerbar getrennt wird sie erst, wenn die Quelle ueber dem Boden "
-        "liegt. Kostet die doppelte Loeserlast, deshalb standardmaessig aus.");
+    groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
     addAndMakeVisible (groundReflectionButton);
     groundReflectionAttachment = std::make_unique<ButtonAttachment> (apvts, Params::groundReflectionOn, groundReflectionButton);
 
-    setupKnob (nWaveSizeKnob, apvts, Params::nWaveSize, "N-Wave Size",
-               "Groesse/Masse des Koerpers in Metern - sie bestimmt die Dauer der "
-               "Druckwelle. Groesser = tiefer und laenger (Verkehrsflugzeug), kleiner = "
-               "kuerzer und knackiger (Geschoss). Wirkt nur bei eingeschalteter N-Welle.");
+    setupKnob (nWaveSizeKnob, apvts, Params::nWaveSize, "N-Wave Size", Tooltips::Key::NWaveSize);
 
-    nWaveButton.setTooltip (
-        "Echte N-Wellen-Druckwelle beim Ueberschallknall: steiler Anstieg, Nulldurchgang, "
-        "steiler Abfall. Ausgeloest pro Hoerweg in dem Moment, in dem die Mach-Front ihn "
-        "ueberstreicht (M_r durchquert 1). Kommt ADDITIV oben auf den normalen Klang, die "
-        "bestehende Amplitudenformel bleibt unveraendert. Nicht zu verwechseln mit 'Boom "
-        "Limit' (reine Amplitudendeckelung, keine Pulsform) und nicht mit dem Limiter am "
-        "Ausgang. Standardmaessig aus.");
+    nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
     addAndMakeVisible (nWaveButton);
     nWaveAttachment = std::make_unique<ButtonAttachment> (apvts, Params::nWaveOn, nWaveButton);
 
-    fadeAutoButton.setTooltip ("Ueberblendzeit bei Sprüngen automatisch aus der jeweiligen "
-                               "Aenderung ableiten (Distanz/Klangfrequenz), statt eine feste "
-                               "Zeit ('Fade Manual') zu benutzen.");
+    fadeAutoButton.setTooltip (Tooltips::text (Tooltips::Key::FadeAuto));
     addAndMakeVisible (fadeAutoButton);
     fadeAutoAttachment = std::make_unique<ButtonAttachment> (apvts, Params::fadeAuto, fadeAutoButton);
 
-    limiterOnButton.setTooltip ("Sicherheitsbegrenzer am Ausgang (weiche Kniekennlinie) - "
-                                "faengt Uberschall-Spitzen ab, ohne sie hart zu clippen.");
+    limiterOnButton.setTooltip (Tooltips::text (Tooltips::Key::LimiterOn));
     addAndMakeVisible (limiterOnButton);
     limiterOnAttachment = std::make_unique<ButtonAttachment> (apvts, Params::limiterOn, limiterOnButton);
 
-    levelMeter.setTooltip ("Ausgangspegel (nach Gain+Limiter). Weisser Strich = -6dB. "
-                           "Rote LED oben = Clipping, haelt 500ms.");
+    levelMeter.setTooltip (Tooltips::text (Tooltips::Key::LevelMeter));
     addAndMakeVisible (levelMeter);
+}
+
+void FieldPanel::refreshTooltips()
+{
+    for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &fadeManualKnob, &outputGainKnob,
+                      &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
+                      &srcJitterAmountKnob, &srcJitterRateKnob, &groundDampKnob, &nWaveSizeKnob })
+    {
+        const auto tooltip = Tooltips::text (k->tooltipKey);
+        k->slider.setTooltip (tooltip);
+        k->label.setTooltip (tooltip);
+    }
+
+    groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
+    nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
+    fadeAutoButton.setTooltip (Tooltips::text (Tooltips::Key::FadeAuto));
+    limiterOnButton.setTooltip (Tooltips::text (Tooltips::Key::LimiterOn));
+    levelMeter.setTooltip (Tooltips::text (Tooltips::Key::LevelMeter));
 }
 
 void FieldPanel::resized()

@@ -2,8 +2,11 @@
 
 void EnginePanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                               const juce::String& paramID, const juce::String& labelText,
-                              const juce::String& tooltip)
+                              Tooltips::Key tooltipKey)
 {
+    knob.tooltipKey = tooltipKey;
+    const auto tooltip = Tooltips::text (tooltipKey);
+
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
     knob.slider.setTooltip (tooltip);
@@ -36,38 +39,39 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
     for (int i = 0; i < 4; ++i)
     {
         const juce::String n = juce::String (i + 1);
-        setupKnob (harmonics[(size_t) i].ratio,  apvts, ratioIds[(size_t) i],  "Ratio "  + n,
-                   "Frequenzverhaeltnis dieses Sägezahn-Teiltons zur Grundfrequenz. Bewusst "
-                   "nicht ganzzahlig - exakt 1/2/3/4 klingt elektronisch statt mechanisch.");
-        setupKnob (harmonics[(size_t) i].detune, apvts, detuneIds[(size_t) i], "Detune " + n,
-                   "Feste Verstimmung dieses Teiltons in Cent, unabhaengig von der Drehzahl.");
-        setupKnob (harmonics[(size_t) i].track,  apvts, trackIds[(size_t) i],  "Track "  + n,
-                   "Wie stark dieser Teilton der RPM-Aenderung folgt. 100% = exakt "
-                   "proportional. Niedriger = er 'schleift hinterher', wodurch sich die "
-                   "Teiltoene beim Hochdrehen zueinander verschieben (mechanischer Schlupf).");
-        setupKnob (harmonics[(size_t) i].level,  apvts, levelIds[(size_t) i],  "Level "  + n,
-                   "Lautstaerke dieses Teiltons in dB.");
+        setupKnob (harmonics[(size_t) i].ratio,  apvts, ratioIds[(size_t) i],  "Ratio "  + n,  Tooltips::Key::HarmRatio);
+        setupKnob (harmonics[(size_t) i].detune, apvts, detuneIds[(size_t) i], "Detune " + n,  Tooltips::Key::HarmDetune);
+        setupKnob (harmonics[(size_t) i].track,  apvts, trackIds[(size_t) i],  "Track "  + n,  Tooltips::Key::HarmTrack);
+        setupKnob (harmonics[(size_t) i].level,  apvts, levelIds[(size_t) i],  "Level "  + n,  Tooltips::Key::HarmLevel);
     }
 
-    setupKnob (noiseFcLoKnob,   apvts, Params::noiseFcLo,   "Noise Fc Lo",
-               "Mittenfrequenz des Rauschbands bei niedriger Drehzahl (RPM = 0).");
-    setupKnob (noiseFcHiKnob,   apvts, Params::noiseFcHi,   "Noise Fc Hi",
-               "Mittenfrequenz des Rauschbands bei maximaler Drehzahl. Wirkt nur bei hohen "
-               "RPM hoerbar, dazwischen wird linear zwischen Fc Lo und Fc Hi ueberblendet.");
-    setupKnob (noiseGainLoKnob, apvts, Params::noiseGainLo, "Noise Gain Lo",
-               "Pegel des Rauschbands bei niedriger Drehzahl (dB).");
-    setupKnob (noiseGainHiKnob, apvts, Params::noiseGainHi, "Noise Gain Hi",
-               "Pegel des Rauschbands bei maximaler Drehzahl (dB) - mehr Drehzahl klingt "
-               "durch mehr Reibungs-/Luftgeraeusch heller und lauter.");
-    setupKnob (noiseQKnob,      apvts, Params::noiseQ,      "Noise Q",
-               "Guete (Schmalbandigkeit) des Rauschband-Filters. Hoeher = schmaler/toniger.");
+    setupKnob (noiseFcLoKnob,   apvts, Params::noiseFcLo,   "Noise Fc Lo",   Tooltips::Key::NoiseFcLo);
+    setupKnob (noiseFcHiKnob,   apvts, Params::noiseFcHi,   "Noise Fc Hi",   Tooltips::Key::NoiseFcHi);
+    setupKnob (noiseGainLoKnob, apvts, Params::noiseGainLo, "Noise Gain Lo", Tooltips::Key::NoiseGainLo);
+    setupKnob (noiseGainHiKnob, apvts, Params::noiseGainHi, "Noise Gain Hi", Tooltips::Key::NoiseGainHi);
+    setupKnob (noiseQKnob,      apvts, Params::noiseQ,      "Noise Q",       Tooltips::Key::NoiseQ);
 
-    setupKnob (jitterAmountKnob, apvts, Params::jitterAmount, "Jitter Amt",
-               "Staerke der langsamen Zufallsschwankung auf der Grundfrequenz (in %), "
-               "skaliert mit der Drehzahl - simuliert Lastschwankung/Unwucht statt eines "
-               "starren, toten Tons.");
-    setupKnob (jitterRateKnob,   apvts, Params::jitterRateHz, "Jitter Rate",
-               "Geschwindigkeit der Jitter-Schwankung in Hz (3-15 Hz, langsames Wackeln).");
+    setupKnob (jitterAmountKnob, apvts, Params::jitterAmount, "Jitter Amt",  Tooltips::Key::JitterAmount);
+    setupKnob (jitterRateKnob,   apvts, Params::jitterRateHz, "Jitter Rate", Tooltips::Key::JitterRate);
+}
+
+void EnginePanel::refreshTooltips()
+{
+    for (auto& h : harmonics)
+        for (auto* k : { &h.ratio, &h.detune, &h.track, &h.level })
+        {
+            const auto tooltip = Tooltips::text (k->tooltipKey);
+            k->slider.setTooltip (tooltip);
+            k->label.setTooltip (tooltip);
+        }
+
+    for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob,
+                      &jitterAmountKnob, &jitterRateKnob })
+    {
+        const auto tooltip = Tooltips::text (k->tooltipKey);
+        k->slider.setTooltip (tooltip);
+        k->label.setTooltip (tooltip);
+    }
 }
 
 void EnginePanel::resized()

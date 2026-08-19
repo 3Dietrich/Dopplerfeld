@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Tooltips.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_core/juce_core.h>
 #include <vector>
@@ -112,6 +113,11 @@ public:
     // horizontales/vertikales Scrollen gerade belegt ist. scaleFactor > 1 =
     // Finger spreizen (reinzoomen), < 1 = zusammenziehen (rauszoomen).
     void mouseMagnify (const juce::MouseEvent&, float scaleFactor) override;
+
+    // Setzt den eigenen Tooltip neu, in der aktuell an
+    // Tooltips::currentLanguage() gewaehlten Sprache - fuer den Sprach-
+    // umschalter in der Kopfzeile (siehe PluginEditor).
+    void refreshTooltips() { setTooltip (Tooltips::text (Tooltips::Key::Scope)); }
 
 private:
     // Sucht in [searchLo, searchHi) den steigenden Nulldurchgang von left,

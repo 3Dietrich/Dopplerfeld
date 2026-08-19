@@ -6,10 +6,7 @@
 
 ScopeComponent::ScopeComponent()
 {
-    setTooltip ("Oszilloskop des Ausgangs (nach Gain/Limiter). Mausrad senkrecht zoomt, Pinch "
-               "zoomt ebenfalls. Freeze haelt das Bild an UND schaltet auf die komplette "
-               "Historie um - darin waagerecht scrollen oder ziehen, um frei zu suchen. "
-               "Speichern legt den sichtbaren Ausschnitt als CSV in Downloads ab.");
+    setTooltip (Tooltips::text (Tooltips::Key::Scope));
 
     shownLeft.resize ((size_t) displaySamples, 0.0f);
     shownRight.resize ((size_t) displaySamples, 0.0f);

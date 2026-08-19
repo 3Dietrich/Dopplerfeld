@@ -2,6 +2,7 @@
 
 #include "../Params.h"
 #include "RoundedSlider.h"
+#include "Tooltips.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
 
@@ -17,6 +18,11 @@ public:
 
     void resized() override;
 
+    // Setzt die Tooltips aller Regler dieses Panels neu, in der aktuell an
+    // Tooltips::currentLanguage() gewaehlten Sprache - fuer den Sprach-
+    // umschalter in der Kopfzeile (siehe PluginEditor).
+    void refreshTooltips();
+
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
 
@@ -28,11 +34,12 @@ private:
         RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
+        Tooltips::Key tooltipKey = Tooltips::Key::HarmRatio;
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                      const juce::String& paramID, const juce::String& labelText,
-                     const juce::String& tooltip = {});
+                     Tooltips::Key tooltipKey);
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     // Je Harmonische: Verhaeltnis, Verstimmung, Tracking, Pegel - siehe

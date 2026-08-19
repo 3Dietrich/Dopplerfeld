@@ -1,4 +1,5 @@
 #include "FieldComponent.h"
+#include "Tooltips.h"
 #include "HeadSymbol.h"
 
 #include <cmath>
@@ -44,12 +45,7 @@ void FieldComponent::setTooltip (const juce::String& newTooltip)
     // Haengt den Text zur Perspektiv-Bedienung an das an, was PluginEditor.cpp
     // hier setzt (Basistext: Ziehen an M/Kopf/Nase) - siehe Header-Kommentar.
     juce::SettableTooltipClient::setTooltip (
-        newTooltip + " In der Perspektive: Klick auf den gelben Marker (auch am "
-        "Bildrand oder unten, wenn M gerade ausserhalb des Blickfelds ist) holt "
-        "die Quelle an diese Stelle. Mausrad zoomt, Umschalt+Mausrad hebt/senkt "
-        "den Horizont (mehr oder weniger Boden im Bild). 'L' oder Doppelklick "
-        "wechselt zwischen Kamera hinter dem Hoerer und Kamera aus Hoerer-Sicht "
-        "(Blick entlang seiner Nase).");
+        newTooltip + Tooltips::text (Tooltips::Key::FieldPerspectiveHelp));
 }
 
 void FieldComponent::setSnapshot (const FieldSnapshot& snapshotIn)

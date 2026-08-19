@@ -2,8 +2,11 @@
 
 void EngineControlPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                                      const juce::String& paramID, const juce::String& labelText,
-                                     const juce::String& tooltip)
+                                     Tooltips::Key tooltipKey)
 {
+    knob.tooltipKey = tooltipKey;
+    const auto tooltip = Tooltips::text (tooltipKey);
+
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
     knob.slider.setTooltip (tooltip);
@@ -25,16 +28,10 @@ void EngineControlPanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 
 EngineControlPanel::EngineControlPanel (juce::AudioProcessorValueTreeState& apvts)
 {
-    setupKnob (rpmKnob, apvts, Params::rpm, "RPM",
-               "Drehzahl des Motors. Treibt die Grundfrequenz (f = RPM/60) und faerbt "
-               "Rauschband + Jitter mit ein - der zentrale Regler des Motorklangs.");
-    setupKnob (imbalanceKnob, apvts, Params::imbalance, "Imbalance",
-               "Zusaetzliche Amplitudenmodulation bei der halben Grundfrequenz - simuliert "
-               "den Zuendtakt eines Viertakters. 0 = aus.");
+    setupKnob (rpmKnob, apvts, Params::rpm, "RPM", Tooltips::Key::EngineRpm);
+    setupKnob (imbalanceKnob, apvts, Params::imbalance, "Imbalance", Tooltips::Key::EngineImbalance);
 
-    motorGateButton.setTooltip ("Motor klingt nur, waehrend/nachdem M gegriffen ist: Start beim "
-                                "Greifen, nach dem Loslassen erst zur Ruhe kommen (Nachlauf), "
-                                "dann in Ruhe ausfaden (~2,5s). Wirkt nur bei Quelle 'Motor'.");
+    motorGateButton.setTooltip (Tooltips::text (Tooltips::Key::EngineMotorGate));
     motorGateButton.onClick = [this]
     {
         if (onMotorGateToggled != nullptr)
@@ -46,6 +43,18 @@ EngineControlPanel::EngineControlPanel (juce::AudioProcessorValueTreeState& apvt
 void EngineControlPanel::setMotorGateEnabled (bool shouldGate)
 {
     motorGateButton.setToggleState (shouldGate, juce::dontSendNotification);
+}
+
+void EngineControlPanel::refreshTooltips()
+{
+    for (auto* k : { &rpmKnob, &imbalanceKnob })
+    {
+        const auto tooltip = Tooltips::text (k->tooltipKey);
+        k->slider.setTooltip (tooltip);
+        k->label.setTooltip (tooltip);
+    }
+
+    motorGateButton.setTooltip (Tooltips::text (Tooltips::Key::EngineMotorGate));
 }
 
 void EngineControlPanel::resized()
