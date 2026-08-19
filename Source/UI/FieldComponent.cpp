@@ -1120,12 +1120,61 @@ void FieldComponent::mouseDown (const juce::MouseEvent& e)
     }
 }
 
+void FieldComponent::setMouseFrameSmoothing (bool shouldBeEnabled)
+{
+    mouseFrameSmoothing = shouldBeEnabled;
+
+    if (! shouldBeEnabled)
+    {
+        // Ausgeschaltet gibt es nichts nachzufuehren: was noch aussteht, geht
+        // sofort raus, damit die Quelle nicht auf halbem Weg stehen bleibt.
+        if (havePendingDrag)
+            handleDragTo (pendingDragScreen);
+
+        havePendingDrag = false;
+        stopTimer();
+    }
+}
+
+void FieldComponent::timerCallback()
+{
+    if (! havePendingDrag || dragTarget == DragTarget::none)
+        return;
+
+    // Ein Schritt pro Bild in Richtung der zuletzt gesehenen Mausposition. Der
+    // Anteil ist so gewaehlt, dass der Rest nach rund zwei Bildern erledigt ist
+    // - genug, um den unregelmaessigen Ereignistakt zu verteilen, zu wenig, um
+    // sich als Traegheit bemerkbar zu machen.
+    constexpr float catchUpPerFrame = 0.5f;
+
+    smoothedDragScreen += (pendingDragScreen - smoothedDragScreen) * catchUpPerFrame;
+
+    handleDragTo (smoothedDragScreen);
+}
+
 void FieldComponent::mouseDrag (const juce::MouseEvent& e)
 {
     if (dragTarget == DragTarget::none)
         return;
 
-    handleDragTo (e.position);
+    if (mouseFrameSmoothing)
+    {
+        // Nur merken: gemeldet wird auf dem Bildtakt (timerCallback). Sonst
+        // steckt der unregelmaessige Ereignistakt der Maus in der Bewegung und
+        // damit im Doppler.
+        if (! havePendingDrag)
+        {
+            smoothedDragScreen = e.position;
+            havePendingDrag    = true;
+            startTimerHz (mouseFrameHz);
+        }
+
+        pendingDragScreen = e.position;
+    }
+    else
+    {
+        handleDragTo (e.position);
+    }
 
     // Geschwindigkeit nur fuer die Ziele schaetzen, die der Nachlauf ueberhaupt
     // unterstuetzt (siehe setCoastEnabled-Kommentar in FieldComponent.h) -
@@ -1159,6 +1208,16 @@ void FieldComponent::mouseUp (const juce::MouseEvent&)
 {
     const DragTarget released = dragTarget;
     dragTarget = DragTarget::none;
+
+    // Der letzte Stand der Maus muss noch ankommen, sonst bliebe die Quelle ein
+    // Stueck vor dem Punkt stehen, an dem losgelassen wurde.
+    if (havePendingDrag)
+    {
+        handleDragTo (pendingDragScreen);
+        havePendingDrag = false;
+    }
+
+    stopTimer();
 
     if (coastEnabled && haveDragVelocity
         && (released == DragTarget::source || released == DragTarget::listenerHead)

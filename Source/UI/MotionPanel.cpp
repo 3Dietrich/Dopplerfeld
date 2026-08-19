@@ -162,6 +162,14 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     coastButton.onClick = [this] { if (onCoastToggled != nullptr) onCoastToggled (coastButton.getToggleState()); };
     addAndMakeVisible (coastButton);
 
+    mouseFrameButton.setTooltip ("Die Maus wird auf einem festen Bildtakt abgefragt statt bei "
+                                 "jedem Ereignis. Mausereignisse kommen unregelmaessig, und dieser "
+                                 "Takt steckt sonst in der Bewegung - und damit im Doppler, dessen "
+                                 "Tonhoehe an der Geschwindigkeit haengt, nicht an der Position.");
+    mouseFrameButton.setToggleState (true, juce::dontSendNotification);
+    mouseFrameButton.onClick = [this] { if (onMouseFrameToggled != nullptr) onMouseFrameToggled (mouseFrameButton.getToggleState()); };
+    addAndMakeVisible (mouseFrameButton);
+
     recordButton.setTooltip ("Aufnahme der (geglaetteten) Quellbewegung starten/stoppen.");
     addAndMakeVisible (recordButton);
     recordButton.onClick = [this] { if (onRecordClicked != nullptr) onRecordClicked(); };
@@ -284,7 +292,9 @@ void MotionPanel::resized()
     auto loopRow = area.removeFromTop (26);
     playLoopButton.setBounds (loopRow.removeFromLeft (100));
     loopRow.removeFromLeft (12);
-    coastButton.setBounds (loopRow.removeFromLeft (120));
+    coastButton.setBounds (loopRow.removeFromLeft (100));
+    loopRow.removeFromLeft (12);
+    mouseFrameButton.setBounds (loopRow.removeFromLeft (120));
     area.removeFromTop (6);
 
     auto knobRow = area.removeFromTop (knobH);

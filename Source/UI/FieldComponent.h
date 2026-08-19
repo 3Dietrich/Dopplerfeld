@@ -20,6 +20,7 @@
 // hier (Nasenwinkel, Hit-Tests, Drag-Logik) leitet sich aus diesen beiden
 // Funktionen ab, statt die Umkehr ein zweites Mal zu implementieren.
 class FieldComponent : public juce::Component,
+                       private juce::Timer,
                         public juce::SettableTooltipClient
 {
 public:
@@ -70,6 +71,18 @@ public:
     // Zeichenbreite, Wert und Einheit auf einer Zeile. Genutzt von der
     // Statuszeile (PluginEditor::statusText()).
     static juce::String formatSpeed (double sourceSpeedMps, double speedOfSoundMps, SpeedUnit unit);
+
+    // Mausbewegung an die Bildrate koppeln (@dpa 20260819: "du musst die
+    // glaettung der mausbewegung mit der framerate glaetten.. schaltbar").
+    //
+    // Mausereignisse kommen unregelmaessig: mal zwei in derselben Millisekunde,
+    // mal keins fuer zwanzig. Wird jedes davon sofort als neues Ziel gemeldet,
+    // steckt dieser Takt in der Bewegung - und damit im Doppler, denn dessen
+    // Tonhoehe haengt an der Geschwindigkeit, nicht an der Position. Eingeschaltet
+    // laeuft das Melden stattdessen auf einem festen Bildtakt und zieht die
+    // zuletzt gesehene Mausposition gleichmaessig nach.
+    void setMouseFrameSmoothing (bool shouldBeEnabled);
+
 
     // Nachlauf nach mouseUp() (@dpa-Feedback): Quelle/Hoerer laufen mit der
     // zuletzt gezogenen Geschwindigkeit noch kurz weiter und bremsen dann ab,
@@ -256,4 +269,14 @@ private:
     static constexpr double nearPlaneMetres = 0.4;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FieldComponent)
+
+    // Bildtakt fuer das Melden der Mausposition, siehe setMouseFrameSmoothing().
+    static constexpr int mouseFrameHz = 60;
+
+    bool               mouseFrameSmoothing = true;
+    bool               havePendingDrag     = false;
+    juce::Point<float> pendingDragScreen;
+    juce::Point<float> smoothedDragScreen;
+
+    void timerCallback() override;
 };

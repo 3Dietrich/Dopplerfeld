@@ -37,6 +37,7 @@ public:
     // setCoastEnabled().
     void setCoastEnabled (bool shouldCoast);
     std::function<void (bool)> onCoastToggled;
+    std::function<void (bool)> onMouseFrameToggled;
 
 private:
     using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
@@ -110,6 +111,10 @@ private:
     std::unique_ptr<ButtonAttachment> playLoopAttachment;
 
     juce::ToggleButton coastButton { "Nachlauf" };
+
+    // Mausbewegung auf den Bildtakt legen, siehe
+    // FieldComponent::setMouseFrameSmoothing().
+    juce::ToggleButton mouseFrameButton { "Maus glatt" };
 
     juce::TextButton recordButton { "Record" };
     juce::TextButton playButton   { "Play" };

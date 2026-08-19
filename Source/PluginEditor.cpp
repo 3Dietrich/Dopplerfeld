@@ -193,6 +193,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     // FieldComponent (die zieht ja). Kein Parameter, reines Bedienungsgefuehl.
     motionPanel.setCoastEnabled (field.isCoastEnabled());
     motionPanel.onCoastToggled = [this] (bool enabled) { field.setCoastEnabled (enabled); };
+    motionPanel.onMouseFrameToggled = [this] (bool enabled) { field.setMouseFrameSmoothing (enabled); };
 
     engineControlPanel.setMotorGateEnabled (dopplerfeldProcessor.isMotorGateEnabled());
     engineControlPanel.onMotorGateToggled = [this] (bool enabled)
