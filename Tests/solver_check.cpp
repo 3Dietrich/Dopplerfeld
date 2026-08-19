@@ -6,6 +6,7 @@
 
 #include "Physics/PathTransform.h"
 #include "Physics/RetardedTimeSolver.h"
+#include "Physics/StraightLineRetardedTime.h"
 
 #include <algorithm>
 #include <cmath>
@@ -828,6 +829,163 @@ void testMirrorPlanes()
 
 } // namespace
 
+// ------------------------------------------------- geschlossene Loesung
+//
+// Fuer die geradlinig gleichfoermige Quelle mit ruhendem Empfaenger gibt es die
+// Retarded Time in geschlossener Form (StraightLineRetardedTime.h). Sie soll
+// spaeter den Startwert fuer den numerischen Loeser liefern, damit an der
+// Schallwand nicht mehr das ganze Fenster abgetastet werden muss.
+//
+// Geprueft wird gegen den numerischen Loeser selbst - der ist hier die
+// Referenz, weil er auf derselben Trajektorie arbeitet, die spaeter auch
+// tatsaechlich geschrieben wird.
+void testClosedFormStraightLine()
+{
+    std::printf ("\nGeschlossene Loesung, gerade Bahn\n");
+
+    const MediumState medium;
+    const double      c = medium.speedOfSound();
+
+    // Erst die Selbstpruefung: erfuellt jede gelieferte Wurzel die Gleichung?
+    {
+        double worstResidual = 0.0;
+        int    subsonicOne   = 0;
+        int    supersonicTwo = 0;
+        int    samples       = 0;
+
+        for (double mach : { 0.3, 0.8, 0.95, 1.05, 1.4, 2.0, 3.0 })
+        {
+            const Vec3 vel { mach * c, 0.0, 0.0 };
+            const Vec3 origin { -4000.0, 0.0, 0.0 };
+            const Vec3 receiver { 0.0, 150.0, 0.0 };
+
+            for (double t_h = 0.0; t_h <= 12.0; t_h += 0.01)
+            {
+                const auto r = straightline::solve (origin, vel, receiver, c, t_h);
+
+                for (int i = 0; i < r.count; ++i)
+                {
+                    const Vec3   m   = origin + vel * r.t_e[i];
+                    const double res = c * (t_h - r.t_e[i]) - (receiver - m).length();
+
+                    worstResidual = std::max (worstResidual, std::abs (res));
+                }
+
+                if (r.count > 0)
+                {
+                    ++samples;
+
+                    if (mach < 1.0 && r.count == 1)
+                        ++subsonicOne;
+
+                    if (mach > 1.0 && r.count == 2)
+                        ++supersonicTwo;
+                }
+            }
+        }
+
+        char buf[160];
+        std::snprintf (buf, sizeof (buf), "groesstes Residuum %.3e m ueber %d Proben",
+                       worstResidual, samples);
+        check (worstResidual < 1.0e-6, "jede Wurzel erfuellt die Gleichung", buf);
+
+        std::snprintf (buf, sizeof (buf), "Unterschall einfach %d, Ueberschall doppelt %d",
+                       subsonicOne, supersonicTwo);
+        check (subsonicOne > 0 && supersonicTwo > 0,
+               "Unterschall eine Wurzel, im Kegel zwei", buf);
+    }
+
+    // Und der Abgleich mit dem numerischen Loeser auf derselben Geometrie.
+    {
+        constexpr double mach = 1.6;
+
+        const Vec3 vel { mach * c, 0.0, 0.0 };
+        const Vec3 origin { -4000.0, 0.0, 0.0 };
+        const Vec3 receiver { 0.0, 150.0, 0.0 };
+
+        SourceTrajectory traj;
+        traj.prepare (trajRateHz, 30.0);
+        traj.reset (origin, 0.0);
+        traj.fillLinear (origin, vel, 0.0, 25.0);
+
+        RetardedTimeSolver solver;
+        solver.setMinScanStep (1.0 / trajRateHz);
+
+        double worstDelta      = 0.0;
+        int    compared        = 0;
+        int    missedByNumeric = 0;
+        int    steps           = 0;
+
+        // Die Trajektorie LUECKENLOS fuellen, sonst vergleicht man den Loeser
+        // gegen eine Bahn, die es so gar nicht gibt: fillLinear belegt nur die
+        // Vorgeschichte bis t = 0, und ein Sprung direkt nach t = 8 s liesse
+        // dazwischen ein Loch, in dem die Quelle stillsteht.
+        const int totalTicks = (int) std::lround (11.0 * trajRateHz);
+
+        for (int k = 1; k <= totalTicks; ++k)
+        {
+            const double t_h = (double) k / trajRateHz;
+
+            traj.push (origin + vel * t_h, t_h);
+
+            if (t_h < 8.0)
+                continue;
+
+            Root      roots[RetardedTimeSolver::maxBranches];
+            const int n = solver.solve (traj, medium, receiver, t_h,
+                                        roots, RetardedTimeSolver::maxBranches, true);
+
+            const auto closed = straightline::solve (origin, vel, receiver, c, t_h);
+
+            if (n == 0 || closed.count == 0)
+                continue;
+
+            ++steps;
+
+            // Richtung des Vergleichs: zu jeder NUMERISCHEN Wurzel die
+            // naechstgelegene geschlossene suchen, nicht umgekehrt.
+            //
+            // Andersherum misst man nicht die geschlossene Loesung, sondern die
+            // bekannte Luecke des numerischen Loesers: der meldet im Kegel oft
+            // nur eine der beiden Wurzeln (siehe Zweig-Zaehlwerk im
+            // load_check), und die fehlende zweite erzeugt dann eine
+            // Abweichung von fast einer Sekunde, ohne dass die geschlossene
+            // Formel etwas dafuer koennte.
+            for (int j = 0; j < n; ++j)
+            {
+                double best = 1.0e30;
+
+                for (int i = 0; i < closed.count; ++i)
+                    best = std::min (best, std::abs (roots[j].t_e - closed.t_e[i]));
+
+                worstDelta = std::max (worstDelta, best);
+                ++compared;
+            }
+
+            if (n < closed.count)
+                ++missedByNumeric;
+        }
+
+
+        char buf[160];
+        std::snprintf (buf, sizeof (buf), "groesste Abweichung %.3e s ueber %d Vergleiche",
+                       worstDelta, compared);
+        check (compared > 100 && worstDelta < 1.0e-4,
+               "jede numerische Wurzel steht auch in der Formel", buf);
+
+        // Der Gegenbefund, bewusst nur berichtet und nicht als Kriterium
+        // gewertet: die geschlossene Formel sieht im Kegel zwei Wurzeln, der
+        // numerische Loeser meldet oft nur eine. Das ist dieselbe Luecke, die
+        // im load_check als Zweigtod bei vollem Pegel auftaucht - hier zum
+        // ersten Mal gegen eine EXAKTE Referenz gemessen statt gegen sich
+        // selbst.
+        std::snprintf (buf, sizeof (buf),
+                       "%d von %d Zeitpunkten, an denen die Formel mehr Wurzeln sieht",
+                       missedByNumeric, steps);
+        ok ("Referenzmessung: fehlende Wurzeln", buf);
+    }
+}
+
 int main()
 {
     std::printf ("solver_check - Abnahme H4 (Plan 2.3 bis 2.12)\n");
@@ -842,6 +1000,7 @@ int main()
     testMachConeArrival();
     testThrottledDiscovery();
     testMirrorPlanes();
+    testClosedFormStraightLine();
 
     std::printf ("\n");
 
