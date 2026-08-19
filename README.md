@@ -55,6 +55,13 @@ cd build && ctest --output-on-failure     # solver_check + load_check
 `-DJUCE_DIR` zeigt auf einen lokalen JUCE-Checkout (Version 8.0.6 getestet);
 ohne die Angabe wird `~/Documents/JUCE` angenommen.
 
+## Warum klingt es anders als erwartet
+
+Überschall-Vorbeiflüge klingen nach dem Knall kurz und wirken, als liefen sie
+rückwärts. Ein Teil davon ist echte Physik, ein Teil ist ein bekannter Fehler.
+[docs/warum-klingt-es-anders.md](docs/warum-klingt-es-anders.md) trennt beides,
+mit Kegelgeometrie, Pegeln über acht Sekunden und dem Stand der Behebung.
+
 ## Architektur
 
 Siehe [ARCHITEKTUR.md](ARCHITEKTUR.md) für das Schichtenmodell, Kernklassen

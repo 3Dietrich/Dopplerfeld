@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 300" width="940" height="300"
+     font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+
+  <!-- Vom Kegel ueberstrichener Bereich -->
+  <polygon points="770,215 413,15 0,15 0,285 413,285" fill="#C8912E" fill-opacity="0.11"/>
+  <line x1="770" y1="215" x2="413" y2="15"  stroke="#C8912E" stroke-width="1.8"/>
+  <line x1="770" y1="215" x2="413" y2="285" stroke="#C8912E" stroke-width="1.8"/>
+
+  <!-- Flugbahn -->
+  <line x1="0" y1="215" x2="940" y2="215" stroke="#8A9AA0" stroke-width="1"/>
+  <line x1="880" y1="215" x2="925" y2="215" stroke="#8A9AA0" stroke-width="1.6"/>
+  <polygon points="925,215 913,209 913,221" fill="#8A9AA0"/>
+
+  <!-- Emissionspunkte und aktuelle Quellposition -->
+  <circle cx="163" cy="215" r="6"   fill="#4E8FA6"/>
+  <circle cx="455" cy="215" r="6"   fill="#8A6FB5"/>
+  <circle cx="770" cy="215" r="7.5" fill="#C8912E"/>
+
+  <!-- Hoerer -->
+  <circle cx="420" cy="65" r="6.5" fill="none" stroke="#8A9AA0" stroke-width="2"/>
+  <circle cx="420" cy="65" r="2.2" fill="#8A9AA0"/>
+
+  <!-- Die zwei gleichzeitig eintreffenden Wege -->
+  <line x1="163" y1="215" x2="420" y2="65" stroke="#4E8FA6" stroke-width="2"/>
+  <line x1="455" y1="215" x2="420" y2="65" stroke="#8A6FB5" stroke-width="2"/>
+  <line x1="420" y1="215" x2="420" y2="65" stroke="#8A9AA0" stroke-width="1" stroke-dasharray="3 4"/>
+
+  <text x="420" y="45"  fill="#8A9AA0" text-anchor="middle">Hoerer L</text>
+  <text x="432" y="150" fill="#8A9AA0">150 m</text>
+
+  <text x="163" y="240" fill="#4E8FA6" text-anchor="middle">Emission A</text>
+  <text x="163" y="257" fill="#4E8FA6" text-anchor="middle">t = -0,367 s</text>
+
+  <text x="470" y="240" fill="#8A6FB5">Emission B</text>
+  <text x="470" y="257" fill="#8A6FB5">t = +0,051 s</text>
+
+  <text x="770" y="240" fill="#C8912E" text-anchor="middle">Quelle M jetzt</text>
+  <text x="770" y="257" fill="#C8912E" text-anchor="middle">t = +0,500 s</text>
+
+  <text x="585" y="105" fill="#C8912E" text-anchor="middle">Mach-Kegel, 29,3 Grad</text>
+  <text x="905" y="200" fill="#8A9AA0" text-anchor="end">Flugbahn</text>
+</svg>
