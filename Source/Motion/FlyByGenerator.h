@@ -79,13 +79,20 @@ public:
     Vec3 tick (double dt);
 
     // Aktuelle Zielposition, ohne die Bahn weiterzudrehen.
-    Vec3 currentPosition() const { return positionAt (travelled); }
+    Vec3 currentPosition() const { return positionAt (travelled + targetLead); }
 
-    // Bahn um metres vorspulen, ohne Zeit vergehen zu lassen. Gedacht fuer den
-    // Ausgleich des Glaetter-Nachlaufs beim Start (siehe
-    // DopplerfeldProcessor::startFlyBy): das Ziel laeuft danach genau so weit
-    // voraus, wie die geglaettete Position hinterherhinkt.
-    void advanceBy (double metres);
+    // Dauerhafter Vorlauf des ZIELS gegenueber der geflogenen Strecke, in
+    // Metern. Gedacht fuer den Ausgleich des Glaetter-Nachlaufs (siehe
+    // DopplerfeldProcessor::startFlyBy): das Ziel laeuft um genau so viel
+    // voraus, wie die geglaettete Position hinterherhinkt, und beide sind
+    // damit ueber den ganzen Flug deckungsgleich verschoben.
+    //
+    // Der Vorlauf verlaengert die Bahn nach vorn, statt sie am Anfang zu
+    // beschneiden. Die zurueckgelegte Strecke - und damit das Ende des Fluges -
+    // zaehlt weiter ab dem echten Startpunkt: die Quelle fliegt die volle
+    // Strecke, und wenn das Ziel den Endpunkt um einen Nachlauf ueberschossen
+    // hat, steht die Quelle genau darauf.
+    void setTargetLead (double metres);
 
     // Ende der geplanten Bahn (@dpa: "voraussichtlichen Weg einzeichnen") -
     // für die Restanzeige zusammen mit currentPosition().
@@ -129,5 +136,8 @@ private:
 
     // Zurückgelegte Strecke ab dem Anfangspunkt, in Metern.
     double travelled = 0.0;
+
+    // Vorlauf des Ziels vor der zurueckgelegten Strecke, siehe setTargetLead().
+    double targetLead = 0.0;
     bool   running   = false;
 };

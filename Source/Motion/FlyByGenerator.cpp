@@ -69,12 +69,13 @@ void FlyByGenerator::start()
 {
     directionSign = (speed < 0.0) ? -1.0 : 1.0;
     travelled     = 0.0;
+    targetLead    = 0.0;
     running       = true;
 }
 
-void FlyByGenerator::advanceBy (double metres)
+void FlyByGenerator::setTargetLead (double metres)
 {
-    travelled = std::min (2.0 * halfLength(), std::max (0.0, travelled + metres));
+    targetLead = std::max (0.0, metres);
 }
 
 Vec3 FlyByGenerator::tick (double dt)

@@ -1125,6 +1125,145 @@ int main()
     }
 
     //==================================================================
+    // 1g2. Vorbeiflug: liegt die geflogene Bahn wirklich zwischen Start- und
+    //      Endpunkt? (@dpa 20260819: "ist der Start und endpunkt des
+    //      vorbeifluges oft falsch", Preset woandersVorbeiflug.)
+    //
+    //      Die Werte stammen aus genau diesem Preset. Zwei Dinge machen es
+    //      heikel, und beide sind darin eingestellt:
+    //
+    //        - Der gemeinsame Tempo-Deckel (Max Speed 428,9 m/s) liegt unter
+    //          der Fluggeschwindigkeit (1107,2 m/s). Der Generator darf dann
+    //          nicht mit dem Reglerwert weiterzaehlen, sonst ist er am Ende der
+    //          Strecke, waehrend die Quelle noch mittendrin ist.
+    //        - Der Glaetter hat eine sehr lange Zeitkonstante (0,64 s). Sein
+    //          Nachlauf betraegt bei diesem Tempo mehrere hundert Meter und
+    //          muss vorn ausgeglichen werden, ohne die Strecke hinten zu
+    //          verkuerzen.
+    //
+    //      Gemessen wird die Geometrie, nicht der Klang: Startpunkt, Endpunkt
+    //      und Flugdauer.
+    {
+        constexpr double flySpeedMps = 1107.19;
+        constexpr double maxSpeedMps = 428.88;
+        constexpr double approachM   = 1095.58;
+
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres,    5927.6f);
+        setParam (proc, Params::lisX,           0.5036f);
+        setParam (proc, Params::lisY,           0.2929f);
+        setParam (proc, Params::lisZ,           1.926f);
+        setParam (proc, Params::srcX,           0.2937f);
+        setParam (proc, Params::srcY,           0.4224f);
+        setParam (proc, Params::srcZ,           19.885f);
+        setParam (proc, Params::smootherType,   1.0f);
+        setParam (proc, Params::smootherTau,    0.6369f);
+        setParam (proc, Params::globalMaxSpeed, (float) maxSpeedMps);
+        setParam (proc, Params::flyKind,        1.0f);    // waagerecht querend
+        setParam (proc, Params::flyStart,       0.0f);
+        setParam (proc, Params::flyDistance,    382.92f);
+        setParam (proc, Params::flyApproach,    (float) approachM);
+        setParam (proc, Params::flySpeed,       (float) flySpeedMps);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        juce::MidiBuffer midi;
+        FieldSnapshot    snapshot;
+
+        Stats settle;
+        render (proc, buffer, 0.3, settle, [] (double) {});
+
+        proc.fillFieldSnapshot (snapshot);
+        const double tTrigger = snapshot.now;
+
+        proc.triggerFlyBy();
+
+        Vec3   plannedStart, plannedEnd, firstSeen, atEnd;
+        bool   sawStart  = false;
+        double flightSec = -1.0;
+
+        const int numBlocks = (int) std::ceil (20.0 * sampleRate / blockSize);
+
+        for (int block = 0; block < numBlocks; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+            proc.fillFieldSnapshot (snapshot);
+
+            const double atSec = (double) block * blockSize / sampleRate;
+
+            // Der erste Snapshot, der wirklich NACH dem Auslösen entstanden
+            // ist. Der davor liegende zeigt noch die alte Position und haette
+            // die Startmessung um die ganze Sprungweite verfaelscht.
+            if (snapshot.flyByActive && ! sawStart && snapshot.now > tTrigger)
+            {
+                sawStart = true;
+                firstSeen = snapshot.sourcePos;
+
+                // Der Startpunkt ergibt sich aus den beiden Punkten, die der
+                // Snapshot fuer die Wegvorschau ohnehin mitfuehrt: der
+                // naechste Punkt liegt in der Mitte der Strecke.
+                plannedEnd   = snapshot.flyByPlannedEnd;
+                plannedStart = snapshot.flyByNearestPoint * 2.0 - plannedEnd;
+            }
+
+            if (sawStart && ! snapshot.flyByActive && flightSec < 0.0)
+                flightSec = atSec;
+        }
+
+        proc.fillFieldSnapshot (snapshot);
+        atEnd = snapshot.sourcePos;
+
+        const double pathLength  = (plannedEnd - plannedStart).length();
+        const double startError  = (firstSeen - plannedStart).length();
+        const double endError    = (atEnd - plannedEnd).length();
+        const double expectedSec = pathLength / std::min (flySpeedMps, maxSpeedMps);
+
+        std::printf ("%-22s Bahn %.0f m | Start daneben %6.1f m | Ende daneben %6.1f m | "
+                     "Dauer %.2f s (erwartet %.2f s)\n",
+                     "Vorbeiflug Geometrie", pathLength, startError, endError,
+                     flightSec, expectedSec);
+
+        if (! sawStart)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Vorbeiflug ist gar nicht angelaufen\n");
+            failed = true;
+        }
+
+        // Startpunkt: die Quelle wird beim Auslösen dorthin gesetzt. Die
+        // Toleranz deckt allein ab, dass der Snapshot mit ~30 Hz erscheint und
+        // die Quelle in dieser Zeit schon ein Stueck geflogen ist.
+        if (startError > 0.03 * pathLength)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Vorbeiflug beginnt %.1f m neben seinem Startpunkt "
+                         "(Bahn %.0f m)\n", startError, pathLength);
+            failed = true;
+        }
+
+        // Endpunkt: hier ist alles ausgeschwungen, die Quelle muss genau auf
+        // dem geplanten Ende stehen.
+        if (endError > 1.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Vorbeiflug endet %.1f m neben seinem Endpunkt "
+                         "(Bahn %.0f m)\n", endError, pathLength);
+            failed = true;
+        }
+
+        // Dauer: der schaerfste der drei Punkte. Endet der Flug zu frueh, hat
+        // die Quelle die Strecke nicht geflogen, sondern ist den Rest nur noch
+        // ausgeschlichen.
+        if (flightSec < 0.0 || std::abs (flightSec - expectedSec) > 0.1 * expectedSec)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Vorbeiflug dauert %.2f s statt %.2f s - die Quelle "
+                         "fliegt die Strecke nicht ab\n", flightSec, expectedSec);
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 1h. N-Wellen-Schicht. Zwei Dinge sind hier zu zeigen, und das zweite ist
     //     das wichtigere:
     //

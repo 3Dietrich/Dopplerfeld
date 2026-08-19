@@ -305,6 +305,9 @@ private:
     // Quelle bleibt stehen, wo ein Vorbeiflug endete, statt zum Reglerwert
     // zurueckzulaufen. Gilt, bis jemand den Regler bewegt.
     void holdSourceTargetAt (Vec3 posMetres);
+
+    // Fluggeschwindigkeit, die der gemeinsame Tempo-Deckel wirklich durchlaesst.
+    double effectiveFlySpeed() const;
     void applyOutputStage (juce::AudioBuffer<float>& buffer);
 
     // Rohzeiger auf die zur SourceKind gehoerende SoundSource - ein Ort

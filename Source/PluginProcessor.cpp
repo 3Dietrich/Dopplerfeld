@@ -513,6 +513,22 @@ Vec3 DopplerfeldProcessor::metresFromNormalised (double normX, double normY, dou
              zMetres };
 }
 
+double DopplerfeldProcessor::effectiveFlySpeed() const
+{
+    // Der gemeinsame Tempo-Deckel (Params::globalMaxSpeed) klemmt die
+    // tatsaechlich zurueckgelegte Strecke je Tick. Liegt er unter der
+    // eingestellten Fluggeschwindigkeit, kommt die Quelle nicht mit - der
+    // Generator waere dann laengst am Ende der Strecke, waehrend sie noch
+    // mittendrin ist, und der Flug bricht weit vor dem Endpunkt ab (gemessen
+    // am Preset woandersVorbeiflug: 1825 m zu frueh, Flug nach 0,84 s statt
+    // 1,98 s beendet).
+    //
+    // Deshalb fliegt der Generator von vornherein mit dem, was der Deckel
+    // durchlaesst. Ein stiller Deckel ist das nicht: die Geschwindigkeit steht
+    // in der Anzeige, und beide Regler gehoeren @dpa.
+    return std::min ((double) pp.flySpeed->load(), (double) pp.globalMaxSpeed->load());
+}
+
 void DopplerfeldProcessor::holdSourceTargetAt (Vec3 posMetres)
 {
     sourceTargetMetres = posMetres;
@@ -602,7 +618,7 @@ void DopplerfeldProcessor::applyParameters()
     // Abstand legt der Start fest (siehe handlePendingRequests). Eine
     // Bahnart, die sich mitten im Flug ändert, wäre ein Positionssprung -
     // das Tempo dagegen ist genau der Wert, den @dpa live automatisieren will.
-    flyBy.setSpeed ((double) pp.flySpeed->load());
+    flyBy.setSpeed (effectiveFlySpeed());
 
     // --- Wiedergabe ---
     motionPlayer.setSpeed ((double) pp.playSpeed->load());
@@ -907,8 +923,12 @@ void DopplerfeldProcessor::handlePendingRequests()
         // Gleiche Synchronisation wie beim natuerlichen Ende der Strecke
         // (siehe advanceMotion()) - sonst springt die Quelle beim manuellen
         // Stopp-Knopf genauso auf die alte, vorherige Zielposition.
+        // Beim Stopp-Knopf bleibt die Quelle dort stehen, wo sie gerade ist -
+        // nicht dort, wo ihr Ziel steht. Das Ziel laeuft um den Glaetter-
+        // Nachlauf voraus, und ihm noch hinterherzulaufen waere ein Stueck
+        // Flug, das niemand ausgeloest hat.
         if (flyBy.isRunning())
-            holdSourceTargetAt (flyBy.currentPosition());
+            holdSourceTargetAt (smoothedSourcePos);
 
         flyBy.stop();
     }
@@ -937,7 +957,7 @@ void DopplerfeldProcessor::startFlyBy()
 
     flyBy.configure (kind, start, (double) pp.flyDistance->load(), (double) pp.flyApproach->load(),
                      listenerState.head, (double) pp.srcZ->load());
-    flyBy.setSpeed ((double) pp.flySpeed->load());
+    flyBy.setSpeed (effectiveFlySpeed());
     flyBy.start();
 
     // Glätter vorwärmen. Beide Startvarianten verlangen, dass die Quelle im
@@ -1009,7 +1029,7 @@ void DopplerfeldProcessor::startFlyBy()
     // Und die Bahn um denselben Nachlauf vorspulen, damit das Ziel dort
     // weitermacht, wo das Vorwaermen es hinterlassen hat. Ohne das saehe der
     // Glaetter im ersten echten Tick einen Ruecksprung.
-    flyBy.advanceBy (lag);
+    flyBy.setTargetLead (lag);
 
     // Der Unterschied zwischen den beiden Startvarianten steckt allein in der
     // Vorgeschichte, die der neue Geometriesatz mitbekommt:
@@ -1080,8 +1100,13 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // (@dpa-Repro: Vorbeiflug endet, M springt an die alte Stelle).
             // So bleibt sie stattdessen einfach dort stehen, wo der Flug
             // endete - kein Sprung, kein neuer Sonderzustand.
+            // Am Ende der Strecke steht die Quelle auf dem geplanten Endpunkt,
+            // das Ziel um einen Nachlauf davor (setTargetLead). Gehalten wird
+            // deshalb der ENDPUNKT, nicht die letzte Zielposition: sonst zoege
+            // der Glaetter die Quelle noch einen Nachlauf weiter darueber
+            // hinaus.
             if (! flyBy.isRunning())
-                holdSourceTargetAt (target);
+                holdSourceTargetAt (flyBy.plannedEnd());
         }
         else if (motionPlayer.isPlaying())
         {
