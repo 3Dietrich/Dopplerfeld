@@ -989,6 +989,17 @@ int main()
                          "Vorbeiflug Anlauf", smoothEarly.speedFirst, flySpeedMps,
                          smoothEarly.speedMin, smoothEarly.speedMax);
 
+            // Und dasselbe fuer den Rest des Fluges. Damit ist unterscheidbar,
+            // ob die Bahn nur beim Start krumm ist oder durchgehend: nur eine
+            // wirklich gerade Bahn mit konstantem Tempo laesst den Loeser alle
+            // Wurzeln finden (nachgewiesen in solver_check gegen die
+            // geschlossene Loesung).
+            std::printf ("%-22s im weiteren Flug: Fenster %7.1f .. %7.1f m/s (%+.1f %% Schwankung)\n",
+                         "", smoothRest.speedMin, smoothRest.speedMax,
+                         smoothRest.speedMin > 0.0
+                            ? 100.0 * (smoothRest.speedMax - smoothRest.speedMin) / flySpeedMps
+                            : 0.0);
+
             if (std::abs (smoothEarly.speedFirst - flySpeedMps) > tolerance * flySpeedMps)
             {
                 std::printf ("FEHLGESCHLAGEN: der Vorbeiflug startet mit %.1f m/s statt %.0f - "
