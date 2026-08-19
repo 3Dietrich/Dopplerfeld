@@ -193,10 +193,13 @@ namespace Tooltips
                     return lang == Language::De
                         ? "Oktavlage der Unwucht. 0 ist der Zuendtakt, also die halbe "
                           "Grundfrequenz - jede Stufe nach oben verdoppelt sie, jede nach unten "
-                          "halbiert sie. Damit wird aus dem Stampfen ein Schnarren und umgekehrt."
+                          "halbiert sie. Moduliert wird mit einer positiven Welle (0 bis 1), "
+                          "damit die Flanken auch in hohen Lagen erhalten bleiben; wie tief sie "
+                          "einschneiden, regelt der Unwucht-Regler."
                         : "Octave of the imbalance. 0 is the firing rate, i.e. half the "
-                          "fundamental - each step up doubles it, each step down halves it. This "
-                          "turns a thumping into a rattle and back.";
+                          "fundamental - each step up doubles it, each step down halves it. "
+                          "Modulation uses a positive wave (0 to 1) so the edges survive in high "
+                          "registers; how deep they cut is set by the imbalance control.";
 
                 case Key::EngineImbalance:
                     return lang == Language::De

@@ -184,8 +184,20 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         const double noiseSample = (double) noiseRandom.nextFloat() * 2.0 - 1.0;
         const double noiseFiltered = (double) noiseFilter.processSample (0, (float) noiseSample);
 
-        // Unwucht: Amplitudenkomponente bei f_base/2 (Zündtakt-Charakter).
-        const double imbalanceFactor = 1.0 + imbalance * std::sin (juce::MathConstants<double>::twoPi * halfPhase);
+        // Unwucht: Amplitudenmodulation mit einer POSITIVEN Welle, 0 bis 1
+        // (@dpa 20260820: "es kam mir so vor wie eine positive (sinus?)welle
+        // (0..1) als amplitudenmodulation und davon die freq einfach
+        // vervielfachen - dann bleibt der Modulationseffekt am wirksamsten").
+        //
+        // Der Unterschied zu einer Modulation um 1 herum: dort schwingt der
+        // Faktor symmetrisch nach oben und unten, das Signal wird also
+        // abwechselnd lauter und leiser und behaelt im Mittel seinen Pegel. Hier
+        // geht er bei vollem Regler bis auf null herunter und nur bis eins
+        // hinauf - das Signal wird wirklich zerhackt, und genau das sind die
+        // Flanken, um die es geht. Die Staerke regelt weiter der Unwucht-Regler:
+        // bei 0 bleibt der Faktor konstant 1.
+        const double wave = 0.5 + 0.5 * std::sin (juce::MathConstants<double>::twoPi * halfPhase);
+        const double imbalanceFactor = 1.0 - imbalance * (1.0 - wave);
 
         halfPhase += halfPhaseInc;
 

@@ -29,6 +29,10 @@ void SwarmPanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 SwarmPanel::SwarmPanel (juce::AudioProcessorValueTreeState& apvts)
 {
     setupKnob (totalKnob, apvts, Params::cloneTotal, "Klone", Tooltips::Key::CloneTotal);
+
+    // Beim Bewegen der Gesamtzahl sofort nachziehen, damit sichtbar ist, ab
+    // wann die anderen Regler ueberhaupt etwas bewirken.
+    totalKnob.slider.onValueChange = [this] { updateEnabledState(); };
     setupKnob (realKnob, apvts, Params::cloneReal, "davon echt", Tooltips::Key::CloneReal);
     setupKnob (spreadKnob, apvts, Params::cloneSpread, "Streuung", Tooltips::Key::CloneSpread);
     setupKnob (levelKnob, apvts, Params::cloneLevel, "Pegel billig", Tooltips::Key::CloneLevel);
@@ -45,6 +49,25 @@ SwarmPanel::SwarmPanel (juce::AudioProcessorValueTreeState& apvts)
     panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));
     panicButton.onClick = [this] { if (onPanic) onPanic(); };
     addAndMakeVisible (panicButton);
+
+    updateEnabledState();
+}
+
+void SwarmPanel::updateEnabledState()
+{
+    // "davon echt" ist der Anteil an der Gesamtzahl und wird gegen sie geklemmt
+    // (siehe DopplerfeldProcessor: wirksam ist min(Klone, davon echt)). Steht
+    // die Gesamtzahl auf null, gibt es nichts zu verteilen - dann muss der
+    // Regler auch grau sein, statt einen Wert zu zeigen, der nichts tut.
+    const bool anyClones = totalKnob.slider.getValue() > 0.5;
+
+    realKnob.slider.setEnabled (anyClones);
+    realKnob.label.setEnabled (anyClones);
+    spreadKnob.slider.setEnabled (anyClones);
+    spreadKnob.label.setEnabled (anyClones);
+    levelKnob.slider.setEnabled (anyClones);
+    levelKnob.label.setEnabled (anyClones);
+    showButton.setEnabled (anyClones);
 }
 
 void SwarmPanel::refreshTooltips()

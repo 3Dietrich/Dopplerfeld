@@ -38,6 +38,8 @@ public:
     // aktuell an Tooltips::currentLanguage() gewaehlten Sprache - fuer den
     // Sprachumschalter in der Kopfzeile (siehe PluginEditor).
     void refreshTooltips();
+    // Graut die abhaengigen Regler aus, solange die Gesamtzahl auf null steht.
+    void updateEnabledState();
 
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
