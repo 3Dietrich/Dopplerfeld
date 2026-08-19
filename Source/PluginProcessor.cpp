@@ -302,7 +302,6 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.fadeManualMs = raw (Params::fadeManualMs);
 
     pp.outputGain = raw (Params::outputGain);
-    pp.loudBoost  = raw (Params::loudBoost);
     pp.limiterOn  = raw (Params::limiterOn);
 
     // Übergabepuffer der geladenen Aufzeichnung einmal auf Höchstlänge
@@ -462,7 +461,7 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
 
     outputGainLinear.reset (sampleRate, 0.02);
     outputGainLinear.setCurrentAndTargetValue (
-        juce::Decibels::decibelsToGain (pp.outputGain->load() + pp.loudBoost->load()));
+        juce::Decibels::decibelsToGain (pp.outputGain->load()));
 }
 
 void DopplerfeldProcessor::restartEngine()
@@ -739,11 +738,9 @@ void DopplerfeldProcessor::applyParameters()
     dopplerEngine.setManualFade (manualFade, manualSeconds);
 
     // --- Ausgang ---
-    // "Lauter" (@dpa-Feedback, 0..+36dB) addiert sich auf outputGain drauf -
-    // eigener Regler fuer den Boost, gemeinsame Rampe/Signalkette mit dem
-    // Feinabgleich (siehe Params::loudBoost).
+    // Ausgangspegel, -36 bis +36 dB (siehe Params::outputGain).
     outputGainLinear.setTargetValue (
-        juce::Decibels::decibelsToGain (pp.outputGain->load() + pp.loudBoost->load()));
+        juce::Decibels::decibelsToGain (pp.outputGain->load()));
     limiterEnabled = pp.limiterOn->load() > 0.5f;
 }
 
@@ -1538,6 +1535,36 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
 
     if (! tree.isValid())
         return;
+
+    // Zustand aus einer Fassung mit eigenem "Lauter"-Regler: sein Wert wird auf
+    // den Ausgangspegel addiert, damit ein altes Preset genauso laut bleibt.
+    // Ohne das faellt der Boost beim Laden ersatzlos weg, und alles, was @dpa
+    // damit auf Pegel gebracht hat, waere danach bis zu 36 dB zu leise.
+    {
+        double legacyBoostDb = 0.0;
+
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            const auto child = tree.getChild (i);
+
+            if (child.getProperty ("id").toString() == Params::loudBoostLegacy)
+                legacyBoostDb = (double) child.getProperty ("value");
+        }
+
+        if (legacyBoostDb > 0.0)
+        {
+            for (int i = 0; i < tree.getNumChildren(); ++i)
+            {
+                auto child = tree.getChild (i);
+
+                if (child.getProperty ("id").toString() == Params::outputGain)
+                {
+                    const double merged = (double) child.getProperty ("value") + legacyBoostDb;
+                    child.setProperty ("value", juce::jlimit (-36.0, 36.0, merged), nullptr);
+                }
+            }
+        }
+    }
 
     // Bewegungsteil herausholen, aber NICHT selbst anwenden: MotionRecorder
     // und MotionPlayer gehören ausschließlich dem Audiothread (siehe

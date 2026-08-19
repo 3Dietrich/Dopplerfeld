@@ -43,13 +43,6 @@ private:
 
     Knob fieldMetresKnob, boomLimitKnob, airAbsorbKnob, fadeManualKnob, outputGainKnob;
 
-    // Boost obendrauf (@dpa-Feedback: "Lauter", 0..+36dB) - steht in der
-    // dritten Reihe (bei den Jitter-Reglern), nicht in der ersten neben
-    // Output Gain: dort ist kein Platz mehr frei (Zeile schon voll bis an
-    // die Fensterbreite), dieselbe Begruendung wie bei distanceCurveKnob
-    // weiter unten.
-    Knob loudBoostKnob;
-
     // Entfernung -> Amplitude schaerfer/flacher als das physikalische 1/R
     // (@dpa-Skizze "Amp-Verlauf"). Steht bei den Hoehe-Reglern statt in der
     // ersten Reihe, weil dort kein Platz mehr frei ist - thematisch gehoert
