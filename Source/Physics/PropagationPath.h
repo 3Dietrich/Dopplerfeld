@@ -131,6 +131,7 @@ public:
     // ganzen Plugins.
     void setDiscoveryIntervalSeconds (double seconds);
 
+
     // Anti-Klick-Rampe beim Erscheinen/Verschwinden eines Zweigs (Plan 3.7,
     // letzter Absatz): 0,5 bis 2 ms. Das ist ausdrücklich kein globaler
     // Crossfade - der würde den Knall wegmitteln, den man hören will.
@@ -374,6 +375,7 @@ private:
     // der Toleranz gewählt, die solver_check für die Kegelankunft ansetzt
     // (3 ms) - mit reichlich Abstand darunter.
     double discoverySeconds = 0.5e-3;
+
 
     // Exponent von R in A_geo = 1/R^k, siehe setDistanceCurve().
     //

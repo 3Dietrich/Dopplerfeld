@@ -38,6 +38,12 @@ void DopplerEngine::PathSet::prepare (double sampleRate, int maxBlockSize, size_
         p.setTrajectoryGridSeconds (1.0 / trajRateHz);
     }
 
+    // GEPRUEFT UND VERWORFEN: die Vollscans der Pfade ueber das
+    // Entdeckungsintervall verteilen, damit nicht alle im selben Block scannen.
+    // Bringt nichts, weil sich die Pfade ueber das gemeinsame Solver-Raster
+    // wieder einsynchronisieren - gemessen stieg der teuerste Block bei
+    // |M_r| 1,01 sogar von 28853 auf 44725 Auswertungen.
+
     // Die Abbildung selbst wird nicht hier gesetzt, sondern vor jedem Block aus
     // der Fläche geholt (renderInto): Wände dürfen sich bewegen, der Boden ist
     // nur der Sonderfall einer Fläche, die es nie tut.

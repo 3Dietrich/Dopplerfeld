@@ -100,6 +100,13 @@ struct Stats
     double speedMin =  1.0e30;
     double speedMax = -1.0e30;
     double speedFirst = -1.0;
+
+    // Teuerster Einzelblock, in Loeser-Auswertungen statt Wanduhrzeit, samt
+    // dem M_r, das in diesem Moment anlag. Beantwortet die Frage, WO die
+    // Lastspitze sitzt - die Wanduhrzahl allein sagt nur, dass es eine gibt.
+    std::uint64_t worstBlockEvals = 0;
+    double        worstBlockMach  = 0.0;
+    double        worstBlockAtSec = 0.0;
     std::uint64_t handovers        = 0;
     std::uint64_t tightPairs       = 0;
     std::uint64_t adjacentPairs    = 0;
@@ -229,6 +236,11 @@ struct Stats
         for (int k = 0; k < 8; ++k)
             totalCalls += rootHist[(size_t) k];
 
+        std::printf ("%-22s teuerster Block %8llu Auswertungen bei t=%5.2fs, |M_r| dort %.2f "
+                     "(Schnitt %6.0f)\n",
+                     "", (unsigned long long) worstBlockEvals, worstBlockAtSec, worstBlockMach,
+                     blocks > 0 ? (double) solverEvals / blocks : 0.0);
+
         std::printf ("%-22s Wurzeln je Aufruf:", "");
 
         for (int k = 0; k <= 5; ++k)
@@ -336,6 +348,25 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
         stats.countFlips       = snapshot.countFlips;
         stats.collapsedTracks  = snapshot.collapsedTracks;
 
+        {
+            const std::uint64_t blockEvals = proc.solverEvaluations() - evalsBefore - stats.solverEvals;
+
+            if (blockEvals > stats.worstBlockEvals)
+            {
+                stats.worstBlockEvals = blockEvals;
+                stats.worstBlockAtSec = (double) block * blockSize / sampleRate;
+
+                double m = 0.0;
+
+                for (int i = 0; i < snapshot.pathCount; ++i)
+                    m = std::max (m, std::abs (snapshot.paths[(size_t) i].machRadial));
+
+                stats.worstBlockMach = m;
+            }
+
+            stats.solverEvals = proc.solverEvaluations() - evalsBefore;
+        }
+
         stats.speedMin = std::min (stats.speedMin, snapshot.sourceSpeed);
         stats.speedMax = std::max (stats.speedMax, snapshot.sourceSpeed);
 
@@ -347,7 +378,7 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
         stats.droppedRoots     = snapshot.droppedRoots;
     }
 
-    stats.solverEvals += proc.solverEvaluations() - evalsBefore;
+    stats.solverEvals = proc.solverEvaluations() - evalsBefore;
 }
 }
 
