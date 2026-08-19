@@ -101,6 +101,16 @@ struct Stats
     double speedMax = -1.0e30;
     double speedFirst = -1.0;
 
+    // Wann die Ausreisser auftraten, in Sekunden ab dem Anfang dieses
+    // Abschnitts. Ohne den Zeitpunkt sagt ein Tempofenster nur, DASS die Bahn
+    // krumm ist - mit ihm laesst sich die Stelle im Flug benennen.
+    // Wann die lauteste Stelle des Abschnitts kam - erst damit sagt eine
+    // Spitze, WOVON sie stammt (Vorbeiflug, Umblendung, Einsatz).
+    double peakAtSec = 0.0;
+
+    double speedMinAtSec = 0.0;
+    double speedMaxAtSec = 0.0;
+
     // Teuerster Einzelblock, in Loeser-Auswertungen statt Wanduhrzeit, samt
     // dem M_r, das in diesem Moment anlag. Beantwortet die Frage, WO die
     // Lastspitze sitzt - die Wanduhrzahl allein sagt nur, dass es eine gibt.
@@ -309,7 +319,11 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
                     continue;
                 }
 
-                stats.peak = std::max (stats.peak, std::abs (x));
+                if (std::abs (x) > stats.peak)
+                {
+                    stats.peak      = std::abs (x);
+                    stats.peakAtSec = (double) block * blockSize / sampleRate;
+                }
 
                 if (ch < 2)
                     stats.sumSquares[ch] += x * x;
@@ -367,8 +381,26 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
             stats.solverEvals = proc.solverEvaluations() - evalsBefore;
         }
 
-        stats.speedMin = std::min (stats.speedMin, snapshot.sourceSpeed);
-        stats.speedMax = std::max (stats.speedMax, snapshot.sourceSpeed);
+        // Das Tempofenster gilt der geflogenen Bahn. Nach dem Ende der Strecke
+        // steht die Quelle (das ist so gewollt, siehe holdSourceTargetAt) -
+        // dieser Stillstand ist keine Schwankung des Fluges und darf das
+        // Fenster nicht aufreissen.
+        if (proc.isFlyingBy())
+        {
+            const double atSec = (double) block * blockSize / sampleRate;
+
+            if (snapshot.sourceSpeed < stats.speedMin)
+            {
+                stats.speedMin      = snapshot.sourceSpeed;
+                stats.speedMinAtSec = atSec;
+            }
+
+            if (snapshot.sourceSpeed > stats.speedMax)
+            {
+                stats.speedMax      = snapshot.sourceSpeed;
+                stats.speedMaxAtSec = atSec;
+            }
+        }
 
         if (stats.speedFirst < 0.0)
             stats.speedFirst = snapshot.sourceSpeed;
@@ -921,7 +953,7 @@ int main()
     //     Varianten sind im Anflug also gleich laut, sie klingen nur
     //     verschieden hoch. (Gemessen: RMS 0,01746 gegen 0,01754.)
     {
-        auto flight = [&] (bool abruptStart, Stats& earlyStats, Stats& restStats)
+        auto flight = [&] (bool abruptStart, Stats& onsetStats, Stats& earlyStats, Stats& restStats)
         {
             DopplerfeldProcessor proc;
 
@@ -934,6 +966,13 @@ int main()
             setParam (proc, Params::lisY, 0.5f);
             setParam (proc, Params::lisZ, 1.75f);
             setParam (proc, Params::srcZ, 30.0f);
+
+            // Die Quelle steht VOR dem Flug weit ab vom Hörer. Stand sie in
+            // der Feldmitte, stand sie genau auf dem Hörer - der Ausblendsatz
+            // war dann beim Umschalten lauter als der ganze Vorbeiflug und
+            // taugte als Vergleichsmassstab nicht mehr.
+            setParam (proc, Params::srcX, 0.95f);
+            setParam (proc, Params::srcY, 0.95f);
 
             setParam (proc, Params::flyKind,     1.0f);   // waagerecht querend
             setParam (proc, Params::flyStart,    abruptStart ? 1.0f : 0.0f);
@@ -953,19 +992,31 @@ int main()
 
             proc.triggerFlyBy();
 
+            // Der Einsatz bekommt ein eigenes, sehr kurzes Fenster. Im ersten
+            // Block blendet die vorher stehende Quelle aus, die direkt beim
+            // Hörer stand - das ist die lauteste Stelle des ganzen Anflugs
+            // (gemessen 0,0508 im ersten Block gegen 0,0301 bei der Passage)
+            // und als Vergleichsmassstab fuer "war da ein Vorbeiflug?"
+            // unbrauchbar. Fuer das Anlauftempo ist genau dieser Moment aber
+            // der interessante, deshalb wird er gemessen statt uebersprungen.
+            render (proc, buffer, 0.05, onsetStats, [] (double) {});
+
             // Erstes halbes Sekundenfenster: die Quelle ist noch weit weg, der
             // Vorbeiflug liegt noch vor uns, und nur die Vorgeschichte
             // unterscheidet die beiden Varianten.
-            render (proc, buffer, 0.5, earlyStats, [] (double) {});
-            render (proc, buffer, 2.5, restStats,  [] (double) {});
+            render (proc, buffer, 0.45, earlyStats, [] (double) {});
+            render (proc, buffer, 2.5,  restStats,  [] (double) {});
         };
 
-        Stats smoothEarly, smoothRest, abruptEarly, abruptRest;
+        Stats smoothOnset, smoothEarly, smoothRest;
+        Stats abruptOnset, abruptEarly, abruptRest;
 
-        flight (false, smoothEarly, smoothRest);
-        flight (true,  abruptEarly, abruptRest);
+        flight (false, smoothOnset, smoothEarly, smoothRest);
+        flight (true,  abruptOnset, abruptEarly, abruptRest);
 
+        smoothOnset.report ("Vorbeiflug weich, Einsatz");
         smoothEarly.report ("Vorbeiflug weich, Start");
+        abruptOnset.report ("Vorbeiflug Knall, Einsatz");
         abruptEarly.report ("Vorbeiflug Knall, Start");
 
         // Ein Vorbeiflug fliegt vom ERSTEN Moment an mit voller Geschwindigkeit
@@ -986,35 +1037,37 @@ int main()
             constexpr double tolerance   = 0.05;   // 5 %
 
             std::printf ("%-22s Quelltempo beim Start %7.1f m/s (Soll %.0f) | Fenster %7.1f .. %7.1f m/s\n",
-                         "Vorbeiflug Anlauf", smoothEarly.speedFirst, flySpeedMps,
-                         smoothEarly.speedMin, smoothEarly.speedMax);
+                         "Vorbeiflug Anlauf", smoothOnset.speedFirst, flySpeedMps,
+                         smoothOnset.speedMin, smoothOnset.speedMax);
 
             // Und dasselbe fuer den Rest des Fluges. Damit ist unterscheidbar,
             // ob die Bahn nur beim Start krumm ist oder durchgehend: nur eine
             // wirklich gerade Bahn mit konstantem Tempo laesst den Loeser alle
             // Wurzeln finden (nachgewiesen in solver_check gegen die
             // geschlossene Loesung).
-            std::printf ("%-22s im weiteren Flug: Fenster %7.1f .. %7.1f m/s (%+.1f %% Schwankung)\n",
-                         "", smoothRest.speedMin, smoothRest.speedMax,
+            std::printf ("%-22s im weiteren Flug: Fenster %7.1f m/s (bei t=%.2fs) .. %7.1f m/s (bei t=%.2fs)"
+                         " (%+.1f %% Schwankung)\n",
+                         "", smoothRest.speedMin, smoothRest.speedMinAtSec,
+                         smoothRest.speedMax, smoothRest.speedMaxAtSec,
                          smoothRest.speedMin > 0.0
                             ? 100.0 * (smoothRest.speedMax - smoothRest.speedMin) / flySpeedMps
                             : 0.0);
 
-            if (std::abs (smoothEarly.speedFirst - flySpeedMps) > tolerance * flySpeedMps)
+            if (std::abs (smoothOnset.speedFirst - flySpeedMps) > tolerance * flySpeedMps)
             {
                 std::printf ("FEHLGESCHLAGEN: der Vorbeiflug startet mit %.1f m/s statt %.0f - "
                              "die Quelle laeuft erst an und durchfaehrt dabei jede "
                              "Geschwindigkeit darunter\n",
-                             smoothEarly.speedFirst, flySpeedMps);
+                             smoothOnset.speedFirst, flySpeedMps);
                 failed = true;
             }
 
-            if (smoothEarly.speedMin < flySpeedMps * (1.0 - tolerance)
-                || smoothEarly.speedMax > flySpeedMps * (1.0 + tolerance))
+            if (smoothOnset.speedMin < flySpeedMps * (1.0 - tolerance)
+                || smoothOnset.speedMax > flySpeedMps * (1.0 + tolerance))
             {
                 std::printf ("FEHLGESCHLAGEN: das Quelltempo schwankt im Anflug zwischen %.1f und "
                              "%.1f m/s, erlaubt sind %.0f +/- %.0f %%\n",
-                             smoothEarly.speedMin, smoothEarly.speedMax,
+                             smoothOnset.speedMin, smoothOnset.speedMax,
                              flySpeedMps, 100.0 * tolerance);
                 failed = true;
             }
@@ -1022,10 +1075,10 @@ int main()
         smoothRest.report  ("Vorbeiflug weich, Rest");
 
         std::printf ("%-22s M_r im Startfenster: weich %.2f, Knall %.2f\n",
-                     "", smoothEarly.maxMach, abruptEarly.maxMach);
+                     "", smoothOnset.maxMach, abruptOnset.maxMach);
 
-        const long long nonFinite = smoothEarly.nonFinite + smoothRest.nonFinite
-                                  + abruptEarly.nonFinite + abruptRest.nonFinite;
+        const long long nonFinite = smoothOnset.nonFinite + smoothEarly.nonFinite + smoothRest.nonFinite
+                                  + abruptOnset.nonFinite + abruptEarly.nonFinite + abruptRest.nonFinite;
 
         if (nonFinite > 0)
         {
@@ -1043,8 +1096,10 @@ int main()
         // ein Vielfaches lauter als in der Anflugphase.
         if (smoothRest.peak <= 2.0 * smoothEarly.peak)
         {
-            std::printf ("FEHLGESCHLAGEN: kein Vorbeiflug erkennbar (Spitze Anflug %.4f, "
-                         "Vorbeiflug %.4f)\n", smoothEarly.peak, smoothRest.peak);
+            std::printf ("FEHLGESCHLAGEN: kein Vorbeiflug erkennbar (Spitze Anflug %.4f bei t=%.2fs, "
+                         "Vorbeiflug %.4f bei t=%.2fs)\n",
+                         smoothEarly.peak, smoothEarly.peakAtSec,
+                         smoothRest.peak, smoothRest.peakAtSec);
             failed = true;
         }
 
