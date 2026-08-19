@@ -44,6 +44,14 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
                "gegensteuern. Der Bereich nach oben deckt die hohe Dynamik des "
                "Doppler-Materials ab: leiser Direktschall neben lauten Ueberschall-Knallen.");
 
+    setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",
+               "Anteil eines gewoehnlichen Panorama-Reglers, 0 bis 100 %. Bei 0 entsteht das "
+               "Stereobild allein aus der Ohrgeometrie - dort verschiebt eine Kopfdrehung vor "
+               "allem die Laufzeit, der Pegelunterschied zwischen den Ohren ist bei weiter "
+               "Quelle winzig. Hoehere Werte legen den Pegelunterschied darueber. Gerechnet "
+               "wird mit der Richtung, aus der der Schall wirklich kommt, nicht mit der "
+               "aktuellen Position - jede Spiegelung bekommt so ihre eigene Seite.");
+
     setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve",
                "Wie stark die Entfernung auf die Lautstaerke wirkt. Mitte (0) = "
                "physikalisch korrektes 1/R, wie bisher. Nach rechts: faellt schneller "
@@ -158,7 +166,7 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto jitterRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob })
+    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &panAmountKnob })
     {
         layoutKnob (*k, jitterRow.removeFromLeft (knobW));
         jitterRow.removeFromLeft (4);

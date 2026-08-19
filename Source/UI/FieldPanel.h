@@ -43,6 +43,11 @@ private:
 
     Knob fieldMetresKnob, boomLimitKnob, airAbsorbKnob, fadeManualKnob, outputGainKnob;
 
+    // Anteil des gewoehnlichen Pegel-Pannings (@dpa-Feedback) - steht in der
+    // dritten Reihe bei den Jitter-Reglern, wo Platz ist; in der ersten Reihe
+    // reicht die Fensterbreite nicht.
+    Knob panAmountKnob;
+
     // Entfernung -> Amplitude schaerfer/flacher als das physikalische 1/R
     // (@dpa-Skizze "Amp-Verlauf"). Steht bei den Hoehe-Reglern statt in der
     // ersten Reihe, weil dort kein Platz mehr frei ist - thematisch gehoert

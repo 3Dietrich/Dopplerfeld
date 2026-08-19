@@ -17,6 +17,46 @@ void MotionPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apv
     knob.attachment = std::make_unique<SliderAttachment> (apvts, paramID, knob.slider);
 }
 
+void MotionPanel::setSpeedUnit (FieldComponent::SpeedUnit unit, double speedOfSoundMps)
+{
+    // Die drei Regler, die ein Tempo einstellen. Der gespeicherte Wert bleibt in
+    // m/s - umgerechnet wird nur, was im Textfeld steht, und was jemand dort
+    // eintippt, wird zurueckgerechnet.
+    for (auto* k : { &flySpeedKnob, &globalMaxSpeedKnob, &slewVmaxKnob })
+    {
+        const auto suffix = unit == FieldComponent::SpeedUnit::KmH  ? " km/h"
+                          : unit == FieldComponent::SpeedUnit::Mach ? " Mach"
+                                                                    : " m/s";
+
+        k->slider.textFromValueFunction = [unit, speedOfSoundMps, suffix] (double mps)
+        {
+            const double shown = FieldComponent::convertSpeed (mps, speedOfSoundMps, unit);
+
+            // Mach braucht zwei Nachkommastellen, um ueberhaupt etwas zu zeigen;
+            // die beiden anderen Einheiten laufen bis in die Zehntausender und
+            // werden mit Nachkommastellen nur unleserlich.
+            return juce::String (shown, unit == FieldComponent::SpeedUnit::Mach ? 2 : 0) + suffix;
+        };
+
+        k->slider.valueFromTextFunction = [unit, speedOfSoundMps] (const juce::String& text)
+        {
+            const double typed = text.getDoubleValue();
+
+            switch (unit)
+            {
+                case FieldComponent::SpeedUnit::KmH:  return typed / 3.6;
+                case FieldComponent::SpeedUnit::Mach: return typed * std::max (1.0, speedOfSoundMps);
+                case FieldComponent::SpeedUnit::Ms:
+                default:                              return typed;
+            }
+        };
+
+        // Ohne das behaelt das Textfeld die alte Beschriftung, bis jemand den
+        // Regler anfasst.
+        k->slider.updateText();
+    }
+}
+
 void MotionPanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 {
     knob.label.setBounds (cell.removeFromTop (18));

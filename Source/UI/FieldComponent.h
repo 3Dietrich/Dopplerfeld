@@ -53,15 +53,22 @@ public:
     void setViewMode (ViewMode mode);
     ViewMode getViewMode() const { return viewMode; }
 
-    // Tempo-Einheit fuer das Cockpit-Display (@dpa-Feedback), dieselbe Auswahl
-    // wie der speedUnitButton in der Statuszeile - der Editor haelt die
-    // Auswahl (kein Parameter, reine Anzeigefrage), reicht sie hier nur durch.
+    // Tempo-Einheit fuer Umrechnung/Textdarstellung (convertSpeed/formatSpeed
+    // unten). Das Cockpit-Display selbst zeigt seit 20260819 immer alle drei
+    // Einheiten gleichzeitig nebeneinander (drawSpeedReadout) und braucht
+    // diese Auswahl folglich nicht mehr - der Typ bleibt hier, weil
+    // PluginEditor ihn als Alias fuer seinen eigenen speedUnitButton-Zustand
+    // weiterverwendet (Statuszeile, Regler-Geschwindigkeitszeile).
     enum class SpeedUnit { KmH, Ms, Mach };
-    void setSpeedUnit (SpeedUnit unit);
 
-    // Textdarstellung eines Tempos in der gewaehlten Einheit - gemeinsam
-    // genutzt von der Statuszeile (PluginEditor::statusText()) und dem
-    // Cockpit-Display hier, damit es nur eine Formel/Einheiten-Zuordnung gibt.
+    // Reine Umrechnung ohne Text/Padding - von formatSpeed() UND vom
+    // dreispaltigen Cockpit-Display (drawSpeedReadout) genutzt, damit die
+    // Umrechnungsformel nur an einer Stelle steht.
+    static double convertSpeed (double sourceSpeedMps, double speedOfSoundMps, SpeedUnit unit);
+
+    // Textdarstellung eines Tempos in der gewaehlten Einheit, feste
+    // Zeichenbreite, Wert und Einheit auf einer Zeile. Genutzt von der
+    // Statuszeile (PluginEditor::statusText()).
     static juce::String formatSpeed (double sourceSpeedMps, double speedOfSoundMps, SpeedUnit unit);
 
     // Nachlauf nach mouseUp() (@dpa-Feedback): Quelle/Hoerer laufen mit der
@@ -243,7 +250,6 @@ private:
     DragTarget dragTarget = DragTarget::none;
 
     ViewMode viewMode = ViewMode::TopDown;
-    SpeedUnit speedUnit = SpeedUnit::KmH;
 
     // Naheste Tiefe, die noch abgebildet wird. Alles davor waechst ins
     // Unendliche und gehoert nicht ins Bild.

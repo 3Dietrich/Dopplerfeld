@@ -117,6 +117,13 @@ public:
     // Druckwellen-/N-Wellen-Schicht, siehe PropagationPath::setNWave().
     void setNWave (bool shouldBeEnabled, double sizeMetres);
 
+    // Anteil des gewoehnlichen Pegel-Pannings, 0..1 (siehe
+    // PropagationPath::setPanning). Wird pro Block an die Pfade gereicht, weil
+    // er von der Kopfausrichtung abhaengt und nicht im Pfad gespeichert bleiben
+    // darf.
+    void   setPanoramaAmount (double amount01) { panoramaAmount01 = amount01; }
+    double panoramaAmount() const { return panoramaAmount01; }
+
     // Reflektierende Flächen. Index 0 ist der Direktschall (immer an, keine
     // Spiegelung), Index 1 der Boden, danach die Wände.
     //
@@ -400,6 +407,8 @@ private:
     double boomLimitDb    = 30.0;
     double airAbsorbAmount = 1.0;
     double distanceCurve   = 0.0;
+
+    double panoramaAmount01 = 0.0;
 
     bool   nWaveOn    = false;
     double nWaveSizeM = 15.0;

@@ -2,6 +2,7 @@
 
 #include "../Params.h"
 #include "RoundedSlider.h"
+#include "FieldComponent.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -52,6 +53,15 @@ private:
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                      const juce::String& paramID, const juce::String& labelText,
                      const juce::String& tooltip = {});
+
+public:
+    // Einheit der drei Tempo-Regler (@dpa 20260819: "ich kann mit m/s schlecht
+    // rechnen"). Sie haengen am selben Hauptschalter wie die Anzeige im Feld,
+    // damit es nur EINE Stelle gibt, an der die Einheit umgestellt wird.
+    // Gespeichert wird weiterhin in m/s - umgerechnet wird nur die Beschriftung.
+    void setSpeedUnit (FieldComponent::SpeedUnit unit, double speedOfSoundMps);
+
+private:
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     // Slew Vmax/Amax sind nur bei Smoother "Slew Limiter" ueberhaupt wirksam

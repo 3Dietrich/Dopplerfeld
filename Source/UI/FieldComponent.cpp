@@ -65,34 +65,32 @@ void FieldComponent::setSpeedOfSound (double metresPerSecond)
     repaint();
 }
 
-void FieldComponent::setSpeedUnit (SpeedUnit unit)
+double FieldComponent::convertSpeed (double sourceSpeedMps, double speedOfSoundMps, SpeedUnit unit)
 {
-    if (speedUnit == unit)
-        return;
+    switch (unit)
+    {
+        case SpeedUnit::KmH:  return sourceSpeedMps * 3.6;
+        case SpeedUnit::Ms:   return sourceSpeedMps;
+        case SpeedUnit::Mach: return sourceSpeedMps / juce::jmax (1.0, speedOfSoundMps);
+    }
 
-    speedUnit = unit;
-    repaint();
+    return sourceSpeedMps;
 }
 
 juce::String FieldComponent::formatSpeed (double sourceSpeedMps, double speedOfSoundMps, SpeedUnit unit)
 {
-    double value = 0.0;
-    const char* label = "";
-
-    switch (unit)
-    {
-        case SpeedUnit::KmH:  value = sourceSpeedMps * 3.6;                                    label = "km/h"; break;
-        case SpeedUnit::Ms:   value = sourceSpeedMps;                                          label = "m/s";  break;
-        case SpeedUnit::Mach: value = sourceSpeedMps / juce::jmax (1.0, speedOfSoundMps);       label = "Mach"; break;
-    }
+    const double value = convertSpeed (sourceSpeedMps, speedOfSoundMps, unit);
+    const char* label = unit == SpeedUnit::KmH ? "km/h" : unit == SpeedUnit::Ms ? "m/s" : "Mach";
 
     // Feste Breite (@dpa-Feedback "Langsamkeit der Anzeigewahrnehmung"): egal
-    // ob 0 oder 100 km/h, Zahl und Einheit duerfen im laufenden Betrieb nicht
-    // seitlich wandern - nur die Ziffern selbst duerfen sich aendern. Beide
-    // Abnehmer (Cockpit-Display hier und PluginEditor::statusText()) bekommen
-    // deshalb schon hier eine auf Zeichenbreite feste Zeichenkette statt sie
-    // selbst nachtraeglich padden zu muessen.
-    return juce::String::formatted ("%6.1f %-4s", value, label);
+    // wie viele Stellen die Zahl gerade hat, Zahl und Einheit duerfen im
+    // laufenden Betrieb nicht seitlich wandern - nur die Ziffern selbst
+    // duerfen sich aendern. 9 Stellen vor dem Komma decken auch km/h beim
+    // groessten einstellbaren Tempo ab (100000 m/s = 360000 km/h), ohne dass
+    // etwas abgeschnitten wird. Alle Abnehmer (Anzeige im Feld, Statuszeile,
+    // Tempo-Regler) bekommen die Zeichenkette damit schon hier auf fester
+    // Breite, statt selbst nachtraeglich padden zu muessen.
+    return juce::String::formatted ("%9.1f %-4s", value, label);
 }
 
 // ---- Koordinatenumrechnung -------------------------------------------------
@@ -180,13 +178,62 @@ void FieldComponent::paint (juce::Graphics& g)
 void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
 {
     // Cockpit-Tempoanzeige (@dpa-Feedback: "wie im Cockpit, aber nicht
-    // uebertrieben") - dieselbe Einheit wie die Statuszeile, hier aber gross
-    // und direkt im schwarzen Feld statt nur klein unten im Text. Alpha-Gelb
-    // #ffff0055, oben rechts, ~140x50px. Kontrastarmer Rahmen statt eines
+    // uebertrieben"). Alle drei Einheiten stehen gleichzeitig nebeneinander
+    // (Mach, m/s, km/h), die Einheit klein unter der jeweiligen Zahl - @dpa
+    // kann mit m/s schlecht rechnen und will nicht erst umschalten muessen.
+    // Alpha-Gelb #ffff0055, oben rechts. Kontrastarmer Rahmen statt eines
     // hellen (siehe Sanfte-Rahmen-Konvention) - das soll ins Bild einsinken,
     // nicht draufkleben.
-    constexpr int w = 140;
-    constexpr int h = 50;
+    //
+    // Pixelfest (@dpa-Regel "Zahlenanzeige pixelfest", wichtigste Vorgabe
+    // hier): jede Spalte bekommt eine FESTE Zeichenzahl (printf-Padding),
+    // gezeichnet in Monospace (gleiche Glyphenbreite fuer jede Ziffer) - nur
+    // die Ziffern selbst duerfen wechseln, nie Spaltenbreite oder Position.
+    // Die Breite je Spalte ist auf den vollen Reglerbereich bemessen
+    // (globalMaxSpeed geht bis 100000 m/s = 360000 km/h, s. Params.cpp), nicht
+    // auf den ueblichen Fall: sonst schneidet eine zu schmale Box den Text ab,
+    // und JUCE tut das ohne Auslassungszeichen, also unbemerkt.
+    struct Column { double value; int intDigits; int decimals; const char* unit; };
+
+    const Column columns[3] =
+    {
+        // Mach bis ca. 8 im Normalfall, aber ohne verstecktes Limit bis zum
+        // theoretischen Maximum von globalMaxSpeed/langsamster Schallgeschw.
+        // (~300) - 3 Vorkommastellen lassen dafuer Luft, ohne die Spalte
+        // unnoetig breit zu machen.
+        { convertSpeed (displaySpeedMps, displaySpeedOfSoundMps, SpeedUnit::Mach), 3, 2, "Mach" },
+        { convertSpeed (displaySpeedMps, displaySpeedOfSoundMps, SpeedUnit::Ms),   6, 1, "m/s"  },
+        { convertSpeed (displaySpeedMps, displaySpeedOfSoundMps, SpeedUnit::KmH),  6, 1, "km/h" },
+    };
+
+    const juce::Font numberFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 15.0f, juce::Font::bold));
+    const juce::Font unitFont   (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 9.5f, juce::Font::plain));
+
+    // Spaltenbreiten aus der festen Zeichenzahl je Spalte, NICHT aus dem
+    // aktuellen Zahlenwert - die Box selbst haengt damit an keiner Stelle vom
+    // gerade angezeigten Tempo ab und kann folglich nicht "zappeln". Punkt
+    // zaehlt als eigenes Zeichen mit (Vorkommastellen + Punkt + Nachkommastellen).
+    const float digitWidth = juce::GlyphArrangement::getStringWidth (numberFont, "0");
+    constexpr int columnGap = 12;
+    constexpr int sidePad   = 8;
+    constexpr int topPad    = 6;
+    constexpr int numberRowHeight = 20;
+    constexpr int unitRowHeight   = 13;
+
+    int columnWidths[3] {};
+    int contentWidth = 0;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        const int chars = columns[i].intDigits + 1 + columns[i].decimals; // +1 fuer den Dezimalpunkt
+        columnWidths[i] = (int) std::ceil (digitWidth * (float) chars);
+        contentWidth += columnWidths[i];
+    }
+
+    contentWidth += columnGap * 2; // zwei Luecken zwischen drei Spalten
+
+    const int w = sidePad * 2 + contentWidth;
+    const int h = topPad * 2 + numberRowHeight + unitRowHeight;
     const juce::Rectangle<int> box (getWidth() - w - 10, 10, w, h);
 
     const juce::Colour hudYellow (0xffffff00);
@@ -196,16 +243,32 @@ void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
     g.setColour (hudYellow.withAlpha (0.22f));
     g.drawRoundedRectangle (box.toFloat().reduced (0.5f), 4.0f, 1.0f);
 
-    const juce::String text = formatSpeed (displaySpeedMps, displaySpeedOfSoundMps, speedUnit);
+    int x = box.getX() + sidePad;
+    const int numberY = box.getY() + topPad;
+    const int unitY   = numberY + numberRowHeight;
 
-    // Monospace statt Proportionalschrift (@dpa-Feedback "Langsamkeit der
-    // Anzeigewahrnehmung"): erst bei fester Zeichenbreite pro Glyphe haelt die
-    // feste Zeichenbreite aus formatSpeed() die Anzeige auch pixelgenau
-    // stehen - in einer Proportionalschrift waeren "1" und "0" unterschiedlich
-    // breit und die Zahl würde bei jeder Ziffernaenderung minimal ruckeln.
-    g.setColour (hudYellow.withAlpha (0x55 / 255.0f));
-    g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 26.0f, juce::Font::bold)));
-    g.drawText (text, box.reduced (6), juce::Justification::centred, false);
+    for (int i = 0; i < 3; ++i)
+    {
+        const auto& col = columns[i];
+
+        // Dynamisches printf-Format aus fester Vor-/Nachkommastellenzahl -
+        // dieselbe Feldbreite bei jedem Aufruf, egal wie gross der Wert ist.
+        const juce::String fmt = "%" + juce::String (col.intDigits + 1 + col.decimals)
+                                      + "." + juce::String (col.decimals) + "f";
+        const juce::String numberText = juce::String::formatted (fmt.toRawUTF8(), col.value);
+
+        g.setColour (hudYellow.withAlpha (0x55 / 255.0f));
+        g.setFont (numberFont);
+        g.drawText (numberText, x, numberY, columnWidths[i], numberRowHeight,
+                    juce::Justification::centred, false);
+
+        g.setColour (hudYellow.withAlpha (0x40 / 255.0f));
+        g.setFont (unitFont);
+        g.drawText (col.unit, x, unitY, columnWidths[i], unitRowHeight,
+                    juce::Justification::centred, false);
+
+        x += columnWidths[i] + columnGap;
+    }
 }
 
 void FieldComponent::drawWalls (juce::Graphics& g) const

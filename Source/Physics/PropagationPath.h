@@ -154,6 +154,35 @@ public:
 
     // Phase 2 (Plan 2.7 / Abschnitt 7). In Phase 1 ohne Wirkung, damit später
     // kein Aufrufer geändert werden muss.
+    // Klassisches Pegel-Panning zusaetzlich zur Ohrgeometrie (@dpa 20260819:
+    // "bitte noch ein normales Panning fuer die Kopfdrehung anbieten, also den
+    // Anteil des normalen pannings von 0 - 100%").
+    //
+    // Die Ohrgeometrie allein verschiebt das Stereobild bei einer Kopfdrehung
+    // fast nur ueber die Laufzeit. Der Pegelunterschied zwischen den beiden
+    // Ohren ist bei einer weit entfernten Quelle winzig - der Kopf dreht sich,
+    // im Stereobild passiert wenig. Das hier legt den Pegelunterschied darueber,
+    // den ein gewoehnlicher Panorama-Regler machen wuerde.
+    //
+    // Gerechnet wird mit der Richtung, aus der der Schall TATSAECHLICH kommt,
+    // also von der retardierten Quellposition zum Ohr. Nur so eilt das
+    // Stereobild dem Klang nicht voraus: bei 400 m/s liegt zwischen der Stelle,
+    // an der die Quelle gerade ist, und der, aus der man sie hoert, ein
+    // erheblicher Winkel. Jede Spiegelung bekommt darueber automatisch ihre
+    // eigene Richtung - eine Wandreflexion von links kommt von links.
+    //
+    // amount 0 laesst alles wie zuvor, 1 ist volles Panorama. right ist die
+    // Rechts-Achse des Kopfes in Weltkoordinaten (siehe Listener.h), rightEar
+    // waehlt das Ohr. Nach setTransform() aufrufen.
+    void setPanning (double amount, Vec3 right, bool rightEar);
+
+private:
+    // Pegelfaktor dieses Ohres fuer Schall, der aus Richtung incoming kommt
+    // (Einheitsvektor, vom Ohr zur Quelle). Siehe setPanning().
+    double panoramaGain (Vec3 incoming) const;
+
+public:
+
     void setNearFieldEnabled (bool shouldBeEnabled) { nearFieldOn = shouldBeEnabled; }
     void setDominantFrequencyHz (double hz) { dominantFreqHz = hz; }
 
@@ -487,6 +516,11 @@ private:
     // der Klang ohnehin abgeklungen und eine Übergabe würde einen alten
     // Filterzustand in einen neuen Hörweg tragen.
     static constexpr double handoverMaxAgeSeconds = 20.0e-3;
+
+    // Panorama-Anteil samt Kopfachse und Ohr, siehe setPanning().
+    double panAmount   = 0.0;
+    Vec3   panRight    { 1.0, 0.0, 0.0 };
+    bool   panRightEar = false;
 
     bool   nearFieldOn     = false;
     double dominantFreqHz  = 0.0;

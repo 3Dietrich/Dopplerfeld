@@ -416,6 +416,7 @@ private:
         std::atomic<float>* fadeAuto     = nullptr;
         std::atomic<float>* fadeManualMs = nullptr;
 
+        std::atomic<float>* panAmount  = nullptr;
         std::atomic<float>* outputGain = nullptr;
         std::atomic<float>* limiterOn  = nullptr;
     };

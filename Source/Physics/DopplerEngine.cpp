@@ -115,6 +115,9 @@ void DopplerEngine::PathSet::renderInto (juce::AudioBuffer<float>& dest, int num
 
         const bool rightEar = (recipe.ear != 0);
 
+        // Nach setTransform(), siehe dort: die Kopfachse wird mitgespiegelt.
+        paths[i].setPanning (engine->panoramaAmount(), listenerRight (prevListener), rightEar);
+
         const Vec3 pos = earPosition (prevListener, rightEar);
         const Vec3 vel = earVelocity (prevListener, headVel, yawRate, rightEar);
 

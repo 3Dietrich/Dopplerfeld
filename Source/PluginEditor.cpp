@@ -147,8 +147,9 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     viewButton.setButtonText ("Ansicht: Draufsicht");
     addAndMakeVisible (viewButton);
 
-    speedUnitButton.setTooltip ("Tempo-Einheit fuer die Statuszeile umschalten "
-                                "(km/h, m/s, Mach).");
+    speedUnitButton.setTooltip ("Tempo-Einheit umschalten (km/h, m/s, Mach). Gilt fuer die "
+                                "Anzeige im Feld, die Statuszeile UND die Werte an den "
+                                "Tempo-Reglern Fly Speed, Max Speed und Slew Vmax.");
     speedUnitButton.setButtonText ("km/h");
     speedUnitButton.onClick = [this]
     {
@@ -158,8 +159,17 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         speedUnitButton.setButtonText (speedUnit == SpeedUnit::KmH ? "km/h"
                                       : speedUnit == SpeedUnit::Ms  ? "m/s"
                                                                     : "Mach");
+
+        // Die Tempo-Regler haengen am selben Schalter (@dpa: "oder du schaltest
+        // beim Hauptschalter die Value Anzeige des Knobs um").
+        motionPanel.setSpeedUnit (speedUnit, displayAverages.speedOfSoundMps);
     };
     addAndMakeVisible (speedUnitButton);
+
+    // Anfangszustand der Regler-Beschriftung, passend zum Schaltertext oben.
+    // 343 m/s ist die Schallgeschwindigkeit bei den fest eingestellten 20 Grad;
+    // beim Umschalten wird der gemessene Wert benutzt.
+    motionPanel.setSpeedUnit (speedUnit, 343.0);
 
     engineResetButton.setTooltip ("Audiomotor neu anlassen: kompletter prepareToPlay()-"
                                   "Durchlauf wie bei einem Wechsel der Audio-Puffergroesse "
@@ -332,7 +342,6 @@ void DopplerfeldEditor::refreshDisplay()
     updateDisplayAverages();
 
     field.setFieldMetres ((double) *dopplerfeldProcessor.apvts.getRawParameterValue (Params::fieldMetres));
-    field.setSpeedUnit (speedUnit);
     field.setSnapshot (snapshot);
     field.setDisplaySpeed (displayAverages.speedMps, displayAverages.speedOfSoundMps);
 
@@ -521,9 +530,11 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     // laenger, mal kuerzer wird - dann "atmet" die ganze Zeile mit, selbst
     // die fest gepaddeten Spalten davor. drawText() zeichnet immer in der
     // gesetzten Groesse und schneidet im Zweifel einfach ab.
+    const int statusTop = getHeight() - statusHeight;
+
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 16.0f, juce::Font::plain)));
     g.drawText (statusText(),
-                margin, getHeight() - statusHeight, fieldWidth, statusHeight,
+                margin, statusTop, fieldWidth, statusHeight,
                 juce::Justification::centredLeft, false);
 }
 

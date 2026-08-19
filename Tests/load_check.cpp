@@ -1264,6 +1264,82 @@ int main()
     }
 
     //==================================================================
+    // 1g3. Gewoehnliches Pegel-Panning (@dpa 20260819: "bitte noch ein normales
+    //      Panning fuer die Kopfdrehung anbieten, also den Anteil des normalen
+    //      pannings von 0 - 100%").
+    //
+    //      Geprueft wird der Pegelunterschied zwischen links und rechts bei
+    //      einer ruhenden Quelle seitlich vom Hoerer. Drei Faelle, weil erst sie
+    //      zusammen zeigen, dass der Regler das Richtige tut:
+    //        - 0 %: das Stereobild kommt allein aus der Ohrgeometrie, beide
+    //          Seiten sind praktisch gleich laut.
+    //        - 100 %: die Seite, auf der die Quelle steht, ist deutlich lauter.
+    //        - 100 % mit um 180 Grad gedrehtem Kopf: es kehrt sich um. Erst
+    //          damit ist gezeigt, dass das Panning am KOPF haengt und nicht an
+    //          der Weltachse.
+    {
+        auto sideTest = [&] (float panPercent, float yawDegrees, Stats& stats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 400.0f);
+            setParam (proc, Params::lisX,   0.5f);
+            setParam (proc, Params::lisY,   0.5f);
+            setParam (proc, Params::lisYaw, yawDegrees);
+            setParam (proc, Params::srcX,   0.75f);   // Quelle rechts vom Hoerer
+            setParam (proc, Params::srcY,   0.5f);
+            setParam (proc, Params::panAmount, panPercent);
+            setParam (proc, Params::groundReflectionOn, 0.0f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            render (proc, buffer, 1.0, stats, [] (double) {});
+        };
+
+        Stats flat, panned, turned;
+
+        sideTest (0.0f,   0.0f,   flat);
+        sideTest (100.0f, 0.0f,   panned);
+        sideTest (100.0f, 180.0f, turned);
+
+        auto ratioDb = [] (const Stats& s)
+        {
+            const double half = std::max (1.0, (double) s.samples * 0.5);
+            const double l = std::max (1.0e-12, std::sqrt (s.sumSquares[0] / half));
+            const double r = std::max (1.0e-12, std::sqrt (s.sumSquares[1] / half));
+            return 20.0 * std::log10 (r / l);
+        };
+
+        std::printf ("%-22s R gegen L: ohne Panning %+.2f dB | mit %+.2f dB | Kopf gedreht %+.2f dB\n",
+                     "Panning", ratioDb (flat), ratioDb (panned), ratioDb (turned));
+
+        if (std::abs (ratioDb (flat)) > 1.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: ohne Panning stehen die Seiten schon %+.2f dB "
+                         "auseinander - der Regler ist nicht mehr der Ausgangspunkt\n",
+                         ratioDb (flat));
+            failed = true;
+        }
+
+        if (ratioDb (panned) < 6.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: bei 100 %% Panning ist die Quellseite nur %+.2f dB "
+                         "lauter - das Panning wirkt nicht\n", ratioDb (panned));
+            failed = true;
+        }
+
+        if (ratioDb (turned) > -6.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: der um 180 Grad gedrehte Kopf hoert die Quelle mit "
+                         "%+.2f dB immer noch rechts - das Panning haengt nicht am Kopf\n",
+                         ratioDb (turned));
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // 1h. N-Wellen-Schicht. Zwei Dinge sind hier zu zeigen, und das zweite ist
     //     das wichtigere:
     //

@@ -67,6 +67,14 @@ private:
     // displayAverages, nicht den rohen 30Hz-Snapshot (s. updateDisplayAverages()).
     juce::String statusText() const;
 
+    // Zweite, kleinere Zeile unter der Statuszeile (@dpa-Feedback 20260819:
+    // "ich kann mit m/s schlecht rechnen") - zeigt Fly Speed/Max Speed/Slew
+    // Vmax (die drei Bewegungs-Regler in m/s) in der am speedUnitButton
+    // gewaehlten Einheit, gekoppelt an denselben Schalter wie statusText()
+    // und das Cockpit-Display im Feld. Die Regler selbst (MotionPanel) zeigen
+    // weiterhin ihren m/s-Rohwert im eigenen Textfeld - diese Zeile ist die
+    // gewaehlte Variante der Umrechnung, ohne MotionPanel anzufassen.
+
     // @dpa-Feedback ("Langsamkeit der Anzeigewahrnehmung", 20260818): Tempo,
     // L-M-Abstand und CPU-Last werden ueber ein 0.5s-Fenster gemittelt und nur
     // alle 0.5s aktualisiert, statt bei jedem 33ms-Tick den zappelnden Rohwert

@@ -183,6 +183,11 @@ namespace Params
     constexpr const char* fadeAuto     = "fadeAuto";
     constexpr const char* fadeManualMs = "fadeManualMs";
 
+    // Anteil des gewoehnlichen Pegel-Pannings, 0..100 % (@dpa 20260819: "bitte
+    // noch ein normales Panning fuer die Kopfdrehung anbieten"). 0 laesst das
+    // Stereobild allein aus der Ohrgeometrie entstehen, wie zuvor.
+    constexpr const char* panAmount = "panAmount";
+
     // --- Ausgang ---
     constexpr const char* outputGain = "outputGain";
     constexpr const char* limiterOn  = "limiterOn";

@@ -224,6 +224,44 @@ int PropagationPath::freeSlot()
     return victim;
 }
 
+double PropagationPath::panoramaGain (Vec3 incoming) const
+{
+    // Seitlichkeit: -1 ganz links, 0 genau voraus (oder dahinter), +1 ganz
+    // rechts. Nach vorn und nach hinten ist das Ergebnis dasselbe - genau wie
+    // bei einem gewoehnlichen Panorama-Regler, der auch nur eine Achse kennt.
+    // Die Unterscheidung vorn/hinten macht weiterhin die Ohrgeometrie ueber die
+    // Laufzeit; dieses Panning legt sich nur darueber.
+    const double side = std::clamp (incoming.dot (panRight), -1.0, 1.0);
+
+    // Gleichbleibende Leistung: L = cos(x), R = sin(x) mit x von 0 (ganz links)
+    // bis pi/2 (ganz rechts). Durch cos(pi/4) geteilt, damit eine Quelle genau
+    // voraus bei jedem Anteil gleich laut bleibt und der Regler die Lautstaerke
+    // nicht mitzieht.
+    constexpr double pi     = 3.14159265358979323846;
+    constexpr double sqrtTwo = 1.41421356237309504880;
+
+    const double x    = (side + 1.0) * 0.25 * pi;
+    const double full = sqrtTwo * (panRightEar ? std::sin (x) : std::cos (x));
+
+    return 1.0 + panAmount * (full - 1.0);
+}
+
+void PropagationPath::setPanning (double amount, Vec3 right, bool rightEar)
+{
+    panAmount   = std::clamp (amount, 0.0, 1.0);
+    panRightEar = rightEar;
+
+    // Gerechnet wird im Koordinatensystem dieses Pfades, in dem der Empfaenger
+    // gespiegelt ist (siehe PathTransform). Die Seitlichkeit ist ein
+    // Skalarprodukt, und die Abbildung ist eine Isometrie - deshalb genuegt es,
+    // die Rechts-Achse des Kopfes einmal mitzuspiegeln, statt jede einzelne
+    // Einfallsrichtung zurueckzurechnen. Ohne das kaeme die Reflexion an einer
+    // seitlichen Wand von der falschen Seite.
+    //
+    // Muss deshalb NACH setTransform() aufgerufen werden.
+    panRight = applyPathTransformVelocity (transform, right);
+}
+
 void PropagationPath::evaluateRoot (const SourceTrajectory& traj,
                                     const Root& root,
                                     Vec3   recvPos,
@@ -265,15 +303,23 @@ void PropagationPath::evaluateRoot (const SourceTrajectory& traj,
     // zurück. Ohne diesen Term stimmte die Verzögerungssteigung nicht, sobald
     // der Kopf bewegt oder gedreht wird - und genau das soll hörbar sein.
     double machListener = 0.0;
+    double panGain      = 1.0;
 
-    if (recvVel.lengthSquared() > 0.0)
+    if (recvVel.lengthSquared() > 0.0 || panAmount > 0.0)
     {
-        Vec3 sourcePos, sourceVel;
+        Vec3 sourcePos;
 
-        if (traj.sampleAt (root.t_e, sourcePos, sourceVel))
+        if (traj.samplePositionAt (root.t_e, sourcePos))
         {
+            // Zeigt vom Ort der Aussendung zum Ohr, ist also die Richtung, in
+            // die der Schall unterwegs war.
             const Vec3 uHat = (recvPos - sourcePos).normalised();
-            machListener    = uHat.dot (recvVel) / c;
+
+            if (recvVel.lengthSquared() > 0.0)
+                machListener = uHat.dot (recvVel) / c;
+
+            if (panAmount > 0.0)
+                panGain = panoramaGain (-uHat);
         }
     }
 
@@ -285,7 +331,7 @@ void PropagationPath::evaluateRoot (const SourceTrajectory& traj,
     out.present = true;
     out.tau     = 0.0;   // vom Aufrufer gesetzt, er kennt t_h
     out.dTau    = (machListener - mr) / signedDenom;
-    out.amp     = amp;
+    out.amp     = amp * panGain;
     out.R       = R;
     out.mach    = mr;
     out.lpCoeff = lowpassCoeff (R);

@@ -301,6 +301,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.fadeAuto     = raw (Params::fadeAuto);
     pp.fadeManualMs = raw (Params::fadeManualMs);
 
+    pp.panAmount  = raw (Params::panAmount);
     pp.outputGain = raw (Params::outputGain);
     pp.limiterOn  = raw (Params::limiterOn);
 
@@ -569,6 +570,8 @@ void DopplerfeldProcessor::applyParameters()
                                                  (double) pp.lisZ->load());
 
     targetYawRadians         = juce::degreesToRadians ((double) pp.lisYaw->load());
+
+    dopplerEngine.setPanoramaAmount (0.01 * (double) pp.panAmount->load());
     listenerState.earSpacing = (double) pp.earSpacing->load();
 
     sourceJitter.setAmount ((double) pp.srcJitterAmount->load());

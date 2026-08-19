@@ -329,6 +329,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (fadeManualMs, "Fade Manual", { 5.0f, 500.0f, 0.1f }, 50.0f, "ms"));
 
     // --- Ausgang ---
+    layout.add (floatParam (panAmount, "Panning", { 0.0f, 100.0f, 1.0f }, 0.0f, "%"));
+
     layout.add (floatParam (outputGain, "Output Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
     layout.add (boolParam (limiterOn, "Limiter", true));
 
