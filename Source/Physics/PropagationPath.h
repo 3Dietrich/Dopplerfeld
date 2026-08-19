@@ -221,6 +221,11 @@ public:
         std::uint64_t newIds      = 0;
         std::uint64_t newIdsNear  = 0;
         std::uint64_t orderMatches = 0;
+        std::uint64_t rootHist[8] {};
+        std::uint64_t countFlips    = 0;
+        std::uint64_t collapsed     = 0;
+        std::uint64_t tightPairs    = 0;
+        std::uint64_t adjacentPairs = 0;
         std::uint64_t droppedRoots = 0;
     };
 
@@ -240,6 +245,14 @@ public:
         s.newIds        = solver.newIdCount();
         s.newIdsNear    = solver.newIdNearCount();
         s.orderMatches  = solver.orderMatchCount();
+
+        for (int i = 0; i < 8; ++i)
+            s.rootHist[i] = solver.rootCountBucket (i);
+
+        s.countFlips    = solver.rootCountFlips();
+        s.collapsed     = solver.collapsedTrackCount();
+        s.tightPairs    = solver.tightPairCount();
+        s.adjacentPairs = solver.adjacentPairCount();
         s.droppedRoots  = (std::uint64_t) std::max (0, solver.droppedRoots());
         return s;
     }

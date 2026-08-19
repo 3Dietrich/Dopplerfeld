@@ -365,6 +365,9 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
             {
                 if (cand[i].id < 0)
                     cand[i].id = id;   // die verfolgte Identität gewinnt
+                else if (id >= 0 && cand[i].id != id)
+                    ++collapsedTracks; // zwei Zweige auf derselben Wurzel
+
                 return;
             }
         }
@@ -377,18 +380,56 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
 
     // Schritt 2 (Plan 2.10): bekannte Zweige nachführen. Immer, weil billig -
     // und weil nur so die ids über Aufrufe hinweg stabil bleiben.
+    //
+    // BEFUND zum Flackern im Überschall (@dpa 20260819), damit niemand die
+    // beiden schon geprüften Wege noch einmal geht:
+    //
+    // Gemessen landen zwei nachgeführte Zweige 291 Mal auf DERSELBEN Wurzel.
+    // Das Zusammenfassen wirft dann eine der beiden Identitäten weg, aus drei
+    // Hörwegen wird einer, und der nächste Vollscan lässt das Paar mit NEUEN
+    // Identitäten wiederauferstehen - mit frischer Hüllkurve und frischem
+    // Filter. Dazu passen 295 neue Identitäten und 342 Wechsel der Wurzelzahl,
+    // wo ein sauberer Überflug mit zwei auskommt.
+    //
+    // Zwei naheliegende Abhilfen wurden gebaut, gemessen und wieder verworfen:
+    //
+    //   1. Suchfenster nach unten auf die Wurzel des vorigen Zweigs begrenzen.
+    //      Die Kollisionen gingen damit auf null - aber die Suche fand die
+    //      eigene Wurzel dann gar nicht mehr (verlorene Nachführungen 4 -> 293),
+    //      und die harten Abbrüche stiegen von 41,4 auf 48,3 %.
+    //   2. Den Deckel auf |1 - M_r| von 0,05 auf 0,005 verfeinern, damit
+    //      Startwert und Suchbudget der echten Wanderung folgen. Ohne jede
+    //      messbare Wirkung.
+    //
+    // Beides zusammen heisst: der Startwert ist nicht bloss zu kurz, die Wurzel
+    // liegt am Ende eines Solver-Schritts schlicht woanders, als eine
+    // Fortschreibung aus dem letzten Zustand hergibt. Der nächste Ansatz muss
+    // deshalb an der Schrittweite ansetzen (im Überschall häufiger lösen, damit
+    // die Wurzel je Schritt weniger weit wandert), nicht an der Suche.
+
     for (int i = 0; i < branchCount; ++i)
     {
         const Branch& b = branches[i];
 
         const double dt_h = t_h - b.lastT_h;
 
-        // dt_e/dt_h = 1/(1 - M_r) (Plan 2.11). Direkt an der Mach-Front ist
-        // der Nenner ~0 und der Startwert damit wertlos; dort wird er nur
-        // grob gedeckelt, die Bracket-Suche fängt den Rest ab.
+        // dt_e/dt_h = 1/(1 - M_r) (Plan 2.11). Direkt an der Mach-Front geht
+        // der Nenner gegen null und die Wurzel wandert entsprechend weit.
+        //
+        // Der frühere Deckel von 0,05 begrenzte die vorhergesagte Wanderung auf
+        // das 20-fache eines Solver-Schritts. In Wirklichkeit sind an der
+        // Kaustik einige hundert drin (für Mach 2 in 150 m Abstand rund 281).
+        // Der Startwert lag damit systematisch zu kurz, und weil das Suchbudget
+        // aus derselben Grösse gebildet wird (siehe budget unten), reichte auch
+        // die Suche nicht bis zur echten Wurzel. Sie fand dann entweder die des
+        // Nachbarn oder gar keine - beides ein Zweigtod bei vollem Pegel.
+        //
+        // Ihn auf 0,005 zu verfeinern (Wanderung bis zum 200-fachen, Budget
+        // skaliert mit) wurde gemessen und blieb ohne jede Wirkung - siehe
+        // Befund oben. Er steht deshalb weiter auf 0,05.
         double denom = 1.0 - b.machRadial;
-        if (std::abs (denom) < 0.05)
-            denom = (denom < 0.0 ? -0.05 : 0.05);
+        if (std::abs (denom) < denomFloor)
+            denom = (denom < 0.0 ? -denomFloor : denomFloor);
 
         double guess = b.t_e + dt_h / denom;
         guess = std::min (std::max (guess, windowStart), windowEnd);
@@ -471,6 +512,22 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
 
     std::sort (cand, cand + nCand,
                [] (const Candidate& x, const Candidate& y) { return x.t_e < y.t_e; });
+
+    // Messung, siehe rootCountBucket()/tightPairCount().
+    ++rootHistogram[nCand < 8 ? nCand : 7];
+
+    if (lastCandCount >= 0 && nCand != lastCandCount)
+        ++countFlips;
+
+    lastCandCount = nCand;
+
+    for (int i = 1; i < nCand; ++i)
+    {
+        ++adjacentPairs;
+
+        if (cand[i].t_e - cand[i - 1].t_e < 1.0e-3)
+            ++tightPairs;
+    }
 
     // Überlauf über K verwerfen: die ältesten Emissionen fliegen raus, weil
     // die jüngeren den aktuellen Klang tragen.

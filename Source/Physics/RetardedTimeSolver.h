@@ -103,6 +103,41 @@ public:
     // Wie oft die Zuordnung ueber die Reihenfolge gegriffen hat.
     std::uint64_t orderMatchCount() const { return orderMatched; }
 
+    // Verteilung der gefundenen Wurzelzahl je Aufruf, und wie eng benachbarte
+    // Wurzeln beieinanderliegen.
+    //
+    // Die Frage dahinter: sind die vielen neuen Wurzeln echt? Physikalisch gibt
+    // es im Ueberschall zwei zusaetzliche Hoerwege, nicht sechs. Findet der
+    // Loeser regelmaessig mehr, und liegen die dicht beieinander, dann sind es
+    // keine Hoerwege, sondern Nulldurchgaenge einer Funktion, die dort fast
+    // flach ist: an der Kaustik gilt F' = -c*(1 - M_r) -> 0, und jede noch so
+    // kleine Welligkeit in R(t_e) erzeugt dann gleich mehrere Vorzeichen-
+    // wechsel. Die Welligkeit kaeme aus der Catmull-Rom-Interpolation der
+    // Trajektorie auf ihrem 1-kHz-Raster.
+    std::uint64_t rootCountBucket (int n) const
+    {
+        return (n >= 0 && n < 8) ? rootHistogram[n] : 0;
+    }
+
+    // Wie oft die Wurzelzahl von einem Aufruf zum naechsten wechselt.
+    //
+    // Ein sauberer Ueberflug hat genau zwei Wechsel: 1 -> 3, wenn der Kegel den
+    // Hoerer erreicht, und 3 -> 1, wenn er ihn wieder verlaesst. Alles darueber
+    // ist Flackern, und jedes Flackern kostet ein Zweigpaar samt Huellkurve und
+    // Filter.
+    std::uint64_t rootCountFlips() const { return countFlips; }
+
+    // Wie oft zwei NACHGEFUEHRTE Zweige auf derselben Wurzel gelandet sind.
+    //
+    // Beim Zusammenfassen gleicher Wurzeln gewinnt die zuerst eingetragene
+    // Identitaet, die zweite faellt weg. Zwei Zweige werden damit zu einem, die
+    // Wurzelzahl sinkt, und beim naechsten Vollscan entsteht das Paar mit neuen
+    // Identitaeten wieder. Das waere das Flackern.
+    std::uint64_t collapsedTrackCount() const { return collapsedTracks; }
+
+    std::uint64_t tightPairCount() const { return tightPairs; }   // Abstand < 1 ms
+    std::uint64_t adjacentPairCount() const { return adjacentPairs; }
+
     // Zähler für verworfene Wurzeln über K hinaus (Plan 2.6: "Ein Überlauf
     // wird verworfen und im Debug-Build gezählt").
     int  droppedRoots() const { return droppedRootCount; }
@@ -164,8 +199,20 @@ private:
     // einem Vorzeichenwechsel.
     double trackStep = 1.0e-3 / 64.0;
 
+    // Untergrenze für |1 - M_r| bei der Fortschreibung eines Zweigs, siehe
+    // ausführliche Begründung an der Verwendungsstelle. Sichtbare
+    // Modellkonstante, kein stiller Deckel: sie bestimmt, wie weit die Suche
+    // einer davongelaufenen Wurzel folgen kann.
+    static constexpr double denomFloor = 0.05;
+
     std::uint64_t trackLost  = 0;
     std::uint64_t newIdGiven = 0;
     std::uint64_t newIdNear  = 0;
     std::uint64_t orderMatched = 0;
+    std::uint64_t rootHistogram[8] {};
+    std::uint64_t countFlips  = 0;
+    std::uint64_t collapsedTracks = 0;
+    int           lastCandCount = -1;
+    std::uint64_t tightPairs    = 0;
+    std::uint64_t adjacentPairs = 0;
 };
