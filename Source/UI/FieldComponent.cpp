@@ -181,9 +181,9 @@ void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
     // uebertrieben"). Alle drei Einheiten stehen gleichzeitig nebeneinander
     // (Mach, m/s, km/h), die Einheit klein unter der jeweiligen Zahl - @dpa
     // kann mit m/s schlecht rechnen und will nicht erst umschalten muessen.
-    // Alpha-Gelb #ffff0055, oben rechts. Kontrastarmer Rahmen statt eines
-    // hellen (siehe Sanfte-Rahmen-Konvention) - das soll ins Bild einsinken,
-    // nicht draufkleben.
+    // Alpha-Gelb #ffff0055, oben rechts. Ohne Rahmen (@dpa 20260819) - nur ein
+    // schwacher Flaechenton dahinter, das soll ins Bild einsinken, nicht
+    // draufkleben.
     //
     // Pixelfest (@dpa-Regel "Zahlenanzeige pixelfest", wichtigste Vorgabe
     // hier): jede Spalte bekommt eine FESTE Zeichenzahl (printf-Padding),
@@ -206,19 +206,23 @@ void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
         { convertSpeed (displaySpeedMps, displaySpeedOfSoundMps, SpeedUnit::KmH),  6, 1, "km/h" },
     };
 
-    const juce::Font numberFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 15.0f, juce::Font::bold));
-    const juce::Font unitFont   (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 9.5f, juce::Font::plain));
+    // @dpa-Feedback (20260819): Zahlen doppelt so gross, dafuer Rahmen weg und
+    // Aussen-/Spaltenabstand deutlich enger - die Anzeige soll dadurch nicht
+    // mehr Platz beanspruchen als vorher. Die Einheit waechst im Verhaeltnis
+    // mit, bleibt aber bewusst klein.
+    const juce::Font numberFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 30.0f, juce::Font::bold));
+    const juce::Font unitFont   (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 13.0f, juce::Font::plain));
 
     // Spaltenbreiten aus der festen Zeichenzahl je Spalte, NICHT aus dem
     // aktuellen Zahlenwert - die Box selbst haengt damit an keiner Stelle vom
     // gerade angezeigten Tempo ab und kann folglich nicht "zappeln". Punkt
     // zaehlt als eigenes Zeichen mit (Vorkommastellen + Punkt + Nachkommastellen).
     const float digitWidth = juce::GlyphArrangement::getStringWidth (numberFont, "0");
-    constexpr int columnGap = 12;
-    constexpr int sidePad   = 8;
-    constexpr int topPad    = 6;
-    constexpr int numberRowHeight = 20;
-    constexpr int unitRowHeight   = 13;
+    constexpr int columnGap = 5;
+    constexpr int sidePad   = 3;
+    constexpr int topPad    = 2;
+    constexpr int numberRowHeight = 38;
+    constexpr int unitRowHeight   = 17;
 
     int columnWidths[3] {};
     int contentWidth = 0;
@@ -238,10 +242,10 @@ void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
 
     const juce::Colour hudYellow (0xffffff00);
 
+    // Kein Rahmen mehr (@dpa 20260819) - nur der schwache Flaechenton bleibt,
+    // der schafft genug Kontrast zum Feld ohne eine Kontur zu ziehen.
     g.setColour (hudYellow.withAlpha (0.06f));
     g.fillRoundedRectangle (box.toFloat(), 4.0f);
-    g.setColour (hudYellow.withAlpha (0.22f));
-    g.drawRoundedRectangle (box.toFloat().reduced (0.5f), 4.0f, 1.0f);
 
     int x = box.getX() + sidePad;
     const int numberY = box.getY() + topPad;
@@ -984,16 +988,23 @@ FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> scre
     const auto nosePx = HeadSymbol::noseTip (headPx, headRadiusPx, yaw);
     const auto sourcePx = worldToScreen (snapshot.sourcePos);
 
-    // Nase zuerst pruefen: sie liegt oft innerhalb des grosszuegigen
+    // Quelle M zuerst pruefen (@dpa-Feedback 20260819: "M muss maus-trigger
+    // Layer-technisch ueber L liegen") - liegen M und der Hoererkopf/seine
+    // Nase uebereinander oder dicht beieinander, soll ein Klick die Quelle
+    // greifen, nicht den Hoerer. Der Fangradius der Quelle bleibt dabei ihr
+    // eigener (sourceRadiusPx + dragHitRadiusPx), er wird durch den
+    // Vorrang nicht groesser - ausserhalb davon bleibt der Hoerer weiterhin
+    // ganz normal greifbar.
+    if (screenPx.getDistanceFrom (sourcePx) <= sourceRadiusPx + dragHitRadiusPx)
+        return DragTarget::source;
+
+    // Nase vor Kopf: sie liegt oft innerhalb des grosszuegigen
     // Kopf-Fangradius, soll aber Vorrang vor "Kopf verschieben" haben.
     if (screenPx.getDistanceFrom (nosePx) <= dragHitRadiusPx)
         return DragTarget::listenerNose;
 
     if (screenPx.getDistanceFrom (headPx) <= headRadiusPx + dragHitRadiusPx * 0.6f)
         return DragTarget::listenerHead;
-
-    if (screenPx.getDistanceFrom (sourcePx) <= sourceRadiusPx + dragHitRadiusPx)
-        return DragTarget::source;
 
     return DragTarget::none;
 }
