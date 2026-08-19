@@ -44,6 +44,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik",    Tooltips::Key::SrcJitterRate);
 
     setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",  Tooltips::Key::GroundDamp);
+    setupKnob (groundGainKnob,  apvts, Params::groundGain,       "Ground Gain",  Tooltips::Key::GroundGain);
 
     groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
     addAndMakeVisible (groundReflectionButton);
@@ -71,7 +72,8 @@ void FieldPanel::refreshTooltips()
 {
     for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &fadeManualKnob, &outputGainKnob,
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
-                      &srcJitterAmountKnob, &srcJitterRateKnob, &groundDampKnob, &nWaveSizeKnob })
+                      &srcJitterAmountKnob, &srcJitterRateKnob, &groundDampKnob, &groundGainKnob,
+                      &nWaveSizeKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -118,7 +120,8 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto geoRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &nWaveSizeKnob, &distanceCurveKnob })
+    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &groundGainKnob, &nWaveSizeKnob,
+                     &distanceCurveKnob })
     {
         layoutKnob (*k, geoRow.removeFromLeft (knobW));
         geoRow.removeFromLeft (4);

@@ -129,14 +129,31 @@ public:
     void mouseUp (const juce::MouseEvent& e) override;
     void mouseDoubleClick (const juce::MouseEvent& e) override;
 
-    // Nur in der Perspektive: Mausrad zoomt (perspectiveZoom), Umschalt+
-    // Mausrad hebt/senkt den Horizont (perspectiveHorizonFraction). @dpa-
-    // Feedback: "Man braucht aber auch ein Zoom regler und ob (mit Boden)
-    // mehr oben oder mittig" - beides reines Bedienungsgefuehl wie
-    // coastEnabled, deshalb kein Parameter, siehe .cpp.
+    // Nur in der Perspektive, Touchpad-Zwei-Finger-Geste mit Achsen-Lock
+    // (wie ScopeComponent::mouseWheelMove(), s. dort - dasselbe Schema, "gut
+    // und schoen" laut @dpa): 2 Finger senkrecht zoomt (perspectiveZoom), 2
+    // Finger waagerecht verschiebt die Horizontlage (perspectiveHorizonFraction,
+    // "ob (mit Boden) mehr oben oder mittig"). Begruendung fuer diese
+    // Zuordnung statt eines Pans: in der Perspektive gibt es keine Zeitachse
+    // zum Pannen wie im Scope, der Horizont ist die einzige zweite
+    // verstellbare Groesse. Umschalt+Mausrad bleibt zusaetzlich als Weg fuer
+    // reine Mausbenutzer (kein deltaX) bestehen, ist aber nicht mehr der
+    // Hauptweg. Siehe auch mouseMagnify() unten fuer die Pinch-Geste.
     void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
 
+    // Pinch-Geste auf dem Trackpad, nur in der Perspektive - die
+    // naheliegendste Zoomgeste auf dem Mac (@dpa-Feedback zur Referenz-Geste,
+    // s. mouseWheelMove()), unabhaengig vom Achsen-Lock der Wheel-Gesten
+    // oben. scaleFactor > 1 = Finger spreizen (reinzoomen/naeher), < 1 =
+    // zusammenziehen (rauszoomen/weiter weg). Direkter, groeberer Faktor als
+    // die Wheel-Zoomkurve, wie ScopeComponent::mouseMagnify().
+    void mouseMagnify (const juce::MouseEvent& e, float scaleFactor) override;
+
     // Tastatur-Zugang zur Hoerer-Sicht ('L'), siehe setPerspectiveFromListener().
+    // '0' setzt Zoom und Horizontlage der Perspektive zurueck (Doppelklick
+    // ist bereits mit dem Kamera-Wechsel oben belegt, deshalb ein eigener
+    // Tastendruck - '0' wie in Browsern/Bildbetrachtern ueblich fuer "Zoom
+    // zuruecksetzen").
     bool keyPressed (const juce::KeyPress& key) override;
 
     // Rueckmeldung nach aussen in normierten [0,1]-Koordinaten, passend zu
@@ -318,18 +335,45 @@ private:
     // Perspektive wirksam.
     bool perspectiveFromListener = false;
 
-    // Perspektiv-Zoom (@dpa-Feedback), 1.0 = Ausgangswert. Multipliziert die
-    // Brennweite in focalPixels(). Bedienung: Mausrad in der Perspektive.
-    float perspectiveZoom = 1.0f;
+    // Perspektiv-Zoom (@dpa-Feedback). Multipliziert die Brennweite in
+    // focalPixels(). Bedienung: 2 Finger senkrecht oder Pinch in der
+    // Perspektive, s. mouseWheelMove()/mouseMagnify(); per '0' (keyPressed())
+    // zurueck auf perspectiveZoomDefault.
+    static constexpr float perspectiveZoomDefault = 1.0f;
+    float perspectiveZoom = perspectiveZoomDefault;
     static constexpr float perspectiveZoomMin = 0.3f;
     static constexpr float perspectiveZoomMax = 4.0f;
 
     // Horizontlage als Anteil der Bildhoehe von oben (@dpa-Feedback: "ob mit
-    // Boden mehr oben oder mittig"), 0.40 = bisheriger fester Wert. Bedienung:
-    // Umschalt+Mausrad in der Perspektive.
-    float perspectiveHorizonFraction = 0.40f;
+    // Boden mehr oben oder mittig"). Bedienung: 2 Finger waagerecht oder
+    // Umschalt+Mausrad in der Perspektive, s. mouseWheelMove(); per '0'
+    // (keyPressed()) zurueck auf perspectiveHorizonFractionDefault.
+    static constexpr float perspectiveHorizonFractionDefault = 0.40f;
+    float perspectiveHorizonFraction = perspectiveHorizonFractionDefault;
     static constexpr float perspectiveHorizonFractionMin = 0.15f;
     static constexpr float perspectiveHorizonFractionMax = 0.70f;
+
+    // Empfindlichkeit der Wheel-Zoom-/Horizont-Kurven (s. mouseWheelMove()) -
+    // 3.0 fuer den Zoom-Exponenten uebernommen aus dem bisherigen Verhalten
+    // (frueher als 3.0f inline im Code), 0.3 fuer die Horizontverschiebung
+    // gilt fuer beide Wege dorthin (2 Finger waagerecht UND Umschalt+Mausrad),
+    // damit sich beide gleich anfuehlen.
+    static constexpr double perspectiveZoomWheelSensitivity = 3.0;
+    static constexpr double perspectiveHorizonWheelSensitivity = 0.3;
+
+    // Achsen-Lock fuer die Zwei-Finger-Wheel-Geste (s. mouseWheelMove()) -
+    // exakt wie ScopeComponent::WheelGestureAxis (s. dort): die erste
+    // Bewegung einer Geste entscheidet per groesserem Delta, ob waagerecht
+    // (Horizont) oder senkrecht (Zoom) gilt, und bleibt dabei, bis
+    // wheelGestureGapMs lang kein Wheel-Event mehr kam (Finger abgehoben) -
+    // verhindert Zittern zwischen Zoom und Horizontverschiebung mitten in
+    // einer Geste. Gilt nicht fuer Umschalt+Mausrad (expliziter Zusatzweg,
+    // s. mouseWheelMove()) und nicht fuer Pinch (mouseMagnify(), laeuft
+    // parallel dazu).
+    enum class WheelGestureAxis { none, horizontal, vertical };
+    WheelGestureAxis wheelGestureAxis = WheelGestureAxis::none;
+    juce::int64 lastWheelEventMs      = 0;
+    static constexpr int wheelGestureGapMs = 140;
 
     // Naheste Tiefe, die noch abgebildet wird. Alles davor waechst ins
     // Unendliche und gehoert nicht ins Bild.

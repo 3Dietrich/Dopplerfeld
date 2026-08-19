@@ -439,6 +439,13 @@ void DopplerEngine::setGroundReflectionEnabled (bool shouldBeEnabled)
     surfaces[1].enabled = shouldBeEnabled;
 }
 
+void DopplerEngine::setGroundGain (double gainLinear)
+{
+    // Gleicher Weg wie bei den Waenden: der Pegel sitzt in der Abbildung, damit
+    // eine Mehrfachreflexion ihn automatisch mitnimmt (siehe setWall).
+    surfaces[1].transform.gain = (float) gainLinear;
+}
+
 void DopplerEngine::setGroundDampingAmount (double amount01)
 {
     // Nur die Spiegelpfade: der Direktschall streift keine Fläche, seine

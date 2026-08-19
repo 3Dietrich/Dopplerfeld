@@ -77,7 +77,20 @@ void PropagationPath::setAirAbsorption (double fc0Hz, double refMetres, double e
 void PropagationPath::setReflectionDamping (double amount01, double fcHz)
 {
     reflectAmount = std::min (1.0, std::max (0.0, amount01));
-    reflectFcHz   = std::max (20.0, fcHz);
+
+    // Der Regler verschiebt die GRENZFREQUENZ, statt einen Filter mit fester
+    // Frequenz ein- und auszublenden (@dpa 20260819: "Wände und Boden - Dumps:
+    // bis zu 100Hz, wirklich richtig dumpf"). Ganz links ist die Reflexion
+    // praktisch offen, ganz rechts steht sie bei fcHz - und das darf jetzt bis
+    // in den Bereich gehen, in dem nur noch ein Wummern uebrig bleibt.
+    //
+    // Logarithmisch, weil Tonhoehe so gehoert wird: die Mitte des Reglerwegs
+    // liegt geometrisch zwischen offen und dumpf, nicht arithmetisch.
+    constexpr double openFcHz = 20000.0;
+
+    const double closedFc = std::max (20.0, fcHz);
+
+    reflectFcHz = openFcHz * std::pow (closedFc / openFcHz, reflectAmount);
 }
 
 void PropagationPath::setSolverStride (int normalStride, int supersonicStrideIn)
@@ -450,9 +463,13 @@ void PropagationPath::process (const SourceTrajectory&   traj,
     // Solver-Punkt - anders als die Luftdämpfung hängt er nicht von R ab.
     // Derselbe Bypass-Trick wie dort (Koeffizient gegen 1 blenden), damit
     // "aus" wirklich aus ist und nicht der Eckfrequenz-Fall.
+    // Ein reiner Tiefpass auf der Grenzfrequenz, die der Regler vorgibt (siehe
+    // setReflectionDamping) - nicht ein Filter, der anteilig beigemischt wird.
+    // Beigemischt bliebe auch bei vollem Regler ein ungefilterter Anteil
+    // stehen, und genau der verhindert, dass es wirklich dumpf wird.
     const bool   useReflectLp = reflectAmount > 0.0;
-    const double reflectA     = 1.0 - std::exp (-2.0 * 3.14159265358979323846 * reflectFcHz / sr);
-    const double reflectCoeff = 1.0 - reflectAmount * (1.0 - std::min (1.0, std::max (0.0, reflectA)));
+    const double reflectCoeff = std::min (1.0, std::max (0.0,
+                                    1.0 - std::exp (-2.0 * 3.14159265358979323846 * reflectFcHz / sr)));
 
     for (int n0 = 0; n0 < numSamples; n0 += stride)
     {

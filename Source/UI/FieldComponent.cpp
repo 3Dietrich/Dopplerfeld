@@ -1376,6 +1376,17 @@ bool FieldComponent::keyPressed (const juce::KeyPress& key)
         return true;
     }
 
+    // '0' setzt Zoom und Horizontlage der Perspektive zurueck. Der
+    // Doppelklick ist bereits mit dem Kamera-Wechsel oben belegt, deshalb
+    // hier ein eigener Tastendruck statt eines zweiten Doppelklick-Effekts.
+    if (key.getKeyCode() == '0' && viewMode == ViewMode::Perspective)
+    {
+        perspectiveZoom = perspectiveZoomDefault;
+        perspectiveHorizonFraction = perspectiveHorizonFractionDefault;
+        repaint();
+        return true;
+    }
+
     return false;
 }
 
@@ -1384,28 +1395,87 @@ void FieldComponent::mouseWheelMove (const juce::MouseEvent& e, const juce::Mous
     // Nur in der Perspektive - die Draufsicht hat mit fieldMetres
     // (Params.cpp) schon ihre eigene, per Regler gesetzte Skalierung; ein
     // zweites, mausgesteuertes Zoomen waere dort nur verwirrend.
-    if (viewMode != ViewMode::Perspective || wheel.deltaY == 0.0f)
+    if (viewMode != ViewMode::Perspective)
+        return;
+
+    if (wheel.deltaX == 0.0f && wheel.deltaY == 0.0f)
         return;
 
     if (e.mods.isShiftDown())
     {
-        // Umschalt+Mausrad: Horizontlage, "ob (mit Boden) mehr oben oder
-        // mittig" (@dpa-Feedback). Hoch scrollen schiebt den Horizont nach
+        // Umschalt+Mausrad: Zusatzweg fuer reine Mausbenutzer (kein deltaX
+        // verfuegbar), nicht mehr der Hauptweg (der ist jetzt die
+        // Zwei-Finger-Geste unten). Hoch scrollen schiebt den Horizont nach
         // oben (mehr Boden im Bild) - dieselbe "hoch = mehr/naeher"-Richtung
-        // wie beim Zoom unten.
+        // wie beim Zoom unten. Laeuft bewusst am Achsen-Lock vorbei, der ist
+        // nur fuer die echte Zwei-Finger-Touchpad-Geste gedacht.
+        if (wheel.deltaY == 0.0f)
+            return;
+
         perspectiveHorizonFraction = juce::jlimit (perspectiveHorizonFractionMin,
                                                     perspectiveHorizonFractionMax,
-                                                    perspectiveHorizonFraction - wheel.deltaY * 0.3f);
+                                                    perspectiveHorizonFraction
+                                                        - wheel.deltaY * (float) perspectiveHorizonWheelSensitivity);
+        repaint();
+        return;
+    }
+
+    // Achsen-Lock fuer die Zwei-Finger-Geste, exakt wie
+    // ScopeComponent::mouseWheelMove() (s. dort): die erste Bewegung einer
+    // Geste entscheidet per groesserem Delta, ob waagerecht oder senkrecht
+    // gilt, und bleibt dabei, bis wheelGestureGapMs lang kein Wheel-Event
+    // mehr kam (Finger abgehoben).
+    const juce::int64 now = juce::Time::currentTimeMillis();
+
+    if (now - lastWheelEventMs > wheelGestureGapMs)
+        wheelGestureAxis = WheelGestureAxis::none;
+
+    lastWheelEventMs = now;
+
+    if (wheelGestureAxis == WheelGestureAxis::none)
+        wheelGestureAxis = std::abs (wheel.deltaX) > std::abs (wheel.deltaY)
+                          ? WheelGestureAxis::horizontal : WheelGestureAxis::vertical;
+
+    if (wheelGestureAxis == WheelGestureAxis::horizontal)
+    {
+        // 2 Finger waagerecht -> Horizontlage verschieben. In der
+        // Perspektive gibt es keine Zeitachse zum Pannen (anders als im
+        // Scope mit seiner Sample-Historie) - der Horizont (mehr oder
+        // weniger Boden im Bild) ist die einzige zweite verstellbare Groesse
+        // hier, deshalb liegt sie auf der waagerechten Achse statt eines
+        // Pans ins Leere. Richtung (Finger nach rechts = mehr Boden) ist
+        // eine Setzung ohne Vorbild - falls sich das beim Ausprobieren
+        // verkehrt anfuehlt, hier das Vorzeichen drehen.
+        perspectiveHorizonFraction = juce::jlimit (perspectiveHorizonFractionMin,
+                                                    perspectiveHorizonFractionMax,
+                                                    perspectiveHorizonFraction
+                                                        - wheel.deltaX * (float) perspectiveHorizonWheelSensitivity);
     }
     else
     {
-        // Reines Mausrad: Zoom (@dpa-Feedback "Man braucht aber auch ein Zoom
-        // regler"). Stetige Exponentialkurve statt fixem Sprung pro Event -
-        // wie im Vorbild ScopeComponent::mouseWheelMove(), damit sich
-        // Trackpad-Gesten mit vielen kleinen deltaY nicht ruckelig anfuehlen.
-        const float factor = std::exp (wheel.deltaY * 3.0f);
+        // 2 Finger senkrecht -> Zoom. Stetige Exponentialkurve statt fixem
+        // Sprung pro Event - wie im Vorbild ScopeComponent::mouseWheelMove(),
+        // damit sich Trackpad-Gesten mit vielen kleinen deltaY nicht
+        // ruckelig anfuehlen.
+        const float factor = std::exp (wheel.deltaY * (float) perspectiveZoomWheelSensitivity);
         perspectiveZoom = juce::jlimit (perspectiveZoomMin, perspectiveZoomMax, perspectiveZoom * factor);
     }
 
+    repaint();
+}
+
+void FieldComponent::mouseMagnify (const juce::MouseEvent&, float scaleFactor)
+{
+    // Nur in der Perspektive, s. mouseWheelMove(). Pinch ist auf dem
+    // Touchpad die natuerlichste Zoomgeste und lief bisher ganz ins Leere.
+    if (viewMode != ViewMode::Perspective || scaleFactor <= 0.0f)
+        return;
+
+    // Direkte Anwendung wie ScopeComponent::mouseMagnify() - dort wird
+    // 1/scaleFactor gebraucht, weil dort ein GROESSERER Wert (displaySamples)
+    // RAUSzoomt. Hier ist es umgekehrt: ein GROESSERER perspectiveZoom
+    // zoomt REIN (s. focalPixels()), deshalb direkt ohne Umkehrung -
+    // Finger spreizen (scaleFactor > 1) vergroessert die Brennweite direkt.
+    perspectiveZoom = juce::jlimit (perspectiveZoomMin, perspectiveZoomMax, perspectiveZoom * scaleFactor);
     repaint();
 }

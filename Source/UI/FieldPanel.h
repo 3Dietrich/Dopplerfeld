@@ -74,6 +74,9 @@ private:
     // ohne Höhenunterschied nichts zu tun hat.
     Knob groundDampKnob;
 
+    // Pegel der Bodenreflexion, siehe Params::groundGain.
+    Knob groundGainKnob;
+
     // Druckwellen-/N-Wellen-Schicht: eigener Schalter und eigene Groesse,
     // bewusst neben (nicht in) Boom Limit - das eine ist eine Pulsform, das
     // andere eine reine Amplitudendeckelung.

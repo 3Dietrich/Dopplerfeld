@@ -250,6 +250,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // nicht braucht, soll sie nicht bezahlen.
     layout.add (boolParam (groundReflectionOn, "Ground Reflection", false));
     layout.add (floatParam (groundDampAmount, "Ground Damping", unitRange(), 0.5f));
+    layout.add (floatParam (groundGain, "Ground Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
     layout.add (std::make_unique<juce::AudioParameterInt> (juce::ParameterID { solverStride, 1 }, "Solver Stride", 1, 16, 1));
 
     // Wände. Default aus und mit derselben Begründung wie beim Boden: jede

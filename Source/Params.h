@@ -183,6 +183,13 @@ namespace Params
     constexpr const char* fadeAuto     = "fadeAuto";
     constexpr const char* fadeManualMs = "fadeManualMs";
 
+    // Pegel der Bodenreflexion in dB, wie bei den Waenden (@dpa 20260819: "bei
+    // Waende habe ich ja Gain, bei Boden noch nicht, was bei tiefem lopass
+    // lauter gestellt werden muesste"). Ein Tiefpass, der bis 100 Hz zumacht,
+    // nimmt der Reflexion fast die ganze Energie - ohne einen eigenen Pegel
+    // waere sie dann schlicht weg statt dumpf.
+    constexpr const char* groundGain = "groundGain";
+
     // Anteil des gewoehnlichen Pegel-Pannings, 0..100 % (@dpa 20260819: "bitte
     // noch ein normales Panning fuer die Kopfdrehung anbieten"). 0 laesst das
     // Stereobild allein aus der Ohrgeometrie entstehen, wie zuvor.

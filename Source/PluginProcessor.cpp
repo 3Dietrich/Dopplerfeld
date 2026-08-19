@@ -301,6 +301,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.fadeAuto     = raw (Params::fadeAuto);
     pp.fadeManualMs = raw (Params::fadeManualMs);
 
+    pp.groundGain = raw (Params::groundGain);
     pp.panAmount  = raw (Params::panAmount);
     pp.outputGain = raw (Params::outputGain);
     pp.limiterOn  = raw (Params::limiterOn);
@@ -701,6 +702,7 @@ void DopplerfeldProcessor::applyParameters()
     // dass hier über alle Pfade beider Geometriesätze gelaufen werden müsste.
     dopplerEngine.setGroundReflectionEnabled (pp.groundReflectionOn->load() > 0.5f);
     dopplerEngine.setGroundDampingAmount ((double) pp.groundDampAmount->load());
+    dopplerEngine.setGroundGain (juce::Decibels::decibelsToGain ((double) pp.groundGain->load()));
 
     dopplerEngine.setSecondOrderEnabled (pp.reflect2ndOn->load() > 0.5f);
     dopplerEngine.setBounceGain ((double) pp.bounceGain->load());

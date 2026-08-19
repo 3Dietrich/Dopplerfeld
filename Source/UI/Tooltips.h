@@ -57,6 +57,7 @@ namespace Tooltips
         ListenerZ,
         SrcJitterAmount,
         SrcJitterRate,
+        GroundGain,
         GroundDamp,
         GroundReflection,
         NWaveSize,
@@ -165,18 +166,20 @@ namespace Tooltips
                 // --- EngineControlPanel ---
                 case Key::FieldPerspectiveHelp:
                     return lang == Language::De
-                        ? " In der Perspektive: Klick auf den gelben Marker (auch am "
-                          "Bildrand oder unten, wenn M gerade ausserhalb des Blickfelds ist) holt "
-                          "die Quelle an diese Stelle. Mausrad zoomt, Umschalt+Mausrad hebt/senkt "
-                          "den Horizont (mehr oder weniger Boden im Bild). 'L' oder Doppelklick "
-                          "wechselt zwischen Kamera hinter dem Hoerer und Kamera aus Hoerer-Sicht "
-                          "(Blick entlang seiner Nase)."
+                        ? " In der Perspektive: Klick auf den gelben Marker (auch am Bildrand "
+                          "oder unten, wenn M gerade ausserhalb des Blickfelds ist) holt die "
+                          "Quelle an diese Stelle. 2 Finger senkrecht oder Pinch zoomt, 2 Finger "
+                          "waagerecht verschiebt den Horizont (mehr oder weniger Boden im Bild) - "
+                          "Umschalt+Mausrad geht ebenfalls. '0' setzt Zoom und Horizont zurueck. "
+                          "'L' oder Doppelklick wechselt zwischen Kamera hinter dem Hoerer und "
+                          "Kamera aus Hoerer-Sicht (Blick entlang seiner Nase)."
                         : " In perspective view: clicking the yellow marker (including at the "
                           "screen edge or at the bottom, when M is currently outside the field of "
-                          "view) moves the source there. The mouse wheel zooms, shift+wheel raises "
-                          "or lowers the horizon (more or less ground in frame). 'L' or a double "
-                          "click switches between the camera behind the listener and the camera "
-                          "from the listener's point of view (looking along the nose).";
+                          "view) moves the source there. Two fingers vertically or a pinch zooms, "
+                          "two fingers horizontally shifts the horizon (more or less ground in "
+                          "frame) - shift+wheel also works. '0' resets zoom and horizon. 'L' or a "
+                          "double click switches between the camera behind the listener and the "
+                          "camera from the listener's point of view (looking along the nose).";
 
                 case Key::EngineRpm:
                     return lang == Language::De
@@ -352,6 +355,16 @@ namespace Tooltips
                           "langsames Driften, grosse Werte = nervoeses Zittern."
                         : "How fast/restless the jitter movement changes (Hz). Small values = "
                           "slow drifting, large values = nervous trembling.";
+                case Key::GroundGain:
+                    return lang == Language::De
+                        ? "Pegel der Bodenreflexion in dB. Eigener Regler neben der Daempfung, "
+                          "weil ein Tiefpass, der bis 100 Hz zumacht, der Reflexion fast die "
+                          "ganze Energie nimmt - ohne Nachregeln waere sie dann weg statt dumpf."
+                        : "Level of the ground reflection in dB. A separate control next to the "
+                          "damping, because a low-pass closing down to 100 Hz takes almost all "
+                          "energy out of the reflection - without turning it up it would be gone "
+                          "rather than dull.";
+
                 case Key::GroundDamp:
                     return lang == Language::De
                         ? "Wie stark der Boden bei der Reflexion die Hoehen schluckt. 0 = ideal "

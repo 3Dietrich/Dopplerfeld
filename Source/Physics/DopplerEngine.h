@@ -156,6 +156,11 @@ public:
     void setWall (int index, bool enabled, Vec3 anchorMetres,
                   double azimuthRad, double tiltRad, double damping01, double gainLinear);
 
+    // Pegel der Bodenreflexion, linear. Eigener Regler, weil ein Tiefpass, der
+    // bis 100 Hz zumacht, der Reflexion fast die ganze Energie nimmt - ohne
+    // Nachregeln waere sie dann weg statt dumpf.
+    void setGroundGain (double gainLinear);
+
     // Mehrfachreflexionen: genau EINE zusätzliche Generation, also Wege der
     // Form Quelle -> Fläche X -> Fläche Y -> Ohr mit X != Y. Mehr nicht, und
     // ausdrücklich keine Rekursion.
@@ -416,8 +421,11 @@ private:
     // Eckfrequenz der Bodendämpfung bei voller Stärke. Rund ein Kilohertz ist
     // die Gegend, in der eine streifende Reflexion an Gras/Erde ihre Höhen
     // verliert. Eine Wand ist typischerweise härter und behält mehr davon.
-    static constexpr double groundDampFcHz = 800.0;
-    static constexpr double wallDampFcHz   = 2500.0;
+    // Grenzfrequenz bei ganz aufgedrehtem Daempfungsregler (@dpa: "bis zu
+    // 100Hz, wirklich richtig dumpf"). Was dazwischen liegt, rechnet
+    // PropagationPath::setReflectionDamping aus dem Reglerwert.
+    static constexpr double groundDampFcHz = 100.0;
+    static constexpr double wallDampFcHz   = 100.0;
 
     // Lage der Wände, für die Anzeige mitgeführt (die Abbildung selbst steht
     // in surfaces[] und ist daraus nicht mehr ablesbar).
