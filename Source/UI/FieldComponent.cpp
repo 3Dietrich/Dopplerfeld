@@ -541,17 +541,31 @@ void FieldComponent::drawSource (juce::Graphics& g) const
         // im Feld schlicht nicht auffindbar, und dann wirkt ein funktionierender
         // Schwarm wie ein kaputter.
         const float r = sourceRadiusPx * 0.7f;
+        const auto  view = getLocalBounds().toFloat().reduced (r + 1.0f);
 
         for (int i = 0; i < snapshot.clonePositionCount; ++i)
         {
             const auto p = worldToScreen (snapshot.clonePositions[(size_t) i]);
-            const auto box = juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (p);
 
-            g.setColour (juce::Colours::yellow.withAlpha (0.45f));
-            g.fillEllipse (box);
+            // Eine Streuung groesser als das Feld setzt Klone ausserhalb des
+            // sichtbaren Ausschnitts ab. Sie verschwinden dann spurlos, und ein
+            // Schwarm, der laeuft, sieht aus wie keiner. Deshalb werden sie an
+            // den Rand geklemmt und dort hohl gezeichnet: der Punkt sagt "hier
+            // entlang, aber weiter draussen", statt gar nichts zu sagen.
+            const bool outside = ! view.contains (p);
+            const auto clamped = juce::Point<float> (juce::jlimit (view.getX(), view.getRight(),  p.x),
+                                                     juce::jlimit (view.getY(), view.getBottom(), p.y));
 
-            g.setColour (juce::Colours::yellow.withAlpha (0.85f));
-            g.drawEllipse (box, 1.0f);
+            const auto box = juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (clamped);
+
+            if (! outside)
+            {
+                g.setColour (juce::Colours::yellow.withAlpha (0.45f));
+                g.fillEllipse (box);
+            }
+
+            g.setColour (juce::Colours::yellow.withAlpha (outside ? 0.55f : 0.85f));
+            g.drawEllipse (box, outside ? 1.5f : 1.0f);
         }
     }
 
