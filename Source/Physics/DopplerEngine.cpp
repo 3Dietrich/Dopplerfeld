@@ -892,7 +892,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
     {
         std::uint64_t deaths = 0, loud = 0, evicted = 0, caustic = 0, abrupt = 0;
         std::uint64_t lost = 0, fresh = 0, dropped = 0, freshNear = 0, ordered = 0;
-        std::uint64_t tight = 0, adjacent = 0, flips = 0, collapsed = 0;
+        std::uint64_t tight = 0, adjacent = 0, flips = 0, collapsed = 0, handed = 0;
         std::array<std::uint64_t, 8> hist {};
         double envSum = 0.0, envMax = 0.0, tauSum = 0.0, tauMax = 0.0;
 
@@ -915,6 +915,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
             ordered   += d.orderMatches;
             flips     += d.countFlips;
             collapsed += d.collapsed;
+            handed    += d.handovers;
             tight     += d.tightPairs;
             adjacent  += d.adjacentPairs;
 
@@ -939,6 +940,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         s.rootHist           = hist;
         s.countFlips         = flips;
         s.collapsedTracks    = collapsed;
+        s.handovers          = handed;
         s.tightPairs         = tight;
         s.adjacentPairs      = adjacent;
         s.droppedRoots       = dropped;

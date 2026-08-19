@@ -224,6 +224,7 @@ public:
         std::uint64_t rootHist[8] {};
         std::uint64_t countFlips    = 0;
         std::uint64_t collapsed     = 0;
+        std::uint64_t handovers     = 0;
         std::uint64_t tightPairs    = 0;
         std::uint64_t adjacentPairs = 0;
         std::uint64_t droppedRoots = 0;
@@ -251,6 +252,7 @@ public:
 
         s.countFlips    = solver.rootCountFlips();
         s.collapsed     = solver.collapsedTrackCount();
+        s.handovers     = handoverCount.load();
         s.tightPairs    = solver.tightPairCount();
         s.adjacentPairs = solver.adjacentPairCount();
         s.droppedRoots  = (std::uint64_t) std::max (0, solver.droppedRoots());
@@ -303,6 +305,13 @@ private:
         double deathEnvValue   = 0.0;
         int    deathSampleCount = 0;
 
+        // Verzögerung im Moment des Todes. NICHT b.tau nehmen: das läuft
+        // während des Ausklangs mit der zuletzt bekannten Steigung weiter, und
+        // die ist an der Kaustik so steil, dass der Wert schon nach einem
+        // Solver-Segment zig Millisekunden entfernt liegt. Der Vergleich für
+        // die Zustandsübergabe braucht den Stand von damals.
+        double deathTauValue   = 0.0;
+
         // --- N-Wellen-Schicht, siehe setNWave() ---
         //
         // machSeen wird beim ersten Solver-Punkt eines Zweigs gesetzt; ohne
@@ -341,6 +350,7 @@ private:
                          Vec3 recvPos, Vec3 recvVel, double c, Target& out) const;
     int    findSlot (int id) const;
     int    freeSlot();
+
     double lowpassCoeff (double R) const;
 
     // Phase-2-Vorbereitung (Plan 2.7). Liefert in Phase 1 konstant 0, der
@@ -462,6 +472,20 @@ private:
     // Kaustik folgt, klar darueber.
     static constexpr double abruptSeconds = 2.0e-3;
 
+    // Wie nah zwei Verzögerungen liegen müssen, damit ein neu gemeldeter Zweig
+    // als Fortsetzung eines sterbenden gilt und dessen Zustand übernimmt.
+    //
+    // 2 ms sind bei 343 m/s rund 70 cm Wegunterschied. Zwei wirklich
+    // verschiedene Hörwege liegen im Feldmassstab weiter auseinander; liegen
+    // sie enger, sind sie ohnehin im Begriff zu verschmelzen und ein
+    // Zustandsübergang zwischen ihnen ist unhörbar.
+    static constexpr double handoverTauSeconds = 2.0e-3;
+
+    // Wie lange ein gestorbener Zweig als Fortsetzungskandidat gilt. Danach ist
+    // der Klang ohnehin abgeklungen und eine Übergabe würde einen alten
+    // Filterzustand in einen neuen Hörweg tragen.
+    static constexpr double handoverMaxAgeSeconds = 20.0e-3;
+
     bool   nearFieldOn     = false;
     double dominantFreqHz  = 0.0;
 
@@ -492,4 +516,5 @@ private:
     pathdetail::DisplayValue<double>        deathTauSum;
     pathdetail::DisplayValue<double>        deathTauMax;
     pathdetail::DisplayValue<std::uint64_t> abruptCount;
+    pathdetail::DisplayValue<std::uint64_t> handoverCount;
 };

@@ -142,6 +142,7 @@ struct FieldSnapshot
     std::array<std::uint64_t, 8> rootHist {};
     std::uint64_t countFlips      = 0;
     std::uint64_t collapsedTracks = 0;
+    std::uint64_t handovers       = 0;
     std::uint64_t tightPairs      = 0;
     std::uint64_t adjacentPairs   = 0;
     std::uint64_t droppedRoots    = 0;

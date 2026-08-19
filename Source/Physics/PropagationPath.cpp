@@ -35,6 +35,7 @@ void PropagationPath::reset()
     deathTauSum.store (0.0);
     deathTauMax.store (0.0);
     abruptCount.store (0);
+    handoverCount.store (0);
 }
 
 void PropagationPath::setBoomLimitDb (double dB)
@@ -368,6 +369,13 @@ void PropagationPath::process (const SourceTrajectory&   traj,
     const double recentMaxSpeed = traj.maxSpeedSince (blockStartTime - 2.0);
     const int    stride         = (recentMaxSpeed > c) ? supersonicStride : baseStride;
 
+    // Nicht mehr versucht: den Stride an der Kaustik feiner machen, damit die
+    // Wurzel je Schritt weniger weit wandert. Gemessen loest das die Zweige
+    // tatsaechlich haeufiger sauber auf (3-Wurzel-Zustand 15 % -> 45 % der
+    // Aufrufe), aendert an den Kollisionen aber nichts (291 -> 299) und
+    // verschlechtert die harten Abbrueche deutlich (41 % -> 75 %) bei 1,6-facher
+    // Loeserlast. Die Ursache liegt also nicht in der Schrittweite.
+
     // Zusammenhängende Zeitachse? Ein halbes Sample Toleranz reicht, weil der
     // Aufrufer die Blockzeit aus einem ganzzahligen Sample-Zähler bildet.
     if (! seeded || std::abs (blockStartTime - lastSolveTime) > 0.5 / sr)
@@ -425,9 +433,29 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
             if (slot < 0)
             {
-                // Neuer Zweig (Plan 2.10 Schritt 5): eigener Slot, Filter und
-                // Envelope fangen bei Null an - der Zustand eines fremden
-                // Zweigs wird ausdrücklich nicht geerbt (Plan 2.9).
+                // Neuer Zweig (Plan 2.10 Schritt 5). Filter und Envelope fangen
+                // bei Null an, der Zustand eines FREMDEN Zweigs wird nicht
+                // geerbt (Plan 2.9).
+                //
+                //
+                // GEPRUEFT UND VERWORFEN: den Zustand eines gerade gestorbenen
+                // Zweigs mit praktisch derselben Verzoegerung uebernehmen, statt
+                // bei null anzufangen. Die Idee war, den Nummernwechsel an der
+                // Mach-Front unhoerbar zu machen, ohne die Identitaet im Loeser
+                // reparieren zu muessen.
+                //
+                // Sie greift nicht: bei 291 Kollisionen kam es zu 9 Uebergaben,
+                // egal ob gegen die eingefrorene Verzoegerung des Toten, gegen
+                // die fortgeschriebene, oder mit einer aus dTau skalierten
+                // Reichweite verglichen wurde. Der neu gemeldete Zweig liegt
+                // also NICHT bei derselben Verzoegerung wie der gestorbene - er
+                // ist keine Umbenennung desselben Hoerwegs, sondern wirklich
+                // eine andere Ankunft.
+                //
+                // Das ist der bisher wichtigste Hinweis: die Paare sterben nicht
+                // und tauchen unter neuer Nummer wieder auf, sondern es
+                // entstehen und vergehen tatsaechlich staendig neue. Der Kegel
+                // ueberstreicht das Ohr also immer wieder, statt einmal.
                 slot = freeSlot();
 
                 if (slot < 0)
@@ -436,6 +464,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 Branch& nb = branches[slot];
                 nb         = Branch{};
                 nb.used    = true;
+
                 nb.id      = roots[i].id;
                 nb.dTau    = tg.dTau;
                 nb.amp     = tg.amp;
@@ -507,6 +536,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                             : 0.0;
 
                 b.deathEnvValue    = b.env;
+                b.deathTauValue    = b.tau;
                 b.deathSampleCount = 0;
 
                 if (b.deathTau > 0.0)
