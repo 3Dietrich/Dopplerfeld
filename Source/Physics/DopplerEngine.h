@@ -57,10 +57,35 @@ public:
 
     // Bereits GEGLÄTTETE Quellposition (Plan 3.8): der MotionSmoother sitzt
     // im Processor davor und tickt auf trajectoryRateHz, hier kommt nur noch
-    // sein Ergebnis an. Zwischen zwei Aufrufen zieht die Engine linear durch
-    // (siehe pushTrajectory), der Aufrufer ruft deshalb in kurzen Teilblöcken.
+    // sein Ergebnis an. Setzt nur die Zielposition, ohne die Bahn zu
+    // beschreiben - dafür ist pushSourceTick() da.
     void setSourceTarget (Vec3 posMetres) { sourceTarget = posMetres; }
     Vec3 getSourceTarget() const { return sourceTarget; }
+
+    // Zeit des nächsten noch zu schreibenden Bahnpunktes. Der Processor tickt
+    // seinen Glätter, solange diese Zeit im laufenden Teilblock liegt, und
+    // reicht jedes Ergebnis mit pushSourceTick() herein. Damit gibt es genau
+    // EINEN Zähler für das Raster - der Glätter kann nicht gegen die Bahn
+    // wegdriften.
+    double nextTrajectoryTime() const { return (double) nextTrajIndex / trajectoryRateHz; }
+
+    // Ein einzelner Bahnpunkt, genau auf nextTrajectoryTime().
+    //
+    // Der Glätter im Processor tickt auf derselben Rate, auf der die Bahn
+    // gespeichert wird. Seine Ergebnisse gehören deshalb unverändert ins
+    // Raster - jedes Umrechnen dazwischen (früher: Position am Teilblockende
+    // merken und über die Teilblockspanne linear verteilen) macht aus einer
+    // gleichförmigen Bewegung eine zackige: die Zahl der Glätter-Ticks je
+    // Teilblock schwankt (bei 128 Samples und 48 kHz zwischen zwei und drei),
+    // die Teilblockspanne ist aber immer gleich lang. Gemessen wurden dabei
+    // 75 bis 250 m/s auf einer Bahn, die exakt 200 m/s laufen sollte.
+    void pushSourceTick (Vec3 posMetres);
+
+    // Anfang eines Teilblocks: fälliger Geometriewechsel und angemeldete
+    // Feldgröße werden übernommen, BEVOR die ersten Bahnpunkte des Teilblocks
+    // geschrieben werden. Idempotent - process() ruft dasselbe noch einmal,
+    // damit ein Aufrufer, der nur process() kennt, nichts verpasst.
+    void beginChunk();
 
     void setListener (const ListenerState& l) { listener = l; }
     const ListenerState& getListener() const { return listener; }
@@ -211,6 +236,15 @@ public:
     // Trajektorie und Löser.
     double currentTime() const { return (double) sampleClock / sr; }
 
+    // Ende eines Blocks von numSamples, ab jetzt gerechnet. Der Aufrufer darf
+    // das NICHT selbst als currentTime() + numSamples/sr zusammensetzen: die
+    // beiden Rechenwege unterscheiden sich in der letzten Stelle, und davon
+    // hängt ab, ob ein Rasterpunkt noch in diesen Block fällt. Fiel er
+    // heraus, sprang die Bahn dort auf Stillstand (gemessen: einzelne
+    // Ausreißer auf 207,4 m/s im 200-m/s-Flug, weil die Anzeige über einen
+    // eingefrorenen Punkt hinweg interpoliert).
+    double blockEndTime (int numSamples) const { return (double) (sampleClock + numSamples) / sr; }
+
 private:
     // Ein kompletter Geometriesatz: eigene Trajektorie, eigene Pfade und
     // damit eigener Löser-, Filter- und Envelope-Zustand. Nicht kopiert wird
@@ -315,7 +349,10 @@ private:
     // es hier nicht). wallIndex ist 0/1 (nicht der Surface-Index).
     double wallSideGain (int wallIndex) const;
 
-    void pushTrajectory (double blockStart, double blockEnd);
+    // Sicherheitsnetz: füllt die Bahn mit der zuletzt geschriebenen Position
+    // auf, falls der Aufrufer für diesen Block weniger Punkte geliefert hat
+    // als der Löser braucht. Im Normalbetrieb passiert hier nichts.
+    void fillTrajectoryUpTo (double untilTime);
 
     // Schreibt den Anzeige-Snapshot in den gerade nicht veröffentlichten
     // Puffer und tauscht ihn ein (Audiothread, am Blockende).
@@ -347,7 +384,6 @@ private:
     ListenerState listener;
 
     Vec3 sourceTarget { 0.0, 0.0, 0.0 };
-    Vec3 prevTarget   { 0.0, 0.0, 0.0 };
 
     // Warteschlange der Länge eins auf Aufruferseite: der Crossfader merkt
     // sich nur die Dauer, die Zielgeometrie steht hier.

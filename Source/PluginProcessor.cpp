@@ -418,7 +418,6 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     listenerSmoothers.prepare (DopplerEngine::trajectoryRateHz);
     sourceJitter.prepare (DopplerEngine::trajectoryRateHz);
 
-    motionTickAccum   = 0.0;
     recorderTickAccum = 0.0;
 
     motionRecorder.prepare (motionRecordRateHz, motionRecordMaxSeconds);
@@ -514,12 +513,43 @@ Vec3 DopplerfeldProcessor::metresFromNormalised (double normX, double normY, dou
              zMetres };
 }
 
+void DopplerfeldProcessor::holdSourceTargetAt (Vec3 posMetres)
+{
+    sourceTargetMetres = posMetres;
+    sourceTargetHeld   = true;
+
+    // Der Reglerstand, den dieser Haltezustand meint. Bewegt sich einer davon,
+    // war das ein Benutzereingriff und der Halt ist vorbei (applyParameters).
+    heldSrcX = pp.srcX->load();
+    heldSrcY = pp.srcY->load();
+    heldSrcZ = pp.srcZ->load();
+}
+
 void DopplerfeldProcessor::applyParameters()
 {
     fieldMetresValue = (double) pp.fieldMetres->load();
 
-    sourceTargetMetres   = metresFromNormalised ((double) pp.srcX->load(), (double) pp.srcY->load(),
-                                                 (double) pp.srcZ->load());
+    // Nach einem Vorbeiflug bleibt die Quelle dort stehen, wo der Flug endete
+    // (siehe holdSourceTargetAt). Der Regler zeigt dann noch auf den
+    // Startpunkt, und ihm blind zu folgen hiesse: die Quelle rast nach dem
+    // Flug dorthin zurueck - gemessen mit bis zu 1651 m/s auf einer Bahn, die
+    // mit 200 m/s geflogen ist. Erst wenn jemand den Regler wirklich bewegt,
+    // gewinnt wieder er.
+    {
+        const float srcX = pp.srcX->load();
+        const float srcY = pp.srcY->load();
+        const float srcZ = pp.srcZ->load();
+
+        const bool knobsUntouched = sourceTargetHeld
+                                 && srcX == heldSrcX && srcY == heldSrcY && srcZ == heldSrcZ;
+
+        if (! knobsUntouched)
+        {
+            sourceTargetHeld   = false;
+            sourceTargetMetres = metresFromNormalised ((double) srcX, (double) srcY, (double) srcZ);
+        }
+    }
+
     listenerTargetMetres = metresFromNormalised ((double) pp.lisX->load(), (double) pp.lisY->load(),
                                                  (double) pp.lisZ->load());
 
@@ -536,6 +566,12 @@ void DopplerfeldProcessor::applyParameters()
         lastFieldMetres = fieldMetresValue;
 
         dopplerEngine.setFieldMetres (fieldMetresValue);
+
+        // Neuer Massstab: die nach einem Flug gehaltene Position gehoert zum
+        // alten und wuerde jetzt an einer anderen Stelle im Feld liegen.
+        sourceTargetHeld   = false;
+        sourceTargetMetres = metresFromNormalised ((double) pp.srcX->load(), (double) pp.srcY->load(),
+                                                   (double) pp.srcZ->load());
 
         // Positionen sind normiert gespeichert (Plan 2.1), ein neuer Maßstab
         // ist deshalb ein reiner Geometriesprung. Die Glätter dürfen ihn nicht
@@ -872,7 +908,7 @@ void DopplerfeldProcessor::handlePendingRequests()
         // (siehe advanceMotion()) - sonst springt die Quelle beim manuellen
         // Stopp-Knopf genauso auf die alte, vorherige Zielposition.
         if (flyBy.isRunning())
-            sourceTargetMetres = flyBy.currentPosition();
+            holdSourceTargetAt (flyBy.currentPosition());
 
         flyBy.stop();
     }
@@ -995,7 +1031,7 @@ void DopplerfeldProcessor::startFlyBy()
         dopplerEngine.jumpSourceTo (smoothedSourcePos);
 }
 
-void DopplerfeldProcessor::advanceMotion (int numSamples)
+void DopplerfeldProcessor::advanceMotion (double untilTime)
 {
     const double sr = currentSampleRate;
 
@@ -1005,15 +1041,15 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
     // Der Glätter tickt auf der Trajektorienrate, nicht auf der Blockrate
     // (Plan 3.8) - seine Dynamik hängt damit nicht daran, welche Blockgröße
     // der Host gerade liefert.
-    const double samplesPerTick  = sr / DopplerEngine::trajectoryRateHz;
     const double tickDt          = 1.0 / DopplerEngine::trajectoryRateHz;
     const double recordInterval  = 1.0 / motionRecordRateHz;
 
-    motionTickAccum += (double) numSamples;
-
-    while (motionTickAccum >= samplesPerTick)
+    // Getaktet wird am Raster der Bahn selbst, nicht an einem eigenen
+    // Sample-Zähler: jeder Tick gehört zu genau einem Bahnpunkt und wird am
+    // Ende der Schleife auch dort abgelegt. Ein zweiter Zähler könnte gegen
+    // die Bahn wegdriften, und genau diese Drift war die Zickzack-Bahn.
+    while (dopplerEngine.nextTrajectoryTime() <= untilTime)
     {
-        motionTickAccum -= samplesPerTick;
 
         // Die Wiedergabe treibt dieselbe Kette wie Maus und Hostautomation
         // (Plan 3.9): sie liefert nur das Ziel, geglättet wird danach. Damit
@@ -1045,7 +1081,7 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
             // So bleibt sie stattdessen einfach dort stehen, wo der Flug
             // endete - kein Sprung, kein neuer Sonderzustand.
             if (! flyBy.isRunning())
-                sourceTargetMetres = target;
+                holdSourceTargetAt (target);
         }
         else if (motionPlayer.isPlaying())
         {
@@ -1197,6 +1233,12 @@ void DopplerfeldProcessor::advanceMotion (int numSamples)
             recorderTickAccum -= recordInterval;
             motionRecorder.pushSmoothed (smoothedSourcePos, dopplerEngine.currentTime());
         }
+
+        // Das Ergebnis dieses Ticks IST der nächste Bahnpunkt - unverändert
+        // und mit der Zeit, zu der der Glätter ihn gerechnet hat. Erst hier,
+        // ganz am Ende: Tempo-Deckel und Motor-Gate oben verändern
+        // smoothedSourcePos noch.
+        dopplerEngine.pushSourceTick (smoothedSourcePos);
     }
 }
 
@@ -1294,14 +1336,18 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         const int n = std::min (chunkSize, numSamples - start);
 
-        advanceMotion (n);
+        // Fälliger Geometriewechsel vor den Bahnpunkten dieses Teilblocks.
+        dopplerEngine.beginChunk();
+
+        // Bis einen Rasterpunkt über das Teilblockende hinaus ticken, damit
+        // die Bahn den ganzen Block abdeckt (siehe fillTrajectoryUpTo).
+        advanceMotion (dopplerEngine.blockEndTime (n) + 1.0 / DopplerEngine::trajectoryRateHz);
 
         const auto t0 = juce::Time::getHighResolutionTicks();
         sourceHolder.renderMono (monoScratch.getWritePointer (0), n);
         applyMotorGate (monoScratch.getWritePointer (0), n);
         const auto t1 = juce::Time::getHighResolutionTicks();
 
-        dopplerEngine.setSourceTarget (smoothedSourcePos);
         dopplerEngine.setListener (listenerState);
 
         for (int w = 0; w < DopplerEngine::maxWalls; ++w)

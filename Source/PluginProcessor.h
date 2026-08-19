@@ -298,7 +298,13 @@ private:
     // Startvariante passende Trajektorien-Vorgeschichte. Nur aus dem
     // Audiothread (handlePendingRequests).
     void startFlyBy();
-    void advanceMotion (int numSamples);
+    // untilTime in Sekunden auf der Zeitachse der Engine: getickt wird,
+    // solange der nächste Bahnpunkt davor liegt.
+    void advanceMotion (double untilTime);
+
+    // Quelle bleibt stehen, wo ein Vorbeiflug endete, statt zum Reglerwert
+    // zurueckzulaufen. Gilt, bis jemand den Regler bewegt.
+    void holdSourceTargetAt (Vec3 posMetres);
     void applyOutputStage (juce::AudioBuffer<float>& buffer);
 
     // Rohzeiger auf die zur SourceKind gehoerende SoundSource - ein Ort
@@ -470,6 +476,11 @@ private:
     ListenerState listenerState;
 
     Vec3 sourceTargetMetres;     // rohes Ziel aus srcX/srcY
+    
+    // Haltezustand nach einem Vorbeiflug samt des Reglerstands, den er meint
+    // (siehe holdSourceTargetAt).
+    bool  sourceTargetHeld = false;
+    float heldSrcX = 0.0f, heldSrcY = 0.0f, heldSrcZ = 0.0f;
     Vec3 listenerTargetMetres;   // rohes Ziel aus lisX/lisY
     Vec3 smoothedSourcePos;      // was tatsächlich in die Engine geht
 
@@ -558,7 +569,6 @@ private:
     WallState wallSmoothed[DopplerEngine::maxWalls];
     bool      wallStateInitialised = false;
 
-    double motionTickAccum   = 0.0;   // Rest-Samples bis zum nächsten Glätter-Tick
     double recorderTickAccum = 0.0;   // dito für die 200-Hz-Aufzeichnung
 
     // One-Pole-Koeffizient der Yaw-Glättung, aus smootherTau abgeleitet.

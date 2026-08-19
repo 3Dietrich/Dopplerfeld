@@ -230,7 +230,6 @@ void DopplerEngine::reset()
     geometry.active().reset  (sourceTarget, 0.0, listener);
     geometry.pending().reset (sourceTarget, 0.0, listener);
 
-    prevTarget       = sourceTarget;
     queuedJumpPos    = sourceTarget;
     queuedJumpVel    = Vec3{};
     fieldChangeArmed = false;
@@ -319,7 +318,6 @@ void DopplerEngine::configurePendingSet (Vec3 newPos, Vec3 preVelocity)
 void DopplerEngine::startGeometrySwitch (Vec3 newPos, Vec3 preVelocity, int fadeSamples)
 {
     sourceTarget = newPos;
-    prevTarget   = newPos;
 
     if (geometry.isFading() || geometry.queuedSwitchDue())
     {
@@ -670,56 +668,65 @@ std::uint64_t DopplerEngine::solverEvaluations() const
     return total;
 }
 
-void DopplerEngine::pushTrajectory (double blockStart, double blockEnd)
+void DopplerEngine::beginChunk()
 {
-    const double grid = 1.0 / trajectoryRateHz;
-    const double span = blockEnd - blockStart;
+    // Ein angemeldeter Geometriewechsel wird fällig, sobald der laufende Fade
+    // durch ist - und zwar bevor die nächsten Bahnpunkte geschrieben werden,
+    // sonst landen sie noch im alten Satz.
+    if (geometry.queuedSwitchDue())
+    {
+        configurePendingSet (queuedJumpPos, queuedJumpVel);
+        geometry.startQueuedSwitch();
+    }
 
-    if (span <= 0.0)
-        return;
+    applyArmedFieldChange();
+}
 
-    // Ein Rasterpunkt über das Blockende hinaus, damit newestTime() den ganzen
-    // Block abdeckt. Sonst friert der Löser die Quelle im letzten Bruchteil
-    // einer Millisekunde ein (Randbedingung aus Plan 2.6) und M_r bekäme dort
-    // eine falsche Null.
-    const double until = blockEnd + grid;
+void DopplerEngine::pushSourceTick (Vec3 posMetres)
+{
+    sourceTarget = posMetres;
 
-    const bool fading = geometry.isFading();
+    const double t = (double) nextTrajIndex / trajectoryRateHz;
 
     // Solange ein Wechsel angemeldet ist, gehört die aktuelle Zielposition
     // schon dem NÄCHSTEN Satz. Der gerade einblendende darf nicht dorthin
     // wandern, sonst zieht er den Sprung als rasende Bewegung nach - man
     // hörte ihn dann doch, nur als Doppler-Schleifer statt als Klick.
+    const bool fading = geometry.isFading();
     const bool follow = ! geometry.hasQueuedSwitch();
 
     PathSet& newest    = fading ? geometry.pending() : geometry.active();
     PathSet& fadingOut = geometry.active();
 
-    while ((double) nextTrajIndex * grid <= until)
+    newest.push (follow ? posMetres : newest.lastPos, t);
+
+    // Der ausblendende Satz hält seine Position. Er repräsentiert den
+    // Zustand VOR dem Sprung; würde er mitlaufen, wäre er kein
+    // Vergleichsklang mehr, sondern eine zweite Bewegung.
+    if (fading)
+        fadingOut.push (fadingOut.lastPos, t);
+
+    ++nextTrajIndex;
+}
+
+void DopplerEngine::fillTrajectoryUpTo (double untilTime)
+{
+    const double grid = 1.0 / trajectoryRateHz;
+
+    // Ein Rasterpunkt über das Blockende hinaus, damit newestTime() den ganzen
+    // Block abdeckt. Sonst friert der Löser die Quelle im letzten Bruchteil
+    // einer Millisekunde ein (Randbedingung aus Plan 2.6) und M_r bekäme dort
+    // eine falsche Null.
+    //
+    // Im Normalbetrieb hat der Processor genau bis hierher getickt und die
+    // Schleife läuft null Mal. Sie greift nur, wenn jemand process() ohne die
+    // Bewegungskette davor aufruft - dann steht die Quelle still, statt dass
+    // der Löser ins Leere greift.
+    while ((double) nextTrajIndex * grid <= untilTime + grid)
     {
-        const double t = (double) nextTrajIndex * grid;
-
-        // Die Glättung sitzt im Processor (Plan 3.8) und tickt dort auf
-        // dieser Rasterrate; hier wird zwischen zwei bereits geglätteten
-        // Positionen linear durchgezogen. Der Aufrufer hält die Teilblöcke
-        // deshalb kurz - je länger die Strecke, desto gröber das Raster der
-        // Geschwindigkeit und damit des Dopplers.
-        const double u   = (t - blockStart) / span;
-        const Vec3   pos = follow ? prevTarget + (sourceTarget - prevTarget) * u
-                                  : newest.lastPos;
-
-        newest.push (pos, t);
-
-        // Der ausblendende Satz hält seine Position. Er repräsentiert den
-        // Zustand VOR dem Sprung; würde er mitlaufen, wäre er kein
-        // Vergleichsklang mehr, sondern eine zweite Bewegung.
-        if (fading)
-            fadingOut.push (fadingOut.lastPos, t);
-
-        ++nextTrajIndex;
+        const PathSet& newest = geometry.isFading() ? geometry.pending() : geometry.active();
+        pushSourceTick (newest.lastPos);
     }
-
-    prevTarget = sourceTarget;
 }
 
 void DopplerEngine::publishSnapshot (const MediumState& medium)
@@ -1000,15 +1007,11 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
     if (numSamples <= 0 || numCh <= 0 || sr <= 0.0)
         return;
 
-    // 0) Angemeldeter Geometriewechsel zuerst: der laufende Fade ist durch,
-    //    jetzt darf pending() neu konfiguriert werden.
-    if (geometry.queuedSwitchDue())
-    {
-        configurePendingSet (queuedJumpPos, queuedJumpVel);
-        geometry.startQueuedSwitch();
-    }
-
-    applyArmedFieldChange();
+    // 0) Angemeldeter Geometriewechsel und Feldgröße zuerst: der laufende Fade
+    //    ist durch, jetzt darf pending() neu konfiguriert werden. Der Processor
+    //    hat das für diesen Teilblock schon erledigt (beginChunk), der Aufruf
+    //    hier ist die Absicherung für jeden anderen Aufrufer.
+    beginChunk();
 
     const double blockStart = (double) sampleClock / sr;
     const double blockEnd   = (double) (sampleClock + numSamples) / sr;
@@ -1029,8 +1032,10 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
 
     signal.write (mono, numSamples);
 
-    // 2) Bewegungspfad nachziehen, beide Sätze auf demselben Zeitraster.
-    pushTrajectory (blockStart, blockEnd);
+    // 2) Bewegungspfad: geschrieben hat ihn der Processor Tick für Tick
+    //    (pushSourceTick). Hier wird nur noch geprüft, dass er den ganzen Block
+    //    abdeckt.
+    fillTrajectoryUpTo (blockEnd);
 
     // 3) Blockkontext setzen. Der jüngste Satz übernimmt die aktuelle
     //    Ohrgeometrie, der ausblendende friert seine ein (prevListener ==
