@@ -88,6 +88,21 @@ public:
     std::uint64_t trackLostCount()  const { return trackLost; }
     std::uint64_t newIdCount()      const { return newIdGiven; }
 
+    // Aufschluesselung der neuen Identitaeten nach dem Abstand zur naechsten
+    // Vorhersage eines bekannten Zweigs, gemessen in Vielfachen der Toleranz:
+    //
+    //   Near - knapp daneben (< 2x). Dann ist es derselbe Hoerweg und die
+    //          Toleranz ist zu eng.
+    //   Far  - weit weg (>= 2x). Dann ist es wirklich eine neue Wurzel und die
+    //          neue Identitaet ist richtig.
+    //
+    // Ohne diese Trennung laesst sich nicht sagen, ob die Zuordnung zu streng
+    // ist oder ob im Ueberschall tatsaechlich staendig Zweige entstehen.
+    std::uint64_t newIdNearCount() const { return newIdNear; }
+
+    // Wie oft die Zuordnung ueber die Reihenfolge gegriffen hat.
+    std::uint64_t orderMatchCount() const { return orderMatched; }
+
     // Zähler für verworfene Wurzeln über K hinaus (Plan 2.6: "Ein Überlauf
     // wird verworfen und im Debug-Build gezählt").
     int  droppedRoots() const { return droppedRootCount; }
@@ -151,4 +166,6 @@ private:
 
     std::uint64_t trackLost  = 0;
     std::uint64_t newIdGiven = 0;
+    std::uint64_t newIdNear  = 0;
+    std::uint64_t orderMatched = 0;
 };

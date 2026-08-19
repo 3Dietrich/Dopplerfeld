@@ -88,6 +88,8 @@ struct Stats
     std::uint64_t abruptDeaths     = 0;
     std::uint64_t trackLost        = 0;
     std::uint64_t newIds           = 0;
+    std::uint64_t newIdsNear       = 0;
+    std::uint64_t orderMatches     = 0;
     std::uint64_t droppedRoots     = 0;
     double        deathEnvMean     = 0.0;
     double        deathEnvMax      = 0.0;
@@ -206,6 +208,11 @@ struct Stats
                      "| Wurzeln verworfen %llu\n",
                      "", (unsigned long long) trackLost, (unsigned long long) newIds,
                      (unsigned long long) droppedRoots);
+        std::printf ("%-22s davon knapp an einem bekannten Zweig vorbei: %llu (%5.1f %%)\n",
+                     "", (unsigned long long) newIdsNear,
+                     newIds > 0 ? 100.0 * (double) newIdsNear / (double) newIds : 0.0);
+        std::printf ("%-22s per Reihenfolge zugeordnet: %llu\n",
+                     "", (unsigned long long) orderMatches);
     }
 };
 
@@ -296,6 +303,8 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
         stats.abruptDeaths     = snapshot.abruptDeaths;
         stats.trackLost        = snapshot.trackLost;
         stats.newIds           = snapshot.newIds;
+        stats.newIdsNear       = snapshot.newIdsNear;
+        stats.orderMatches     = snapshot.orderMatches;
         stats.droppedRoots     = snapshot.droppedRoots;
     }
 

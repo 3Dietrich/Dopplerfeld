@@ -219,6 +219,8 @@ public:
         // Todesursachen aus dem Loeser, siehe RetardedTimeSolver.
         std::uint64_t trackLost   = 0;
         std::uint64_t newIds      = 0;
+        std::uint64_t newIdsNear  = 0;
+        std::uint64_t orderMatches = 0;
         std::uint64_t droppedRoots = 0;
     };
 
@@ -236,6 +238,8 @@ public:
         s.abruptDeaths  = abruptCount.load();
         s.trackLost     = solver.trackLostCount();
         s.newIds        = solver.newIdCount();
+        s.newIdsNear    = solver.newIdNearCount();
+        s.orderMatches  = solver.orderMatchCount();
         s.droppedRoots  = (std::uint64_t) std::max (0, solver.droppedRoots());
         return s;
     }

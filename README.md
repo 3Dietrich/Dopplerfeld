@@ -61,6 +61,8 @@ ohne die Angabe wird `~/Documents/JUCE` angenommen.
 rückwärts. Ein Teil davon ist echte Physik, ein Teil ist ein bekannter Fehler.
 [docs/warum-klingt-es-anders.md](docs/warum-klingt-es-anders.md) trennt beides,
 mit Kegelgeometrie, Pegeln über acht Sekunden und dem Stand der Behebung.
+Dieselbe Erklärung als gesetzte Seite:
+[3dietrich.github.io/Dopplerfeld](https://3dietrich.github.io/Dopplerfeld/).
 
 ## Architektur
 

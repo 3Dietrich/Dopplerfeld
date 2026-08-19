@@ -891,7 +891,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
     // auf die Anzeigezeilen verteilt.
     {
         std::uint64_t deaths = 0, loud = 0, evicted = 0, caustic = 0, abrupt = 0;
-        std::uint64_t lost = 0, fresh = 0, dropped = 0;
+        std::uint64_t lost = 0, fresh = 0, dropped = 0, freshNear = 0, ordered = 0;
         double envSum = 0.0, envMax = 0.0, tauSum = 0.0, tauMax = 0.0;
 
         for (size_t i = 0; i < set.paths.size(); ++i)
@@ -909,6 +909,8 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
             abrupt  += d.abruptDeaths;
             lost    += d.trackLost;
             fresh   += d.newIds;
+            freshNear += d.newIdsNear;
+            ordered   += d.orderMatches;
             dropped += d.droppedRoots;
         }
 
@@ -923,6 +925,8 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         s.abruptDeaths       = abrupt;
         s.trackLost          = lost;
         s.newIds             = fresh;
+        s.newIdsNear         = freshNear;
+        s.orderMatches       = ordered;
         s.droppedRoots       = dropped;
     }
 

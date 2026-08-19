@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Was im Mach-Kegel nach dem Ueberschallknall wirklich zu hoeren sein muss, und welcher Teil des kurzen Bursts der Fehler ist.">
+<title>Nach dem Knall</title>
+<style>
+  :root {
+    --ground:    #E4E9EB;
+    --panel:     #F2F5F6;
+    --panel-2:   #D6DEE1;
+    --ink:       #0B1114;
+    --ink-soft:  #33454C;
+    --mute:      #63757C;
+    --rule:      #B9C6CB;
+    --shock:     #A8741A;
+    --shock-dim: #A8741A26;
+    --back:      #2E6E85;
+    --fwd:       #6B4E96;
+    --bad:       #9B3B2F;
+    --code-bg:   #DCE4E7;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:    #0B1114;
+      --panel:     #121B1F;
+      --panel-2:   #1B272C;
+      --ink:       #DFE8EB;
+      --ink-soft:  #AEBFC5;
+      --mute:      #7C8F96;
+      --rule:      #26353B;
+      --shock:     #E8B23A;
+      --shock-dim: #E8B23A22;
+      --back:      #7FB2C4;
+      --fwd:       #A98FC7;
+      --bad:       #D9756A;
+      --code-bg:   #162126;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:    #0B1114;
+    --panel:     #121B1F;
+    --panel-2:   #1B272C;
+    --ink:       #DFE8EB;
+    --ink-soft:  #AEBFC5;
+    --mute:      #7C8F96;
+    --rule:      #26353B;
+    --shock:     #E8B23A;
+    --shock-dim: #E8B23A22;
+    --back:      #7FB2C4;
+    --fwd:       #A98FC7;
+    --bad:       #D9756A;
+    --code-bg:   #162126;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-size: 17px;
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 20px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 34px; }
+
+  .disp {
+    font-family: "Avenir Next Condensed", "HelveticaNeue-CondensedBold", "Roboto Condensed",
+                 "Helvetica Neue", Helvetica, sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  header { padding-top: 64px; display: flex; flex-direction: column; gap: 14px; }
+
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+
+  h1 { font-size: clamp(38px, 7vw, 62px); line-height: 1.02; margin: 0; }
+
+  .standfirst { font-size: 20px; line-height: 1.5; color: var(--ink-soft); margin: 0; max-width: 62ch; }
+
+  h2 {
+    font-size: 25px;
+    margin: 0 0 4px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+  }
+
+  h3 { font-size: 17px; margin: 0 0 -6px; letter-spacing: 0.02em; }
+
+  section { display: flex; flex-direction: column; gap: 15px; }
+
+  p { margin: 0; max-width: 66ch; }
+
+  .lede { color: var(--ink-soft); }
+
+  code {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.87em;
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  figure { margin: 6px 0; display: flex; flex-direction: column; gap: 11px; }
+
+  .plate {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 18px 16px 12px;
+    overflow-x: auto;
+  }
+
+  .plate svg { display: block; width: 100%; min-width: 520px; height: auto; }
+
+  figcaption { font-size: 14.5px; color: var(--mute); line-height: 1.5; max-width: 66ch; }
+
+  .svg-label {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    fill: var(--mute);
+  }
+  .svg-label.strong { fill: var(--ink); }
+  .svg-label.back   { fill: var(--back); }
+  .svg-label.fwd    { fill: var(--fwd); }
+  .svg-label.shock  { fill: var(--shock); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--panel); }
+  th, td { padding: 7px 12px; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--mute);
+    font-weight: 500;
+    border-bottom: 1px solid var(--rule);
+  }
+  tbody tr + tr td { border-top: 1px solid var(--rule); }
+  tbody td { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+             font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+  tbody tr.peak td { color: var(--shock); }
+
+  .bar { display: block; height: 7px; background: var(--shock); border-radius: 1px; }
+  .barcell { width: 190px; }
+  .barcell > span { display: block; background: var(--panel-2); border-radius: 1px; }
+
+  .verdicts { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--rule);
+              border-radius: 3px; overflow: hidden; }
+  .verdict { display: grid; grid-template-columns: 108px 1fr; gap: 16px; padding: 15px 16px;
+             background: var(--panel); align-items: baseline; }
+  .verdict + .verdict { border-top: 1px solid var(--rule); }
+  .verdict .tag {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .verdict .tag.ok  { color: var(--back); }
+  .verdict .tag.no  { color: var(--bad); }
+  .verdict p { font-size: 15.5px; line-height: 1.5; }
+  .verdict strong { font-weight: 600; color: var(--ink); }
+
+  .callout {
+    border-left: 3px solid var(--shock);
+    background: var(--shock-dim);
+    padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .callout p { font-size: 16px; }
+
+  ul { margin: 0; padding-left: 1.15em; display: flex; flex-direction: column; gap: 8px; max-width: 66ch; }
+  li::marker { color: var(--mute); }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 18px; font-size: 14px; color: var(--mute); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .plate svg .draw { animation: fade 700ms ease-out both; }
+    @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">dopplerfeld &middot; Überschall</div>
+  <h1 class="disp">Nach dem Knall</h1>
+  <p class="standfirst">Was ein Hörer im Mach-Kegel wirklich hört, wenn der Knall vorbei ist &ndash; und welcher Teil des kurzen Bursts Physik ist und welcher der Fehler.</p>
+</header>
+
+<section>
+  <h2 class="disp">Die Frage</h2>
+  <p>Beim Vorbeiflug über Mach 1 bleibt der Klang nach dem Knall kurz und wirkt, als liefe er rückwärts. Die Frage ist nicht, warum es knallt. Die Frage ist, was danach kommt und wie lange es dauern muss.</p>
+  <p class="lede">Gerechnet für Mach 2,04 bei 150 m seitlichem Abstand, also ungefähr dein Bremsflug-Fall.</p>
+</section>
+
+<section>
+  <h2 class="disp">Die Geometrie in einem Augenblick</h2>
+
+  <figure>
+    <div class="plate">
+      <svg viewBox="0 0 940 430" role="img" aria-label="Draufsicht: Flugbahn, Hörer, Mach-Kegel und die zwei Emissionspunkte, deren Schall gleichzeitig eintrifft">
+        <g class="draw">
+          <polygon points="770,215 413,15 0,15 0,415 413,415" fill="var(--shock-dim)"/>
+          <line x1="770" y1="215" x2="413" y2="15"  stroke="var(--shock)" stroke-width="1.6"/>
+          <line x1="770" y1="215" x2="413" y2="415" stroke="var(--shock)" stroke-width="1.6"/>
+
+          <line x1="0" y1="215" x2="940" y2="215" stroke="var(--rule)" stroke-width="1"/>
+          <line x1="880" y1="215" x2="925" y2="215" stroke="var(--ink-soft)" stroke-width="1.4"/>
+          <polygon points="925,215 914,210 914,220" fill="var(--ink-soft)"/>
+
+          <circle cx="163" cy="215" r="5.5" fill="var(--back)"/>
+          <circle cx="455" cy="215" r="5.5" fill="var(--fwd)"/>
+          <circle cx="770" cy="215" r="7"   fill="var(--shock)"/>
+
+          <circle cx="420" cy="65" r="6" fill="none" stroke="var(--ink)" stroke-width="1.8"/>
+          <circle cx="420" cy="65" r="2" fill="var(--ink)"/>
+
+          <line x1="163" y1="215" x2="420" y2="65" stroke="var(--back)" stroke-width="1.8"/>
+          <line x1="455" y1="215" x2="420" y2="65" stroke="var(--fwd)"  stroke-width="1.8"/>
+
+          <line x1="420" y1="215" x2="420" y2="65" stroke="var(--rule)" stroke-width="1" stroke-dasharray="3 4"/>
+
+          <text class="svg-label strong" x="420" y="46" text-anchor="middle">Hörer</text>
+          <text class="svg-label"        x="408" y="152" text-anchor="end">150 m</text>
+
+          <text class="svg-label back"   x="248" y="126" text-anchor="end" font-weight="700">Weg A</text>
+          <text class="svg-label back"   x="248" y="143" text-anchor="end">rückwärts, 0,96&times;</text>
+
+          <text class="svg-label fwd"    x="470" y="126" font-weight="700">Weg B</text>
+          <text class="svg-label fwd"    x="470" y="143">vorwärts, 0,33&times;</text>
+
+          <text class="svg-label back"   x="163" y="240" text-anchor="middle">Emission A</text>
+          <text class="svg-label back"   x="163" y="257" text-anchor="middle">t = &minus;0,367 s</text>
+          <text class="svg-label fwd"    x="470" y="240" text-anchor="start">Emission B</text>
+          <text class="svg-label fwd"    x="470" y="257" text-anchor="start">t = +0,051 s</text>
+          <text class="svg-label shock"  x="770" y="240" text-anchor="middle">Quelle jetzt</text>
+          <text class="svg-label shock"  x="770" y="257" text-anchor="middle">t = +0,500 s</text>
+
+          <text class="svg-label shock"  x="580" y="105" text-anchor="middle">Mach-Kegel, 29,3&deg;</text>
+          <text class="svg-label"        x="905" y="200" text-anchor="end">Flugbahn</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption>Draufsicht, 0,5 Sekunden nach der dichtesten Annäherung. Der Hörer liegt innerhalb des Kegels und empfängt in diesem Moment Schall von <em>zwei</em> Punkten der Bahn gleichzeitig: einem weit vor der Annäherung und einem kurz danach. Die Kegelfläche selbst hat ihn bei 0,381 s überstrichen, das war der Knall.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2 class="disp">Die zwei Wege laufen auseinander</h2>
+  <p>Ab dem Moment der Kegelankunft gibt es zwei Lösungen der Retarded-Time-Gleichung, und sie wandern in entgegengesetzte Richtungen durch die Quellgeschichte.</p>
+
+  <div class="verdicts">
+    <div class="verdict">
+      <span class="tag" style="color: var(--back)">Weg A</span>
+      <p><strong>läuft rückwärts</strong>, und zwar mit 0,96-facher Geschwindigkeit, also fast in Echtzeit. Er arbeitet die gesamte Anflugphase rückwärts ab und kommt nie an ein Ende, solange die Quelle Geschichte hat.</p>
+    </div>
+    <div class="verdict">
+      <span class="tag" style="color: var(--fwd)">Weg B</span>
+      <p><strong>läuft vorwärts, auf ein Drittel verlangsamt</strong> (Faktor 0,33). Das sind gut anderthalb Oktaven tiefer. Er folgt der Quelle beim Wegfliegen.</p>
+    </div>
+  </div>
+
+  <p>Direkt an der Kegelfläche ist der Faktor beider Wege <span class="mono">&plusmn;281</span>. In dem Augenblick wird also fast eine halbe Minute Quellgeschichte in wenige Millisekunden gepresst. Das ist die Kaustik, und das ist der Grund, warum der Knall so laut ist: nicht weil dort mehr Energie entsteht, sondern weil dort sehr viel Zeit auf sehr wenig Zeit fällt.</p>
+</section>
+
+<section>
+  <h2 class="disp">Wie lange es dauern muss</h2>
+  <p>Amplitude beider Wege, gerechnet aus <span class="mono">1/(R&middot;&radic;((1&minus;M<sub>r</sub>)&sup2;+&epsilon;&sup2;))</span>, bezogen auf den Spitzenwert an der Kegelfläche.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Zeit nach Annäherung</th>
+          <th>Abstand Weg&nbsp;A</th>
+          <th>Pegel</th>
+          <th class="barcell"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="peak"><td>0,381 s &nbsp;Knall</td><td>172 m</td><td>0,0 dB</td><td class="barcell"><span><i class="bar" style="width:100%"></i></span></td></tr>
+        <tr><td>0,400 s</td><td>207 m</td><td>&minus;23,8 dB</td><td class="barcell"><span><i class="bar" style="width:60%"></i></span></td></tr>
+        <tr><td>0,500 s</td><td>297 m</td><td>&minus;32,4 dB</td><td class="barcell"><span><i class="bar" style="width:46%"></i></span></td></tr>
+        <tr><td>0,750 s</td><td>481 m</td><td>&minus;38,4 dB</td><td class="barcell"><span><i class="bar" style="width:36%"></i></span></td></tr>
+        <tr><td>1,000 s</td><td>656 m</td><td>&minus;41,5 dB</td><td class="barcell"><span><i class="bar" style="width:31%"></i></span></td></tr>
+        <tr><td>2,000 s</td><td>1337 m</td><td>&minus;48,0 dB</td><td class="barcell"><span><i class="bar" style="width:20%"></i></span></td></tr>
+        <tr><td>4,000 s</td><td>2686 m</td><td>&minus;54,1 dB</td><td class="barcell"><span><i class="bar" style="width:10%"></i></span></td></tr>
+        <tr><td>8,000 s</td><td>5378 m</td><td>&minus;60,2 dB</td><td class="barcell"><span><i class="bar" style="width:0%"></i></span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Zwei Dinge stehen da drin. Erstens fällt der Pegel unmittelbar nach dem Knall <strong>sehr</strong> steil, fast 24 dB in 19 Millisekunden. Das ist echte Physik, das ist die Kaustik, die zusammenbricht. Zweitens geht es danach in einen langen, flachen Ausklang über, rund 20 dB pro Zehnerpotenz Zeit. Nach acht Sekunden ist immer noch etwas da.</p>
+
+  <div class="callout">
+    <p>Ein echter Überschallüberflug klingt genau so: Knall, dann schlagartig viel leiser, dann ein anhaltendes Rollen, das minutenlang ausklingen kann. <strong>Nichts bricht ab.</strong></p>
+  </div>
+</section>
+
+<section>
+  <h2 class="disp">Was Physik ist und was nicht</h2>
+
+  <div class="verdicts">
+    <div class="verdict">
+      <span class="tag ok">Physik</span>
+      <p><strong>Rückwärts.</strong> Weg A läuft wirklich zeitverkehrt. Man hört es nur nicht: zeitumgekehrtes Rauschen klingt wie vorwärts laufendes. Erst bei einem Sample mit erkennbarem Anschlag wird es hörbar, und dann ist es trotzdem richtig.</p>
+    </div>
+    <div class="verdict">
+      <span class="tag ok">Physik</span>
+      <p><strong>Der steile Abfall unmittelbar nach dem Knall.</strong> Rund 24 dB in 19 ms. Das ist die zusammenbrechende Fokussierung, kein Fehler.</p>
+    </div>
+    <div class="verdict">
+      <span class="tag no">Fehler</span>
+      <p><strong>Dass danach nichts mehr kommt.</strong> Es müsste ein langer Ausklang folgen, 20 dB pro Zehnerpotenz, über viele Sekunden. Der fehlt.</p>
+    </div>
+    <div class="verdict">
+      <span class="tag no">Fehler</span>
+      <p><strong>Das Zerhacken.</strong> Zweige sterben und werden neu geboren, im schlimmsten Fall über 200 Mal pro Sekunde. Jede Neugeburt setzt Hüllkurve und Filter auf null zurück.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="disp">Die Anti-Klick-Hüllkurve</h2>
+  <p>Jeder Zweig hat einen eigenen Faktor <span class="mono">env</span> zwischen 0 und 1, mit dem sein gesamter Beitrag multipliziert wird. Meldet der Löser den Zweig, läuft <span class="mono">env</span> linear auf 1. Meldet er ihn nicht mehr, läuft <span class="mono">env</span> auf 0.</p>
+  <p>Der Grund: ein Zweig, der von einem Sample auf das nächste erscheint oder verschwindet, ist ein Sprung im Ausgangssignal, und ein Sprung ist Energie über die gesamte Bandbreite. Man hört ihn als Knacks. Die Rampe verteilt den Sprung über eine Millisekunde.</p>
+
+  <h3 class="disp">Deine Frage: wird mit abgeschalteter N-Welle noch etwas unterdrückt?</h3>
+  <p><strong>Ja, alles.</strong> <span class="mono">env</span> multipliziert den kompletten Zweigbeitrag, also genau den Schall, um den es geht. Die N-Welle war nur ein zusätzlicher Passagier auf derselben Multiplikation. Sie abzuschalten ändert an der Hüllkurve nichts.</p>
+  <p>Und darin liegt der Fehler: die Rampe wurde gebaut, um einen Knacks zu verhindern, macht aber genau das Gegenteil. Gemessen stirbt ein Zweig im Überschall mit <span class="mono">env</span> im Mittel bei 0,71 und im Maximum bei 1,000 &ndash; also bei vollem Pegel. Die Rampe schneidet ihn dann in einer Millisekunde ab. Das ist kein sanftes Ausblenden, das ist ein Schnitt.</p>
+</section>
+
+<footer>
+  Gerechnet für Mach&nbsp;2,04 (700&nbsp;m/s) bei 343&nbsp;m/s Schallgeschwindigkeit und 150&nbsp;m seitlichem Abstand. Amplituden mit &epsilon;&nbsp;=&nbsp;0,0316, entsprechend Boom&nbsp;Limit 30&nbsp;dB.
+</footer>
+
+</div>
+</body>
+</html>

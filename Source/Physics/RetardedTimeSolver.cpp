@@ -518,6 +518,11 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
                 branchTaken[j] = true;
     }
 
+    double nearestRatio[maxBranches];
+
+    for (int i = 0; i < maxBranches; ++i)
+        nearestRatio[i] = 1.0e30;
+
     for (int i = 0; i < nCand; ++i)
     {
         if (roots[i].id >= 0)
@@ -544,6 +549,11 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
             // grundlos neu starten zu lassen (das hörte man als Aussetzer).
             const double tol = std::max (8.0 * minStep, 8.0 * std::abs (dt_h / denom));
 
+            // Auch wenn die Zuordnung scheitert: wie knapp war es? Siehe
+            // newIdNearCount().
+            if (i < maxBranches && tol > 0.0)
+                nearestRatio[i] = std::min (nearestRatio[i], dist / tol);
+
             if (dist < tol && (best < 0 || dist < bestDist))
             {
                 best     = j;
@@ -558,6 +568,22 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
         }
     }
 
+    // Nicht mehr versucht: Zuordnung über die REIHENFOLGE beider Listen
+    // (beide sind nach t_e sortiert, zwei Wurzeln können einander nicht
+    // überholen ohne vorher zu verschmelzen). Die Idee scheitert an der
+    // Bedingung, unter der sie gelten würde - gleich viele Wurzeln wie zuletzt
+    // bekannte Zweige. Genau dann gibt es aber gar keine unzugeordnete Wurzel:
+    // das Nachführen liefert für jeden bekannten Zweig einen Kandidaten, eine
+    // identitätslose Wurzel kommt also immer OBEN DRAUF, und nCand ist dann
+    // zwangsläufig grösser als branchCount. Gemessen hat die Zuordnung in
+    // keinem einzigen Fall gegriffen.
+    //
+    // Der Befund dahinter steht: 97,6 % der neuen Identitäten liegen NICHT
+    // knapp neben der Vorhersage eines bekannten Zweigs, sondern weit weg. An
+    // der Toleranz zu drehen bringt also nichts. Der Löser findet im Überschall
+    // tatsächlich rund 60 neue Wurzeln je Sekunde - ob die echt sind, ist die
+    // offene Frage.
+
     // Unterschall hat genau eine Wurzel (Plan 2.4). Ist genau ein Zweig
     // bekannt, ist es zwingend derselbe - unabhängig davon, wie weit die
     // Fortschreibung danebenlag.
@@ -569,6 +595,9 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
         {
             roots[i].id = nextId++;
             ++newIdGiven;
+
+            if (i < maxBranches && nearestRatio[i] < 2.0)
+                ++newIdNear;
         }
 
     branchCount = nCand;

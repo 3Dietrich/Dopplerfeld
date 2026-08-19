@@ -137,6 +137,8 @@ struct FieldSnapshot
     std::uint64_t abruptDeaths    = 0;
     std::uint64_t trackLost       = 0;
     std::uint64_t newIds          = 0;
+    std::uint64_t newIdsNear      = 0;
+    std::uint64_t orderMatches    = 0;
     std::uint64_t droppedRoots    = 0;
 
     // Lage der Wände, damit die Feldanzeige sie zeichnen kann. Die Wand ist

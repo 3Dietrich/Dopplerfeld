@@ -26,7 +26,14 @@
   <line x1="420" y1="215" x2="420" y2="65" stroke="#8A9AA0" stroke-width="1" stroke-dasharray="3 4"/>
 
   <text x="420" y="45"  fill="#8A9AA0" text-anchor="middle">Hoerer L</text>
-  <text x="432" y="150" fill="#8A9AA0">150 m</text>
+  <text x="408" y="152" fill="#8A9AA0" text-anchor="end">150 m</text>
+
+  <!-- Die zwei Wege benannt -->
+  <text x="248" y="126" fill="#4E8FA6" text-anchor="end" font-weight="bold">Weg A</text>
+  <text x="248" y="143" fill="#4E8FA6" text-anchor="end">rueckwaerts, 0,96x</text>
+
+  <text x="470" y="126" fill="#8A6FB5" font-weight="bold">Weg B</text>
+  <text x="470" y="143" fill="#8A6FB5">vorwaerts, 0,33x</text>
 
   <text x="163" y="240" fill="#4E8FA6" text-anchor="middle">Emission A</text>
   <text x="163" y="257" fill="#4E8FA6" text-anchor="middle">t = -0,367 s</text>
