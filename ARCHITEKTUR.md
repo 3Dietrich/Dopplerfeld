@@ -1010,6 +1010,22 @@ Aufrufe hinweg gepflegte Faltungsstruktur der Ankunftszeitfunktion
   rot über 100%, mit Physik/Quelle-Aufschlüsselung) sind bereits umgesetzt
   (siehe `git log`).
 
+## TODO: Kaustik-Lastspitze (bekannt, bewusst offen)
+
+Beim Vorbeiflug nahe Mach 1 kostet der teuerste Block das rund 12-fache des
+Blockschnitts (143994 gegen 12354 Löser-Auswertungen, gemessen bei 358 m/s und
+|M_r| = 0,99). An dieser Stelle setzt der Ton aus. Der Test in
+`Tests/load_check.cpp` misst und meldet das weiterhin, lässt den Lauf aber
+nicht mehr fehlschlagen (@dpa 20260820), damit gepusht werden kann.
+
+Was bereits ausgeschlossen ist: die *Länge* eines einzelnen Suchfensters. Ein
+testweise auf den Beginn der geradlinigen Phase angehobenes Fenster halbierte
+den Schnitt (12354 -> 7422), liess den teuersten Block aber bei exakt denselben
+143994 Auswertungen. Die Spitze entsteht also durch mehrere Vollscans innerhalb
+*eines* Blocks, nicht durch einen einzelnen langen Scan. Dort ist
+weiterzusuchen. (Die Fenster-Verkleinerung selbst wäre als CPU-Gewinn im Mittel
+trotzdem zu haben, sie ist nur kein Aussetzer-Fix.)
+
 Chat-Verlauf mit der vollständigen Entstehungsgeschichte (inkl. aller
 Design-Entscheidungen aus dem Grill-Interview) liegt in der Claude-Code-
 Session vom 2026-08-15/16, falls tiefere Begründungen für eine Entscheidung

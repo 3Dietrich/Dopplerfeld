@@ -1626,12 +1626,26 @@ int main()
         // Vier Mal der Schnitt ist die Groesse, um die es geht: so weit ragt die
         // Spitze an der Mach-Front ueber den laufenden Betrieb hinaus, und genau
         // daran haengt der Aussetzer.
+        //
+        // Das ist ein BEKANNTES OFFENES THEMA und laesst den Lauf deshalb nicht
+        // fehlschlagen (@dpa 20260820: "lassen wir das mit der kaustik, ich habe
+        // gerade andere Probleme. bitte nimm Kaustik ins todo und raus aus push
+        // der Blockade"). Die Zahl wird weiter gemessen und ausgegeben, damit
+        // eine Verschlechterung auffaellt und der Tag, an dem es jemand angeht,
+        // eine Ausgangsgroesse hat.
+        //
+        // Stand der Diagnose: nicht die LAENGE eines einzelnen Scans ist die
+        // Ursache. Ein testweise auf den Beginn der Geraden angehobenes
+        // Suchfenster halbierte den Schnitt (12354 -> 7422 Auswertungen), liess
+        // den teuersten Block aber bei exakt denselben 143994 Auswertungen. Die
+        // Spitze kommt also aus mehreren Vollscans INNERHALB eines Blocks, nicht
+        // aus einem einzelnen langen Scan - dort ist weiterzusuchen.
         if (spike > 4.0)
         {
-            std::printf ("FEHLGESCHLAGEN: der teuerste Block kostet das %.1f-fache des Schnitts "
-                         "(bei t=%.2fs, |M_r| dort %.2f) - an dieser Stelle setzt der Ton aus\n",
+            std::printf ("OFFEN (kein Fehlschlag): der teuerste Block kostet das %.1f-fache des "
+                         "Schnitts (bei t=%.2fs, |M_r| dort %.2f) - an dieser Stelle setzt der Ton "
+                         "aus. Steht als Kaustik-Lastspitze im TODO.\n",
                          spike, flight.worstBlockAtSec, flight.worstBlockMach);
-            failed = true;
         }
     }
 
