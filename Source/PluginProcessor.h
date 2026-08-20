@@ -458,42 +458,8 @@ private:
     // Eigener Wackler je echtem Klon, siehe advanceMotion().
     std::array<PositionJitter, (size_t) DopplerEngine::maxRealClones> cloneJitter;
 
-    // Und derselbe Weg wie bei der Quelle: deren Jitter wird auf das Ziel
-    // addiert und laeuft DANACH durch die Bewegungsglaettung, wird dort also
-    // gedaempft. Ohne diesen Schritt wackeln die Klone in voller Amplitude,
-    // waehrend die Quelle nur noch einen Rest davon zeigt - sichtbar als
-    // Ausschlaege, die um ein Vielfaches weiter reichen als die Bahn selbst.
-    //
-    // Es ist bewusst derselbe Glaettersatz und nicht nur dieselbe
-    // Zeitkonstante: die vier Verfahren daempfen unterschiedlich stark, und ein
-    // Ein-Pol laesst bei gleichem tau deutlich mehr durch als die kritisch
-    // gedaempfte Feder (gemessen Faktor 2,6 statt 1).
-    std::array<SmootherSet, (size_t) DopplerEngine::maxRealClones> cloneJitterSmoother;
-
-    // Fuehrt NUR den Quell-Wackler, sonst nichts - ein Glaettersatz, der
-    // dieselbe Behandlung durchlaeuft wie die Quelle, aber ohne deren Bahn.
-    //
-    // Er wird gebraucht, weil die Klone um denselben ruhenden Punkt schwirren
-    // sollen wie die Quelle und nicht um die bereits wackelnde Quelle herum
-    // (@dpa 20260820: "nicht Koenig und Diener drumherum, sondern Fliegen").
-    // Die Quellposition, die die Engine bekommt, enthaelt den geglaetteten
-    // Wackler bereits eingerechnet; aus ihr allein laesst er sich nicht wieder
-    // herausrechnen. Also laeuft er hier ein zweites Mal separat mit, und der
-    // Klon-Versatz zieht ihn ab: Klon = Anker + Streuung + eigener Wackler.
-    //
-    // Der Abzug ist exakt, solange die Glaettung linear ist (Ein-Pol, Feder,
-    // 1-Euro). Beim Slew-Limiter und beim Tempo-Deckel, die klemmen statt zu
-    // filtern, gilt er nur naeherungsweise - der Wackler ist dort klein genug,
-    // dass er selbst kaum ans Limit stoesst, und die Abweichung bleibt ein
-    // Rest der ohnehin geklemmten Gesamtbewegung.
-    SmootherSet sourceJitterSmoother;
-
-    // Letzter ausgegebener Wert je Wackel-Glaetter. Beim Wechsel zwischen dem
-    // Bypass-Zweig (Slew als Waechter) und der normalen Glaettung setzt der
-    // neu einsetzende Glaetter darauf auf, statt bei null anzufangen - sonst
-    // spraenge der Versatz genau im Umschaltmoment.
-    Vec3 lastSourceJitterSmoothed {};
-    std::array<Vec3, (size_t) DopplerEngine::maxRealClones> lastCloneJitterSmoothed {};
+    // Die Wackler laufen bewusst an Glaettung und Tempo-Deckel vorbei, siehe
+    // advanceMotion(): eingestellte Meter sollen als Ausschlag auch ankommen.
 
     // Die Kapazitäts-Vorwärmung in prepareToPlay() darf nur beim allerersten
     // Mal laufen - prepareToPlay() wird vom Host bei jeder Blockgrößen-/

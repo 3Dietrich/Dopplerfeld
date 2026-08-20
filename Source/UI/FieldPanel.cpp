@@ -156,14 +156,14 @@ void FieldPanel::resized()
     }
 
     // Dritte Reihe: M-Jitter, eigenstaendig statt in die schon volle
-    // Hoehen-Reihe gequetscht. Eigener kleiner Schalter davor, gleicher
-    // Aufbau wie je Wand in WallPanel (Schalter-Reihe direkt ueber der
-    // zugehoerigen Knopf-Reihe).
+    // Hoehen-Reihe gequetscht. Die Panel-Hoehe kommt von aussen fest vorgegeben
+    // (PluginEditor::fieldContentHeight) - fuer den Ganz-Aus-Schalter ist
+    // deshalb KEINE eigene Reihe drin: eine zusaetzliche Reihe frisst Hoehe,
+    // die dann layoutKnob() fehlt, und der Drehknopf verschwindet (nur noch
+    // Beschriftung + Wertfeld sichtbar, siehe layoutKnob() oben). Der
+    // Schalter steht stattdessen rechts neben den drei Knoepfen, oben buendig
+    // mit deren Beschriftungszeile.
     area.removeFromTop (6);
-
-    auto jitterToggleRow = area.removeFromTop (26);
-    srcJitterOnButton.setBounds (jitterToggleRow.removeFromLeft (120));
-    area.removeFromTop (4);
 
     auto jitterRow = area.removeFromTop (knobH);
     for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &panAmountKnob })
@@ -171,4 +171,7 @@ void FieldPanel::resized()
         layoutKnob (*k, jitterRow.removeFromLeft (knobW));
         jitterRow.removeFromLeft (4);
     }
+
+    srcJitterOnButton.setBounds (jitterRow.removeFromTop (18)
+                                           .withWidth (juce::jmin (120, jitterRow.getWidth())));
 }

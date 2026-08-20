@@ -555,16 +555,22 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     g.setFont (13.0f);
     g.drawText ("dopplerfeld", margin, margin, 100, topBarHeight, juce::Justification::centredLeft);
 
-    // Bauzeit dieser Fassung, klein daneben. Ohne sie laesst sich von aussen
-    // nicht unterscheiden, ob eine Aenderung nicht wirkt oder ob schlicht eine
-    // aeltere Fassung laeuft - und diese Frage hat schon mehrere Anlaeufe
-    // gekostet. __DATE__/__TIME__ stehen beim Uebersetzen fest, es gibt also
-    // nichts zu pflegen.
-    g.setColour (juce::Colours::white.withAlpha (0.30f));
+    // Bauzeit dieser Fassung, rechts aussen in der Kopfzeile. Ohne sie laesst
+    // sich von aussen nicht unterscheiden, ob eine Aenderung nicht wirkt oder ob
+    // schlicht eine aeltere Fassung laeuft - und diese Frage hat schon mehrere
+    // Anlaeufe gekostet. __DATE__/__TIME__ stehen beim Uebersetzen fest, es gibt
+    // also nichts zu pflegen.
+    //
+    // Rechts und nicht neben dem Schriftzug: links reicht der Platz nur bis zum
+    // ersten Knopf der Kopfzeile, dahinter verschwindet die Zeile unter ihm.
+    // Rechts bleibt hinter dem letzten Knopf genug Rest, und rechtsbuendig
+    // gezeichnet waechst sie in den freien Raum hinein statt in die Knopfreihe.
+    g.setColour (juce::Colours::white.withAlpha (0.45f));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
                                               10.0f, juce::Font::plain)));
     g.drawText (juce::String ("Build ") + __DATE__ + " " + __TIME__,
-                margin + 104, margin, 200, topBarHeight, juce::Justification::centredLeft);
+                getWidth() - margin - 200, margin, 200, topBarHeight,
+                juce::Justification::centredRight);
 
     g.setColour (juce::Colours::white.withAlpha (0.75f));
     g.setFont (13.0f);
