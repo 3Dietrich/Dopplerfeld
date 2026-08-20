@@ -350,7 +350,7 @@ void DopplerfeldEditor::updateScopeVisibility()
 
     setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
              margin * 2 + topBarHeight + 6 + fieldHeight
-                 + (scopeVisible ? scopeBlockHeight : 0) + statusHeight);
+                 + (scopeVisible ? scopeBlockHeight : 0) + cpuMeterBlockHeight + statusHeight);
 }
 
 void DopplerfeldEditor::setParameter (const char* paramID, double value)
@@ -387,10 +387,9 @@ void DopplerfeldEditor::refreshDisplay()
     motionPanel.setPlaying (dopplerfeldProcessor.isPlayingMotion());
     motionPanel.setFlying (dopplerfeldProcessor.isFlyingBy());
 
-    swarmPanel.setLoad (dopplerfeldProcessor.cpuLoadPercent(),
-                        dopplerfeldProcessor.realCloneCount(),
-                        dopplerfeldProcessor.cheapCloneCount(),
-                        dopplerfeldProcessor.limiterHits() > 0);
+    // Die CPU-Zeile braucht kein setLoad() mehr auf ein Panel - sie liest
+    // Klonzahl/Begrenzer direkt im paint() der Editor-Zeile, genau wie die
+    // CPU-Last schon vorher direkt dort gelesen wurde (s. dort).
 
     // 30Hz-Timer = ~33ms zwischen zwei Aufrufen (siehe startTimerHz weiter
     // unten) - fest verdrahtet statt gemessen, das Levelmeter braucht nur
@@ -446,9 +445,10 @@ void DopplerfeldEditor::refreshDisplay()
         }
     }
 
-    // Statuszeile neu zeichnen, nicht das ganze Fenster - die Panels darüber
-    // ändern sich nur bei Bedienung.
-    repaint (margin, getHeight() - statusHeight, fieldWidth, statusHeight);
+    // Statuszeile UND die CPU-Zeile darueber neu zeichnen, nicht das ganze
+    // Fenster - die Panels darüber ändern sich nur bei Bedienung.
+    repaint (margin, getHeight() - statusHeight - cpuMeterBlockHeight,
+             fieldWidth, cpuMeterBlockHeight + statusHeight);
 }
 
 void DopplerfeldEditor::updateDisplayAverages()
@@ -504,10 +504,10 @@ juce::String DopplerfeldEditor::statusText() const
     // @dpa-Feedback: L-M-Abstand immer sichtbar, nicht nur bei Vorbeiflug.
     text << "   L-M " << juce::String::formatted ("%7.1f", displayAverages.listenerDistanceM) << " m";
 
-    // @dpa-Feedback: CPU-Echtzeit-Anzeige (Wanduhrzeit/Audiozeit, geglättet -
-    // siehe cpuLoadPercent()). Über 100% färbt paint() die ganze Statuszeile
-    // rot (siehe dort) - reiner Text reicht hier, kein eigener Meter nötig.
-    text << "   CPU " << juce::String::formatted ("%4.0f", displayAverages.cpuPercent) << " %";
+    // Die CPU-Last steht nicht mehr in dieser Zeile, sondern in der eigenen
+    // Zeile direkt darueber (siehe paint(), cpuMeterBlockHeight) - dort mit
+    // Balken statt nur als Zahl, und immer sichtbar statt nur, wenn dieser
+    // Text gerade Platz hat.
 
     // @dpa-Feedback: Einzelne Pfade (L/R, M_r, Zweige) sind zu klein und zu
     // viel für die Statuszeile - nur die Anzahl aktiver Mehrfachreflexionen
@@ -572,15 +572,63 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
                 getWidth() - margin - 200, margin, 200, topBarHeight,
                 juce::Justification::centredRight);
 
-    g.setColour (juce::Colours::white.withAlpha (0.75f));
-    g.setFont (13.0f);
+    // Loeserlast-Zeile: eigener Balken + Zahl, IMMER sichtbar (siehe
+    // cpuMeterBlockHeight im Header) - unabhaengig davon, ob ein Panel
+    // (insbesondere das Schwarm-Panel) gerade auf- oder zugeklappt ist, denn
+    // sie ist die Warnung vor hoerbaren Aussetzern. Frueher stand dieser
+    // Balken in SwarmPanel::paint und war darum unsichtbar, sobald das Panel
+    // zu war oder @dpa sich gerade nicht fuer Klone interessierte.
+    {
+        // Gemittelter Wert wie im Rest der Statuszeile (s. updateDisplayAverages,
+        // @dpa-Feedback "Langsamkeit der Anzeigewahrnehmung") - Balken und Zahl
+        // muessen denselben Wert zeigen, sonst widersprechen sie sich optisch.
+        const float cpu = (float) displayAverages.cpuPercent;
 
-    // CPU über 100% ist hörbar (Aussetzer) - die ganze Statuszeile färbt sich
-    // dafür rot, statt nur die Zahl selbst hervorzuheben. Einfacher als ein
-    // gemischtfarbiger Text und im Zweifel eher zu auffällig als übersehen.
-    const bool overBudget = dopplerfeldProcessor.cpuLoadPercent() > 100.0f;
-    g.setColour (overBudget ? juce::Colours::orangered.withAlpha (0.85f)
-                            : juce::Colours::white.withAlpha (0.6f));
+        const int meterTop = getHeight() - statusHeight - cpuMeterBlockHeight;
+        const auto bar = juce::Rectangle<int> (margin, meterTop, fieldWidth, cpuMeterBarHeight).toFloat();
+
+        g.setColour (juce::Colours::white.withAlpha (0.08f));
+        g.fillRoundedRectangle (bar, 2.0f);
+
+        // Der Balken zeigt bis 150 %, nicht bis 100: der interessante Bereich
+        // beginnt dort, wo es knapp wird, und ein Balken, der bei 100 % einfach
+        // anschlaegt, verschweigt genau das.
+        constexpr float fullScale = 150.0f;
+        const float filled = juce::jlimit (0.0f, 1.0f, cpu / fullScale);
+
+        const juce::Colour meterColour = cpu > 100.0f ? juce::Colours::orangered
+                                        : cpu >  70.0f ? juce::Colours::orange
+                                                       : juce::Colours::limegreen;
+
+        g.setColour (meterColour.withAlpha (0.75f));
+        g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * filled), 2.0f);
+
+        // Marke bei 100 %, damit der Balken eine Bezugsgroesse hat.
+        const float markX = bar.getX() + bar.getWidth() * (100.0f / fullScale);
+        g.setColour (juce::Colours::white.withAlpha (0.55f));
+        g.drawLine (markX, bar.getY(), markX, bar.getBottom(), 1.0f);
+
+        // CPU über 100% ist hörbar (Aussetzer) - die Beschriftung faerbt sich
+        // dafuer zusaetzlich rot, dieselbe Farbe wie der Balken selbst.
+        g.setColour (cpu > 100.0f ? juce::Colours::orangered.withAlpha (0.85f)
+                                  : juce::Colours::white.withAlpha (0.75f));
+        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
+                                                  11.0f, juce::Font::plain)));
+
+        // Begrenzer gehoert hier hin: laeuft er, klingt ein Schwarm nach einer
+        // einzigen Stimme, weil alles auf dieselbe Obergrenze zusammengefahren
+        // wird - ohne diese Anzeige sieht man dem Ausgang das nicht an.
+        g.drawText (juce::String::formatted ("CPU %4.0f %%   Klone: %d%s",
+                                             (double) cpu, dopplerfeldProcessor.realCloneCount(),
+                                             dopplerfeldProcessor.limiterHits() > 0 ? "   BEGRENZER AKTIV" : ""),
+                    margin, meterTop + cpuMeterBarHeight + 2, fieldWidth, cpuMeterLabelHeight,
+                    juce::Justification::centredLeft);
+    }
+
+    // Statuszeile selbst (Tempo/L-M/Reflexionen/...) faerbt sich seit dem
+    // Auslagern der CPU-Last nicht mehr rot - diese Warnung sitzt jetzt
+    // ausschliesslich im Balken darueber.
+    g.setColour (juce::Colours::white.withAlpha (0.6f));
     // Monospace statt Proportionalschrift: nur bei fester Zeichenbreite pro
     // Glyphe hält das Zahlen-Padding in statusText() die Spalten auch
     // tatsaechlich stabil (siehe Kommentar dort). drawText() statt

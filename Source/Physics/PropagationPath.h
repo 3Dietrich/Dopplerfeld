@@ -401,6 +401,16 @@ private:
     RetardedTimeSolver solver;
     PathTransform      transform;
 
+    // Der Versatz des vorigen Blocks. Der Transform wird nur einmal je Block
+    // gesetzt (wandernde Waende, Klon-Versatz samt Wackler), seine Aenderung
+    // waere sonst ein Positionssprung im Blockraster: bei 512 Samples alle
+    // 10,7 ms, und schon ein halber Meter Sprung sind 1,5 ms Laufzeitsprung.
+    // Das klingt nach Bitcrusher, nicht nach Bewegung (@dpa 20260820: "Klone
+    // klingen Bitcrashed"). Statt zu springen wandert der Empfaenger den Block
+    // ueber von hier nach dort, siehe process().
+    Vec3               prevTransformOffset {};
+    bool               hasPrevTransformOffset = false;
+
     Branch branches[maxBranchSlots];
 
     double sr              = 0.0;

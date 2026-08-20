@@ -91,9 +91,13 @@ private:
     // Feld-Drag und Regler nie auseinanderlaufen.
     void setParameter (const char* paramID, double value);
 
-    // Statuszeile unter dem Feld: Tempo, L-M-Abstand, CPU-Last, Reflexions-
-    // und Aufnahme/Wiedergabe-Status. Liest die gemittelten Werte aus
+    // Statuszeile unter dem Feld: Tempo, L-M-Abstand, Reflexions- und
+    // Aufnahme/Wiedergabe-Status. Liest die gemittelten Werte aus
     // displayAverages, nicht den rohen 30Hz-Snapshot (s. updateDisplayAverages()).
+    // Die CPU-Last steht NICHT mehr in diesem Text, sondern in der eigenen
+    // Zeile direkt darueber (siehe cpuMeterBlockHeight, gezeichnet in
+    // paint()) - eine einzelne Anzeige statt zweier, die durch
+    // unterschiedliche Mittelung auseinanderlaufen koennten.
     juce::String statusText() const;
 
     // Zweite, kleinere Zeile unter der Statuszeile (@dpa-Feedback 20260819:
@@ -250,7 +254,10 @@ private:
     static constexpr int motionContentHeight = 372;   // Reiter Vorbeiflug/Record-Play + gemeinsame Jitter/Speed-Zeile, s. MotionPanel::resized()
     static constexpr int fieldContentHeight  = 306;   // 218 + dritte Reihe (jetzt Amplitudenregler statt M-Jitter, s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 360;
-    static constexpr int swarmContentHeight  = 226;
+    // 226 minus die 40px, die frueher fuer den CPU-Balken reserviert waren -
+    // der sitzt jetzt in der eigenen Zeile am unteren Fensterrand statt hier
+    // (siehe cpuMeterBlockHeight), das Panel braucht darum weniger Hoehe.
+    static constexpr int swarmContentHeight  = 186;
 
     // Das Feld bleibt exakt 700x400 (Plan 3.13). Die Größe ist nicht nur
     // Optik: FieldComponent rechnet die Feldhöhe in Metern aus seinem
@@ -264,6 +271,17 @@ private:
     static constexpr int topBarHeight = 26;
     // Zeitbasis, mit der der Scope startet (@dpa: "default auf 10s").
     static constexpr double scopeDefaultSeconds = 10.0;
+
+    // Loeserlast-Zeile direkt ueber der Statuszeile, ueber die gesamte
+    // Fenster-Laufzeit hinweg sichtbar - unabhaengig davon, ob ein Panel
+    // (insbesondere das Schwarm-Panel) auf- oder zugeklappt ist, denn sie ist
+    // die Warnung vor hoerbaren Aussetzern (@dpa 20260820: "auch ohne Klone
+    // immer sichtbar"). Frueher steckte dieser Balken in SwarmPanel::paint
+    // und war darum unsichtbar, sobald das Panel zu war.
+    static constexpr int cpuMeterBarHeight   = 8;
+    static constexpr int cpuMeterLabelHeight = 16;
+    // Balken + kleiner Abstand + Beschriftungszeile + Abstand zur Statuszeile darunter.
+    static constexpr int cpuMeterBlockHeight = cpuMeterBarHeight + 2 + cpuMeterLabelHeight + 6;
 
     static constexpr int statusHeight = 44;
     static constexpr int panelColumnWidth = 470;   // breitestes Panel (Sample) plus Scrollbalken

@@ -22,6 +22,11 @@ void PropagationPath::reset()
     lastSolveTime = 0.0;
     seeded        = false;
 
+    // Ohne das traegt der erste Block nach einem Reset die Differenz zum
+    // Versatz von vorher als Geschwindigkeit ein - ein Wusch aus dem Nichts.
+    hasPrevTransformOffset = false;
+    prevTransformOffset    = Vec3{};
+
     dispBranches.store (0);
     dispDelay.store (0.0);
     dispMach.store (0.0);
@@ -491,8 +496,27 @@ void PropagationPath::process (const SourceTrajectory&   traj,
     // Pflichtstelle für die Spiegelquellen aus Phase 2 (Plan 3.4): der
     // Empfänger wird zuerst in das Koordinatensystem dieses Pfades gespiegelt.
     // Für den Direktschall ist das die Identität, also ein No-op.
-    const Vec3 recvPos0 = applyPathTransform (transform, receiverPos);
-    const Vec3 recvVel  = applyPathTransformVelocity (transform, receiverVel);
+    // Der Versatz dieses Pfades wandert ueber den Block, statt an seinem Anfang
+    // zu springen: begonnen wird beim Versatz des vorigen Blocks, die Differenz
+    // geht als zusaetzliche Empfaengergeschwindigkeit ein. Weiter unten wird der
+    // Empfaenger ohnehin linear mit recvVel extrapoliert (siehe recvAtEnd), die
+    // Bewegung ist damit stueckweise linear statt treppenfoermig.
+    //
+    // Das ist nicht nur eine Glaettung: erst dadurch bekommt die Wackelbewegung
+    // eines Klons ueberhaupt einen Doppler-Anteil. Ein reiner Positionssprung
+    // ohne Geschwindigkeit ist genau das, was als Bitcrusher zu hoeren war.
+    const Vec3 offsetNow  = transform.offset;
+    const Vec3 offsetPrev = hasPrevTransformOffset ? prevTransformOffset : offsetNow;
+    const Vec3 offsetStep = offsetNow - offsetPrev;
+
+    prevTransformOffset    = offsetNow;
+    hasPrevTransformOffset = true;
+
+    const double blockSeconds = (double) numSamples / sr;
+
+    const Vec3 recvPos0 = applyPathTransform (transform, receiverPos) - offsetStep;
+    const Vec3 recvVel  = applyPathTransformVelocity (transform, receiverVel)
+                        + offsetStep * (1.0 / std::max (1.0e-9, blockSeconds));
 
     const double c = medium.speedOfSound();
 

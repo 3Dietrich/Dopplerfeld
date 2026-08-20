@@ -356,19 +356,30 @@ namespace Tooltips
                 case Key::SrcJitterAmount:
                     return lang == Language::De
                         ? "Auslenkung einer langsamen, staendigen Mikrobewegung der Quelle M in "
-                          "Metern - 0 = aus (Default). Wirkt immer additiv, auch waehrend normaler "
-                          "Bewegung; im Stillstand ist es der 'echte Chorus', bei Bewegung geht es im "
-                          "normalen Doppler unter."
+                          "Metern, 0 bis 1000 - 0 = aus (Default). Kennlinie stark exponentiell: "
+                          "der untere, dezente Arbeitsbereich (Bruchteile bis wenige Meter) ist "
+                          "fein aufgeloest, die grossen Ausschlaege liegen erst ganz am Ende des "
+                          "Reglerwegs. Wirkt immer additiv, auch waehrend normaler Bewegung; im "
+                          "Stillstand ist es der 'echte Chorus', bei Bewegung geht es im normalen "
+                          "Doppler unter."
                         : "Amplitude of a slow, continuous micro-movement of source M in "
-                          "metres - 0 = off (default). Always acts additively, even during "
-                          "normal movement; at standstill it is the 'real chorus', during "
-                          "movement it gets absorbed into the normal doppler.";
+                          "metres, 0 to 1000 - 0 = off (default). Strongly exponential curve: "
+                          "the lower, subtle working range (fractions up to a few metres) is "
+                          "finely resolved, the large excursions only appear at the very end of "
+                          "the control's travel. Always acts additively, even during normal "
+                          "movement; at standstill it is the 'real chorus', during movement it "
+                          "gets absorbed into the normal doppler.";
                 case Key::SrcJitterRate:
                     return lang == Language::De
-                        ? "Wie schnell/unruhig sich die Jitter-Bewegung aendert (Hz). Kleine Werte = "
-                          "langsames Driften, grosse Werte = nervoeses Zittern."
-                        : "How fast/restless the jitter movement changes (Hz). Small values = "
-                          "slow drifting, large values = nervous trembling.";
+                        ? "Wie schnell/unruhig sich die Jitter-Bewegung aendert (Hz), 0,001 bis "
+                          "20 Hz. Kennlinie exponentiell, damit der untere Bereich trotz der "
+                          "riesigen Spanne bedienbar bleibt: kleine Werte = extrem langsames "
+                          "Driften (0,001 Hz = ein Zyklus in gut 16 Minuten), grosse Werte = "
+                          "nervoeses Zittern."
+                        : "How fast/restless the jitter movement changes (Hz), 0.001 to 20 Hz. "
+                          "Exponential curve so the low end stays usable despite the huge span: "
+                          "small values = extremely slow drifting (0.001 Hz = one cycle in just "
+                          "over 16 minutes), large values = nervous trembling.";
                 case Key::SrcJitterOn:
                     return lang == Language::De
                         ? "Schaltet das Wackeln der Quelle M und aller Klone komplett ab. Die "
@@ -422,12 +433,14 @@ namespace Tooltips
                           "silent brake inside the calculation.";
                 case Key::NWaveSize:
                     return lang == Language::De
-                        ? "Groesse/Masse des Koerpers in Metern - sie bestimmt die Dauer der "
-                          "Druckwelle. Groesser = tiefer und laenger (Verkehrsflugzeug), kleiner = "
-                          "kuerzer und knackiger (Geschoss). Wirkt nur bei eingeschalteter N-Welle."
-                        : "Size/mass of the body in metres - determines the duration of the "
-                          "pressure wave. Larger = deeper and longer (airliner), smaller = "
-                          "shorter and sharper (projectile). Only affects the N-wave while enabled.";
+                        ? "Groesse/Masse des Koerpers in Metern, 0 bis 200 - sie bestimmt die "
+                          "Dauer der Druckwelle. Groesser = tiefer und laenger "
+                          "(Verkehrsflugzeug), kleiner = kuerzer und knackiger (Geschoss). Wirkt "
+                          "nur bei eingeschalteter N-Welle."
+                        : "Size/mass of the body in metres, 0 to 200 - determines the duration "
+                          "of the pressure wave. Larger = deeper and longer (airliner), smaller "
+                          "= shorter and sharper (projectile). Only affects the N-wave while "
+                          "enabled.";
                 case Key::NWave:
                     return lang == Language::De
                         ? "Echte N-Wellen-Druckwelle beim Ueberschallknall: steiler Anstieg, Nulldurchgang, "
@@ -777,13 +790,13 @@ namespace Tooltips
                           "Route um einen kleinen Betrag von der echten abweicht - zusammen ergibt das "
                           "ein Schrotmuster statt eines Einzelobjekts. Jeder Klon kostet genau ein "
                           "Pfadpaar, die Loeserlast waechst also linear mit dieser Zahl, siehe "
-                          "CPU-Balken darunter. 0 = aus, kostet dann auch nichts."
+                          "CPU-Balken unten am Fensterrand. 0 = aus, kostet dann auch nichts."
                         : "Total number of clones. A clone is a second source with full solver "
                           "physics (its own delay, own doppler, own sonic boom) whose path "
                           "deviates from the real one by a small amount - together they "
                           "produce a shotgun pattern instead of a single object. Each clone "
                           "costs exactly one path pair, so solver load grows linearly with "
-                          "this number, see the CPU bar below. 0 = off, costs nothing then "
+                          "this number, see the CPU bar at the bottom of the window. 0 = off, costs nothing then "
                           "either.";
                 case Key::CloneSpread:
                     return lang == Language::De

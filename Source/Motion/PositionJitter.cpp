@@ -61,6 +61,11 @@ void PositionJitter::setRate (double hektikHz)
     freqSmoother.setTau (1.0 / (2.0 * rateHz));
 }
 
+void PositionJitter::setMaxSpeed (double metresPerSecond)
+{
+    maxSpeed = metresPerSecond;
+}
+
 Vec3 PositionJitter::tick (double dt)
 {
     retargetTimer -= dt;
@@ -78,12 +83,30 @@ Vec3 PositionJitter::tick (double dt)
     Vec3 freqNow, freqVel;
     freqSmoother.tick (freqNow, freqVel);
 
+    // Tempogrenze: die Bahngeschwindigkeit ist amount * 2pi * f je Achse, im
+    // ungünstigsten Fall stehen alle drei Achsen gleichzeitig auf ihrem
+    // Maximum. Ueberschreitet das die Grenze, werden ALLE drei Frequenzen mit
+    // demselben Faktor gestreckt - so bleibt das Bewegungsmuster erhalten und
+    // laeuft nur langsamer ab, statt dass eine Achse gegen eine Kante faehrt.
+    double slow = 1.0;
+
+    if (maxSpeed > 0.0 && amount > 0.0)
+    {
+        const double fMagnitude = std::sqrt (freqNow.x * freqNow.x
+                                           + freqNow.y * freqNow.y
+                                           + freqNow.z * freqNow.z);
+        const double vMax       = amount * kTwoPi * fMagnitude;
+
+        if (vMax > maxSpeed)
+            slow = maxSpeed / vMax;
+    }
+
     // std::abs, weil eine negativ driftende "Frequenz" sonst die Phase
     // rueckwaerts liefe - das ist als Wert ohne Bedeutung, nur ihr Betrag
     // zaehlt als Umlaufgeschwindigkeit.
-    phase[0] += kTwoPi * std::abs (freqNow.x) * dt;
-    phase[1] += kTwoPi * std::abs (freqNow.y) * dt;
-    phase[2] += kTwoPi * std::abs (freqNow.z) * dt;
+    phase[0] += kTwoPi * std::abs (freqNow.x) * slow * dt;
+    phase[1] += kTwoPi * std::abs (freqNow.y) * slow * dt;
+    phase[2] += kTwoPi * std::abs (freqNow.z) * slow * dt;
 
     for (auto& p : phase)
         if (p > kTwoPi)

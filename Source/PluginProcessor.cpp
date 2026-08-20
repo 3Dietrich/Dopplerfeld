@@ -592,16 +592,25 @@ void DopplerfeldProcessor::applyParameters()
     const double jitterAmount = jitterOn ? (double) pp.srcJitterAmount->load() : 0.0;
     const double jitterRate   = (double) pp.srcJitterRateHz->load();
 
-    sourceJitter.setAmount (jitterAmount);
-    sourceJitter.setRate   (jitterRate);
+    // Tempogrenze aus demselben Regler, der auch die Bahn deckelt. Der Wackler
+    // laeuft weiterhin NICHT durch den harten Schrittdeckel in advanceMotion -
+    // dort wuerde er zerhackt. Hier wird stattdessen seine Frequenz gestreckt:
+    // die Bewegung behaelt ihre Groesse und wird langsamer, was bei grossen
+    // Ausschlaegen erst brauchbar macht, was sonst Ueberschall waere.
+    const double jitterMaxSpeed = (double) pp.globalMaxSpeed->load();
+
+    sourceJitter.setAmount   (jitterAmount);
+    sourceJitter.setRate     (jitterRate);
+    sourceJitter.setMaxSpeed (jitterMaxSpeed);
 
     // Dieselben Regler wie fuer die Quelle: @dpa hat den Jitter dort
     // ausprobiert und will genau diesen auf den Klonen, nicht einen zweiten
     // Satz Regler.
     for (auto& j : cloneJitter)
     {
-        j.setAmount (jitterAmount);
-        j.setRate   (jitterRate);
+        j.setAmount   (jitterAmount);
+        j.setRate     (jitterRate);
+        j.setMaxSpeed (jitterMaxSpeed);
     }
 
     const bool fieldJustChanged = std::abs (fieldMetresValue - lastFieldMetres) > 1.0e-9;

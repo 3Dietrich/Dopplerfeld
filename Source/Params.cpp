@@ -123,17 +123,30 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (earSpacing, "Ear Spacing", { 0.10f, 0.25f, 0.001f }, 0.17f, "m"));
 
     // Position-Jitter der Quelle M. Default 0m/aus, damit bestehende Presets
-    // beim Laden unveraendert klingen. Obergrenzen bewusst weit offen statt
+    // beim Laden unveraendert klingen. Obergrenze bewusst weit offen statt
     // auf einen "vernuenftigen" Wert gedeckelt (keine versteckten Limits) -
     // Skew haelt den ueblichen, dezenten Bereich trotzdem fein bedienbar.
     {
-        auto range = juce::NormalisableRange<float> (0.0f, 50.0f);
-        range.setSkewForCentre (0.3f);
+        // Bereich bis 1000 m (@dpa: "exponentiel, also langsam steigend").
+        // Skew-Mittelpunkt bei 1 m statt wie vorher 0,3 m in nur 50 m Bereich -
+        // der Regler haengt dadurch noch deutlich laenger im feinen,
+        // dezenten Arbeitsbereich (Bruchteile bis wenige Meter) und
+        // schwingt erst auf dem letzten Stueck des Wegs in die grossen
+        // Ausschlaege hoch.
+        auto range = juce::NormalisableRange<float> (0.0f, 1000.0f);
+        range.setSkewForCentre (1.0f);
         layout.add (floatParam (srcJitterAmount, "Source Jitter Amount", range, 0.0f, "m"));
     }
     {
-        auto range = juce::NormalisableRange<float> (0.01f, 20.0f);
-        range.setSkewForCentre (0.3f);
+        // "Hektik": Rate der Jitter-Bewegung. Untergrenze bis 0,001 Hz offen
+        // (ein Wellenberg alle 1000 s), damit auch extrem traeges Driften
+        // erreichbar bleibt - bei 0,001 bis 20 Hz waere eine lineare Kennlinie
+        // unbedienbar, deshalb Skew-Mittelpunkt bei 0,1 Hz: der untere,
+        // musikalisch relevante Bereich (Sekundenbruchteile bis wenige Hz)
+        // bekommt den Grossteil des Reglerwegs, "hektisch" bis 20 Hz bleibt
+        // am oberen Ende erreichbar.
+        auto range = juce::NormalisableRange<float> (0.001f, 20.0f);
+        range.setSkewForCentre (0.1f);
         layout.add (floatParam (srcJitterRateHz, "Source Jitter Rate", range, 0.2f, "Hz"));
     }
     // Default an: der Ausschlag steht ohnehin auf 0, das Wackeln beginnt also
@@ -340,9 +353,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (boolParam (nWaveOn, "N-Wave", false));
     {
         // Groesse/Masse des Koerpers in Metern. Skew auf 15 m (Kampfjet-
-        // Groessenordnung), nach unten bis 0,5 m fuer knackige kleine Koerper
-        // und nach oben bis 200 m offen.
-        auto range = juce::NormalisableRange<float> (0.5f, 200.0f);
+        // Groessenordnung), nach unten bis 0 m offen (keine versteckten
+        // Limits) und nach oben bis 200 m offen. PropagationPath::setNWave()
+        // floort den intern verwendeten Wert selbst auf 0,01 m, ein Regler-
+        // wert von exakt 0 fuehrt also nicht zu einer Division durch 0.
+        auto range = juce::NormalisableRange<float> (0.0f, 200.0f);
         range.setSkewForCentre (15.0f);
         layout.add (floatParam (nWaveSize, "N-Wave Size", range, 15.0f, "m"));
     }
@@ -359,7 +374,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // andere weg, keine 'billigen', die bringen nichts"). Eine billige
     // Nachbildung mit eigenem Anteil-Regler und Automatik gibt es seither
     // nicht mehr - die Loeserlast waechst linear mit dieser Zahl, sichtbar am
-    // CPU-Balken im SwarmPanel.
+    // CPU-Balken unten am Fensterrand, immer sichtbar.
     layout.add (std::make_unique<juce::AudioParameterInt> (
         juce::ParameterID { cloneTotal, 1 }, "Clones", 0, 20, 0));
     {

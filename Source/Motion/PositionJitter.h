@@ -50,6 +50,18 @@ public:
     // "Hektik": wie schnell/chaotisch sich die Bewegung ändert, in Hz.
     void setRate (double hektikHz);
 
+    // Obergrenze für die Bahngeschwindigkeit des Wacklers, in m/s. 0 oder
+    // negativ heißt "keine Grenze".
+    //
+    // Gebremst wird ueber die Frequenz, nicht ueber den Ausschlag: die
+    // Bewegung wird langsamer und behaelt ihre Groesse, statt an einer Kante
+    // abgeschnitten zu werden (@dpa 20260820: "vielleicht kannst Du die
+    // Jitterbewegung auch zum max Speed (rund) limitieren? So kann man grosse
+    // Gebiete in unterschiedlichen Geschwindigkeiten"). Ein Ausschlag von
+    // 1000 m bei 20 Hz waeren sonst 125000 m/s, also Mach 365 - der Loeser
+    // haette dort nichts mehr zu suchen.
+    void setMaxSpeed (double metresPerSecond);
+
     // Additiver Versatz für diesen Tick, in Metern. Immer aktiv, kein
     // Ein/Aus nach Bewegungszustand (@dpa 20260818: additiv immer, geht bei
     // Bewegung im normalen Doppler unter, dominiert im Stillstand von
@@ -62,6 +74,7 @@ private:
 
     double amount = 0.0;
     double rateHz = 0.2;
+    double maxSpeed = 0.0;   // 0 = keine Grenze
 
     // Zweckentfremdet: glättet das Frequenztripel (fx,fy,fz), nicht eine
     // Position - siehe Klassenkommentar.

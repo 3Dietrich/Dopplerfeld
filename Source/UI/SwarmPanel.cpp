@@ -73,62 +73,6 @@ void SwarmPanel::refreshTooltips()
     panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));
 }
 
-void SwarmPanel::setLoad (float cpu, int realClones, int cheapClones, bool limiterActive)
-{
-    cpuPercent = cpu;
-    realCount  = realClones;
-    cheapCount = cheapClones;
-    limiting   = limiterActive;
-    repaint();
-}
-
-void SwarmPanel::paint (juce::Graphics& g)
-{
-    if (meterArea.isEmpty())
-        return;
-
-    auto bar = meterArea.toFloat();
-
-    g.setColour (juce::Colours::white.withAlpha (0.08f));
-    g.fillRoundedRectangle (bar, 2.0f);
-
-    // Der Balken zeigt bis 150 %, nicht bis 100: der interessante Bereich
-    // beginnt dort, wo es knapp wird, und ein Balken, der bei 100 % einfach
-    // anschlaegt, verschweigt genau das.
-    constexpr float fullScale = 150.0f;
-
-    const float filled = juce::jlimit (0.0f, 1.0f, cpuPercent / fullScale);
-
-    // Ueber 100 % ist es hoerbar, nicht nur eine Zahl - deshalb dieselbe Farbe
-    // wie in der Statuszeile des Editors.
-    const juce::Colour colour = cpuPercent > 100.0f ? juce::Colours::orangered
-                              : cpuPercent >  70.0f ? juce::Colours::orange
-                                                    : juce::Colours::limegreen;
-
-    g.setColour (colour.withAlpha (0.75f));
-    g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * filled), 2.0f);
-
-    // Marke bei 100 %, damit der Balken eine Bezugsgroesse hat.
-    const float markX = bar.getX() + bar.getWidth() * (100.0f / fullScale);
-
-    g.setColour (juce::Colours::white.withAlpha (0.55f));
-    g.drawLine (markX, bar.getY(), markX, bar.getBottom(), 1.0f);
-
-    g.setColour (juce::Colours::white.withAlpha (0.75f));
-    g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
-                                              11.0f, juce::Font::plain)));
-    // Der Begrenzer gehoert hier hin: laeuft er, klingt ein Schwarm nach einer
-    // einzigen Stimme, weil alles auf dieselbe Obergrenze zusammengefahren wird.
-    // Ohne diese Anzeige sieht man dem Ausgang das nicht an.
-    // cheapCount ist seit der Entfernung der billigen Klone immer 0 - kommt
-    // aber ueber setLoad() unveraendert herein, siehe deren Kommentar oben.
-    g.drawText (juce::String::formatted ("CPU %4.0f %%   Klone: %d%s",
-                                         (double) cpuPercent, realCount + cheapCount,
-                                         limiting ? "   BEGRENZER AKTIV" : ""),
-                meterArea.getX(), meterArea.getBottom() + 2, meterArea.getWidth(), 16,
-                juce::Justification::centredLeft);
-}
-
 void SwarmPanel::resized()
 {
     constexpr int knobW = 84;
@@ -150,10 +94,8 @@ void SwarmPanel::resized()
         showButton.setBounds (row.removeFromLeft (110));
     }
 
-    area.removeFromTop (8);
-    meterArea = area.removeFromTop (14);
-    area.removeFromTop (18);   // Platz fuer die Zeile unter dem Balken
-
+    // Kein Platz mehr fuer den CPU-Balken hier reserviert - der sitzt jetzt
+    // in der Statuszeile des Editors (siehe Klassenkommentar in SwarmPanel.h).
     area.removeFromTop (8);
     panicButton.setBounds (area.removeFromTop (28).removeFromLeft (240));
 }
