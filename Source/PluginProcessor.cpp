@@ -428,6 +428,10 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     {
         cloneJitter[i].prepare (DopplerEngine::trajectoryRateHz);
         cloneJitter[i].setSeed (0x9e3779b9u * (std::uint32_t) (i + 1) + 0x5eed4a11u);
+
+        cloneJitterSmoother[i].prepare (DopplerEngine::trajectoryRateHz);
+        cloneJitterSmoother[i].reset (Vec3{});
+        cloneJitterSmoother[i].setType (sourceSmoothers.typeIndex, Vec3{});
     }
 
     recorderTickAccum = 0.0;
@@ -632,6 +636,14 @@ void DopplerfeldProcessor::applyParameters()
     listenerSmoothers.setType ((int) pp.smootherType->load(), listenerState.head);
 
     sourceSmoothers.applyParameters (tau, vMax, aMax);
+
+    // Dasselbe Verfahren und dieselbe Zeitkonstante fuer die Wackler der Klone,
+    // damit sie so weit ausschlagen wie die Quelle und nicht weiter.
+    for (auto& s : cloneJitterSmoother)
+    {
+        s.setType ((int) pp.smootherType->load(), Vec3{});
+        s.applyParameters (tau, vMax, aMax);
+    }
     listenerSmoothers.applyParameters (tau, vMax, aMax);
 
     yawSmoothCoeff = 1.0 - std::exp (-1.0 / (DopplerEngine::trajectoryRateHz * std::max (1.0e-3, tau)));
@@ -1163,7 +1175,16 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         // alle Klone lesen dieselbe Trajektorie und unterscheiden sich nur
         // darin, von wo aus sie gehoert werden.
         for (int i = 0; i < (int) cloneJitter.size(); ++i)
-            dopplerEngine.setCloneJitterOffset (i, cloneJitter[(size_t) i].tick (tickDt));
+        {
+            // Erst der Wackler, dann die Glaettung - genau die Reihenfolge, die
+            // die Quelle durchlaeuft (Jitter aufs Ziel, danach Glaetter).
+            cloneJitterSmoother[(size_t) i].setTarget (cloneJitter[(size_t) i].tick (tickDt));
+
+            Vec3 offset, unused;
+            cloneJitterSmoother[(size_t) i].tick (offset, unused);
+
+            dopplerEngine.setCloneJitterOffset (i, offset);
+        }
 
         if (bypassSmoothing)
         {

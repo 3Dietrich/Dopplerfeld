@@ -1892,6 +1892,71 @@ int main()
             std::printf ("%-22s weitester Klon %.2f m von der Quelle (Streuung 5 m)\n",
                          "", maxDistance);
 
+            // Schlagen sie so weit aus wie die Quelle? (@dpa 20260820: "sie
+            // laufen nicht durch die Glaettung und haben deshalb viel groessere
+            // weiten ausschlage als das original!")
+            //
+            // Der Quell-Jitter wird auf das Ziel addiert und laeuft DANACH durch
+            // die Bewegungsglaettung, wird dort also gedaempft. Der Klon-Jitter
+            // muss denselben Weg nehmen, sonst wackeln die Klone in voller
+            // Amplitude um eine Quelle, die nur noch einen Rest davon zeigt.
+            {
+                DopplerfeldProcessor p3;
+
+                p3.setRateAndBufferSizeDetails (sampleRate, blockSize);
+                setParam (p3, Params::fieldMetres, 20.0f);
+                setParam (p3, Params::cloneTotal,  4.0f);
+                setParam (p3, Params::cloneReal,   4.0f);
+                setParam (p3, Params::cloneSpread, 2.0f);
+                setParam (p3, Params::cloneAuto,   0.0f);
+                setParam (p3, Params::smootherType, 1.0f);
+                setParam (p3, Params::smootherTau,  0.5f);
+                setParam (p3, Params::srcJitterAmount, 1.0f);
+                setParam (p3, Params::srcJitterRateHz, 2.0f);
+                p3.prepareToPlay (sampleRate, blockSize);
+
+                juce::MidiBuffer midi3;
+                FieldSnapshot    snap3;
+
+                Vec3 srcMin {  1e9,  1e9,  1e9 }, srcMax { -1e9, -1e9, -1e9 };
+                Vec3 relMin {  1e9,  1e9,  1e9 }, relMax { -1e9, -1e9, -1e9 };
+
+                for (int b = 0; b < (int) (6.0 * sampleRate / blockSize); ++b)
+                {
+                    buffer.clear();
+                    p3.processBlock (buffer, midi3);
+                    p3.fillFieldSnapshot (snap3);
+
+                    if (snap3.clonePositionCount < 1)
+                        continue;
+
+                    const Vec3 s = snap3.sourcePos;
+                    const Vec3 r = snap3.clonePositions[0] - s;
+
+                    srcMin = { std::min (srcMin.x, s.x), std::min (srcMin.y, s.y), std::min (srcMin.z, s.z) };
+                    srcMax = { std::max (srcMax.x, s.x), std::max (srcMax.y, s.y), std::max (srcMax.z, s.z) };
+                    relMin = { std::min (relMin.x, r.x), std::min (relMin.y, r.y), std::min (relMin.z, r.z) };
+                    relMax = { std::max (relMax.x, r.x), std::max (relMax.y, r.y), std::max (relMax.z, r.z) };
+                }
+
+                const double srcSpan   = (srcMax - srcMin).length();
+                const double cloneSpan = (relMax - relMin).length();
+                const double ratio     = srcSpan > 1.0e-6 ? cloneSpan / srcSpan : 0.0;
+
+                std::printf ("%-22s Quelle wackelt %.3f m, Klon %.3f m (Faktor %.2f)\n",
+                             "Klon-Ausschlag", srcSpan, cloneSpan, ratio);
+
+                // Beide laufen durch dieselbe Glaettung, also darf der Klon nicht
+                // deutlich weiter ausschlagen als die Quelle.
+                if (ratio > 1.6)
+                {
+                    std::printf ("FEHLGESCHLAGEN: die Klone schlagen %.1f-mal so weit aus wie die "
+                                 "Quelle - ihr Wackler laeuft nicht durch dieselbe Glaettung\n",
+                                 ratio);
+                    failed = true;
+                }
+            }
+
             // Tragen sie ueberhaupt Ton bei? Acht zusaetzliche Quellen muessen den
             // Pegel deutlich anheben - tun sie das nicht, werden sie zwar
             // gerechnet und angezeigt, sind aber stumm.

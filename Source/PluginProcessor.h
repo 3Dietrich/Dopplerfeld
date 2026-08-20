@@ -457,6 +457,18 @@ private:
     // Eigener Wackler je echtem Klon, siehe advanceMotion().
     std::array<PositionJitter, (size_t) DopplerEngine::maxRealClones> cloneJitter;
 
+    // Und derselbe Weg wie bei der Quelle: deren Jitter wird auf das Ziel
+    // addiert und laeuft DANACH durch die Bewegungsglaettung, wird dort also
+    // gedaempft. Ohne diesen Schritt wackeln die Klone in voller Amplitude,
+    // waehrend die Quelle nur noch einen Rest davon zeigt - sichtbar als
+    // Ausschlaege, die um ein Vielfaches weiter reichen als die Bahn selbst.
+    //
+    // Es ist bewusst derselbe Glaettersatz und nicht nur dieselbe
+    // Zeitkonstante: die vier Verfahren daempfen unterschiedlich stark, und ein
+    // Ein-Pol laesst bei gleichem tau deutlich mehr durch als die kritisch
+    // gedaempfte Feder (gemessen Faktor 2,6 statt 1).
+    std::array<SmootherSet, (size_t) DopplerEngine::maxRealClones> cloneJitterSmoother;
+
     // Die Kapazitäts-Vorwärmung in prepareToPlay() darf nur beim allerersten
     // Mal laufen - prepareToPlay() wird vom Host bei jeder Blockgrößen-/
     // Samplerate-Änderung erneut gerufen, ein zweites Mal würde eine bereits
