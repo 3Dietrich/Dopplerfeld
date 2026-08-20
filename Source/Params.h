@@ -41,6 +41,12 @@ namespace Params
     // ohne den Regler neu zu suchen.
     constexpr const char* srcJitterOn = "srcJitterOn";
 
+    // Hauptschalter. Aus heisst: sanft ausgeblendet, danach Stille und keine
+    // Rechenlast mehr (@dpa 20260821: "Ich brauche unbedingt einen
+    // Ausschalter. irgendwie huebsch ausgefadet und dann ist stille (und 0
+    // CPU)").
+    constexpr const char* masterOn = "masterOn";
+
     // --- Motor ---
     constexpr const char* rpm = "rpm";
 

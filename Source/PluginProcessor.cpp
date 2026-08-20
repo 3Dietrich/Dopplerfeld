@@ -204,6 +204,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.srcJitterAmount = raw (Params::srcJitterAmount);
     pp.srcJitterRateHz = raw (Params::srcJitterRateHz);
     pp.srcJitterOn     = raw (Params::srcJitterOn);
+    pp.masterOn        = raw (Params::masterOn);
 
     pp.rpm = raw (Params::rpm);
 
@@ -1380,6 +1381,46 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     // hinterlässt, gehört nicht zum Ausgangssignal.
     buffer.clear();
 
+    // Hauptschalter. Ausgeschaltet wird nicht abrupt: erst faehrt der Pegel
+    // ueber masterFadeSeconds auf null, und ERST wenn er dort angekommen ist,
+    // steigt der Block vorzeitig aus. Solange gerechnet wird, kostet es das
+    // Uebliche; danach nichts mehr, denn Loeser, Engine und Ausgangsstufe
+    // werden gar nicht erst betreten (@dpa: "huebsch ausgefadet und dann ist
+    // stille (und 0 CPU)").
+    {
+        const bool wantOn = pp.masterOn->load() > 0.5f;
+
+        // Wiedereinschalten: waehrend der Stille lief die Bewegung nicht mit,
+        // die Bahn hat also ein Loch. Die Engine setzt deshalb neu auf, bevor
+        // wieder Ton kommt - sonst waere der erste Block ein Sprung ueber die
+        // gesamte Pause hinweg.
+        if (wantOn && ! masterWasOn)
+        {
+            dopplerEngine.reset();
+            sourceSmoothers.reset (smoothedSourcePos);
+            listenerSmoothers.reset (listenerState.head);
+        }
+
+        masterWasOn = wantOn;
+
+        if (! wantOn && masterGain <= 1.0e-4)
+        {
+            masterGain = 0.0;
+
+            // Die Anzeigen werden weiter unten gefuellt, dorthin kommen wir
+            // gleich nicht mehr. Ohne das blieben CPU-Last und Ausschlag auf
+            // ihrem letzten Wert von vor dem Abschalten stehen, und die Anzeige
+            // behauptete Last, die es nicht mehr gibt.
+            cpuLoad.store        (0.0f, std::memory_order_relaxed);
+            cpuLoadSource.store  (0.0f, std::memory_order_relaxed);
+            cpuLoadPhysics.store (0.0f, std::memory_order_relaxed);
+            outPeakL.store       (0.0f, std::memory_order_relaxed);
+            outPeakR.store       (0.0f, std::memory_order_relaxed);
+
+            return;                      // ab hier kostet der Block nichts mehr
+        }
+    }
+
     if (numSamples <= 0 || sr <= 0.0 || monoScratch.getNumSamples() <= 0)
         return;
 
@@ -1444,6 +1485,32 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
 
     applyOutputStage (buffer);
+
+    // Blende des Hauptschalters, ganz am Ende: sie liegt hinter Begrenzer und
+    // Ausgangspegel, damit das Ausblenden von keiner Regelung wieder
+    // hochgezogen wird. Je Sample gerechnet, nicht je Block - eine
+    // Blockgrenze waere bei 0,12 s Blende sonst als Stufe hoerbar.
+    {
+        const double target = (pp.masterOn->load() > 0.5f) ? 1.0 : 0.0;
+        const double step   = 1.0 / std::max (1.0, masterFadeSeconds * sr);
+        const int    numCh  = buffer.getNumChannels();
+
+        if (masterGain != target || masterGain < 1.0)
+        {
+            float* const* data = buffer.getArrayOfWritePointers();
+
+            for (int n = 0; n < numSamples; ++n)
+            {
+                if (masterGain < target)
+                    masterGain = std::min (target, masterGain + step);
+                else if (masterGain > target)
+                    masterGain = std::max (target, masterGain - step);
+
+                for (int ch = 0; ch < numCh; ++ch)
+                    data[ch][n] *= (float) masterGain;
+            }
+        }
+    }
 
     const double elapsedSeconds = juce::Time::highResolutionTicksToSeconds (
         juce::Time::getHighResolutionTicks() - blockStartTicks);

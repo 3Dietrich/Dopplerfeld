@@ -342,6 +342,7 @@ private:
         std::atomic<float>* srcJitterAmount = nullptr;
         std::atomic<float>* srcJitterRateHz = nullptr;
         std::atomic<float>* srcJitterOn     = nullptr;
+        std::atomic<float>* masterOn        = nullptr;
 
         std::atomic<float>* rpm = nullptr;
         std::atomic<float>* harmRatio[4]  {};
@@ -438,6 +439,18 @@ private:
     MotionRecorder  motionRecorder;
     MotionPlayer    motionPlayer;
     FlyByGenerator  flyBy;
+
+    // Hauptschalter, siehe Params::masterOn. Der Pegel faehrt weich auf 0 und
+    // erst DANACH steigt der Block ganz aus - haette er das sofort getan, waere
+    // das Abschalten ein Knacks. Umgekehrt beim Einschalten: die Engine setzt
+    // neu auf, bevor wieder eingeblendet wird, denn waehrend der Stille wurde
+    // keine Bewegung mitgeschrieben.
+    // Blendendauer des Hauptschalters. Lang genug, dass nichts knackt, kurz
+    // genug, dass "aus" sich wie aus anfuehlt.
+    static constexpr double masterFadeSeconds = 0.12;
+
+    double masterGain      = 1.0;
+    bool   masterWasOn     = true;
 
     // Additive Mikrobewegung der Quelle M, vor sourceSmoothers eingehakt
     // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.

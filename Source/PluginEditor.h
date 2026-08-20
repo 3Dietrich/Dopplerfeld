@@ -14,6 +14,7 @@
 #include "UI/WallPanel.h"
 #include "UI/ToggleableTooltipWindow.h"
 #include "UI/Tooltips.h"
+#include "UI/WelcomeOverlay.h"
 
 #include "Util/FieldSnapshot.h"
 
@@ -214,7 +215,11 @@ private:
     // abschaltbar. Die Regler selbst tragen ihren Tooltip-Text bereits
     // (setTooltip in den Panels) - hier sitzt nur der globale Schalter.
     ToggleableTooltipWindow tooltipWindow { this };
-    juce::ToggleButton tooltipsButton { "Hilfehinweise" };
+// Hauptschalter ganz links, siehe Params::masterOn.
+    juce::ToggleButton masterOnButton { "An" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> masterOnAttachment;
+
+        juce::ToggleButton tooltipsButton { "Hilfehinweise" };
 
     // Sprache der Hilfehinweise (deutsch/englisch, siehe Tooltips.h) - der
     // Text selbst liegt zentral in Tooltips.h, hier nur der Umschalter.
@@ -292,6 +297,14 @@ private:
     static constexpr int scopeToolbarHeight = 26;
     static constexpr int scopeHeight        = 220;
     static constexpr int scopeBlockHeight   = 6 + scopeToolbarHeight + 4 + scopeHeight;
+
+    // Begruessungsfenster (@dpa-Feedback 20260821) - als LETZTES Kind
+    // angelegt (siehe Konstruktor) und in resized() ueber die volle
+    // Editorflaeche gelegt, damit es wirklich alles darunter verdeckt und
+    // dessen Klicks abfaengt. Bleibt bestehen (nur unsichtbar), wenn es schon
+    // einmal gesehen wurde - WelcomeOverlay::hasBeenSeen() entscheidet beim
+    // Start, ob es sichtbar startet.
+    WelcomeOverlay welcomeOverlay;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DopplerfeldEditor)
 };

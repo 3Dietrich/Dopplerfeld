@@ -59,6 +59,7 @@ namespace Tooltips
         SrcJitterAmount,
         SrcJitterRate,
         SrcJitterOn,
+        MasterOn,
         GroundGain,
         GroundDamp,
         GroundReflection,
@@ -380,6 +381,16 @@ namespace Tooltips
                           "Exponential curve so the low end stays usable despite the huge span: "
                           "small values = extremely slow drifting (0.001 Hz = one cycle in just "
                           "over 16 minutes), large values = nervous trembling.";
+                case Key::MasterOn:
+                    return lang == Language::De
+                        ? "Hauptschalter. Aus blendet in gut einer Zehntelsekunde aus, danach "
+                          "ist Stille - und es wird auch nichts mehr gerechnet, die "
+                          "CPU-Anzeige geht auf null. Beim Einschalten setzt die Bahn neu auf, "
+                          "denn waehrend der Stille lief keine Bewegung mit."
+                        : "Main switch. Off fades out over about a tenth of a second, then "
+                          "there is silence - and nothing is computed any more, the CPU meter "
+                          "drops to zero. Switching back on restarts the trajectory, since no "
+                          "motion was recorded while it was silent.";
                 case Key::SrcJitterOn:
                     return lang == Language::De
                         ? "Schaltet das Wackeln der Quelle M und aller Klone komplett ab. Die "

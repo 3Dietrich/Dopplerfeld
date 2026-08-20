@@ -152,6 +152,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Default an: der Ausschlag steht ohnehin auf 0, das Wackeln beginnt also
     // erst, wenn jemand ihn aufdreht - bestehende Presets klingen unveraendert.
     layout.add (boolParam (srcJitterOn, "Source Jitter On", true));
+    layout.add (boolParam (masterOn, "On", true));
 
     // --- Motor ---
     {

@@ -124,6 +124,13 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
                                                                                      : Kind::Motor;
         dopplerfeldProcessor.selectSourceKind (next);
     };
+    // Hauptschalter ganz links, noch vor dem Schriftzug: er schaltet alles ab,
+    // das gehoert an die auffaelligste Stelle und nicht in eine Klappe.
+    masterOnButton.setTooltip (Tooltips::text (Tooltips::Key::MasterOn));
+    addAndMakeVisible (masterOnButton);
+    masterOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+        dopplerfeldProcessor.apvts, Params::masterOn, masterOnButton);
+
     addAndMakeVisible (sourceButton);
 
     field.setTooltip (Tooltips::text (Tooltips::Key::FieldDrag));
@@ -299,6 +306,13 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     addAndMakeVisible (scopeSaveStatusLabel);
 
     updateScopeVisibility();
+
+    // Muss das LETZTE hinzugefuegte Kind sein - JUCE zeichnet/trifft Kinder in
+    // Hinzufuege-Reihenfolge von unten nach oben, nur so liegt das Overlay
+    // wirklich ueber allen Panels und faengt deren Klicks ab. Startet
+    // unsichtbar, wenn es schon einmal gesehen wurde (WelcomeOverlay::hasBeenSeen()).
+    addAndMakeVisible (welcomeOverlay);
+    welcomeOverlay.setVisible (! WelcomeOverlay::hasBeenSeen());
 
     // 30 Hz: schnell genug, dass eine gezogene Quelle nicht ruckelt, und
     // langsam genug, dass die Wellenfronten nicht flimmern.
@@ -553,7 +567,7 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
 
     g.setColour (juce::Colours::white.withAlpha (0.75f));
     g.setFont (13.0f);
-    g.drawText ("dopplerfeld", margin, margin, 100, topBarHeight, juce::Justification::centredLeft);
+    g.drawText ("dopplerfeld", margin + 46, margin, 100, topBarHeight, juce::Justification::centredLeft);
 
     // Bauzeit dieser Fassung, rechts aussen in der Kopfzeile. Ohne sie laesst
     // sich von aussen nicht unterscheiden, ob eine Aenderung nicht wirkt oder ob
@@ -569,7 +583,7 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
                                               10.0f, juce::Font::plain)));
     g.drawText (juce::String ("Build ") + __DATE__ + " " + __TIME__,
-                getWidth() - margin - 200, margin, 200, topBarHeight,
+                getWidth() - margin - 150, margin, 150, topBarHeight,
                 juce::Justification::centredRight);
 
     // Loeserlast-Zeile: eigener Balken + Zahl, IMMER sichtbar (siehe
@@ -650,6 +664,8 @@ void DopplerfeldEditor::resized()
     auto area = getLocalBounds().reduced (margin);
 
     auto topBar = area.removeFromTop (topBarHeight);
+
+    masterOnButton.setBounds (topBar.removeFromLeft (46));
     topBar.removeFromLeft (100);   // Platz für den Schriftzug links
     sourceButton.setBounds (topBar.removeFromLeft (150));   // "Quelle: Audio In" ist der laengste Text
     topBar.removeFromLeft (8);
@@ -696,6 +712,10 @@ void DopplerfeldEditor::resized()
     panelViewport.setBounds (area);
 
     layoutPanels();
+
+    // Volle Editorflaeche, ungeachtet der obigen Aufteilung - das Overlay
+    // legt sich darueber, nicht daneben.
+    welcomeOverlay.setBounds (getLocalBounds());
 }
 
 void DopplerfeldEditor::layoutPanels()

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Dopplerfeld VERSION 0.1.0)
+project(Dopplerfeld VERSION 0.2.0)
 
 # Ohne CMAKE_BUILD_TYPE erzeugt CMake bei Makefile-/Ninja-Generatoren einen
 # Bau ganz ohne -O-Schalter. JUCEs juce_recommended_config_flags hängen ihre
@@ -70,7 +70,8 @@ target_sources(Dopplerfeld
         Source/UI/SwarmPanel.cpp
         Source/Sources/SoundSourceHolder.cpp
         Source/UI/LevelMeter.cpp
-        Source/UI/ScopeComponent.cpp)
+        Source/UI/ScopeComponent.cpp
+        Source/UI/WelcomeOverlay.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 
