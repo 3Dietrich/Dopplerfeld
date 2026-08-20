@@ -89,6 +89,19 @@ target_link_libraries(Dopplerfeld
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
 
+# Die Bauzeit oben links im Fenster (PluginEditor::paint, __DATE__/__TIME__)
+# steht beim Uebersetzen fest. Wird ausgerechnet an dieser Datei nichts
+# geaendert, uebersetzt make sie nicht neu, und das Fenster zeigt weiter die
+# Zeit des letzten Laufs, bei dem sie zufaellig mit dran war - die Anzeige, an
+# der sich eine veraltete Fassung erkennen laesst, waere dann selbst veraltet.
+# Deshalb vor jedem Bau anfassen: eine Uebersetzungseinheit kostet
+# Sekundenbruchteile, ein Durchgang mit der falschen Fassung einen Hoerdurchgang.
+add_custom_target(dopplerfeld_bauzeit ALL
+    COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_SOURCE_DIR}/Source/PluginEditor.cpp
+    COMMENT "Bauzeit-Stempel auffrischen")
+
+add_dependencies(Dopplerfeld dopplerfeld_bauzeit)
+
 # Solver-Prüfprogramm ohne JUCE-Audio, nur zum Rechnen (Plan Abschnitt 6, H4:
 # Abnahme gegen die geschlossene Lösung aus Plan 2.5). `ctest` fasst es an,
 # damit ein künftiger Regressions-Check nicht am solver_check vorbeigeht.
