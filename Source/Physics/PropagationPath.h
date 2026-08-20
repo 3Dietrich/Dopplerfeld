@@ -502,6 +502,26 @@ private:
     // abgeschnittenen Zweig nur an eine andere Stelle verschoben.
     static constexpr double causticWidths = 4.0;
 
+    // Ausklang fuer einen Zweig, der NICHT an der Kaustik stirbt, sondern weil
+    // der Loeser seine Wurzel verloren hat.
+    //
+    // Schall hoert nicht abrupt auf. Verschwindet ein Zweig bei voller
+    // Huellkurve, ist die naheliegende Erklaerung deshalb nicht "die Quelle ist
+    // verstummt", sondern "wir haben sie aus den Augen verloren" - ein
+    // Loeserereignis, kein akustisches. Ihn dann in einer Millisekunde
+    // wegzublenden loescht echtes Signal: gemessen fiel der Pegel nach einem
+    // Ueberschall-Vorbeiflug binnen einer halben Sekunde um 15 bis 20 dB,
+    // waehrend die groessere Entfernung in derselben Zeit nur 2,4 dB erklaert
+    // (@dpa 20260820: "warum ist das Rückwärts noch laut und danach ist
+    // ploetzlich stille.. das kann doch nicht wahr sein!").
+    //
+    // Der Zweig laeuft dabei mit seiner zuletzt bekannten Steigung weiter, das
+    // ist eine Extrapolation und wird mit der Zeit ungenauer - deshalb kurz
+    // genug, dass daraus kein Hall wird, und nur fuer Zweige, die laut genug
+    // sterben, dass ihr Fehlen als Loch auffaellt.
+    static constexpr double lostBranchTailSeconds = 0.08;
+    static constexpr double lostBranchMinEnv      = 0.05;
+
     // Unterhalb dieses Hüllkurvenwerts gilt ein sterbender Zweig als fertig und
     // sein Steckplatz wird frei. Nötig, weil ein exponentieller Ausklang die
     // Null nie erreicht. -80 dB liegt unter allem, was neben dem Direktschall

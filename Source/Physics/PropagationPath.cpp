@@ -711,33 +711,44 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 if (b.env >= 0.5)
                     deathLoudCount.store (deathLoudCount.load() + 1);
 
-                // Der Schattenausläufer gilt NUR für den Tod an der Kaustik.
-                //
-                // Ein Zweig kann auch aus ganz anderen Gründen verschwinden -
-                // die Nachführung verliert die Wurzel, ein Vollscan kommt zu
-                // spät, ein Sprung in der Geometrie. Solche Tode haben mit der
-                // Mach-Front nichts zu tun, und ihnen einen langen Ausklang zu
-                // geben wäre keine Physik, sondern nur ein Hall. Sie behalten
-                // deshalb die lineare Anti-Klick-Rampe von Plan 3.7 (deathTau
-                // bleibt 0 und markiert genau das).
+                // Der SCHATTENAUSLAEUFER gilt nur für den Tod an der Kaustik:
+                // dort folgt die Ausklangdauer aus der Physik, nämlich daraus,
+                // wie schnell M_r durch die Front läuft.
                 //
                 // "An der Kaustik" heißt: M_r liegt innerhalb der Breite, auf
                 // die eps die Divergenz ohnehin glättet. Ausserhalb davon ist
                 // der Fokussierungsfaktor unauffällig, dort gibt es auch nichts
                 // abzuschneiden.
+                //
+                // Ein Zweig kann aber auch aus ganz anderen Gründen
+                // verschwinden - die Nachführung verliert die Wurzel, ein
+                // Vollscan kommt zu spät, ein Sprung in der Geometrie. Das sind
+                // Ereignisse des Lösers, keine akustischen: der Schall ist
+                // weiter da, wir haben ihn nur verloren. Stirbt so ein Zweig
+                // laut, bekommt er deshalb einen kurzen eigenen Ausklang statt
+                // der Millisekunden-Rampe (siehe lostBranchTailSeconds im
+                // Header) - andernfalls schneidet ein Löserfehler hörbar echtes
+                // Signal weg.
                 const double distanceToCone = std::abs (1.0 - b.mach);
+                const bool   diedAtCaustic  = (distanceToCone < causticWidths * eps);
 
-                b.deathTau = (distanceToCone < causticWidths * eps)
-                            ? std::min (maxDeathTailSeconds,
-                                        std::max (rampSeconds,
-                                                  eps / std::max (b.machRate, 1.0e-9)))
-                            : 0.0;
+                if (diedAtCaustic)
+                    b.deathTau = std::min (maxDeathTailSeconds,
+                                           std::max (rampSeconds,
+                                                     eps / std::max (b.machRate, 1.0e-9)));
+                else if (b.env >= lostBranchMinEnv)
+                    b.deathTau = lostBranchTailSeconds;
+                else
+                    b.deathTau = 0.0;
 
                 b.deathEnvValue    = b.env;
                 b.deathTauValue    = b.tau;
                 b.deathSampleCount = 0;
 
-                if (b.deathTau > 0.0)
+                // Nur echte Kaustik-Tode zaehlen hier mit: sonst zeigte die
+                // Statistik "davon an der Kaustik" jeden verlorenen Zweig an
+                // und waere als Diagnose wertlos.
+                if (diedAtCaustic && b.deathTau > 0.0)
                 {
                     causticCount.store (causticCount.load() + 1);
                     deathTauSum.store (deathTauSum.load() + b.deathTau);
