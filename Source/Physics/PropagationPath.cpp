@@ -691,7 +691,23 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const double distA = std::abs (1.0 - a.mach);
             const double distB = std::abs (1.0 - b.mach);
 
-            if (distA < causticWidths * eps && distB < causticWidths * eps)
+            // Notwendige Bedingung: es muss wirklich Ueberschall sein.
+            //
+            // Die Naehe zu M_r = 1 allein reicht nicht, denn ihr Mass haengt an
+            // eps und damit am Regler "Boom Limit" - der steuert aber nur, wie
+            // stark die Amplitudenformel an der Front geglaettet wird, und hat
+            // mit der Frage, OB ein Kegel eintrifft, nichts zu tun. Bei
+            // Boom Limit 20,8 dB ist causticWidths * eps schon 0,365 breit, es
+            // genuegte also ein M_r von 0,64.
+            //
+            // Ein Wurzelpaar entsteht an der Falte bei M_r = 1, der eine der
+            // beiden Zweige liegt danach darueber. Ist keiner von beiden
+            // schneller als der Schall, war es keine Kegelankunft, sondern ein
+            // Paar aus anderem Grund - und dann gibt es nichts zu knallen.
+            const bool trulySupersonic = (a.mach >= 1.0 || b.mach >= 1.0);
+
+            if (trulySupersonic
+                && distA < causticWidths * eps && distB < causticWidths * eps)
             {
                 // Nur EIN Zweig trägt den Puls, sonst würde dieselbe
                 // Kegelankunft doppelt ausgelöst - zwei neue Zweige, aber ein

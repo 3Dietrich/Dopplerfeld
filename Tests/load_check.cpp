@@ -2224,7 +2224,15 @@ int main()
     //        bestehende Amplitudenformel: ohne Machfront gibt es keine
     //        Auslösung, also auch kein einziges verändertes Sample.
     {
-        auto flight = [&] (bool nWaveEnabled, double speedMetresPerSecond, Stats& stats)
+        // Boom Limit gehoert zu den Eingangsgroessen, weil die Ausloesung der
+        // N-Welle frueher an einer Toleranz haengen konnte, deren Breite genau
+        // von diesem Regler kam - siehe den Fall knapp unter Mach 1 weiter unten.
+        // Mit "extra" laesst sich eine konkrete Szene nachstellen, ohne den
+        // Standardaufbau zu verbiegen - gebraucht fuer @dpas Preset weiter unten.
+        auto flight = [&] (bool nWaveEnabled, double speedMetresPerSecond,
+                           float boomLimit, Stats& stats,
+                           const std::function<void (DopplerfeldProcessor&)>& extra
+                               = [] (DopplerfeldProcessor&) {})
         {
             DopplerfeldProcessor proc;
 
@@ -2239,7 +2247,8 @@ int main()
             setParam (proc, Params::srcZ, 200.0f);
             setParam (proc, Params::limiterOn, 0.0f);
 
-            setParam (proc, Params::nWaveOn,   nWaveEnabled ? 1.0f : 0.0f);
+            setParam (proc, Params::nWaveOn,     nWaveEnabled ? 1.0f : 0.0f);
+            setParam (proc, Params::boomLimitDb, boomLimit);
             setParam (proc, Params::nWaveSize, 15.0f);
 
             setParam (proc, Params::flyKind,     1.0f);   // waagerecht querend
@@ -2251,6 +2260,8 @@ int main()
             setParam (proc, Params::flyApproach, 1800.0f);
             setParam (proc, Params::flySpeed,    (float) speedMetresPerSecond);
 
+            extra (proc);
+
             proc.prepareToPlay (sampleRate, blockSize);
 
             Stats settle;
@@ -2261,12 +2272,104 @@ int main()
             render (proc, buffer, 12.0, stats, [] (double) {});
         };
 
+        // Wie flight(), aber der Vorbeiflug wird DREIMAL ausgeloest. Beim
+        // zweiten Start schreibt fillLinear die gesamte Bahn-Historie neu: der
+        // Loeser sieht schlagartig eine andere Vergangenheit, seine Zweige
+        // finden neue Wurzeln und entstehen paarweise neu. Genau daran haengt
+        // @dpas Beobachtung "der Knall ist nicht beim ersten Durchlauf, sondern
+        // erst beim 2. und 3." - gemessen wird deshalb NUR ab dem zweiten Start.
+        auto repeatedFlight = [&] (bool nWaveEnabled, double speedMetresPerSecond,
+                                   float boomLimit, Stats& stats,
+                                   const std::function<void (DopplerfeldProcessor&)>& extra)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 2000.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcZ, 200.0f);
+            setParam (proc, Params::limiterOn, 0.0f);
+
+            setParam (proc, Params::nWaveOn,     nWaveEnabled ? 1.0f : 0.0f);
+            setParam (proc, Params::boomLimitDb, boomLimit);
+            setParam (proc, Params::nWaveSize,   15.0f);
+
+            setParam (proc, Params::flyKind,     1.0f);
+            setParam (proc, Params::flyStart,    0.0f);
+            setParam (proc, Params::flyDistance, 300.0f);
+            setParam (proc, Params::flyApproach, 1800.0f);
+            setParam (proc, Params::flySpeed,    (float) speedMetresPerSecond);
+
+            extra (proc);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            Stats settle;
+            render (proc, buffer, 0.3, settle, [] (double) {});
+
+            // Erster Durchlauf: nicht gemessen, er ist unauffaellig.
+            proc.triggerFlyBy();
+            render (proc, buffer, 3.0, settle, [] (double) {});
+
+            // Zweiter und dritter Start - hier wird gemessen.
+            proc.triggerFlyBy();
+            render (proc, buffer, 3.0, stats, [] (double) {});
+
+            proc.triggerFlyBy();
+            render (proc, buffer, 3.0, stats, [] (double) {});
+        };
+
         Stats supersonicOff, supersonicOn, subsonicOff, subsonicOn;
 
-        flight (false, 700.0, supersonicOff);   // rund Mach 2
-        flight (true,  700.0, supersonicOn);
-        flight (false, 100.0, subsonicOff);
-        flight (true,  100.0, subsonicOn);
+        flight (false, 700.0, 30.0f, supersonicOff);   // rund Mach 2
+        flight (true,  700.0, 30.0f, supersonicOn);
+        flight (false, 100.0, 30.0f, subsonicOff);
+        flight (true,  100.0, 30.0f, subsonicOn);
+
+        // @dpas Fall vom 20260820 ("hier gibt's eine unvermittelte n-Wave"):
+        // schnell, aber sicher im Unterschall, dazu ein niedrigeres Boom Limit.
+        // Der Fall oben mit 100 m/s greift dafuer nicht: bei Boom Limit 30 dB
+        // ist die Toleranz um M_r = 1 nur 0,126 breit, und Mach 0,29 liegt weit
+        // ausserhalb. Bei 20,8 dB sind es 0,365 - dort wird ein Flug mit Mach
+        // 0,74 faelschlich als Kegelankunft gelesen, wenn nicht zusaetzlich
+        // geprueft wird, ob ueberhaupt einer der Zweige schneller als der
+        // Schall ist.
+        Stats fastSubsonicOff, fastSubsonicOn;
+
+        // Die uebrigen Werte stammen aus @dpas Preset
+        // "test_subsonicvorbei-trotzdem Nwave". Entscheidend sind die
+        // eingeschaltete Bodenreflexion (ein zweiter Pfad, der eigene Zweige
+        // bildet), die sehr kurze Flugstrecke dicht am Hoerer und die niedrige
+        // Quelle - mit dem Standardaufbau dieses Tests tritt der Fall nicht auf.
+        auto dpaScene = [] (DopplerfeldProcessor& p)
+        {
+            setParam (p, Params::fieldMetres,        361.8f);
+            setParam (p, Params::smootherType,         0.0f);
+            setParam (p, Params::smootherTau,         0.053f);
+            setParam (p, Params::groundReflectionOn,   1.0f);
+            setParam (p, Params::groundDampAmount,   0.687f);
+            setParam (p, Params::srcZ,               31.92f);
+            setParam (p, Params::srcX,               0.254f);
+            setParam (p, Params::srcY,               0.514f);
+            setParam (p, Params::lisX,               0.437f);
+            setParam (p, Params::lisY,               0.373f);
+            setParam (p, Params::nWaveSize,           2.24f);
+            setParam (p, Params::flyDistance,         40.3f);
+            setParam (p, Params::flyApproach,        268.9f);
+        };
+
+        flight (false, 252.6, 20.8f, fastSubsonicOff, dpaScene);
+        flight (true,  252.6, 20.8f, fastSubsonicOn,  dpaScene);
+
+        Stats repeatOff, repeatOn;
+
+        repeatedFlight (false, 252.6, 20.8f, repeatOff, dpaScene);
+        repeatedFlight (true,  252.6, 20.8f, repeatOn,  dpaScene);
 
         supersonicOff.report ("Mach2-Flug, N aus");
         supersonicOn.report  ("Mach2-Flug, N an");
@@ -2304,6 +2407,41 @@ int main()
         // b) Im Unterschall muss der Ausgang bitgleich sein. Bewusst ohne
         //    Toleranz: ohne Machfront gibt es keinen Auslöser, und damit darf
         //    sich kein einziges Sample unterscheiden.
+        std::printf ("%-22s Neustart des Fluges, subsonisch: M_r max %.2f, "
+                     "Spitze ohne %.6f, mit %.6f\n",
+                     "", repeatOn.maxMach, repeatOff.peak, repeatOn.peak);
+
+        // Ein wiederholt gestarteter Unterschallflug darf genauso wenig knallen
+        // wie ein einmal gestarteter. Dass die Bahn-Historie dabei neu
+        // geschrieben wird, ist ein Vorgang im Loeser und kein Ueberschall.
+        if (std::abs (repeatOn.peak - repeatOff.peak) > 0.0
+            || std::abs (repeatOn.sumSquares[0] - repeatOff.sumSquares[0]) > 0.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: der WIEDERHOLT gestartete Unterschallflug knallt "
+                         "(Spitze ohne %.6f, mit %.6f, M_r max %.2f) - der Neuaufbau der "
+                         "Bahn-Historie wird als Kegelankunft gelesen\n",
+                         repeatOff.peak, repeatOn.peak, repeatOn.maxMach);
+            failed = true;
+        }
+
+        if (fastSubsonicOn.maxMach >= 1.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: der schnelle Unterschallflug erreicht M_r %.2f "
+                         "und ist damit kein Unterschallfall mehr\n", fastSubsonicOn.maxMach);
+            failed = true;
+        }
+        else if (std::abs (fastSubsonicOn.peak - fastSubsonicOff.peak) > 0.0
+                 || std::abs (fastSubsonicOn.sumSquares[0] - fastSubsonicOff.sumSquares[0]) > 0.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: knapp unter Mach 1 (M_r max %.2f) bei Boom Limit "
+                         "20,8 dB knallt es, obwohl nie Ueberschall erreicht wird\n",
+                         fastSubsonicOn.maxMach);
+            failed = true;
+        }
+
+        std::printf ("%-22s schnell subsonisch: M_r max %.2f, Spitze ohne %.6f, mit %.6f\n",
+                     "", fastSubsonicOn.maxMach, fastSubsonicOff.peak, fastSubsonicOn.peak);
+
         if (std::abs (subsonicOn.peak - subsonicOff.peak) > 0.0
             || std::abs (subsonicOn.sumSquares[0] - subsonicOff.sumSquares[0]) > 0.0)
         {
