@@ -58,6 +58,7 @@ namespace Tooltips
         ListenerZ,
         SrcJitterAmount,
         SrcJitterRate,
+        SrcJitterOn,
         GroundGain,
         GroundDamp,
         GroundReflection,
@@ -370,6 +371,15 @@ namespace Tooltips
                           "langsames Driften, grosse Werte = nervoeses Zittern."
                         : "How fast/restless the jitter movement changes (Hz). Small values = "
                           "slow drifting, large values = nervous trembling.";
+                case Key::SrcJitterOn:
+                    return lang == Language::De
+                        ? "Schaltet das Wackeln der Quelle M und aller Klone komplett ab. Die "
+                          "Regler Jitter/Hektik behalten dabei ihren Wert - beim Wiedereinschalten "
+                          "wackelt es sofort mit dem alten Ausschlag weiter, statt bei null neu "
+                          "anzufangen."
+                        : "Switches the wobble of source M and all clones off completely. The "
+                          "Jitter/Hektik controls keep their value while off - switching back on "
+                          "resumes wobbling at the previous amount instead of starting from zero.";
                 case Key::GroundGain:
                     return lang == Language::De
                         ? "Pegel der Bodenreflexion in dB. Eigener Regler neben der Daempfung, "

@@ -89,10 +89,20 @@ private:
     juce::ToggleButton limiterOnButton  { "Limiter" };
     juce::ToggleButton groundReflectionButton { "Bodenreflexion" };
     juce::ToggleButton nWaveButton { "N-Welle" };
+
+    // Ganz-Aus fuer den Jitter, ohne die Regler Jitter/Hektik zurueckzusetzen
+    // - deren Wert bleibt erhalten, siehe updateJitterEnabledState().
+    juce::ToggleButton srcJitterOnButton { "Jitter An" };
+
     std::unique_ptr<ButtonAttachment> fadeAutoAttachment;
     std::unique_ptr<ButtonAttachment> limiterOnAttachment;
     std::unique_ptr<ButtonAttachment> groundReflectionAttachment;
     std::unique_ptr<ButtonAttachment> nWaveAttachment;
+    std::unique_ptr<ButtonAttachment> srcJitterOnAttachment;
+
+    // Graut Jitter/Hektik aus, solange srcJitterOnButton aus ist - auch nach
+    // dem Laden eines Presets, nicht nur beim Klicken (siehe Konstruktor).
+    void updateJitterEnabledState();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FieldPanel)
 };

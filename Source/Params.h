@@ -35,6 +35,12 @@ namespace Params
     constexpr const char* srcJitterAmount = "srcJitterAmount";
     constexpr const char* srcJitterRateHz = "srcJitterRateHz";
 
+    // Ein/Aus fuer das Wackeln insgesamt - Quelle UND Klone (@dpa 20260820).
+    // Ein eigener Schalter statt "Amount auf 0 drehen", weil der eingestellte
+    // Ausschlag beim Abschalten erhalten bleiben soll: aus, hoeren, wieder an,
+    // ohne den Regler neu zu suchen.
+    constexpr const char* srcJitterOn = "srcJitterOn";
+
     // --- Motor ---
     constexpr const char* rpm = "rpm";
 

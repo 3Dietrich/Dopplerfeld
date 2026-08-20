@@ -203,6 +203,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.srcJitterAmount = raw (Params::srcJitterAmount);
     pp.srcJitterRateHz = raw (Params::srcJitterRateHz);
+    pp.srcJitterOn     = raw (Params::srcJitterOn);
 
     pp.rpm = raw (Params::rpm);
 
@@ -421,6 +422,11 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     listenerSmoothers.prepare (DopplerEngine::trajectoryRateHz);
     sourceJitter.prepare (DopplerEngine::trajectoryRateHz);
 
+    sourceJitterSmoother.prepare (DopplerEngine::trajectoryRateHz);
+    sourceJitterSmoother.reset (Vec3{});
+    sourceJitterSmoother.setType (sourceSmoothers.typeIndex, Vec3{});
+    lastSourceJitterSmoothed = Vec3{};
+
     // Jeder echte Klon bekommt seinen eigenen Wackler, mit eigenem Startwert -
     // sonst durchlaufen alle dieselbe Zufallsfolge und wackeln im Gleichtakt,
     // was den Schwarm wieder zu einer einzigen Quelle zusammenzieht.
@@ -432,6 +438,7 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
         cloneJitterSmoother[i].prepare (DopplerEngine::trajectoryRateHz);
         cloneJitterSmoother[i].reset (Vec3{});
         cloneJitterSmoother[i].setType (sourceSmoothers.typeIndex, Vec3{});
+        lastCloneJitterSmoothed[i] = Vec3{};
     }
 
     recorderTickAccum = 0.0;
@@ -590,16 +597,25 @@ void DopplerfeldProcessor::applyParameters()
     dopplerEngine.setPanoramaAmount (0.01 * (double) pp.panAmount->load());
     listenerState.earSpacing = (double) pp.earSpacing->load();
 
-    sourceJitter.setAmount ((double) pp.srcJitterAmount->load());
-    sourceJitter.setRate   ((double) pp.srcJitterRateHz->load());
+    // Ein Schalter fuer das Wackeln insgesamt, Quelle wie Klone. Abgeschaltet
+    // wird ueber den Ausschlag und nicht durch Ueberspringen des tick():
+    // die Oszillatoren laufen weiter, also setzt das Wackeln beim
+    // Wiedereinschalten dort ein, wo es gerade waere, statt aus der
+    // eingefrorenen Phase heraus anzuspringen.
+    const bool   jitterOn     = pp.srcJitterOn->load() > 0.5f;
+    const double jitterAmount = jitterOn ? (double) pp.srcJitterAmount->load() : 0.0;
+    const double jitterRate   = (double) pp.srcJitterRateHz->load();
+
+    sourceJitter.setAmount (jitterAmount);
+    sourceJitter.setRate   (jitterRate);
 
     // Dieselben Regler wie fuer die Quelle: @dpa hat den Jitter dort
     // ausprobiert und will genau diesen auf den Klonen, nicht einen zweiten
     // Satz Regler.
     for (auto& j : cloneJitter)
     {
-        j.setAmount ((double) pp.srcJitterAmount->load());
-        j.setRate   ((double) pp.srcJitterRateHz->load());
+        j.setAmount (jitterAmount);
+        j.setRate   (jitterRate);
     }
 
     const bool fieldJustChanged = std::abs (fieldMetresValue - lastFieldMetres) > 1.0e-9;
@@ -644,6 +660,12 @@ void DopplerfeldProcessor::applyParameters()
         s.setType ((int) pp.smootherType->load(), Vec3{});
         s.applyParameters (tau, vMax, aMax);
     }
+
+    // Und derselbe Satz noch einmal fuer den mitlaufenden Quell-Wackler: nur
+    // wenn er exakt gleich behandelt wird wie die Wackler der Klone, hebt sich
+    // sein Anteil im Klon-Versatz sauber weg.
+    sourceJitterSmoother.setType ((int) pp.smootherType->load(), Vec3{});
+    sourceJitterSmoother.applyParameters (tau, vMax, aMax);
     listenerSmoothers.applyParameters (tau, vMax, aMax);
 
     yawSmoothCoeff = 1.0 - std::exp (-1.0 / (DopplerEngine::trajectoryRateHz * std::max (1.0e-3, tau)));
@@ -1168,7 +1190,47 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         // (siehe PositionJitter), braucht also KEINEN nachgeschalteten
         // Glaetter, um klickfrei zu bleiben - deshalb ist es unbedenklich,
         // ihn auch im bypassSmoothing-Zweig direkt in target zu addieren.
-        target += sourceJitter.tick (tickDt);
+        const Vec3 rawSourceJitter = sourceJitter.tick (tickDt);
+
+        target += rawSourceJitter;
+
+        // Fuehrt einen Wackler genau den Weg entlang, den auch die Quelle in
+        // diesem Tick geht: im Bypass-Zweig durch den Slew-Waechter, sonst
+        // durch das eingestellte Glaettungsverfahren. Nur so entsprechen die
+        // Wackel-Anteile von Quelle und Klonen einander wirklich - ein fest
+        // verdrahteter Glaetter waere im Bypass-Zweig zu traege und im
+        // Normalzweig zu durchlaessig.
+        auto tickJitterLikeSource = [this, bypassSmoothing] (SmootherSet& set,
+                                                             Vec3 rawTarget,
+                                                             Vec3& lastOut)
+        {
+            Vec3 unused;
+
+            if (bypassSmoothing)
+            {
+                // Beim Umschalten auf dem zuletzt ausgegebenen Wert aufsetzen,
+                // wie es die Quelle mit sourceSmoothers.slew ebenfalls tut.
+                if (! wasMotionSlewGuardActive)
+                    set.slew.reset (lastOut);
+
+                set.slew.setTarget (rawTarget);
+                set.slew.tick (lastOut, unused);
+            }
+            else
+            {
+                if (wasMotionSlewGuardActive)
+                    set.resetExceptSlew (lastOut);
+
+                set.setTarget (rawTarget);
+                set.tick (lastOut, unused);
+            }
+
+            return lastOut;
+        };
+
+        const Vec3 smoothedSourceJitter = tickJitterLikeSource (sourceJitterSmoother,
+                                                                rawSourceJitter,
+                                                                lastSourceJitterSmoothed);
 
         // Die Klone wackeln auf derselben Rate wie die Quelle, jeder fuer sich.
         // Ihr Versatz sitzt in der Geometrie der Engine, nicht in der Bahn -
@@ -1178,12 +1240,18 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         {
             // Erst der Wackler, dann die Glaettung - genau die Reihenfolge, die
             // die Quelle durchlaeuft (Jitter aufs Ziel, danach Glaetter).
-            cloneJitterSmoother[(size_t) i].setTarget (cloneJitter[(size_t) i].tick (tickDt));
+            const Vec3 ownJitter = tickJitterLikeSource (cloneJitterSmoother[(size_t) i],
+                                                         cloneJitter[(size_t) i].tick (tickDt),
+                                                         lastCloneJitterSmoothed[(size_t) i]);
 
-            Vec3 offset, unused;
-            cloneJitterSmoother[(size_t) i].tick (offset, unused);
-
-            dopplerEngine.setCloneJitterOffset (i, offset);
+            // Der Wackler der Quelle steckt in der Quellposition, auf der die
+            // Klone sitzen, bereits drin. Wuerde er stehen bleiben, traegen die
+            // Klone zwei Wackler: den der Quelle, dem sie folgen, und ihren
+            // eigenen - die Quelle waere der ruhige Mittelpunkt, um den die
+            // anderen kreisen. Abgezogen bleibt von jeder Fliege genau ihr
+            // eigener Wackler um den gemeinsamen, ruhenden Ankerpunkt
+            // (@dpa 20260820: "jede wie alle anderen durcheinander").
+            dopplerEngine.setCloneJitterOffset (i, ownJitter - smoothedSourceJitter);
         }
 
         if (bypassSmoothing)

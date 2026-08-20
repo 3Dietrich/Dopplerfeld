@@ -104,6 +104,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         range.setSkewForCentre (0.3f);
         layout.add (floatParam (srcJitterRateHz, "Source Jitter Rate", range, 0.2f, "Hz"));
     }
+    // Default an: der Ausschlag steht ohnehin auf 0, das Wackeln beginnt also
+    // erst, wenn jemand ihn aufdreht - bestehende Presets klingen unveraendert.
+    layout.add (boolParam (srcJitterOn, "Source Jitter On", true));
 
     // --- Motor ---
     {

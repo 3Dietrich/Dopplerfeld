@@ -43,6 +43,14 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (srcJitterAmountKnob, apvts, Params::srcJitterAmount, "Jitter",    Tooltips::Key::SrcJitterAmount);
     setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik",    Tooltips::Key::SrcJitterRate);
 
+    srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
+    addAndMakeVisible (srcJitterOnButton);
+    srcJitterOnAttachment = std::make_unique<ButtonAttachment> (apvts, Params::srcJitterOn, srcJitterOnButton);
+    // Klick UND Presetwechsel loesen onClick aus (ButtonAttachment schaltet
+    // per sendNotificationSync um) - deshalb reicht dieser eine Ort, um die
+    // Regler in beiden Faellen richtig auszugrauen.
+    srcJitterOnButton.onClick = [this] { updateJitterEnabledState(); };
+
     setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",  Tooltips::Key::GroundDamp);
     setupKnob (groundGainKnob,  apvts, Params::groundGain,       "Ground Gain",  Tooltips::Key::GroundGain);
 
@@ -66,6 +74,25 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 
     levelMeter.setTooltip (Tooltips::text (Tooltips::Key::LevelMeter));
     addAndMakeVisible (levelMeter);
+
+    // Einmal von Hand, denn das Attachment hat seinen Startwert schon vor der
+    // Zuweisung von onClick durchgereicht - ohne diesen Aufruf waere der
+    // Ausgrauzustand beim ersten Anzeigen falsch, bis man den Schalter selbst
+    // anfasst.
+    updateJitterEnabledState();
+}
+
+void FieldPanel::updateJitterEnabledState()
+{
+    // Aus heisst nur "steht still", nicht "Wert weg" - die Regler bleiben auf
+    // ihrem Stand, damit beim Wiedereinschalten sofort der alte Ausschlag
+    // greift statt bei null neu anzufangen (siehe Tooltips::Key::SrcJitterOn).
+    const bool jitterOn = srcJitterOnButton.getToggleState();
+
+    srcJitterAmountKnob.slider.setEnabled (jitterOn);
+    srcJitterAmountKnob.label.setEnabled (jitterOn);
+    srcJitterRateKnob.slider.setEnabled (jitterOn);
+    srcJitterRateKnob.label.setEnabled (jitterOn);
 }
 
 void FieldPanel::refreshTooltips()
@@ -82,6 +109,7 @@ void FieldPanel::refreshTooltips()
 
     groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
+    srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
     fadeAutoButton.setTooltip (Tooltips::text (Tooltips::Key::FadeAuto));
     limiterOnButton.setTooltip (Tooltips::text (Tooltips::Key::LimiterOn));
     levelMeter.setTooltip (Tooltips::text (Tooltips::Key::LevelMeter));
@@ -128,8 +156,14 @@ void FieldPanel::resized()
     }
 
     // Dritte Reihe: M-Jitter, eigenstaendig statt in die schon volle
-    // Hoehen-Reihe gequetscht.
+    // Hoehen-Reihe gequetscht. Eigener kleiner Schalter davor, gleicher
+    // Aufbau wie je Wand in WallPanel (Schalter-Reihe direkt ueber der
+    // zugehoerigen Knopf-Reihe).
     area.removeFromTop (6);
+
+    auto jitterToggleRow = area.removeFromTop (26);
+    srcJitterOnButton.setBounds (jitterToggleRow.removeFromLeft (120));
+    area.removeFromTop (4);
 
     auto jitterRow = area.removeFromTop (knobH);
     for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &panAmountKnob })

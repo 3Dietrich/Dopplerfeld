@@ -23,6 +23,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 
 namespace
 {
@@ -1943,15 +1944,26 @@ int main()
                 const double cloneSpan = (relMax - relMin).length();
                 const double ratio     = srcSpan > 1.0e-6 ? cloneSpan / srcSpan : 0.0;
 
-                std::printf ("%-22s Quelle wackelt %.3f m, Klon %.3f m (Faktor %.2f)\n",
+                std::printf ("%-22s Quelle wackelt %.3f m, Abstand zum Klon %.3f m (Faktor %.2f)\n",
                              "Klon-Ausschlag", srcSpan, cloneSpan, ratio);
 
-                // Beide laufen durch dieselbe Glaettung, also darf der Klon nicht
-                // deutlich weiter ausschlagen als die Quelle.
-                if (ratio > 1.6)
+                // Gemessen wird der ABSTAND Klon-Quelle, und der ist die Differenz
+                // zweier eigenstaendiger Wackler: der Klon schwirrt um denselben
+                // Ankerpunkt wie die Quelle, nicht um die Quelle herum (siehe
+                // "Jitter-Wolke" weiter unten). Zwei gleich starke Wackler koennen
+                // sich im Abstand hoechstens zu ihrer Summe aufaddieren, der Faktor
+                // liegt also selbst im Ungluecksfall bei 2.
+                //
+                // Nach oben trennt die Schranke trotzdem sauber: laeuft der
+                // Klon-Wackler nicht durch dieselbe Glaettung, schlaegt er allein
+                // schon rund 2,6-mal so weit aus wie der der Quelle (Ein-Pol gegen
+                // kritisch gedaempfte Feder bei gleichem tau), der Abstand kaeme
+                // damit auf gut das Dreifache.
+                if (ratio > 2.5)
                 {
-                    std::printf ("FEHLGESCHLAGEN: die Klone schlagen %.1f-mal so weit aus wie die "
-                                 "Quelle - ihr Wackler laeuft nicht durch dieselbe Glaettung\n",
+                    std::printf ("FEHLGESCHLAGEN: der Abstand Klon-Quelle schwankt %.1f-mal so weit "
+                                 "wie die Quelle selbst wackelt - der Klon-Wackler laeuft nicht "
+                                 "durch dieselbe Glaettung\n",
                                  ratio);
                     failed = true;
                 }
@@ -2050,6 +2062,147 @@ int main()
         {
             std::printf ("FEHLGESCHLAGEN: der Jitter aendert am Klon-Klang nichts (%.2f %%) - "
                          "er kommt bei den Klonen nicht an\n", change);
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // 1g9. Jitter-Wolke: schwirren Quelle und echte Klone gleichberechtigt um
+    //      EINEN gemeinsamen, ruhenden Ankerpunkt, oder ist die Quelle dabei
+    //      ruhiger als die Klone? Bisher sassen die Klone als Versatz auf der
+    //      bereits gewackelten Quellposition - sie erbten also den
+    //      Quell-Wackler und legten ihren eigenen obendrauf ("Koenig und
+    //      Diener"). Gewollt ist ein Fliegenschwarm: jede Fliege (Quelle wie
+    //      Klon) traegt genau EINEN eigenen, unabhaengigen Wackler um denselben
+    //      festen Punkt, keine ruhiger als die andere.
+    //
+    //      Die Quelle steht dafuer fest (keine Bahn, nur der Jitter selbst
+    //      bewegt sie), der Jitter bekommt einen deutlichen Ausschlag, und
+    //      mehrere echte Klone sind eingeschaltet. Gemessen wird ueber viele
+    //      Bloecke die Streuung JEDER Fliege um ihren EIGENEN Zeitmittelwert.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres, 200.0f);
+        setParam (proc, Params::srcX, 0.5f);
+        setParam (proc, Params::srcY, 0.5f);
+        setParam (proc, Params::srcZ, 0.0f);
+
+        setParam (proc, Params::cloneTotal,  5.0f);
+        setParam (proc, Params::cloneReal,   5.0f);
+        setParam (proc, Params::cloneAuto,   0.0f);
+        setParam (proc, Params::cloneSpread, 6.0f);
+
+        setParam (proc, Params::srcJitterAmount, 3.0f);
+        setParam (proc, Params::srcJitterRateHz, 4.0f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        // Erst einschwingen lassen: der Glaetter braucht ein paar
+        // Zeitkonstanten, um von der Startposition auf die Zielbahn samt
+        // Jitter einzulaufen - dieser Anlauf ist keine Eigenschaft des
+        // Jitters selbst und wuerde die Streuung nur verfaelschen.
+        Stats warmUp;
+        render (proc, buffer, 0.5, warmUp, [] (double) {});
+
+        juce::MidiBuffer midi;
+        FieldSnapshot     snapshot;
+
+        std::vector<Vec3>              sourceSamples;
+        std::vector<std::vector<Vec3>> cloneSamples;
+
+        // 20 Sekunden bei 4 Hz Jitter sind rund 80 Wackel-Perioden je Fliege -
+        // genug, damit die Streuungs-Schaetzung nicht selbst vom Zufall der
+        // Messdauer abhaengt (bei nur ein paar Perioden waere jede der
+        // folgenden Schranken reine Gluecksache).
+        const int numBlocks = (int) std::ceil (20.0 * sampleRate / blockSize);
+
+        for (int block = 0; block < numBlocks; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+            proc.fillFieldSnapshot (snapshot);
+
+            sourceSamples.push_back (snapshot.sourcePos);
+
+            if ((int) cloneSamples.size() < snapshot.clonePositionCount)
+                cloneSamples.resize ((size_t) snapshot.clonePositionCount);
+
+            for (int i = 0; i < snapshot.clonePositionCount; ++i)
+                cloneSamples[(size_t) i].push_back (snapshot.clonePositions[(size_t) i]);
+        }
+
+        // Streuung einer Fliege um ihren eigenen Zeitmittelwert: RMS des
+        // 3D-Abstands zum Mittelwert, also dieselbe Groesse wie eine
+        // Standardabweichung, nur ueber den Abstand statt je Achse einzeln.
+        auto scatter = [] (const std::vector<Vec3>& samples) -> double
+        {
+            if (samples.empty())
+                return 0.0;
+
+            Vec3 mean;
+
+            for (const auto& p : samples)
+                mean += p;
+
+            mean *= (1.0 / (double) samples.size());
+
+            double sumSq = 0.0;
+
+            for (const auto& p : samples)
+                sumSq += (p - mean).lengthSquared();
+
+            return std::sqrt (sumSq / (double) samples.size());
+        };
+
+        std::vector<double> spreads;
+        spreads.push_back (scatter (sourceSamples));
+
+        for (auto& c : cloneSamples)
+            spreads.push_back (scatter (c));
+
+        double minSpread = spreads.front();
+        double maxSpread = spreads.front();
+
+        for (double s : spreads)
+        {
+            minSpread = std::min (minSpread, s);
+            maxSpread = std::max (maxSpread, s);
+        }
+
+        const double ratio = minSpread > 1.0e-9 ? maxSpread / minSpread : 0.0;
+
+        std::printf ("%-22s Quelle %.4f m", "Jitter-Wolke", spreads[0]);
+
+        for (size_t i = 1; i < spreads.size(); ++i)
+            std::printf (" | Klon%d %.4f m", (int) i, spreads[i]);
+
+        std::printf (" -> groesste/kleinste Streuung %.3f\n", ratio);
+
+        // Schranke 1.25, begruendet aus der Physik der beiden Faelle, nicht
+        // gewuerfelt: Quell-Wackler und der eigene Wackler jedes Klons laufen
+        // durch dieselbe Glaettung (gleicher Typ, gleiches Tau) mit demselben
+        // Betrag/derselben Rate, sind also statistisch gleich stark, nur
+        // unabhaengig voneinander gewuerfelt. Im alten Verhalten traegt jeder
+        // Klon ZWEI solche unabhaengigen, gleich starken Wackler uebereinander
+        // (den ererbten der Quelle plus seinen eigenen) - bei zwei
+        // unabhaengigen Anteilen gleicher Varianz V addieren sich die Varianzen
+        // (2V), die Streuung (Wurzel daraus) waechst also um den Faktor
+        // sqrt(2) = 1,414 gegenueber der Quelle, die nur einen Wackler traegt.
+        // 1.25 liegt sicher unter diesem alten Wert, laesst aber der neuen,
+        // korrekten Messung (Verhaeltnis nahe 1, nur Schaetzrauschen ueber
+        // endliche Messdauer und mehrere verglichene Fliegen) genug Luft nach
+        // oben, ohne selbst zur Zufallsschranke zu werden.
+        constexpr double ratioLimit = 1.25;
+
+        if (ratio > ratioLimit)
+        {
+            std::printf ("FEHLGESCHLAGEN: groesste/kleinste Streuung %.3f > %.2f - eine Fliege "
+                         "ist deutlich ruhiger oder unruhiger als die anderen (Klone tragen "
+                         "vermutlich noch den Quell-Wackler huckepack, statt eigenstaendig um "
+                         "den gemeinsamen Ankerpunkt zu schwirren)\n", ratio, ratioLimit);
             failed = true;
         }
     }
