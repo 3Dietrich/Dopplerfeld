@@ -144,6 +144,60 @@ double PropagationPath::nWaveAt (const Branch& b)
     return b.nAmp * shape;
 }
 
+void PropagationPath::triggerNWave (Branch& b, double c) const
+{
+    // Pulsdauer aus der Ausdehnung des Körpers: die Zeit, die der Schall
+    // braucht, um ihn der Länge nach zu durchlaufen, mal zwei (Bug- und
+    // Heckstoß liegen nicht am selben Punkt). Damit heißt größer wirklich
+    // länger und tiefer, kleiner kürzer und knackiger - ohne dass hinter dem
+    // Regler eine Formel steckt, die niemand nachvollziehen kann.
+    b.nDuration = 2.0 * nWaveSizeM / std::max (1.0, c);
+
+    // Verbreiterung der Stoßfront mit der Entfernung, siehe nWaveAt(). Zwei
+    // Mikrosekunden je Meter sind eine Modellkonstante: in 100 m ergibt das
+    // 0,2 ms (Peitschenknall), in 3 km 6 ms (dumpfes Grollen).
+    b.nRise = 0.05 * b.nDuration + 2.0e-6 * b.R;
+
+    // Eigenes Abstandsgesetz statt des regularisierten Fokussierungsfaktors:
+    // die Druckwelle ist eine separate Schicht und soll nicht an demselben
+    // eps hängen, das "Boom Limit" für die Amplitudenformel deckelt.
+    //
+    // Und ausdrücklich NICHT 1/R (@dpa 20260819: "das passt nicht zu den
+    // Duesenjaegern, die irgendwo im Himmel sind, kilometer entfernt, und man
+    // hoert ploetzlich einen lauten Knall").
+    //
+    // Eine N-Welle ist keine gewöhnliche Kugelwelle. Sie ist nichtlinear: die
+    // Druckspitze läuft schneller als der Fuss, die Welle zieht sich auf
+    // ihrem Weg selbst in die Länge und wird dabei flacher statt einfach
+    // leiser. Der Überdruck fällt deshalb nur mit rund R^(-3/4). Über 15 km
+    // macht das gegenüber 1/R etwa den Faktor 10 aus, also 20 dB - genau der
+    // Unterschied zwischen "in 12 km Höhe unhörbar" und "man hört plötzlich
+    // einen lauten Knall".
+    //
+    // Bezugsentfernung, damit nWaveLevel weiter dasselbe bedeutet wie bisher:
+    // bei nWaveRefMetres ist das Ergebnis bitgleich zum alten 1/R, näher dran
+    // etwas leiser, weiter weg deutlich lauter. 20 m ist bewusst nah gewählt -
+    // dort war die Schicht eingehört, und dieser Stand soll erhalten bleiben.
+    //
+    // Größenkopplung (@dpa: "die N-Welle ist das Druckabbild des Körpers ...
+    // Größerer Körper = lauterer Knall waere der passende Ausbau"): dasselbe
+    // 3/4-Potenzgesetz wie beim Abstand, denn beide Zahlen kommen physikalisch
+    // aus derselben klassischen Sonic-Boom-Asymptotik (Whitham-Theorie): der
+    // Spitzenüberdruck einer N-Welle waechst mit L^(3/4) der Körperlänge L,
+    // genau wie er mit R^(-3/4) der Entfernung faellt. Bei nWaveSizeRefMetres
+    // (15 m, derselbe Wert wie der Default/Skew-Mittelpunkt des "N-Wave
+    // Size"-Reglers) ist der Faktor exakt 1 - der bisher eingehörte Klang bei
+    // mittlerer Reglerstellung bleibt also unveraendert, kleinere Koerper
+    // werden leiser, groessere lauter. Kein Deckel noetig: das Potenzgesetz
+    // ist ueber den ganzen Reglerbereich (0,5 bis 200 m) von selbst monoton
+    // und endlich.
+    b.nAmp = (nWaveLevel / nWaveRefMetres)
+           * std::pow (nWaveRefMetres / std::max (b.R, minRadius), nWaveDistanceExponent)
+           * std::pow (nWaveSizeM / nWaveSizeRefMetres, nWaveSizeExponent);
+
+    b.nPhase = 0.0;
+}
+
 void PropagationPath::setDiscoveryIntervalSeconds (double seconds)
 {
     discoverySeconds = std::max (0.0, seconds);
@@ -502,6 +556,14 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
         Target targets[maxBranchSlots];
 
+        // Sammelt die Steckplätze frisch geborener Zweige aus DIESEM
+        // Solver-Segment - Grundlage der Paar-Geburt-Erkennung der N-Welle
+        // weiter unten (siehe dortige Begründung). Ein Kegel bringt genau ein
+        // Paar, der Puffer ist trotzdem so groß wie maxBranchSlots, damit ein
+        // unerwarteter Überlauf nie schreibt statt nur die Erkennung verfehlt.
+        int newBornSlots[maxBranchSlots];
+        int newBornCount = 0;
+
         for (int i = 0; i < nRoots; ++i)
         {
             Target tg;
@@ -555,9 +617,53 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // extrapoliert, damit die Hermite-Strecke im Segment schon
                 // stimmt und nicht erst ab dem nächsten Solver-Punkt.
                 nb.tau = tg.tau - tg.dTau * h;
+
+                if (newBornCount < maxBranchSlots)
+                    newBornSlots[newBornCount++] = slot;
             }
 
             targets[slot] = tg;
+        }
+
+        // --- N-Wellen-Schicht: Auslösung an der Geburt eines Zweigpaares ---
+        //
+        // Diagnose (@dpa + gemeinsame Analyse): auf einer sauberen
+        // Überschallgeraden ist es vor der Kegelankunft still, und mit ihr
+        // entstehen zwei Zweige GLEICHZEITIG aus dem Nichts (Wurzelzahl 1 ->
+        // 3, siehe rootCountFlips im Löser). Keiner der beiden hat einen
+        // Vorwert, dessen M_r durch 1 wandern könnte - der andere Auslöser
+        // weiter unten (M_r-Durchgang eines BESTEHENDEN Zweigs) sieht diesen
+        // Fall deshalb nie. Der Knall IST aber genau diese Geburt, nicht der
+        // spätere Durchgang eines schon laufenden Zweigs.
+        //
+        // Erkannt wird sie NICHT an jeder neuen Zweig-Identität - davon gibt
+        // es laut load_check auch im Unterschall welche (newIdCount), das
+        // wäre also ein Fehlalarm bei jedem gewöhnlichen Zweigwechsel.
+        // Kriterium ist stattdessen: in diesem Solver-Segment sind GENAU ZWEI
+        // neue Zweige entstanden, und beide liegen nahe an M_r = 1. Das ist
+        // kein willkürlicher Zusatztest, sondern dieselbe Bedingung, unter der
+        // ein Wurzelpaar mathematisch entsteht bzw. wieder vergeht: die Falte
+        // liegt genau dort, wo F'(t_e) = -c*(1-M_r) durch null geht, also bei
+        // M_r = 1 - derselben Stelle, an der weiter oben auch der
+        // Kaustik-Ausklang beim Tod eines Zweigs greift (causticWidths*eps).
+        if (nWaveOn && newBornCount == 2)
+        {
+            Branch& a = branches[newBornSlots[0]];
+            Branch& b = branches[newBornSlots[1]];
+
+            const double distA = std::abs (1.0 - a.mach);
+            const double distB = std::abs (1.0 - b.mach);
+
+            if (distA < causticWidths * eps && distB < causticWidths * eps)
+            {
+                // Nur EIN Zweig trägt den Puls, sonst würde dieselbe
+                // Kegelankunft doppelt ausgelöst - zwei neue Zweige, aber ein
+                // einziges physikalisches Ereignis (der Knall trifft das Ohr
+                // einmal, nicht zweimal). Welcher der beiden trägt ist
+                // beliebig: an der Falte liegen R und tau für beide praktisch
+                // gleich.
+                triggerNWave (a, c);
+            }
         }
 
         for (int s = 0; s < maxBranchSlots; ++s)
@@ -654,59 +760,21 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const double tau0 = b.tau;
             const double amp0 = b.amp;
 
-            // --- N-Wellen-Schicht: Auslösung ---
+            // --- N-Wellen-Schicht: zweiter Auslöser (bestehender Zweig) ---
             //
-            // Pro Zweig genau dann, wenn sein M_r die 1 durchquert - der
-            // Moment, in dem die Mach-Front diesen Hörweg überstreicht. Ein
-            // frisch geborener Zweig hat keinen Vorwert und löst deshalb nicht
-            // aus; sonst käme bei jeder Kegelankunft gleich ein ganzes Paar.
+            // Der PRIMÄRE Auslöser ist die Paar-Geburt weiter oben (Kegel-
+            // ankunft auf einer sauberen Überschallgeraden). Hier zusätzlich:
+            // wenn der M_r eines bereits bestehenden, laufenden Zweigs die 1
+            // durchquert - der Fall, wenn z.B. innerhalb einer Bewegung durch
+            // Mach 1 beschleunigt wird, ohne dass dabei ein neues Zweigpaar
+            // entsteht. Ein frisch geborener Zweig hat keinen Vorwert
+            // (b.machSeen ist dann noch false, siehe Branch{}) und feuert hier
+            // deshalb nie - der ist schon oben über die Paar-Geburt bedient,
+            // sonst gäbe es an derselben Kegelankunft einen doppelten Puls.
             const double machNow = alive ? tg.mach : b.mach;
 
             if (nWaveOn && b.machSeen && ((b.prevMach < 1.0) != (machNow < 1.0)))
-            {
-                // Pulsdauer aus der Ausdehnung des Körpers: die Zeit, die der
-                // Schall braucht, um ihn der Länge nach zu durchlaufen, mal
-                // zwei (Bug- und Heckstoß liegen nicht am selben Punkt). Damit
-                // heißt größer wirklich länger und tiefer, kleiner kürzer und
-                // knackiger - ohne dass hinter dem Regler eine Formel steckt,
-                // die niemand nachvollziehen kann.
-                b.nDuration = 2.0 * nWaveSizeM / std::max (1.0, c);
-
-                // Verbreiterung der Stoßfront mit der Entfernung, siehe
-                // nWaveAt(). Zwei Mikrosekunden je Meter sind eine
-                // Modellkonstante: in 100 m ergibt das 0,2 ms (Peitschenknall),
-                // in 3 km 6 ms (dumpfes Grollen).
-                b.nRise = 0.05 * b.nDuration + 2.0e-6 * b.R;
-
-                // Eigenes Abstandsgesetz statt des regularisierten
-                // Fokussierungsfaktors: die Druckwelle ist eine separate
-                // Schicht und soll nicht an demselben eps hängen, das "Boom
-                // Limit" für die Amplitudenformel deckelt.
-                //
-                // Und ausdrücklich NICHT 1/R (@dpa 20260819: "das passt nicht
-                // zu den Duesenjaegern, die irgendwo im Himmel sind, kilometer
-                // entfernt, und man hoert ploetzlich einen lauten Knall").
-                //
-                // Eine N-Welle ist keine gewöhnliche Kugelwelle. Sie ist
-                // nichtlinear: die Druckspitze läuft schneller als der Fuss,
-                // die Welle zieht sich auf ihrem Weg selbst in die Länge und
-                // wird dabei flacher statt einfach leiser. Der Überdruck fällt
-                // deshalb nur mit rund R^(-3/4). Über 15 km macht das gegenüber
-                // 1/R etwa den Faktor 10 aus, also 20 dB - genau der
-                // Unterschied zwischen "in 12 km Höhe unhörbar" und "man hört
-                // plötzlich einen lauten Knall".
-                //
-                // Bezugsentfernung, damit nWaveLevel weiter dasselbe bedeutet
-                // wie bisher: bei nWaveRefMetres ist das Ergebnis bitgleich zum
-                // alten 1/R, näher dran etwas leiser, weiter weg deutlich
-                // lauter. 20 m ist bewusst nah gewählt - dort war die Schicht
-                // eingehört, und dieser Stand soll erhalten bleiben.
-                b.nAmp = (nWaveLevel / nWaveRefMetres)
-                       * std::pow (nWaveRefMetres / std::max (b.R, minRadius),
-                                   nWaveDistanceExponent);
-
-                b.nPhase = 0.0;
-            }
+                triggerNWave (b, c);
 
             b.prevMach = machNow;
             b.machSeen = true;

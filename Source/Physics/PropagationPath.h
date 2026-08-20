@@ -145,11 +145,15 @@ public:
     // (reine Amplitudendeckelung über eps, keine Pulsform) und vom
     // Master-Softclip.
     //
-    // Ausgelöst wird sie pro Zweig, wenn dessen M_r die 1 durchquert - das ist
-    // der Moment, in dem die Mach-Front diesen Hörweg überstreicht.
+    // Ausgelöst wird sie an der GEBURT eines Zweigpaars (zwei neue Zweige im
+    // selben Solver-Segment, beide nahe M_r = 1 - die Kegelankunft) sowie
+    // zusätzlich, wenn der M_r eines bereits bestehenden Zweigs die 1
+    // durchquert (z.B. Beschleunigen durch Mach 1 bei laufendem Zweig). Siehe
+    // ausführliche Begründung an den beiden Auslösestellen in process().
     //
-    // sizeMetres ist die Ausdehnung des Körpers und bestimmt die Pulsdauer:
-    // größer = tiefer und länger, kleiner = kürzer und knackiger.
+    // sizeMetres ist die Ausdehnung des Körpers und bestimmt sowohl die
+    // Pulsdauer (größer = tiefer und länger, kleiner = kürzer und knackiger)
+    // als auch die Amplitude (größer = lauter, siehe triggerNWave()).
     void setNWave (bool shouldBeEnabled, double sizeMetres);
 
     // Phase 2 (Plan 2.7 / Abschnitt 7). In Phase 1 ohne Wirkung, damit später
@@ -381,6 +385,13 @@ private:
     int    findSlot (int id) const;
     int    freeSlot();
 
+    // Setzt Dauer, Anstiegszeit, Amplitude und Phase des N-Wellen-Pulses auf
+    // Zweig b und startet ihn (nPhase = 0). Gemeinsamer Code für beide
+    // Auslöser (Paar-Geburt an der Kegelankunft und M_r-Durchgang eines
+    // bereits bestehenden Zweigs, siehe process()) - beide sollen exakt
+    // denselben Puls erzeugen, keine zwei leicht auseinanderlaufenden Formeln.
+    void triggerNWave (Branch& b, double c) const;
+
     double lowpassCoeff (double R) const;
 
     // Phase-2-Vorbereitung (Plan 2.7). Liefert in Phase 1 konstant 0, der
@@ -542,6 +553,17 @@ private:
     // die Bezugsentfernung hält den bisher eingehörten Nahbereich fest.
     static constexpr double nWaveDistanceExponent = 0.75;
     static constexpr double nWaveRefMetres        = 20.0;
+
+    // Größenkopplung der Lautstärke (@dpa: "die N-Welle ist das Druckabbild
+    // des Körpers ... Größerer Körper = lauterer Knall"). Ausführliche
+    // Begründung an der Verwendungsstelle in triggerNWave().
+    //
+    // nWaveSizeRefMetres ist bewusst dieselbe Zahl wie der Skew-Mittelpunkt
+    // und Default des "N-Wave Size"-Reglers (Params.cpp, 15 m): dort ist der
+    // Kopplungsfaktor exakt 1 und der bisher eingehörte Klang bleibt bei
+    // mittlerer Reglerstellung unverändert - kein Presets-Sprung.
+    static constexpr double nWaveSizeRefMetres = 15.0;
+    static constexpr double nWaveSizeExponent  = 0.75;
 
     pathdetail::DisplayValue<int>    dispBranches;
     pathdetail::DisplayValue<double> dispDelay;
