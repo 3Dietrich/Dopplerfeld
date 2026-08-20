@@ -1010,6 +1010,60 @@ Aufrufe hinweg gepflegte Faltungsstruktur der Ankunftszeitfunktion
   rot über 100%, mit Physik/Quelle-Aufschlüsselung) sind bereits umgesetzt
   (siehe `git log`).
 
+## TODO: Bahn-Historie wird unter laufenden Zweigen umgeschrieben
+
+Gemeinsame Wurzel von zwei Beobachtungen (@dpa 20260820/21):
+
+- "hier gibt's eine unvermittelte n-Wave" bei einem Unterschallflug, und zwar
+  "nicht beim ersten Durchlauf, sondern erst beim 2. und 3." Das Preset hat
+  `playLoop = 1` und einen aufgezeichneten Clip: beim Loop-Wrap setzt
+  `MotionPlayer` den Abspielkopf per `fmod` zurueck. Ist der Clip nicht
+  zufaellig geschlossen, springt die Quelle dabei ueber eine Strecke, die sie
+  in einem Tick nie zuruecklegen koennte - fuer den Loeser unendliche
+  Geschwindigkeit, also Ueberschall, also ein neu entstehendes Zweigpaar.
+- "test_vorbeiflug 909kmh knackst am anfang manchmal". Beim Flugstart schreibt
+  `startLinearMotion()` -> `fillLinear()` die gesamte Vorgeschichte neu.
+  Zweige, die gerade noch Schall von vor einer Sekunde wiedergeben, finden
+  schlagartig eine andere Vergangenheit vor. "Manchmal" heisst: nur wenn
+  gerade noch etwas unterwegs ist.
+
+Zu beheben ist das am Sprung, nicht an der Ausloesebedingung der N-Welle: ein
+Positionssprung IST formal Ueberschall, der Ueberschall-Check in
+`PropagationPath` kann ihn also nicht abfangen.
+
+Vorschlag: Die Engine hat bereits einen Geometrie-Crossfader (60 ms,
+`DualPathCrossfader`), der bei Aenderungen der Wegewelt den alten Satz
+ausblendet, waehrend der neue einsetzt. `startLinearMotion()` und
+`jumpSourceTo()` benutzen ihn nicht, sondern ueberschreiben die aktive
+Trajektorie direkt. Laufen sie ueber denselben Crossfade, verschwinden Knacks
+und Scheinknall gemeinsam.
+
+## TODO: One-Pole glaettet den Echtzeitverlauf der Maus nicht sauber
+
+@dpa 20260821: "mit Smoother One-Pole wird der Echtzeitverlauf der maus noch
+nicht korrekt geglaettet. aber nur dieser Smoother und nur in Echtzeit oder
+waehrend der Aufnahme. Beim Abspielen ist es dann korrekt."
+
+Ursache steht fest: `sourceTargetMetres` wird in `applyParameters()` gesetzt,
+also einmal je Block, waehrend `advanceMotion()` mit 1000 Hz tickt. Das Ziel
+steht rund elf Ticks still und springt dann. Die Glaetter zweiter Ordnung
+(Feder, 1-Euro) und der Slew-Limiter fuehren eine eigene Geschwindigkeit und
+stecken das weg. Der Ein-Pol nicht: seine Geschwindigkeit ist die
+Positionsaenderung dieses Ticks geteilt durch dt (so auch im Klassenkommentar
+von `OnePoleSmoother` vermerkt), sie springt also mit dem Ziel mit - und genau
+diese Geschwindigkeit bestimmt den Doppler. Beim Abspielen umgeht die
+Catmull-Rom-Wiedergabe den Glaetter, deshalb ist es dort korrekt.
+
+Der naheliegende Fix (Ziel ueber den Block wandern lassen, wie beim
+Pfad-Versatz in `PropagationPath`) wurde gebaut und wieder VERWORFEN: er macht
+aus jedem SPRUNG des Ziels eine Strecke, die in einem einzigen Block
+zurueckzulegen ist. Gemessen stieg M_r im Test "schnell subsonisch" von 0,74
+auf 2,46, nach Ausnahme fuer `holdSourceTargetAt()` immer noch auf 1,26 - die
+Rampe erzeugte also Scheinueberschall. Ein tragfaehiger Fix muss alle Stellen
+erfassen, an denen das Ziel springen DARF (Flugende, Preset, Feldwechsel,
+Automationsspruenge), und nur die echte Reglerbewegung rampen. Alternativ am
+Ein-Pol selbst ansetzen und ihm einen eigenen Geschwindigkeitszustand geben.
+
 ## TODO: Kaustik-Lastspitze (bekannt, bewusst offen)
 
 Beim Vorbeiflug nahe Mach 1 kostet der teuerste Block das rund 12-fache des
