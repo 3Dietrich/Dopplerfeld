@@ -45,6 +45,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     groundReflectionAttachment = std::make_unique<ButtonAttachment> (apvts, Params::groundReflectionOn, groundReflectionButton);
 
     setupKnob (nWaveSizeKnob, apvts, Params::nWaveSize, "N-Wave Size", Tooltips::Key::NWaveSize);
+    setupKnob (nWaveGainKnob, apvts, Params::nWaveGainDb, "N-Wave Gain", Tooltips::Key::NWaveGain);
     setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve", Tooltips::Key::DistanceCurve);
     setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",       Tooltips::Key::Panning);
 
@@ -68,7 +69,7 @@ void FieldPanel::refreshTooltips()
 {
     for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &fadeManualKnob, &outputGainKnob,
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
-                      &groundDampKnob, &groundGainKnob, &nWaveSizeKnob })
+                      &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -129,7 +130,7 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto ampRow = area.removeFromTop (knobH);
-    for (auto* k : { &nWaveSizeKnob, &distanceCurveKnob, &panAmountKnob })
+    for (auto* k : { &nWaveSizeKnob, &nWaveGainKnob, &distanceCurveKnob, &panAmountKnob })
     {
         layoutKnob (*k, ampRow.removeFromLeft (knobW));
         ampRow.removeFromLeft (4);

@@ -63,6 +63,7 @@ namespace Tooltips
         GroundDamp,
         GroundReflection,
         NWaveSize,
+        NWaveGain,
         NWave,
         FadeAuto,
         LimiterOn,
@@ -411,6 +412,14 @@ namespace Tooltips
                           "the reflection is then just a damped doubling with no delay of "
                           "its own - it only becomes audibly separate once the source is "
                           "above ground. Costs double the solver load, therefore off by default.";
+                case Key::NWaveGain:
+                    return lang == Language::De
+                        ? "Lautstaerke des Ueberschallknalls in dB. Er darf uebersteuern - "
+                          "ein Knall aus der Naehe IST ohrenbetaeubend, abgefangen wird das "
+                          "vom Limiter, nicht von einer stillen Bremse in der Rechnung."
+                        : "Loudness of the sonic boom in dB. It may clip - a boom heard from "
+                          "close by IS deafening; that is caught by the limiter, not by a "
+                          "silent brake inside the calculation.";
                 case Key::NWaveSize:
                     return lang == Language::De
                         ? "Groesse/Masse des Koerpers in Metern - sie bestimmt die Dauer der "

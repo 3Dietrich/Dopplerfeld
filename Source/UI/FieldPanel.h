@@ -68,6 +68,7 @@ private:
     // Hektik/Jitter An sind ins Bewegungs-Panel gewandert, @dpa-Feedback) -
     // alle drei sind Amplituden-/Pegelthemen, keine Positionsregler wie Reihe 2.
     Knob nWaveSizeKnob;
+    Knob nWaveGainKnob;
 
     // Entfernung -> Amplitude schaerfer/flacher als das physikalische 1/R
     // (@dpa-Skizze "Amp-Verlauf"). Steht in der dritten Reihe, s. nWaveSizeKnob
