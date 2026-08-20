@@ -1,2 +1,6 @@
 build/
 .DS_Store
+
+# Test-Presets aus Hoerdurchgaengen: bleiben lokal, sie sind Arbeitsmaterial
+# und kein Teil dessen, was jemand herunterlaedt.
+presets/test/
