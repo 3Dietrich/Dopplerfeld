@@ -34,22 +34,8 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (fadeManualKnob,  apvts, Params::fadeManualMs,    "Fade Manual",   Tooltips::Key::FadeManual);
     setupKnob (outputGainKnob,  apvts, Params::outputGain,      "Output Gain",   Tooltips::Key::OutputGain);
 
-    setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",       Tooltips::Key::Panning);
-
-    setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve", Tooltips::Key::DistanceCurve);
-
     setupKnob (srcZKnob,        apvts, Params::srcZ,            "Source Z",      Tooltips::Key::SourceZ);
     setupKnob (lisZKnob,        apvts, Params::lisZ,            "Listener Z",    Tooltips::Key::ListenerZ);
-    setupKnob (srcJitterAmountKnob, apvts, Params::srcJitterAmount, "Jitter",    Tooltips::Key::SrcJitterAmount);
-    setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik",    Tooltips::Key::SrcJitterRate);
-
-    srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
-    addAndMakeVisible (srcJitterOnButton);
-    srcJitterOnAttachment = std::make_unique<ButtonAttachment> (apvts, Params::srcJitterOn, srcJitterOnButton);
-    // Klick UND Presetwechsel loesen onClick aus (ButtonAttachment schaltet
-    // per sendNotificationSync um) - deshalb reicht dieser eine Ort, um die
-    // Regler in beiden Faellen richtig auszugrauen.
-    srcJitterOnButton.onClick = [this] { updateJitterEnabledState(); };
 
     setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",  Tooltips::Key::GroundDamp);
     setupKnob (groundGainKnob,  apvts, Params::groundGain,       "Ground Gain",  Tooltips::Key::GroundGain);
@@ -59,6 +45,8 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     groundReflectionAttachment = std::make_unique<ButtonAttachment> (apvts, Params::groundReflectionOn, groundReflectionButton);
 
     setupKnob (nWaveSizeKnob, apvts, Params::nWaveSize, "N-Wave Size", Tooltips::Key::NWaveSize);
+    setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve", Tooltips::Key::DistanceCurve);
+    setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",       Tooltips::Key::Panning);
 
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
     addAndMakeVisible (nWaveButton);
@@ -74,33 +62,13 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 
     levelMeter.setTooltip (Tooltips::text (Tooltips::Key::LevelMeter));
     addAndMakeVisible (levelMeter);
-
-    // Einmal von Hand, denn das Attachment hat seinen Startwert schon vor der
-    // Zuweisung von onClick durchgereicht - ohne diesen Aufruf waere der
-    // Ausgrauzustand beim ersten Anzeigen falsch, bis man den Schalter selbst
-    // anfasst.
-    updateJitterEnabledState();
-}
-
-void FieldPanel::updateJitterEnabledState()
-{
-    // Aus heisst nur "steht still", nicht "Wert weg" - die Regler bleiben auf
-    // ihrem Stand, damit beim Wiedereinschalten sofort der alte Ausschlag
-    // greift statt bei null neu anzufangen (siehe Tooltips::Key::SrcJitterOn).
-    const bool jitterOn = srcJitterOnButton.getToggleState();
-
-    srcJitterAmountKnob.slider.setEnabled (jitterOn);
-    srcJitterAmountKnob.label.setEnabled (jitterOn);
-    srcJitterRateKnob.slider.setEnabled (jitterOn);
-    srcJitterRateKnob.label.setEnabled (jitterOn);
 }
 
 void FieldPanel::refreshTooltips()
 {
     for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &fadeManualKnob, &outputGainKnob,
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
-                      &srcJitterAmountKnob, &srcJitterRateKnob, &groundDampKnob, &groundGainKnob,
-                      &nWaveSizeKnob })
+                      &groundDampKnob, &groundGainKnob, &nWaveSizeKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -109,7 +77,6 @@ void FieldPanel::refreshTooltips()
 
     groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
-    srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
     fadeAutoButton.setTooltip (Tooltips::text (Tooltips::Key::FadeAuto));
     limiterOnButton.setTooltip (Tooltips::text (Tooltips::Key::LimiterOn));
     levelMeter.setTooltip (Tooltips::text (Tooltips::Key::LevelMeter));
@@ -148,30 +115,23 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto geoRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &groundGainKnob, &nWaveSizeKnob,
-                     &distanceCurveKnob })
+    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &groundGainKnob })
     {
         layoutKnob (*k, geoRow.removeFromLeft (knobW));
         geoRow.removeFromLeft (4);
     }
 
-    // Dritte Reihe: M-Jitter, eigenstaendig statt in die schon volle
-    // Hoehen-Reihe gequetscht. Die Panel-Hoehe kommt von aussen fest vorgegeben
-    // (PluginEditor::fieldContentHeight) - fuer den Ganz-Aus-Schalter ist
-    // deshalb KEINE eigene Reihe drin: eine zusaetzliche Reihe frisst Hoehe,
-    // die dann layoutKnob() fehlt, und der Drehknopf verschwindet (nur noch
-    // Beschriftung + Wertfeld sichtbar, siehe layoutKnob() oben). Der
-    // Schalter steht stattdessen rechts neben den drei Knoepfen, oben buendig
-    // mit deren Beschriftungszeile.
+    // Dritte Reihe: Amplituden-/Pegelthemen (N-Wave-Groesse, Amp-Verlauf,
+    // Panning-Anteil) - seit Jitter/Hektik/Jitter An ins Bewegungs-Panel
+    // gewandert sind (@dpa-Feedback), war diese Reihe frei; die Hoehe bleibt
+    // exakt gleich (PluginEditor::fieldContentHeight unveraendert), nur die
+    // drei genannten Regler ziehen hier ein statt eine leere Reihe zu lassen.
     area.removeFromTop (6);
 
-    auto jitterRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &panAmountKnob })
+    auto ampRow = area.removeFromTop (knobH);
+    for (auto* k : { &nWaveSizeKnob, &distanceCurveKnob, &panAmountKnob })
     {
-        layoutKnob (*k, jitterRow.removeFromLeft (knobW));
-        jitterRow.removeFromLeft (4);
+        layoutKnob (*k, ampRow.removeFromLeft (knobW));
+        ampRow.removeFromLeft (4);
     }
-
-    srcJitterOnButton.setBounds (jitterRow.removeFromTop (18)
-                                           .withWidth (juce::jmin (120, jitterRow.getWidth())));
 }

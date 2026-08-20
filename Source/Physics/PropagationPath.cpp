@@ -104,10 +104,14 @@ void PropagationPath::setTrajectoryGridSeconds (double seconds)
     trajGridSeconds = std::max (1.0e-6, seconds);
 }
 
-void PropagationPath::setNWave (bool shouldBeEnabled, double sizeMetres)
+void PropagationPath::setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear)
 {
     nWaveOn    = shouldBeEnabled;
     nWaveSizeM = std::max (0.01, sizeMetres);
+
+    // Nach oben bewusst ohne Deckel: ein Knall darf uebersteuern, dafuer gibt
+    // es den sichtbaren Limiter.
+    nWaveGain  = std::max (0.0, gainLinear);
 }
 
 double PropagationPath::nWaveAt (const Branch& b)
@@ -156,7 +160,15 @@ void PropagationPath::triggerNWave (Branch& b, double c) const
     // Verbreiterung der Stoßfront mit der Entfernung, siehe nWaveAt(). Zwei
     // Mikrosekunden je Meter sind eine Modellkonstante: in 100 m ergibt das
     // 0,2 ms (Peitschenknall), in 3 km 6 ms (dumpfes Grollen).
-    b.nRise = 0.05 * b.nDuration + 2.0e-6 * b.R;
+    // Der erste Term ist der Anteil, der NICHT von der Entfernung kommt: die
+    // Front ist auch am Ursprung nicht unendlich steil. Er faellt bewusst klein
+    // aus, denn er entscheidet ueber den Charakter - bei 5 % der Pulsdauer sind
+    // es auf 87 ms Dauer schon 4,4 ms Anstieg, und was so weich einsetzt, klingt
+    // nach Wusch statt nach Schlag. Mit 2 % bleiben 1,7 ms, die Front kommt als
+    // Kante. Die Verbreiterung mit der Entfernung (zweiter Term) bleibt
+    // unangetastet, sie ist die eigentliche Physik dahinter: in 100 m ein
+    // Peitschenknall, in 3 km ein dumpfes Grollen.
+    b.nRise = 0.02 * b.nDuration + 2.0e-6 * b.R;
 
     // Eigenes Abstandsgesetz statt des regularisierten Fokussierungsfaktors:
     // die Druckwelle ist eine separate Schicht und soll nicht an demselben
@@ -193,7 +205,8 @@ void PropagationPath::triggerNWave (Branch& b, double c) const
     // und endlich.
     b.nAmp = (nWaveLevel / nWaveRefMetres)
            * std::pow (nWaveRefMetres / std::max (b.R, minRadius), nWaveDistanceExponent)
-           * std::pow (nWaveSizeM / nWaveSizeRefMetres, nWaveSizeExponent);
+           * std::pow (nWaveSizeM / nWaveSizeRefMetres, nWaveSizeExponent)
+           * nWaveGain;
 
     b.nPhase = 0.0;
 }

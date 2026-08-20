@@ -19,7 +19,6 @@
 #include "Sources/SampleSource.h"
 #include "Sources/AudioInSource.h"
 #include "Sources/SoundSourceHolder.h"
-#include "Util/CloneSpray.h"
 #include "Util/FieldSnapshot.h"
 #include "Util/ScopeRingBuffer.h"
 
@@ -133,11 +132,13 @@ public:
     // Ausgang laeuft frei.
     int limiterHits() const { return limiterHitCount.load (std::memory_order_relaxed); }
 
-    // Was gerade tatsaechlich gerechnet wird - bei eingeschalteter Automatik
-    // weicht die Zahl der echten Klone vom Regler ab, und genau das soll man
-    // sehen koennen (@dpa: kein stiller Deckel).
+    // Was gerade tatsaechlich gerechnet wird (@dpa: kein stiller Deckel).
     int realCloneCount()  const { return activeRealClones.load(); }
-    int cheapCloneCount() const { return activeCheapClones.load(); }
+    // Billige Klone gibt es seit ihrer Entfernung nicht mehr (@dpa: "nur
+    // echte Klones, alles andere weg") - bleibt als 0-Konstante stehen, weil
+    // der einzige Aufrufer in PluginEditor.cpp sitzt und dort nicht
+    // angefasst werden darf.
+    int cheapCloneCount() const { return 0; }
 
     // Notaus: zurueck auf die minimale sichere Konfiguration - nur der
     // Direktpfad pro Ohr, keine Reflexionen, keine Klone. Greift im
@@ -287,16 +288,9 @@ private:
     void applyParameters();
     void handlePendingRequests();
 
-    // Klone: Reglerstand einlesen, Automatik nachfuehren, echte und billige
-    // Anzahl setzen. Nur aus applyParameters() (Audiothread).
+    // Klone: Reglerstand einlesen, Zahl an die Engine weiterreichen. Nur aus
+    // applyParameters() (Audiothread).
     void applyCloneParameters();
-
-    // Haltezeiten der Klon-Automatik in Bloecken (bei 48 kHz / 512 Samples rund
-    // 10,7 ms je Block). Runter darf sie schnell reagieren - da geht es darum,
-    // Aussetzer zu vermeiden - hoch nur zoegerlich, damit sie nicht sofort
-    // wieder zurueckholt, was sie gerade abgeworfen hat.
-    static constexpr int autoDownHoldBlocks = 20;    // ~0,2 s
-    static constexpr int autoUpHoldBlocks   = 180;   // ~2 s
 
     // Setzt den Vorbeiflug auf: Generator, Glätter-Vorwärmung und die zur
     // Startvariante passende Trajektorien-Vorgeschichte. Nur aus dem
@@ -390,6 +384,7 @@ private:
         std::atomic<float>* flySpeed    = nullptr;
 
         std::atomic<float>* boomLimitDb     = nullptr;
+        std::atomic<float>* nWaveGainDb     = nullptr;
         std::atomic<float>* airAbsorbAmount = nullptr;
         std::atomic<float>* distanceCurve   = nullptr;
 
@@ -409,11 +404,8 @@ private:
         std::atomic<float>* nWaveSize  = nullptr;
 
         std::atomic<float>* cloneTotal  = nullptr;
-        std::atomic<float>* cloneReal   = nullptr;
-        std::atomic<float>* cloneAuto   = nullptr;
         std::atomic<float>* cloneRealLevel = nullptr;
         std::atomic<float>* cloneSpread = nullptr;
-        std::atomic<float>* cloneLevel  = nullptr;
 
         std::atomic<float>* reflect2ndOn = nullptr;
         std::atomic<float>* bounceGain   = nullptr;
@@ -439,10 +431,6 @@ private:
     AudioInSource     audioInSource;
     SoundSourceHolder sourceHolder;
     DopplerEngine     dopplerEngine;
-
-    // Billige Nachbildung der Klone, die keine eigene Loeserphysik bekommen.
-    // Sitzt hinter der Engine und vor der Ausgangsstufe.
-    CloneSpray cloneSpray;
 
     SmootherSet sourceSmoothers;
     SmootherSet listenerSmoothers;
@@ -551,16 +539,12 @@ private:
     double lastDistanceCurve   = 0.0;
     bool   lastNWaveOn         = false;
     double lastNWaveSize       = 15.0;
+    double lastNWaveGainDb     = 0.0;
 
-    // Wie viele Klone gerade WIRKLICH mit Loeserphysik laufen. Bei
-    // eingeschalteter Automatik weicht das vom Regler ab, deshalb ein eigener
-    // Wert - und deshalb wird er auch angezeigt, statt still zu wirken.
+    // Wie viele Klone gerade WIRKLICH mit Loeserphysik laufen - seit der
+    // entfernten Automatik immer genau min(Regler, maxRealClones), aber der
+    // eigene Wert bleibt (Notaus setzt ihn auf 0, ohne den Regler anzufassen).
     int    effectiveRealClones = 0;
-
-    // Zaehler fuer die Automatik, in Bloecken. Sie darf nur langsam und
-    // getrennt in beide Richtungen reagieren, sonst pendelt sie im Takt der
-    // eigenen Wirkung.
-    int    cloneAutoHoldBlocks = 0;
 
     // Geglättete Wandlage. Eine Wand ist eine Spiegelebene; springt sie, dann
     // springt der gespiegelte Empfänger und damit die Laufzeit des ganzen
@@ -650,7 +634,6 @@ private:
     std::atomic<float> cpuLoadPhysics { 0.0f };   // siehe cpuLoadPhysicsPercent()
     std::atomic<int>  recordedFrames  { 0 };
     std::atomic<int>  activeRealClones  { 0 };
-    std::atomic<int>  activeCheapClones { 0 };
 
     // Werte aus SourceKind, atomar statt des Enums selbst (std::atomic<enum
     // class> ginge zwar auch, int ist hier aber schon ueberall sonst der

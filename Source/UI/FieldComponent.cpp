@@ -51,6 +51,29 @@ void FieldComponent::setTooltip (const juce::String& newTooltip)
 void FieldComponent::setSnapshot (const FieldSnapshot& snapshotIn)
 {
     snapshot = snapshotIn; // Wertkopie, FieldSnapshot ist klein und allokationsfrei
+
+    // Tiefpass fuer die jitterfreie Ankerposition, s. Kommentar bei
+    // sourceAnchorWorld (FieldComponent.h). snapshot.now ist die Engine-Zeit
+    // in Sekunden (dieselbe Basis wie die Wellenfront-Emissionszeiten) - damit
+    // laeuft die Glaettung an der TATSAECHLICHEN Zeit zwischen zwei Snapshots
+    // statt an einer angenommenen festen Taktrate.
+    const double dt = snapshot.now - lastAnchorSnapshotTime;
+
+    if (! haveSourceAnchor || dt <= 0.0 || dt > 1.0)
+    {
+        // Erster Aufruf oder Zeitsprung (z.B. Loop-Neustart, Engine-Reset) -
+        // kein Nachziehen ueber eine Distanz, die so gar nicht durchlaufen wurde.
+        sourceAnchorWorld = snapshot.sourcePos;
+    }
+    else
+    {
+        const double alpha = 1.0 - std::exp (-dt / sourceAnchorSmoothTauSeconds);
+        sourceAnchorWorld = sourceAnchorWorld + (snapshot.sourcePos - sourceAnchorWorld) * alpha;
+    }
+
+    lastAnchorSnapshotTime = snapshot.now;
+    haveSourceAnchor = true;
+
     repaint();
 }
 
@@ -569,7 +592,10 @@ void FieldComponent::drawSource (juce::Graphics& g) const
         }
     }
 
-    const auto centrePx = worldToScreen (snapshot.sourcePos);
+    // Waehrend M gezogen wird: die zuletzt gemeldete Zielposition statt der
+    // (moeglicherweise gejitterten) Snapshot-Position, s. sourceDragWorldOverride.
+    const auto centrePx = worldToScreen (dragTarget == DragTarget::source ? sourceDragWorldOverride
+                                                                           : snapshot.sourcePos);
 
     g.setColour (juce::Colours::yellow);
     g.fillEllipse (juce::Rectangle<float> (sourceRadiusPx * 2.0f, sourceRadiusPx * 2.0f).withCentre (centrePx));
@@ -696,7 +722,11 @@ FieldComponent::Projected FieldComponent::project (Vec3 worldMetres) const
 
 FieldComponent::SourceMarker FieldComponent::perspectiveSourceMarker() const
 {
-    const auto pr = project (snapshot.sourcePos);
+    // Waehrend M gezogen wird: die zuletzt gemeldete Zielposition statt der
+    // (moeglicherweise gejitterten) Snapshot-Position, s. sourceDragWorldOverride -
+    // haelt die "EINE Stelle fuer Zeichnen UND Hit-Test" auch mitten im Drag ein.
+    const auto pr = project (dragTarget == DragTarget::source ? sourceDragWorldOverride
+                                                               : snapshot.sourcePos);
 
     if (! pr.visible)
     {
@@ -1133,7 +1163,7 @@ FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> scre
         // beides bleibt der Draufsicht vorbehalten.
         const auto marker = perspectiveSourceMarker();
 
-        if (screenPx.getDistanceFrom (marker.px) <= marker.radiusPx + dragHitRadiusPx)
+        if (screenPx.getDistanceFrom (marker.px) <= marker.radiusPx + sourceDragHitRadiusPx)
             return DragTarget::source;
 
         return DragTarget::none;
@@ -1142,16 +1172,22 @@ FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> scre
     const auto headPx = worldToScreen (snapshot.listener.head);
     const float yaw = listenerScreenYaw();
     const auto nosePx = HeadSymbol::noseTip (headPx, headRadiusPx, yaw);
-    const auto sourcePx = worldToScreen (snapshot.sourcePos);
+
+    // Am ruhenden Anker pruefen, nicht am gezeichneten (gejitterten) Punkt -
+    // s. sourceAnchorWorld: M wird dort gefangen, wo es "eigentlich" ist,
+    // auch wenn es gerade zappelnd irgendwo daneben gezeichnet wird (@dpa:
+    // "ich habe Schwierigkeiten, M zu bewegen, wenn Jitter ueber seine
+    // Darstellung hinausgeht - man kann es nicht mehr fangen").
+    const auto sourcePx = worldToScreen (sourceAnchorWorld);
 
     // Quelle M zuerst pruefen (@dpa-Feedback 20260819: "M muss maus-trigger
     // Layer-technisch ueber L liegen") - liegen M und der Hoererkopf/seine
     // Nase uebereinander oder dicht beieinander, soll ein Klick die Quelle
     // greifen, nicht den Hoerer. Der Fangradius der Quelle bleibt dabei ihr
-    // eigener (sourceRadiusPx + dragHitRadiusPx), er wird durch den
-    // Vorrang nicht groesser - ausserhalb davon bleibt der Hoerer weiterhin
-    // ganz normal greifbar.
-    if (screenPx.getDistanceFrom (sourcePx) <= sourceRadiusPx + dragHitRadiusPx)
+    // eigener (sourceRadiusPx + sourceDragHitRadiusPx, grosszuegiger als der
+    // des Hoerers), er wird durch den Vorrang nicht weiter vergroessert -
+    // ausserhalb davon bleibt der Hoerer weiterhin ganz normal greifbar.
+    if (screenPx.getDistanceFrom (sourcePx) <= sourceRadiusPx + sourceDragHitRadiusPx)
         return DragTarget::source;
 
     // Nase vor Kopf: sie liegt oft innerhalb des grosszuegigen
@@ -1204,6 +1240,22 @@ void FieldComponent::handleDragTo (juce::Point<float> screenPx)
         Vec3 worldPos = cam + fwd * depth + right * lateralOffset;
         worldPos.z    = cam.z + heightOffset;
 
+        // Unter den Boden nur, solange er nichts zurueckwirft. Reflektiert er,
+        // ist er eine Flaeche, und eine Quelle darunter waere ein Zustand, den
+        // die Rechnung nicht abbildet: ihr Spiegelbild laege dann ueber ihr
+        // (@dpa: "wenn Bodenreflexion an ist, dann nur z>=0"). Dieselbe
+        // Klemmung gilt auch fuers Zeichnen (sourceDragWorldOverride) - sonst
+        // zeigte der gezogene Punkt eine Position, die so nie gemeldet wird.
+        if (snapshot.groundReflectionOn)
+            worldPos.z = juce::jmax (0.0, worldPos.z);
+
+        // Zum Zeichnen benutzt, solange M gezogen wird (s. drawSource(),
+        // perspectiveSourceMarker()) - folgt damit der Maus 1:1, ohne den
+        // Wackel-Versatz der naechsten (moeglicherweise gejitterten)
+        // Snapshot-Position (@dpa: "waehrend des Ziehens folgt M der Maus
+        // ohne Wackel-Versatz").
+        sourceDragWorldOverride = worldPos;
+
         const double normX = juce::jlimit (0.0, 1.0, worldPos.x / juce::jmax (1.0e-6, fieldMetres));
 
         if (onSourceDragged)
@@ -1214,15 +1266,7 @@ void FieldComponent::handleDragTo (juce::Point<float> screenPx)
         }
 
         if (onSourceHeightDragged)
-        {
-            // Unter den Boden nur, solange er nichts zurueckwirft. Reflektiert
-            // er, ist er eine Flaeche, und eine Quelle darunter waere ein
-            // Zustand, den die Rechnung nicht abbildet: ihr Spiegelbild laege
-            // dann ueber ihr (@dpa: "wenn Bodenreflexion an ist, dann nur z>=0").
-            const double z = snapshot.groundReflectionOn ? juce::jmax (0.0, worldPos.z)
-                                                         : worldPos.z;
-            onSourceHeightDragged (z);
-        }
+            onSourceHeightDragged (worldPos.z);
 
         return;
     }
@@ -1230,8 +1274,15 @@ void FieldComponent::handleDragTo (juce::Point<float> screenPx)
     switch (dragTarget)
     {
         case DragTarget::source:
-            reportNormalisedDrag (screenToWorld (screenPx), true);
+        {
+            const Vec3 worldPos = screenToWorld (screenPx);
+
+            // s. Kommentar bei sourceDragWorldOverride (FieldComponent.h) -
+            // gilt hier genauso fuer die Draufsicht.
+            sourceDragWorldOverride = worldPos;
+            reportNormalisedDrag (worldPos, true);
             break;
+        }
 
         case DragTarget::listenerHead:
             reportNormalisedDrag (screenToWorld (screenPx), false);

@@ -90,8 +90,33 @@ private:
     Knob smootherTauKnob, slewVmaxKnob, slewAmaxKnob, playSpeedKnob;
 
     // Gemeinsamer Tempo-Deckel fuer jede Bewegungsquelle (Maus/Automation UND
-    // Vorbeiflug) - siehe Params::globalMaxSpeed.
+    // Vorbeiflug) - siehe Params::globalMaxSpeed. Steht darum IMMER sichtbar
+    // (nicht in einem der beiden Reiter unten), zusammen mit dem Jitter -
+    // beides gilt unabhaengig davon, welche Bewegungsart gerade angezeigt wird.
     Knob globalMaxSpeedKnob;
+
+    // Additive Mikrobewegung der Quelle M ("echter Chorus" bei Stillstand,
+    // @dpa 20260818) - hierher gewandert aus dem Feld-Panel (@dpa-Feedback:
+    // "Jitter, Hektik, Jitter An sollen in Bewegung"), da sie eine Bewegung
+    // sind, keine Feldgeometrie. Wie globalMaxSpeedKnob immer sichtbar.
+    Knob srcJitterAmountKnob, srcJitterRateKnob;
+
+    // Ganz-Aus fuer den Jitter, ohne die Regler Jitter/Hektik zurueckzusetzen
+    // - deren Wert bleibt erhalten, siehe updateJitterEnabledState().
+    juce::ToggleButton srcJitterOnButton { "Jitter An" };
+    std::unique_ptr<ButtonAttachment> srcJitterOnAttachment;
+
+    // Graut Jitter/Hektik aus, solange srcJitterOnButton aus ist - auch nach
+    // dem Laden eines Presets, nicht nur beim Klicken (siehe Konstruktor).
+    void updateJitterEnabledState();
+
+    // Reiter-Umschalter (@dpa-Feedback: "entweder Vorbeiflug ODER Record/Play
+    // anzeigen, jew. mit allen Controls - spart Platz und bringt Uebersicht").
+    // Klassisches Segmented-Control-Paar per setRadioGroupId(): klickbar wie
+    // TextButton, aber nur einer der beiden bleibt gedrueckt.
+    juce::TextButton flyTabButton    { "Vorbeiflug" };
+    juce::TextButton recordTabButton { "Record/Play" };
+    void updateTabVisibility();
 
     // Vorbeiflug: Bahnart, Startvariante, Abstand, Tempo.
     juce::Label flyKindLabel;

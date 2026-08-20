@@ -33,14 +33,8 @@ SwarmPanel::SwarmPanel (juce::AudioProcessorValueTreeState& apvts)
     // Beim Bewegen der Gesamtzahl sofort nachziehen, damit sichtbar ist, ab
     // wann die anderen Regler ueberhaupt etwas bewirken.
     totalKnob.slider.onValueChange = [this] { updateEnabledState(); };
-    setupKnob (realKnob, apvts, Params::cloneReal, "davon echt", Tooltips::Key::CloneReal);
     setupKnob (spreadKnob, apvts, Params::cloneSpread, "Streuung", Tooltips::Key::CloneSpread);
-    setupKnob (levelKnob, apvts, Params::cloneLevel, "Pegel billig", Tooltips::Key::CloneLevel);
-    setupKnob (realLevelKnob, apvts, Params::cloneRealLevel, "Pegel echt", Tooltips::Key::CloneRealLevel);
-
-    autoButton.setTooltip (Tooltips::text (Tooltips::Key::CloneAuto));
-    addAndMakeVisible (autoButton);
-    autoAttachment = std::make_unique<ButtonAttachment> (apvts, Params::cloneAuto, autoButton);
+    setupKnob (realLevelKnob, apvts, Params::cloneRealLevel, "Gain", Tooltips::Key::CloneRealLevel);
 
     showButton.setTooltip (Tooltips::text (Tooltips::Key::CloneShow));
     showButton.setToggleState (true, juce::dontSendNotification);
@@ -56,18 +50,12 @@ SwarmPanel::SwarmPanel (juce::AudioProcessorValueTreeState& apvts)
 
 void SwarmPanel::updateEnabledState()
 {
-    // "davon echt" ist der Anteil an der Gesamtzahl und wird gegen sie geklemmt
-    // (siehe DopplerfeldProcessor: wirksam ist min(Klone, davon echt)). Steht
-    // die Gesamtzahl auf null, gibt es nichts zu verteilen - dann muss der
-    // Regler auch grau sein, statt einen Wert zu zeigen, der nichts tut.
+    // Steht die Gesamtzahl auf null, gibt es nichts zu verteilen - dann muss
+    // der Regler auch grau sein, statt einen Wert zu zeigen, der nichts tut.
     const bool anyClones = totalKnob.slider.getValue() > 0.5;
 
-    realKnob.slider.setEnabled (anyClones);
-    realKnob.label.setEnabled (anyClones);
     spreadKnob.slider.setEnabled (anyClones);
     spreadKnob.label.setEnabled (anyClones);
-    levelKnob.slider.setEnabled (anyClones);
-    levelKnob.label.setEnabled (anyClones);
     realLevelKnob.slider.setEnabled (anyClones);
     realLevelKnob.label.setEnabled (anyClones);
     showButton.setEnabled (anyClones);
@@ -75,14 +63,13 @@ void SwarmPanel::updateEnabledState()
 
 void SwarmPanel::refreshTooltips()
 {
-    for (auto* k : { &totalKnob, &realKnob, &spreadKnob, &realLevelKnob, &levelKnob })
+    for (auto* k : { &totalKnob, &spreadKnob, &realLevelKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
     }
 
-    autoButton.setTooltip (Tooltips::text (Tooltips::Key::CloneAuto));
     panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));
 }
 
@@ -133,8 +120,10 @@ void SwarmPanel::paint (juce::Graphics& g)
     // Der Begrenzer gehoert hier hin: laeuft er, klingt ein Schwarm nach einer
     // einzigen Stimme, weil alles auf dieselbe Obergrenze zusammengefahren wird.
     // Ohne diese Anzeige sieht man dem Ausgang das nicht an.
-    g.drawText (juce::String::formatted ("CPU %4.0f %%   Klone: %d echt / %d billig%s",
-                                         (double) cpuPercent, realCount, cheapCount,
+    // cheapCount ist seit der Entfernung der billigen Klone immer 0 - kommt
+    // aber ueber setLoad() unveraendert herein, siehe deren Kommentar oben.
+    g.drawText (juce::String::formatted ("CPU %4.0f %%   Klone: %d%s",
+                                         (double) cpuPercent, realCount + cheapCount,
                                          limiting ? "   BEGRENZER AKTIV" : ""),
                 meterArea.getX(), meterArea.getBottom() + 2, meterArea.getWidth(), 16,
                 juce::Justification::centredLeft);
@@ -149,7 +138,7 @@ void SwarmPanel::resized()
 
     auto knobRow = area.removeFromTop (knobH);
 
-    for (auto* k : { &totalKnob, &realKnob, &spreadKnob, &realLevelKnob, &levelKnob })
+    for (auto* k : { &totalKnob, &spreadKnob, &realLevelKnob })
     {
         layoutKnob (*k, knobRow.removeFromLeft (knobW));
         knobRow.removeFromLeft (4);
@@ -158,8 +147,6 @@ void SwarmPanel::resized()
     area.removeFromTop (6);
     {
         auto row = area.removeFromTop (26);
-        autoButton.setBounds (row.removeFromLeft (140));
-        row.removeFromLeft (12);
         showButton.setBounds (row.removeFromLeft (110));
     }
 

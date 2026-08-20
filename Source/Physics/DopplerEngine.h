@@ -116,7 +116,7 @@ public:
     void setDistanceCurve (double curve);
 
     // Druckwellen-/N-Wellen-Schicht, siehe PropagationPath::setNWave().
-    void setNWave (bool shouldBeEnabled, double sizeMetres);
+    void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear);
 
     // Anteil des gewoehnlichen Pegel-Pannings, 0..1 (siehe
     // PropagationPath::setPanning). Wird pro Block an die Pfade gereicht, weil
@@ -216,7 +216,10 @@ public:
     // keinem Verhältnis zu dem, was man davon hört.
     static constexpr int maxRealClones = 20;
 
-    void setRealClones (int count, double spreadMetres, double level01);
+    // gainLinear ist der lineare Faktor aus Params::cloneRealLevel (dB, im
+    // Processor via Decibels::decibelsToGain umgerechnet) - anders als frueher
+    // KEIN 0..1-Pegel mehr, sondern ein echter Gain, der ueber 1 hinaus darf.
+    void setRealClones (int count, double spreadMetres, double gainLinear);
     int  realCloneCount() const { return realClones; }
 
     // Alles außer dem Direktschall aus - die minimale sichere Konfiguration.
@@ -402,7 +405,7 @@ private:
     int    realClones  = 0;
     double cloneSpread = 3.0;
 
-    // Pegel der echten Klone, siehe Params::cloneRealLevel.
+    // Gain der Klone (linear), siehe Params::cloneRealLevel - 0dB = 1.0.
     double cloneRealLevel = 1.0;
 
     // Wackler je Klon, siehe setCloneJitterOffset().
@@ -434,6 +437,9 @@ private:
 
     bool   nWaveOn    = false;
     double nWaveSizeM = 15.0;
+
+    // Regelbarer Knall-Pegel, linear (siehe Params::nWaveGainDb).
+    double nWaveGain  = 1.0;
 
     // Eckfrequenz der Bodendämpfung bei voller Stärke. Rund ein Kilohertz ist
     // die Gegend, in der eine streifende Reflexion an Gras/Erde ihre Höhen

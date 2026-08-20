@@ -1843,7 +1843,6 @@ int main()
             // keine Klone, und der Jitter haette nichts, woran er wackeln
             // koennte.
             setParam (proc, Params::cloneTotal,  10.0f);
-            setParam (proc, Params::cloneReal,   10.0f);
             setParam (proc, Params::cloneSpread, 6.0f);
             setParam (proc, Params::srcJitterAmount, jitterMetres);
             setParam (proc, Params::srcJitterRateHz, 3.0f);
@@ -1867,9 +1866,7 @@ int main()
             proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
             setParam (proc, Params::fieldMetres, 200.0f);
             setParam (proc, Params::cloneTotal,  8.0f);
-            setParam (proc, Params::cloneReal,   8.0f);
             setParam (proc, Params::cloneSpread, 5.0f);
-            setParam (proc, Params::cloneAuto,   0.0f);
             proc.prepareToPlay (sampleRate, blockSize);
 
             juce::MidiBuffer midi;
@@ -1921,9 +1918,7 @@ int main()
                 p3.setRateAndBufferSizeDetails (sampleRate, blockSize);
                 setParam (p3, Params::fieldMetres, 20.0f);
                 setParam (p3, Params::cloneTotal,  4.0f);
-                setParam (p3, Params::cloneReal,   4.0f);
                 setParam (p3, Params::cloneSpread, 2.0f);
-                setParam (p3, Params::cloneAuto,   0.0f);
                 setParam (p3, Params::smootherType, 1.0f);
                 setParam (p3, Params::smootherTau,  0.5f);
                 setParam (p3, Params::srcJitterAmount, 1.0f);
@@ -1993,9 +1988,7 @@ int main()
                     p2.setRateAndBufferSizeDetails (sampleRate, blockSize);
                     setParam (p2, Params::fieldMetres, 200.0f);
                     setParam (p2, Params::cloneTotal,  totalClones);
-                    setParam (p2, Params::cloneReal,   totalClones);
                     setParam (p2, Params::cloneSpread, 5.0f);
-                    setParam (p2, Params::cloneAuto,   0.0f);
                     p2.prepareToPlay (sampleRate, blockSize);
                     render (p2, buffer, 1.0, stats, [] (double) {});
                 };
@@ -2105,8 +2098,6 @@ int main()
         setParam (proc, Params::srcZ, 0.0f);
 
         setParam (proc, Params::cloneTotal,  5.0f);
-        setParam (proc, Params::cloneReal,   5.0f);
-        setParam (proc, Params::cloneAuto,   0.0f);
         setParam (proc, Params::cloneSpread, 6.0f);
 
         setParam (proc, Params::srcJitterAmount, 3.0f);
@@ -2336,7 +2327,9 @@ int main()
     //     c) Der Notaus muss die Last wirklich auf den Direktpfad zurückholen.
     //     d) Nichts davon darf entgleisen.
     {
-        auto run = [&] (int total, int real, bool panicHalfway, Stats& stats)
+        // Der frueher zweite Parameter ("davon echt") ist entfallen: jeder Klon
+        // ist ein echter Loeserpfad, die Zahl der echten IST die Gesamtzahl.
+        auto run = [&] (int total, bool panicHalfway, Stats& stats)
         {
             DopplerfeldProcessor proc;
 
@@ -2352,10 +2345,7 @@ int main()
             setParam (proc, Params::srcZ, 5.0f);
 
             setParam (proc, Params::cloneTotal,  (float) total);
-            setParam (proc, Params::cloneReal,   (float) real);
-            setParam (proc, Params::cloneAuto,   0.0f);   // Automatik hier aus
             setParam (proc, Params::cloneSpread, 4.0f);
-            setParam (proc, Params::cloneLevel,  0.5f);
 
             proc.prepareToPlay (sampleRate, blockSize);
 
@@ -2370,14 +2360,14 @@ int main()
 
         Stats none, realOnly, cheapOnly, panicked;
 
-        run (0,  0,  false, none);
-        run (10, 10, false, realOnly);
-        run (10, 0,  false, cheapOnly);
-        run (10, 10, true,  panicked);
+        run (0, false, none);
+        run (10, false, realOnly);
+        run (10, false, cheapOnly);
+        run (10, true, panicked);
 
         none.report      ("Ohne Klone");
         realOnly.report  ("10 echte Klone");
-        cheapOnly.report ("10 billige Klone");
+        cheapOnly.report ("10 Klone, Gegenprobe");
         panicked.report  ("10 echte + Notaus");
 
         auto perBlock = [] (const Stats& s)
@@ -2425,20 +2415,13 @@ int main()
             failed = true;
         }
 
-        // b) Die billige Nachbildung darf KEINE einzige Löserauswertung
-        //    zusätzlich verursachen - sonst ist sie keine.
-        if (std::abs (evalsCheap - evalsNone) > 0.0)
-        {
-            std::printf ("FEHLGESCHLAGEN: billige Klone kosten Löserlast (%.0f statt %.0f "
-                         "pro Block) - sie sind keine Nachbildung\n", evalsCheap, evalsNone);
-            failed = true;
-        }
-
-        if (std::abs (rmsOf (cheapOnly) - rmsOf (none)) <= 1.0e-6 * rmsOf (none))
-        {
-            std::printf ("FEHLGESCHLAGEN: billige Klone ändern den Ausgang nicht\n");
-            failed = true;
-        }
+        // b) Die beiden Pruefungen auf die billige Nachbildung sind entfallen:
+        //    es gibt sie nicht mehr (@dpa 20260820: "nur echte Klones, alles
+        //    andere weg, keine 'billigen', die bringen nichts"). Jeder Klon ist
+        //    jetzt ein echter Loeserpfad, die Zahl der echten ist gleich der
+        //    Gesamtzahl. Was frueher "billig" hiess, kostet damit
+        //    zwangslaeufig Loeserlast - die alte Pruefung wuerde genau das
+        //    anschlagen, obwohl es der gewollte Zustand ist.
 
         // c) Der Notaus muss wirken. Über den ganzen Lauf gemittelt liegt die
         //    Last danach zwischen "voll" und "ohne" - geprüft wird deshalb, dass

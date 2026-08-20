@@ -6,12 +6,13 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
-// Regler fuer das "Schrot"-Muster: mehrere Klone der Quelle, davon ein Teil mit
-// voller Loeserphysik und der Rest als billige Nachbildung.
+// Regler fuer das "Schrot"-Muster: mehrere Klone der Quelle, alle mit voller
+// Loeserphysik (@dpa: "nur echte Klones, alles andere weg, keine 'billigen',
+// die bringen nichts" - eine billige Nachbildung gibt es deshalb nicht mehr).
 //
 // Dieses Panel traegt bewusst auch den CPU-Balken und den Notaus. Das ist keine
 // Willkuer, sondern der Grund, aus dem es die Regler ueberhaupt gibt: die
-// Loeserlast waechst linear mit der Zahl der echten Klone, und @dpa will sehen,
+// Loeserlast waechst linear mit der Zahl der Klone, und @dpa will sehen,
 // was er sich einkauft, statt einen stillen Deckel zu bekommen. Wer hier die
 // Zahl hochdreht, soll die Folge im selben Blickfeld haben - und einen Weg
 // zurueck, ohne das Plugin neu zu laden.
@@ -25,9 +26,11 @@ public:
     void resized() override;
 
     // Vom Editor-Timer nachgefuehrt: Auslastung in Prozent des
-    // Echtzeit-Budgets und was gerade tatsaechlich gerechnet wird. Beides
-    // gehoert zusammen - die Zahl der echten Klone kann bei eingeschalteter
-    // Automatik unter dem Regler liegen, und genau das soll ablesbar sein.
+    // Echtzeit-Budgets und was gerade tatsaechlich gerechnet wird.
+    // cheapClones bleibt in der Signatur stehen, obwohl es die billige
+    // Nachbildung nicht mehr gibt (@dpa: "nur echte Klones, alles andere
+    // weg") - der Aufrufer in PluginEditor.cpp darf hier nicht angefasst
+    // werden, er uebergibt seitdem schlicht 0.
     void setLoad (float cpuPercent, int realClones, int cheapClones, bool limiterActive);
 
     // Notaus. Kein Parameter, weil er mehrere auf einmal zurueckstellt.
@@ -58,15 +61,12 @@ private:
                     Tooltips::Key tooltipKey);
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
-    Knob totalKnob, realKnob, spreadKnob, levelKnob;
-    // Pegel der echten Klone, siehe Params::cloneRealLevel.
+    Knob totalKnob, spreadKnob;
+    // Gain der Klone in dB, siehe Params::cloneRealLevel.
     Knob realLevelKnob;
-
-    juce::ToggleButton autoButton { "Automatik" };
 
     // Klon-Schwarm im Feld anzeigen, siehe FieldComponent::setShowClones().
     juce::ToggleButton showButton { "Zeigen" };
-    std::unique_ptr<ButtonAttachment> autoAttachment;
 
     juce::TextButton panicButton { "Notaus: minimale Konfiguration" };
 

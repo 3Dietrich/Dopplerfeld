@@ -154,7 +154,7 @@ public:
     // sizeMetres ist die Ausdehnung des Körpers und bestimmt sowohl die
     // Pulsdauer (größer = tiefer und länger, kleiner = kürzer und knackiger)
     // als auch die Amplitude (größer = lauter, siehe triggerNWave()).
-    void setNWave (bool shouldBeEnabled, double sizeMetres);
+    void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear);
 
     // Phase 2 (Plan 2.7 / Abschnitt 7). In Phase 1 ohne Wirkung, damit später
     // kein Aufrufer geändert werden muss.
@@ -541,11 +541,25 @@ private:
     bool   nWaveOn        = false;
     double nWaveSizeM     = 15.0;
 
+    // Regelbarer Pegel des Knalls, linear (siehe Params::nWaveGainDb).
+    double nWaveGain      = 1.0;
+
     // Spitzendruck der N-Welle in einem Meter Abstand. Modellkonstante, kein
     // Regler: die Regler sind An/Aus und Größe. Der Wert ist so gewählt, dass
     // die Welle in typischer Vorbeiflug-Entfernung in derselben Größenordnung
     // liegt wie der Direktschall - beurteilen muss ihn @dpas Ohr.
-    static constexpr double nWaveLevel = 8.0;
+    // Pegel der Druckwelle bei nWaveRefMetres. Gross, weil ein Ueberschallknall
+    // die Szene beherrscht statt sich einzureihen: bei 8.0 kam auf 500 m eine
+    // Amplitude von 0,036 heraus, also 8 dB UNTER dem Motorgeraeusch derselben
+    // Szene (gemessene Signalspitze -21 dB) - @dpa hoerte dort folgerichtig
+    // "ein bisschen ziusch.. aber nichts was an einen Schlag oder Druck oder
+    // gar nur Lautheit erinnert". Ein realer Knall liegt Zehnerpotenzen darueber.
+    //
+    // Mit 40.0 sind es auf 500 m rund 0,18, also etwa 6 dB ueber der Szene.
+    // In der Naehe uebersteuert das und laeuft in den Limiter - das ist kein
+    // Versehen: ein Knall aus 20 m IST ohrenbetaeubend, und der Limiter ist
+    // sichtbar und abschaltbar, statt die Welle vorher heimlich klein zu halten.
+    static constexpr double nWaveLevel = 40.0;
 
     // Abstandsgesetz der N-Welle, siehe ausführliche Begründung an der
     // Verwendungsstelle. Der Exponent 3/4 ist der Standardwert für eine

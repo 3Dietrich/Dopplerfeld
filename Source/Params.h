@@ -175,15 +175,19 @@ namespace Params
     constexpr const char* nWaveOn   = "nWaveOn";
     constexpr const char* nWaveSize = "nWaveSize";
 
-    // "Schrot"-Muster: Klone der Quelle. cloneTotal ist die Gesamtzahl,
-    // cloneReal davon die mit voller Löserphysik - der Rest läuft über die
-    // billige Nachbildung (CloneSpray). cloneAuto zieht cloneReal bei hoher
-    // CPU-Last selbsttätig zurück.
+    // Pegel des Knalls in dB. Eigener Regler, weil "wie laut ist ein
+    // Ueberschallknall" keine Frage ist, die eine Konstante im Code
+    // beantworten darf - je nach Szene soll er die Aufnahme beherrschen oder
+    // sich einreihen (@dpa 20260820: "nichts was an einen Schlag oder Druck
+    // oder gar nur Lautheit erinnert").
+    constexpr const char* nWaveGainDb = "nWaveGainDb";
+
+    // "Schrot"-Muster: Klone der Quelle. cloneTotal ist die Gesamtzahl, und alle
+    // davon bekommen volle Loeserphysik - eine billige Nachbildung gibt es
+    // nicht mehr (@dpa: "nur echte Klones, alles andere weg, keine 'billigen',
+    // die bringen nichts").
     constexpr const char* cloneTotal  = "cloneTotal";
-    constexpr const char* cloneReal   = "cloneReal";
-    constexpr const char* cloneAuto   = "cloneAuto";
     constexpr const char* cloneSpread = "cloneSpread";
-    constexpr const char* cloneLevel  = "cloneLevel";
 
     // --- Crossfade ---
     constexpr const char* fadeAuto     = "fadeAuto";
@@ -196,10 +200,11 @@ namespace Params
     // waere sie dann schlicht weg statt dumpf.
     // Oktavlage der Unwucht im Motor. 0 ist der Zuendtakt (halbe Grundfrequenz),
     // jede Stufe verdoppelt bzw. halbiert ihn.
-    // Pegel der ECHTEN Klone, 0..1. Die billigen haben mit cloneLevel laengst
-    // einen; die echten kamen bisher mit vollem Pegel dazu, sodass schon acht
-    // Stueck den Ausgang an den Limiter druecken und der Schwarm zu einem Brei
-    // zusammengefahren wird, statt breiter zu klingen.
+    // Gain der Klone in dB (@dpa: "die klone sind bei Pegel=1 noch zu leise").
+    // 0 dB = unveraendert, Bereich wie bei outputGain +/-36dB - Klone kamen
+    // vorher mit vollem Pegel dazu, sodass schon acht Stueck den Ausgang an den
+    // Limiter druecken und der Schwarm zu einem Brei zusammengefahren wird,
+    // statt breiter zu klingen.
     constexpr const char* cloneRealLevel = "cloneRealLevel";
 
     constexpr const char* imbalanceOctave = "imbalanceOctave";

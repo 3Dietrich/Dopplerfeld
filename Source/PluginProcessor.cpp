@@ -255,6 +255,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.flySpeed    = raw (Params::flySpeed);
 
     pp.boomLimitDb     = raw (Params::boomLimitDb);
+    pp.nWaveGainDb     = raw (Params::nWaveGainDb);
     pp.airAbsorbAmount = raw (Params::airAbsorbAmount);
     pp.distanceCurve   = raw (Params::distanceCurve);
 
@@ -265,11 +266,8 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.nWaveSize = raw (Params::nWaveSize);
 
     pp.cloneTotal  = raw (Params::cloneTotal);
-    pp.cloneReal   = raw (Params::cloneReal);
-    pp.cloneAuto   = raw (Params::cloneAuto);
     pp.cloneRealLevel = raw (Params::cloneRealLevel);
     pp.cloneSpread = raw (Params::cloneSpread);
-    pp.cloneLevel  = raw (Params::cloneLevel);
 
     pp.reflect2ndOn = raw (Params::reflect2ndOn);
     pp.bounceGain   = raw (Params::bounceGain);
@@ -404,8 +402,6 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     // Rohfenster, das doppelt so lang ist wie die Anzeige - Sicherheitsabstand
     // fuer die Trigger-Suche bei Sync, siehe dortigen Klassenkommentar).
     scopeRing.prepare (sampleRate, 2.0 * scopeMaxDisplaySeconds);
-
-    cloneSpray.prepare (sampleRate, 2);
 
     engineGenerator.prepare (sampleRate, maxBlock);
     sampleSource.prepare (sampleRate, maxBlock);
@@ -720,12 +716,16 @@ void DopplerfeldProcessor::applyParameters()
     // deshalb nur bei tatsächlicher Änderung.
     const bool   nWaveEnabled = pp.nWaveOn->load() > 0.5f;
     const double nWaveSize    = (double) pp.nWaveSize->load();
+    const double nWaveGainDb  = (double) pp.nWaveGainDb->load();
 
-    if (nWaveEnabled != lastNWaveOn || std::abs (nWaveSize - lastNWaveSize) > 1.0e-9)
+    if (nWaveEnabled != lastNWaveOn || std::abs (nWaveSize - lastNWaveSize) > 1.0e-9
+        || std::abs (nWaveGainDb - lastNWaveGainDb) > 1.0e-9)
     {
-        lastNWaveOn   = nWaveEnabled;
-        lastNWaveSize = nWaveSize;
-        dopplerEngine.setNWave (nWaveEnabled, nWaveSize);
+        lastNWaveOn     = nWaveEnabled;
+        lastNWaveSize   = nWaveSize;
+        lastNWaveGainDb = nWaveGainDb;
+        dopplerEngine.setNWave (nWaveEnabled, nWaveSize,
+                                juce::Decibels::decibelsToGain (nWaveGainDb));
     }
 
     // Beides ist inzwischen billig: die Engine legt Schalter und Dämpfung an
@@ -782,68 +782,23 @@ void DopplerfeldProcessor::applyParameters()
 
 void DopplerfeldProcessor::applyCloneParameters()
 {
-    const int  total      = (int) pp.cloneTotal->load();
-    const int  wantedReal = std::min (total, (int) pp.cloneReal->load());
-    const bool automatic  = pp.cloneAuto->load() > 0.5f;
+    // Keine Automatik, keine billige Nachbildung mehr (@dpa: "nur echte
+    // Klones, alles andere weg, keine 'billigen', die bringen nichts") - die
+    // Zahl der echten Klone ist ab jetzt fest gleich der Gesamtzahl, nur nach
+    // oben durch maxRealClones gedeckelt.
+    const int total = (int) pp.cloneTotal->load();
 
-    if (! automatic)
-    {
-        effectiveRealClones = wantedReal;
-        cloneAutoHoldBlocks = 0;
-    }
-    else
-    {
-        // Automatik. Sie darf nur langsam und in beide Richtungen getrennt
-        // reagieren, sonst pendelt sie im Takt ihrer eigenen Wirkung: ein Klon
-        // weniger senkt die Last, die gesenkte Last holt ihn zurück, und das
-        // Ganze schwingt im Blockraster.
-        //
-        // Deshalb zwei verschiedene Schwellen (Hysterese) und eine Haltezeit,
-        // und deshalb kein PI-Regler: hier wird eine ganzzahlige Pfadanzahl
-        // gestellt, kein stetiger Wert.
-        const float load = cpuLoad.load (std::memory_order_relaxed);
+    effectiveRealClones = juce::jlimit (0, DopplerEngine::maxRealClones, total);
 
-        effectiveRealClones = std::min (effectiveRealClones, wantedReal);
+    // cloneRealLevel ist seit @dpas Wunsch ein dB-Gain (-36..+36dB, 0dB =
+    // unveraendert) statt eines 0..1-Pegels - die Umrechnung in den linearen
+    // Faktor gehoert hierher, DopplerEngine bekommt nur noch den fertigen
+    // Faktor.
+    const double gainLinear = juce::Decibels::decibelsToGain ((double) pp.cloneRealLevel->load());
 
-        if (cloneAutoHoldBlocks > 0)
-        {
-            --cloneAutoHoldBlocks;
-        }
-        else if (load > 70.0f && effectiveRealClones > 0)
-        {
-            --effectiveRealClones;
-            cloneAutoHoldBlocks = autoDownHoldBlocks;
-        }
-        else if (load < 40.0f && effectiveRealClones < wantedReal)
-        {
-            ++effectiveRealClones;
-            cloneAutoHoldBlocks = autoUpHoldBlocks;
-        }
-    }
-
-    effectiveRealClones = juce::jlimit (0, std::min (total, DopplerEngine::maxRealClones),
-                                        effectiveRealClones);
-
-    const int cheap = std::max (0, total - effectiveRealClones);
-
-    dopplerEngine.setRealClones (effectiveRealClones, (double) pp.cloneSpread->load(),
-                                 (double) pp.cloneRealLevel->load());
-
-    cloneSpray.setCount (cheap);
-    cloneSpray.setLevel ((double) pp.cloneLevel->load());
-
-    // Die billigen Klone stellen die Streuung in ZEIT dar, nicht im Raum: sie
-    // haben keine Geometrie. Umgerechnet wird deshalb über die
-    // Schallgeschwindigkeit - eine Streuung von drei Metern heißt knapp neun
-    // Millisekunden Laufzeitunterschied, also genau das, was ein echter Klon in
-    // dieser Entfernung auch hätte.
-    const double spreadMs = (double) pp.cloneSpread->load() / 343.2 * 1000.0;
-
-    cloneSpray.setSpreadMs (spreadMs);
-    cloneSpray.setJitterMs (std::min (4.0, 0.2 * spreadMs + 0.3));
+    dopplerEngine.setRealClones (effectiveRealClones, (double) pp.cloneSpread->load(), gainLinear);
 
     activeRealClones.store (effectiveRealClones);
-    activeCheapClones.store (cheap);
 }
 
 void DopplerfeldProcessor::handlePendingRequests()
@@ -858,13 +813,8 @@ void DopplerfeldProcessor::handlePendingRequests()
         dopplerEngine.disableAllReflections();
 
         effectiveRealClones = 0;
-        cloneAutoHoldBlocks = 0;
-
-        cloneSpray.setCount (0);
-        cloneSpray.reset();
 
         activeRealClones.store (0);
-        activeCheapClones.store (0);
     }
 
     if (sourceSwitchRequest.exchange (false))
@@ -1483,11 +1433,6 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
         start += n;
     }
-
-    // Billige Klone: sie arbeiten auf dem fertigen Stereosignal und kosten
-    // keinen Loeseraufruf. Vor der Ausgangsstufe, damit Gain und Limiter auch
-    // fuer sie gelten.
-    cloneSpray.process (buffer);
 
     applyOutputStage (buffer);
 

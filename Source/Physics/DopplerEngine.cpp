@@ -213,7 +213,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setBoomLimitDb (boomLimitDb);
     setAirAbsorptionAmount (airAbsorbAmount);
     setDistanceCurve (distanceCurve);
-    setNWave (nWaveOn, nWaveSizeM);
+    setNWave (nWaveOn, nWaveSizeM, nWaveGain);
 
     reset();
 }
@@ -314,7 +314,7 @@ void DopplerEngine::configurePendingSet (Vec3 newPos, Vec3 preVelocity)
         p.setBoomLimitDb (boomLimitDb);
         p.setAirAbsorptionAmount (airAbsorbAmount);
         p.setDistanceCurve (distanceCurve);
-        p.setNWave (nWaveOn, nWaveSizeM);
+        p.setNWave (nWaveOn, nWaveSizeM, nWaveGain);
     }
 }
 
@@ -477,14 +477,15 @@ void DopplerEngine::setWall (int index, bool enabled, Vec3 anchorMetres,
     s.transform.gain = (float) gainLinear;
 }
 
-void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres)
+void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear)
 {
     nWaveOn    = shouldBeEnabled;
     nWaveSizeM = sizeMetres;
+    nWaveGain  = gainLinear;
 
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
-            p.setNWave (shouldBeEnabled, sizeMetres);
+            p.setNWave (shouldBeEnabled, sizeMetres, gainLinear);
 }
 
 Vec3 DopplerEngine::cloneOffset (int index, double spreadMetres)
@@ -505,11 +506,13 @@ Vec3 DopplerEngine::cloneOffset (int index, double spreadMetres)
              r * 0.35 * std::sin (a2) };
 }
 
-void DopplerEngine::setRealClones (int count, double spreadMetres, double level01)
+void DopplerEngine::setRealClones (int count, double spreadMetres, double gainLinear)
 {
     realClones     = std::min (maxRealClones, std::max (0, count));
     cloneSpread    = std::max (0.0, spreadMetres);
-    cloneRealLevel = std::min (1.0, std::max (0.0, level01));
+    // Kein oberer Deckel mehr: gainLinear kommt aus einem dB-Regler
+    // (-36..+36dB), der ausdruecklich ueber 0dB (=1.0) hinaus darf.
+    cloneRealLevel = std::max (0.0, gainLinear);
 }
 
 void DopplerEngine::setSecondOrderEnabled (bool shouldBeEnabled)

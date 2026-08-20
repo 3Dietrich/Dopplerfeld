@@ -1,5 +1,7 @@
 #include "Params.h"
 
+#include <cmath>
+
 namespace
 {
     // Kleine Fabrik, damit `juce::ParameterID { id, 1 }` und die Attribute
@@ -57,22 +59,52 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
     // Höhe über dem Boden. Anders als x/y NICHT normiert, sondern in echten
     // Metern: die Körpergröße eines Hörers ändert sich nicht, wenn man den
-    // Feldmaßstab von 100 m auf 10000 m stellt. Skew auf 10 m, weil sich die
-    // interessanten Höhen (Kopf, Fahrzeug, Dach) alle im einstelligen bis
-    // zweistelligen Meterbereich abspielen - oben bleibt trotzdem Platz für
-    // Flugzeuge, statt den Regler auf einen "vernünftigen" Wert zu deckeln.
+    // Feldmaßstab von 100 m auf 10000 m stellt.
+    //
+    // Unter die Grundflaeche ist erlaubt, solange sie nichts zurueckwirft: dann
+    // ist sie nur ein Massstab zum Abschaetzen der Weite und keine Flaeche
+    // (@dpa: "und man kann auch z<0 setzen"). Reflektiert sie, haelt die
+    // Anzeige die Quelle beim Ziehen darueber, siehe FieldComponent.
+    //
+    // Ein gewoehnliches setSkewForCentre() geht von einer einseitigen Basis bei
+    // 0 aus und verzerrt falsch, sobald der Bereich (wie hier) ueber Null
+    // hinaus ins Negative reicht - der Nullpunkt landet nicht in der Mitte des
+    // Reglerwegs, und um ihn herum ist die Aufloesung nicht mehr logarithmisch
+    // fein (@dpa 20260820: "in der Mitte ist 0, wo ich nun nicht mehr
+    // logarithmisch von klein nach gross einstellen kann"). Deshalb hier ein
+    // eigenes, bipolares Skew ueber die vier NormalisableRange-Konverter: der
+    // Nullpunkt liegt exakt bei normalisiert 0,5, und je Seite wird der
+    // Betrag ueber eine Potenzfunktion abgebildet - Exponent > 1 macht die
+    // Kurve nahe Null flach (fein) und an den Enden steil (grob), symmetrisch
+    // zur Mitte, auch wenn die Grenzen selbst (-1000/+10000) asymmetrisch
+    // bleiben. Die Grenzen selbst bleiben unveraendert (keine versteckten
+    // Limits) - nur der Weg dorthin wird neu verteilt.
     auto heightRange = []
     {
-        // Unter die Grundflaeche ist erlaubt, solange sie nichts zurueckwirft:
-        // dann ist sie nur ein Massstab zum Abschaetzen der Weite und keine
-        // Flaeche (@dpa: "und man kann auch z<0 setzen"). Reflektiert sie, haelt
-        // die Anzeige die Quelle beim Ziehen darueber, siehe FieldComponent.
-        //
-        // Der Schwerpunkt bleibt bei zehn Metern, damit die uebliche Hoehe fein
-        // einstellbar bleibt und die Extreme nicht den halben Reglerweg fressen.
-        auto r = juce::NormalisableRange<float> (-1000.0f, 10000.0f);
-        r.setSkewForCentre (10.0f);
-        return r;
+        constexpr float rangeMin  = -1000.0f;
+        constexpr float rangeMax  = 10000.0f;
+        constexpr float exponent  = 3.0f;
+
+        return juce::NormalisableRange<float> (
+            rangeMin, rangeMax,
+            // normalisiert (0..1, 0.5 = Null) -> Wert
+            [] (float, float, float norm) -> float
+            {
+                const float signedNorm = (norm - 0.5f) * 2.0f;   // -1..1
+                const float sign       = signedNorm < 0.0f ? -1.0f : 1.0f;
+                const float shaped     = std::pow (std::abs (signedNorm), exponent);
+
+                return sign >= 0.0f ? shaped * rangeMax : -shaped * rangeMin;
+            },
+            // Wert -> normalisiert (0..1), die Umkehrung des obigen
+            [] (float, float, float value) -> float
+            {
+                const float sign   = value < 0.0f ? -1.0f : 1.0f;
+                const float shaped = sign >= 0.0f ? value / rangeMax : value / rangeMin;
+                const float norm   = std::pow (std::abs (shaped), 1.0f / exponent);
+
+                return (sign >= 0.0f ? norm : -norm) * 0.5f + 0.5f;
+            });
     };
 
     // --- Quelle ---
@@ -149,7 +181,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         hi.setSkewForCentre (2000.0f);
         layout.add (floatParam (noiseFcHi, "Noise Fc Hi", hi, 3000.0f, "Hz"));
     }
-    layout.add (floatParam (noiseGainLo, "Noise Gain Lo", { -60.0f, 0.0f, 0.1f }, -24.0f, "dB"));
+    // Bereich nach oben erweitert (@dpa: "Noise Gain Lo bitte auch lauter") -
+    // das tiefe Rauschband soll auch ueber 0dB hinaus verstaerkbar sein, wie
+    // schon der laute Anschlag von noiseGainHi.
+    layout.add (floatParam (noiseGainLo, "Noise Gain Lo", { -48.0f, 24.0f, 0.1f }, -24.0f, "dB"));
     layout.add (floatParam (noiseGainHi, "Noise Gain Hi", { -60.0f, 0.0f, 0.1f }, -6.0f, "dB"));
     layout.add (floatParam (noiseQ, "Noise Q", { 0.1f, 10.0f, 0.01f }, 1.2f));
     layout.add (floatParam (jitterAmount, "Jitter Amount", { 0.0f, 20.0f, 0.01f }, 1.5f, "%"));
@@ -311,19 +346,22 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         range.setSkewForCentre (15.0f);
         layout.add (floatParam (nWaveSize, "N-Wave Size", range, 15.0f, "m"));
     }
+    {
+        // Grosszuegig nach oben offen: der Knall DARF uebersteuern, dafuer gibt
+        // es den sichtbaren Limiter. 0 dB ist die eingemessene Voreinstellung.
+        layout.add (floatParam (nWaveGainDb, "N-Wave Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
+    }
 
     // --- Klone ("Schrot") ---
     //
-    // Zwei getrennte Zahlen statt einer: die Gesamtzahl bestimmt, wie dicht
-    // der Schwarm klingt, und davon unabhaengig legt cloneReal fest, wie viele
-    // davon echte Loeserphysik bekommen. @dpa will sehen, was er sich
-    // einkauft, statt einen stillen Deckel zu bekommen - deshalb ist beides
-    // von Hand einstellbar und die Automatik nur ein Angebot.
+    // Nur noch EINE Zahl: cloneTotal ist die Gesamtzahl der Klone, und alle
+    // davon bekommen volle Loeserphysik (@dpa: "nur echte Klones, alles
+    // andere weg, keine 'billigen', die bringen nichts"). Eine billige
+    // Nachbildung mit eigenem Anteil-Regler und Automatik gibt es seither
+    // nicht mehr - die Loeserlast waechst linear mit dieser Zahl, sichtbar am
+    // CPU-Balken im SwarmPanel.
     layout.add (std::make_unique<juce::AudioParameterInt> (
         juce::ParameterID { cloneTotal, 1 }, "Clones", 0, 20, 0));
-    layout.add (std::make_unique<juce::AudioParameterInt> (
-        juce::ParameterID { cloneReal, 1 }, "Clones Real", 0, 20, 2));
-    layout.add (boolParam (cloneAuto, "Clones Auto", false));
     {
         // Streuung der Klon-Routen in Metern. Klein gemeint ("die Route weicht
         // um sehr kleine Betraege ab"), nach oben trotzdem weit offen (@dpa:
@@ -334,8 +372,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         range.setSkewForCentre (15.0f);
         layout.add (floatParam (cloneSpread, "Clone Spread", range, 3.0f, "m"));
     }
-    layout.add (floatParam (cloneLevel, "Clone Level", unitRange(), 0.5f));
-    layout.add (floatParam (cloneRealLevel, "Clone Real Level", unitRange(), 1.0f));
+    // Gain der Klone in dB (@dpa: "die klone sind bei Pegel=1 noch zu leise.
+    // nenne es einfach 'Gain' und mache die ueblichen -36..36dB"). 0dB =
+    // unveraendert.
+    layout.add (floatParam (cloneRealLevel, "Clone Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
 
     // --- Crossfade ---
     layout.add (boolParam (fadeAuto, "Fade Auto", true));

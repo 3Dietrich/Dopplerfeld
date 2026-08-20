@@ -50,25 +50,9 @@ private:
 
     Knob fieldMetresKnob, boomLimitKnob, airAbsorbKnob, fadeManualKnob, outputGainKnob;
 
-    // Anteil des gewoehnlichen Pegel-Pannings (@dpa-Feedback) - steht in der
-    // dritten Reihe bei den Jitter-Reglern, wo Platz ist; in der ersten Reihe
-    // reicht die Fensterbreite nicht.
-    Knob panAmountKnob;
-
-    // Entfernung -> Amplitude schaerfer/flacher als das physikalische 1/R
-    // (@dpa-Skizze "Amp-Verlauf"). Steht bei den Hoehe-Reglern statt in der
-    // ersten Reihe, weil dort kein Platz mehr frei ist - thematisch gehoert
-    // er eher zu Boom Limit/Air Absorb.
-    Knob distanceCurveKnob;
-
     // Höhe über dem Boden. x/y stellt man mit der Maus im Feld ein, für z gibt
     // es dort keine Achse - deshalb sind das die einzigen Positionsregler.
     Knob srcZKnob, lisZKnob;
-
-    // Additive Mikrobewegung der Quelle M ("echter Chorus" bei Stillstand,
-    // @dpa 20260818) - eigene Reihe, weil in der Höhen-Reihe kein Platz mehr
-    // frei ist.
-    Knob srcJitterAmountKnob, srcJitterRateKnob;
 
     // Höhendämpfung der Bodenreflexion - steht neben den z-Reglern, weil sie
     // ohne Höhenunterschied nichts zu tun hat.
@@ -79,8 +63,20 @@ private:
 
     // Druckwellen-/N-Wellen-Schicht: eigener Schalter und eigene Groesse,
     // bewusst neben (nicht in) Boom Limit - das eine ist eine Pulsform, das
-    // andere eine reine Amplitudendeckelung.
+    // andere eine reine Amplitudendeckelung. Steht (mit distanceCurveKnob und
+    // panAmountKnob) in der dritten Reihe, seit dort Platz frei wurde (Jitter/
+    // Hektik/Jitter An sind ins Bewegungs-Panel gewandert, @dpa-Feedback) -
+    // alle drei sind Amplituden-/Pegelthemen, keine Positionsregler wie Reihe 2.
     Knob nWaveSizeKnob;
+
+    // Entfernung -> Amplitude schaerfer/flacher als das physikalische 1/R
+    // (@dpa-Skizze "Amp-Verlauf"). Steht in der dritten Reihe, s. nWaveSizeKnob
+    // oben - thematisch naeher an N-Wave/Panning (Amplitude) als an Reihe 2.
+    Knob distanceCurveKnob;
+
+    // Anteil des gewoehnlichen Pegel-Pannings (@dpa-Feedback) - steht in der
+    // dritten Reihe, s. nWaveSizeKnob oben.
+    Knob panAmountKnob;
 
     // Neben Output Gain: -6dB-Marke, Clip-Anzeige mit 500ms-Halt (@dpa).
     LevelMeter levelMeter;
@@ -90,19 +86,10 @@ private:
     juce::ToggleButton groundReflectionButton { "Bodenreflexion" };
     juce::ToggleButton nWaveButton { "N-Welle" };
 
-    // Ganz-Aus fuer den Jitter, ohne die Regler Jitter/Hektik zurueckzusetzen
-    // - deren Wert bleibt erhalten, siehe updateJitterEnabledState().
-    juce::ToggleButton srcJitterOnButton { "Jitter An" };
-
     std::unique_ptr<ButtonAttachment> fadeAutoAttachment;
     std::unique_ptr<ButtonAttachment> limiterOnAttachment;
     std::unique_ptr<ButtonAttachment> groundReflectionAttachment;
     std::unique_ptr<ButtonAttachment> nWaveAttachment;
-    std::unique_ptr<ButtonAttachment> srcJitterOnAttachment;
-
-    // Graut Jitter/Hektik aus, solange srcJitterOnButton aus ist - auch nach
-    // dem Laden eines Presets, nicht nur beim Klicken (siehe Konstruktor).
-    void updateJitterEnabledState();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FieldPanel)
 };

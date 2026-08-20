@@ -67,7 +67,6 @@ target_sources(Dopplerfeld
         Source/UI/FieldPanel.cpp
         Source/UI/WallPanel.cpp
         Source/Util/Crossfader.cpp
-        Source/Util/CloneSpray.cpp
         Source/UI/SwarmPanel.cpp
         Source/Sources/SoundSourceHolder.cpp
         Source/UI/LevelMeter.cpp

@@ -111,6 +111,37 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (playSpeedKnob,   apvts, Params::playSpeed,   "Play Speed", Tooltips::Key::PlaySpeed);
     setupKnob (globalMaxSpeedKnob, apvts, Params::globalMaxSpeed, "Max Speed", Tooltips::Key::GlobalMaxSpeed);
 
+    setupKnob (srcJitterAmountKnob, apvts, Params::srcJitterAmount, "Jitter", Tooltips::Key::SrcJitterAmount);
+    setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik", Tooltips::Key::SrcJitterRate);
+
+    srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
+    addAndMakeVisible (srcJitterOnButton);
+    srcJitterOnAttachment = std::make_unique<ButtonAttachment> (apvts, Params::srcJitterOn, srcJitterOnButton);
+    // Klick UND Presetwechsel loesen onClick aus (ButtonAttachment schaltet
+    // per sendNotificationSync um) - deshalb reicht dieser eine Ort, um die
+    // Regler in beiden Faellen richtig auszugrauen.
+    srcJitterOnButton.onClick = [this] { updateJitterEnabledState(); };
+
+    // Reiter-Umschalter Vorbeiflug/Record-Play (@dpa-Feedback, s. Header).
+    // setClickingTogglesState+setRadioGroupId ergibt ein Segmented-Control-
+    // Paar: Klick auf den einen hebt den anderen automatisch auf.
+    constexpr int tabRadioGroupId = 1;
+    flyTabButton.setClickingTogglesState (true);
+    flyTabButton.setRadioGroupId (tabRadioGroupId);
+    flyTabButton.setTooltip (Tooltips::text (Tooltips::Key::Fly));
+    flyTabButton.onClick = [this] { updateTabVisibility(); };
+    addAndMakeVisible (flyTabButton);
+
+    recordTabButton.setClickingTogglesState (true);
+    recordTabButton.setRadioGroupId (tabRadioGroupId);
+    recordTabButton.setTooltip (Tooltips::text (Tooltips::Key::Record));
+    recordTabButton.onClick = [this] { updateTabVisibility(); };
+    addAndMakeVisible (recordTabButton);
+
+    // Record/Play startet aktiv - Vorbeiflug ist der seltener genutzte
+    // Generator-Modus, den man bewusst dazuschaltet.
+    recordTabButton.setToggleState (true, juce::dontSendNotification);
+
     smootherTypeLabel.setText ("Smoother", juce::dontSendNotification);
     smootherTypeLabel.setJustificationType (juce::Justification::centredLeft);
     smootherTypeLabel.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
@@ -182,6 +213,52 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     // stuenden Slew Vmax/Amax nach dem Oeffnen des Editors aktiv, obwohl der
     // geladene Zustand z.B. "Critically Damped Spring" waehlt.
     updateSlewControlsVisibility();
+
+    // Ausgrauzustand und Reiter-Sichtbarkeit von Hand einmal anstossen - beide
+    // Attachments/Toggles haben ihren Startwert schon vor der Zuweisung von
+    // onClick durchgereicht (s. Kommentar bei srcJitterOnButton.onClick oben).
+    updateJitterEnabledState();
+    updateTabVisibility();
+}
+
+void MotionPanel::updateJitterEnabledState()
+{
+    // Aus heisst nur "steht still", nicht "Wert weg" - die Regler bleiben auf
+    // ihrem Stand, damit beim Wiedereinschalten sofort der alte Ausschlag
+    // greift statt bei null neu anzufangen (siehe Tooltips::Key::SrcJitterOn).
+    const bool jitterOn = srcJitterOnButton.getToggleState();
+
+    srcJitterAmountKnob.slider.setEnabled (jitterOn);
+    srcJitterAmountKnob.label.setEnabled (jitterOn);
+    srcJitterRateKnob.slider.setEnabled (jitterOn);
+    srcJitterRateKnob.label.setEnabled (jitterOn);
+}
+
+void MotionPanel::updateTabVisibility()
+{
+    // Immer nur EINE der beiden Gruppen sichtbar, s. Header-Kommentar bei
+    // flyTabButton (@dpa-Feedback: "spart Platz und bringt Uebersicht"). Die
+    // jeweils andere bleibt existent (setVisible(false)), keine Regler werden
+    // neu angelegt oder ihre Attachments geloest.
+    const bool showFly = flyTabButton.getToggleState();
+
+    for (auto* c : { (juce::Component*) &flyKindLabel, (juce::Component*) &flyKindCombo,
+                      (juce::Component*) &flyStartLabel, (juce::Component*) &flyStartCombo,
+                      (juce::Component*) &flyButton,
+                      (juce::Component*) &flyDistanceKnob.slider, (juce::Component*) &flyDistanceKnob.label,
+                      (juce::Component*) &flyApproachKnob.slider, (juce::Component*) &flyApproachKnob.label,
+                      (juce::Component*) &flySpeedKnob.slider,    (juce::Component*) &flySpeedKnob.label })
+        c->setVisible (showFly);
+
+    for (auto* c : { (juce::Component*) &recordButton, (juce::Component*) &playButton,
+                      (juce::Component*) &smootherTypeLabel, (juce::Component*) &smootherTypeCombo,
+                      (juce::Component*) &playInterpLabel,   (juce::Component*) &playInterpCombo,
+                      (juce::Component*) &playLoopButton, (juce::Component*) &coastButton, (juce::Component*) &mouseFrameButton,
+                      (juce::Component*) &smootherTauKnob.slider, (juce::Component*) &smootherTauKnob.label,
+                      (juce::Component*) &slewVmaxKnob.slider,    (juce::Component*) &slewVmaxKnob.label,
+                      (juce::Component*) &slewAmaxKnob.slider,    (juce::Component*) &slewAmaxKnob.label,
+                      (juce::Component*) &playSpeedKnob.slider,   (juce::Component*) &playSpeedKnob.label })
+        c->setVisible (! showFly);
 }
 
 void MotionPanel::updateSlewControlsVisibility()
@@ -222,13 +299,15 @@ void MotionPanel::setCoastEnabled (bool shouldCoast)
 void MotionPanel::refreshTooltips()
 {
     for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob,
-                      &globalMaxSpeedKnob, &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
+                      &globalMaxSpeedKnob, &srcJitterAmountKnob, &srcJitterRateKnob,
+                      &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
     }
 
+    srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
     smootherTypeLabel.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
     smootherTypeCombo.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
     playInterpLabel.setTooltip (Tooltips::text (Tooltips::Key::PlayInterp));
@@ -238,72 +317,115 @@ void MotionPanel::refreshTooltips()
     mouseFrameButton.setTooltip (Tooltips::text (Tooltips::Key::MouseFrame));
     recordButton.setTooltip (Tooltips::text (Tooltips::Key::Record));
     playButton.setTooltip (Tooltips::text (Tooltips::Key::Play));
+    recordTabButton.setTooltip (Tooltips::text (Tooltips::Key::Record));
     flyKindLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyKind));
     flyStartLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyStart));
     flyButton.setTooltip (Tooltips::text (Tooltips::Key::Fly));
+    flyTabButton.setTooltip (Tooltips::text (Tooltips::Key::Fly));
 }
 
 void MotionPanel::resized()
 {
-    constexpr int knobW = 84;
-    constexpr int knobH = 82;
+    // Groesser als die 84x82, die die uebrigen Panels nutzen (@dpa-Feedback:
+    // Regler hier "zu klein gequetscht") - der Reiter-Umschalter unten (immer
+    // nur eine der beiden Gruppen sichtbar, s. updateTabVisibility()) schafft
+    // dafuer erst den Platz, ohne dass die Panel-Gesamthoehe waechst (s.
+    // PluginEditor::motionContentHeight-Rechnung im Aufgabenbericht).
+    constexpr int knobW = 100;
+    constexpr int knobH = 100;
     auto area = getLocalBounds().reduced (8);
 
-    // Record/Play oben - die Bewegungsaufnahme ist der Einstiegspunkt in
-    // diese Gruppe.
-    auto transportRow = area.removeFromTop (28);
-    recordButton.setBounds (transportRow.removeFromLeft (100));
-    transportRow.removeFromLeft (8);
-    playButton.setBounds (transportRow.removeFromLeft (100));
+    // Reiter oben: Vorbeiflug ODER Record/Play, nie beide gleichzeitig
+    // (@dpa-Feedback: "spart Platz und bringt Uebersicht").
+    auto tabRow = area.removeFromTop (28);
+    flyTabButton.setBounds (tabRow.removeFromLeft (150));
+    tabRow.removeFromLeft (8);
+    recordTabButton.setBounds (tabRow.removeFromLeft (150));
     area.removeFromTop (6);
 
-    // Zwei Dropdowns nebeneinander (Smoother-Typ, Interpolation).
-    auto comboRow = area.removeFromTop (44);
-    auto smootherArea = comboRow.removeFromLeft (180);
-    smootherTypeLabel.setBounds (smootherArea.removeFromTop (18));
-    smootherTypeCombo.setBounds (smootherArea);
-    comboRow.removeFromLeft (12);
-    auto interpArea = comboRow.removeFromLeft (180);
-    playInterpLabel.setBounds (interpArea.removeFromTop (18));
-    playInterpCombo.setBounds (interpArea);
-    area.removeFromTop (6);
+    // Beide Reitergruppen bekommen denselben reservierten Bereich zugewiesen
+    // (gleicher Startpunkt) - nur eine ist am Ende sichtbar
+    // (updateTabVisibility()), aber die Panel-Hoehe bleibt dadurch unabhaengig
+    // vom aktiven Reiter konstant, wie von CollapsiblePanel gefordert (siehe
+    // Klassenkommentar dort: der Aufrufer legt die Gesamthoehe fest vor).
+    // Bemessen an der groesseren der beiden Gruppen (Record/Play).
+    constexpr int tabContentHeight = 28 + 6 + 44 + 6 + 26 + 6 + knobH;
+    auto tabContentArea = area.removeFromTop (tabContentHeight);
 
-    auto loopRow = area.removeFromTop (26);
-    playLoopButton.setBounds (loopRow.removeFromLeft (100));
-    loopRow.removeFromLeft (12);
-    coastButton.setBounds (loopRow.removeFromLeft (100));
-    loopRow.removeFromLeft (12);
-    mouseFrameButton.setBounds (loopRow.removeFromLeft (120));
-    area.removeFromTop (6);
-
-    auto knobRow = area.removeFromTop (knobH);
-    for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob, &globalMaxSpeedKnob })
+    // --- Record/Play-Gruppe ---
     {
-        layoutKnob (*k, knobRow.removeFromLeft (knobW));
-        knobRow.removeFromLeft (4);
+        auto a = tabContentArea;
+
+        auto transportRow = a.removeFromTop (28);
+        recordButton.setBounds (transportRow.removeFromLeft (100));
+        transportRow.removeFromLeft (8);
+        playButton.setBounds (transportRow.removeFromLeft (100));
+        a.removeFromTop (6);
+
+        auto comboRow = a.removeFromTop (44);
+        auto smootherArea = comboRow.removeFromLeft (180);
+        smootherTypeLabel.setBounds (smootherArea.removeFromTop (18));
+        smootherTypeCombo.setBounds (smootherArea);
+        comboRow.removeFromLeft (12);
+        auto interpArea = comboRow.removeFromLeft (180);
+        playInterpLabel.setBounds (interpArea.removeFromTop (18));
+        playInterpCombo.setBounds (interpArea);
+        a.removeFromTop (6);
+
+        auto loopRow = a.removeFromTop (26);
+        playLoopButton.setBounds (loopRow.removeFromLeft (100));
+        loopRow.removeFromLeft (12);
+        coastButton.setBounds (loopRow.removeFromLeft (100));
+        loopRow.removeFromLeft (12);
+        mouseFrameButton.setBounds (loopRow.removeFromLeft (120));
+        a.removeFromTop (6);
+
+        auto knobRow = a.removeFromTop (knobH);
+        for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob })
+        {
+            layoutKnob (*k, knobRow.removeFromLeft (knobW));
+            knobRow.removeFromLeft (4);
+        }
     }
 
-    // Vorbeiflug-Generatoren als eigener Block darunter.
-    area.removeFromTop (10);
-
-    auto flyRow = area.removeFromTop (28);
-    flyButton.setBounds (flyRow.removeFromLeft (140));
-    area.removeFromTop (6);
-
-    auto flyComboRow = area.removeFromTop (44);
-    auto kindArea = flyComboRow.removeFromLeft (180);
-    flyKindLabel.setBounds (kindArea.removeFromTop (18));
-    flyKindCombo.setBounds (kindArea);
-    flyComboRow.removeFromLeft (12);
-    auto startArea = flyComboRow.removeFromLeft (180);
-    flyStartLabel.setBounds (startArea.removeFromTop (18));
-    flyStartCombo.setBounds (startArea);
-    area.removeFromTop (6);
-
-    auto flyKnobRow = area.removeFromTop (knobH);
-    for (auto* k : { &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
+    // --- Vorbeiflug-Gruppe ---
     {
-        layoutKnob (*k, flyKnobRow.removeFromLeft (knobW));
-        flyKnobRow.removeFromLeft (4);
+        auto a = tabContentArea;
+
+        auto flyRow = a.removeFromTop (28);
+        flyButton.setBounds (flyRow.removeFromLeft (140));
+        a.removeFromTop (6);
+
+        auto flyComboRow = a.removeFromTop (44);
+        auto kindArea = flyComboRow.removeFromLeft (180);
+        flyKindLabel.setBounds (kindArea.removeFromTop (18));
+        flyKindCombo.setBounds (kindArea);
+        flyComboRow.removeFromLeft (12);
+        auto startArea = flyComboRow.removeFromLeft (180);
+        flyStartLabel.setBounds (startArea.removeFromTop (18));
+        flyStartCombo.setBounds (startArea);
+        a.removeFromTop (6);
+
+        auto flyKnobRow = a.removeFromTop (knobH);
+        for (auto* k : { &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
+        {
+            layoutKnob (*k, flyKnobRow.removeFromLeft (knobW));
+            flyKnobRow.removeFromLeft (4);
+        }
     }
+
+    // --- Immer sichtbar, unabhaengig vom Reiter: Jitter + gemeinsamer
+    // Tempo-Deckel (globalMaxSpeed gilt fuer Maus/Automation UND Vorbeiflug,
+    // Jitter ist ebenfalls reiterunabhaengig) ---
+    area.removeFromTop (6);
+
+    auto sharedRow = area.removeFromTop (knobH);
+    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &globalMaxSpeedKnob })
+    {
+        layoutKnob (*k, sharedRow.removeFromLeft (knobW));
+        sharedRow.removeFromLeft (4);
+    }
+
+    srcJitterOnButton.setBounds (sharedRow.removeFromTop (18)
+                                          .withWidth (juce::jmin (120, sharedRow.getWidth())));
 }

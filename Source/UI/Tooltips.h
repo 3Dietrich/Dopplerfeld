@@ -117,12 +117,9 @@ namespace Tooltips
 
         // --- SwarmPanel ---
         CloneTotal,
-        CloneReal,
         CloneSpread,
         CloneRealLevel,
-        CloneLevel,
         CloneShow,
-        CloneAuto,
         Panic,
 
         // --- PluginEditor (Kopfzeile, Scope-Toolbar) ---
@@ -766,56 +763,33 @@ namespace Tooltips
                 // --- SwarmPanel ---
                 case Key::CloneTotal:
                     return lang == Language::De
-                        ? "Gesamtzahl der Klone. Ein Klon ist eine zweite Quelle, deren Route um "
-                          "einen kleinen Betrag von der echten abweicht - zusammen ergibt das ein "
-                          "Schrotmuster statt eines Einzelobjekts. 0 = aus, kostet dann auch nichts."
-                        : "Total number of clones. A clone is a second source whose path "
+                        ? "Gesamtzahl der Klone. Ein Klon ist eine zweite Quelle mit voller "
+                          "Loeserphysik (eigene Laufzeit, eigener Doppler, eigener Ueberschall), deren "
+                          "Route um einen kleinen Betrag von der echten abweicht - zusammen ergibt das "
+                          "ein Schrotmuster statt eines Einzelobjekts. Jeder Klon kostet genau ein "
+                          "Pfadpaar, die Loeserlast waechst also linear mit dieser Zahl, siehe "
+                          "CPU-Balken darunter. 0 = aus, kostet dann auch nichts."
+                        : "Total number of clones. A clone is a second source with full solver "
+                          "physics (its own delay, own doppler, own sonic boom) whose path "
                           "deviates from the real one by a small amount - together they "
-                          "produce a shotgun pattern instead of a single object. 0 = off, "
-                          "costs nothing then either.";
-                case Key::CloneReal:
-                    return lang == Language::De
-                        ? "Wie viele der Klone volle Loeserphysik bekommen: eigene Laufzeit, eigener "
-                          "Doppler, eigener Ueberschall. Jeder davon kostet genau ein Pfadpaar - die "
-                          "Loeserlast waechst also linear mit dieser Zahl, siehe CPU-Balken darunter. "
-                          "Der Rest laeuft ueber die billige Nachbildung: leicht versetzte, in der "
-                          "Verzoegerung langsam wandernde Kopien des fertigen Signals, ohne einen "
-                          "einzigen Loeseraufruf."
-                        : "How many of the clones get full solver physics: their own "
-                          "delay, own doppler, own sonic boom. Each of these costs "
-                          "exactly one path pair - solver load grows linearly with this "
-                          "number, see the CPU bar below. The rest run via the cheap "
-                          "emulation: slightly offset copies of the finished signal, "
-                          "slowly drifting in delay, without a single solver call.";
+                          "produce a shotgun pattern instead of a single object. Each clone "
+                          "costs exactly one path pair, so solver load grows linearly with "
+                          "this number, see the CPU bar below. 0 = off, costs nothing then "
+                          "either.";
                 case Key::CloneSpread:
                     return lang == Language::De
-                        ? "Wie weit die Klon-Routen von der echten abweichen, in Metern. Bei den "
-                          "billigen Klonen wird derselbe Wert ueber die Schallgeschwindigkeit in "
-                          "Laufzeit umgerechnet - drei Meter sind also knapp neun Millisekunden, "
-                          "genau wie bei einem echten Klon in dieser Entfernung."
-                        : "How far the clone paths deviate from the real one, in metres. "
-                          "For the cheap clones the same value is converted into delay "
-                          "via the speed of sound - three metres is just under nine "
-                          "milliseconds, exactly as for a real clone at that distance.";
+                        ? "Wie weit die Klon-Routen von der echten abweichen, in Metern."
+                        : "How far the clone paths deviate from the real one, in metres.";
                 case Key::CloneRealLevel:
                     return lang == Language::De
-                        ? "Pegel der ECHTEN Klone. Jeder von ihnen ist eine vollwertige Quelle "
-                          "mit eigener Laufzeit - ohne Absenkung summieren sich acht Stueck bis "
-                          "an den Limiter, und dann klingt der Schwarm nicht breiter, sondern "
-                          "zusammengefahren. Faustregel: je mehr Klone, desto weiter herunter."
-                        : "Level of the REAL clones. Each is a full source with its own delay - "
+                        ? "Gain der Klone in dB. Jeder ist eine vollwertige Quelle mit eigener "
+                          "Laufzeit - ohne Absenkung summieren sich acht Stueck bis an den Limiter, "
+                          "und dann klingt der Schwarm nicht breiter, sondern zusammengefahren. "
+                          "0dB = unveraendert. Faustregel: je mehr Klone, desto weiter herunter."
+                        : "Gain of the clones in dB. Each is a full source with its own delay - "
                           "without attenuation eight of them add up to the limiter, and then the "
-                          "swarm does not sound wider but squashed. Rule of thumb: the more "
-                          "clones, the further down.";
-
-                case Key::CloneLevel:
-                    return lang == Language::De
-                        ? "Pegel der billigen Klone, relativ zum Original. Wirkt nur auf die "
-                          "Nachbildung - die echten Klone haben ihren Pegel aus der Physik (1/R) und "
-                          "brauchen keinen Regler."
-                        : "Level of the cheap clones, relative to the original. Only "
-                          "affects the emulation - the real clones get their level from "
-                          "the physics (1/R) and need no control.";
+                          "swarm does not sound wider but squashed. 0dB = unchanged. Rule of "
+                          "thumb: the more clones, the further down.";
                 case Key::CloneShow:
                     return lang == Language::De
                         ? "Zeigt im Feld, wo die echten Klone sitzen: kleine, blasse Punkte um "
@@ -825,19 +799,6 @@ namespace Tooltips
                           "the source. This makes their spread visible, and that each one wobbles "
                           "on its own. Display only, it costs no audio processing time.";
 
-                case Key::CloneAuto:
-                    return lang == Language::De
-                        ? "Zieht die Zahl der ECHTEN Klone bei hoher Auslastung selbsttaetig zurueck und "
-                          "holt sie zurueck, wenn wieder Luft ist. Der Regler bleibt dabei die Obergrenze. "
-                          "Bewusst nur ein Angebot und nicht der Standard: was gerechnet wird, soll man "
-                          "einstellen koennen, nicht erraten muessen. Was die Automatik daraus macht, steht "
-                          "unter dem CPU-Balken."
-                        : "Automatically pulls back the number of REAL clones under high "
-                          "load and brings them back once there is headroom again. The "
-                          "control remains the upper limit. Deliberately an option, not "
-                          "the default: what gets computed should be something you set, "
-                          "not something you have to guess. What the automation actually "
-                          "does is shown below the CPU bar.";
                 case Key::Panic:
                     return lang == Language::De
                         ? "Sofort zurueck auf die minimale sichere Konfiguration: nur der Direktpfad pro Ohr, "

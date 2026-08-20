@@ -247,8 +247,8 @@ private:
     static constexpr int engineControlContentHeight = 130;   // Reihe (RPM, Imbalance) + Gate-Schalter
     static constexpr int engineContentHeight = 520;         // 608 minus die ausgelagerte RPM-Reihe
     static constexpr int sampleContentHeight = 220;
-    static constexpr int motionContentHeight = 384;
-    static constexpr int fieldContentHeight  = 306;   // 218 + dritte Reihe (M-Jitter)
+    static constexpr int motionContentHeight = 372;   // Reiter Vorbeiflug/Record-Play + gemeinsame Jitter/Speed-Zeile, s. MotionPanel::resized()
+    static constexpr int fieldContentHeight  = 306;   // 218 + dritte Reihe (jetzt Amplitudenregler statt M-Jitter, s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 360;
     static constexpr int swarmContentHeight  = 226;
 

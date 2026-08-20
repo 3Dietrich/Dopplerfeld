@@ -339,6 +339,35 @@ private:
     bool showClones = true;
     static constexpr float dragHitRadiusPx = 16.0f;
 
+    // Grosszuegigerer Fangradius eigens fuer M (@dpa: "ich habe Schwierigkeiten,
+    // M zu bewegen, wenn Jitter ueber seine Darstellung hinausgeht - man kann
+    // es nicht mehr fangen"). Nur fuer die Quelle, nicht fuer Kopf/Nase - der
+    // Hoerer L soll dadurch nicht schwerer greifbar werden, s. dragTargetAt().
+    static constexpr float sourceDragHitRadiusPx = 28.0f;
+
+    // Ruhende Ankerposition der Quelle OHNE das Jitter-Wackeln, nur fuers
+    // Greifen per Mausklick (dragTargetAt()) - der gezeichnete Punkt darf
+    // weiter zappeln, getroffen wird dort, wo M "eigentlich" ist. FieldSnapshot
+    // liefert keine jitterfreie Position (nur die tatsaechliche, moeglicherweise
+    // gewackelte sourcePos) - ohne Processor-Aenderung wird hier stattdessen
+    // tiefpassgefiltert, mit einer Zeitkonstante deutlich ueber der ueblichen
+    // Jitter-Periode (Hektik-Parameter typischerweise mehrere Hz): schnelle,
+    // gewollte Bewegung (Drag, Vorbeiflug) bleibt erkennbar, das schnelle
+    // Zappeln wird herausgemittelt. Siehe setSnapshot().
+    Vec3   sourceAnchorWorld;
+    bool   haveSourceAnchor          = false;
+    double lastAnchorSnapshotTime    = 0.0;
+    static constexpr double sourceAnchorSmoothTauSeconds = 0.25;
+
+    // Waehrend M aktiv gezogen wird: die zuletzt an den Aufrufer gemeldete
+    // Zielposition, fuers Zeichnen benutzt statt der naechsten (moeglicherweise
+    // wieder gejitterten) Snapshot-Position - sonst kaempft der gezeichnete
+    // Punkt waehrend des Ziehens sichtbar gegen die Maus an, obwohl er ihr
+    // eigentlich 1:1 folgen soll (@dpa: "waehrend des Ziehens folgt M der Maus
+    // ohne Wackel-Versatz"). Gilt fuer Draufsicht UND Perspektive (siehe
+    // drawSource(), perspectiveSourceMarker()).
+    Vec3 sourceDragWorldOverride;
+
     DragTarget dragTarget = DragTarget::none;
 
     ViewMode viewMode = ViewMode::TopDown;
