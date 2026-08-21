@@ -72,29 +72,72 @@ WelcomeOverlay::WelcomeOverlay()
     setWantsKeyboardFocus (true);
 
     titleLabel.setText ("Dopplerfeld", juce::dontSendNotification);
-    titleLabel.setFont (juce::Font (juce::FontOptions (22.0f, juce::Font::bold)));
-    titleLabel.setJustificationType (juce::Justification::centredLeft);
+    // Eine Schrift mit Charakter statt der Systemvorgabe, aber nur solche, die
+    // auf dem System auch wirklich liegen - JUCE faellt sonst wortlos auf die
+    // Standardschrift zurueck, und dann sieht es aus wie ein Versehen. Die
+    // Reihenfolge ist die Rangfolge; Helvetica Neue gibt es auf jedem Mac.
+    const juce::StringArray schoeneSchriften { "Avenir Next", "Avenir", "Optima",
+                                               "Helvetica Neue" };
+    const juce::StringArray vorhanden = juce::Font::findAllTypefaceNames();
+
+    juce::String anzeigeSchrift;
+
+    for (const auto& name : schoeneSchriften)
+        if (vorhanden.contains (name))
+        {
+            anzeigeSchrift = name;
+            break;
+        }
+
+    auto schrift = [&anzeigeSchrift] (float hoehe, int stil)
+    {
+        return anzeigeSchrift.isNotEmpty()
+             ? juce::Font (juce::FontOptions (anzeigeSchrift, hoehe, stil))
+             : juce::Font (juce::FontOptions (hoehe, stil));
+    };
+
+    titleLabel.setFont (schrift (38.0f, juce::Font::plain));
+    titleLabel.setJustificationType (juce::Justification::centred);
     titleLabel.setColour (juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible (titleLabel);
+
+    creatorLabel.setText ("von DD, 3Dietrich und D.Pank", juce::dontSendNotification);
+    creatorLabel.setFont (schrift (19.0f, juce::Font::plain));
+    creatorLabel.setJustificationType (juce::Justification::centred);
+    creatorLabel.setColour (juce::Label::textColourId, juce::Colour (0xffb0b0b0));
+    addAndMakeVisible (creatorLabel);
 
     // @dpas Text woertlich uebernommen, nur der Hinweis auf die States zeigt
     // jetzt ausdruecklich auf den Options-Knopf oben links statt auf ein Bild
     // ("s.B."), das es hier nicht gibt.
+    // Der Text wird ausdruecklich als UTF-8 uebergeben. Ohne das liest JUCE die
+    // Bytes eines Umlauts einzeln und zeigt "fÃ¼r" statt "für" - genau deshalb
+    // schreibt der Rest des Projekts ae/oe/ue aus. Hier steht der Text vor dem
+    // Benutzer, also gehoeren echte Umlaute hin.
+    //
+    // Umgebrochen wird NICHT von Hand: juce::Label bricht selbst an Wortgrenzen
+    // um, sobald der Text breiter als sein Bereich ist. Feste Umbrueche landen
+    // sonst mitten im Satz, sobald sich Breite oder Schriftgroesse aendern.
     bodyLabel.setText (
-        "von DD, 3Dietrich und D.Pank\n"
-        "\n"
-        "Mehr f\u00fcr Standalone (als Plugin nat\u00fcrlich auch, aber in v0.2.0 ungetestet).\n"
-        "\n"
-        "Die Einstellungen sind noch etwas cryptisch, deswegen empfehle ich, die\n"
-        "Presets = States \u00fcber den Options-Knopf oben links zu entdecken\n"
-        "(\"Save current state...\" / \"Load a saved state...\").",
+        juce::String::fromUTF8 (
+            "Ein akustisches Dopplerfeld: eine Schallquelle bewegt sich durch den "
+            "Raum, und du hörst, was davon an deinem Ohr ankommt.\n"
+            "\n"
+            "Gedacht ist es vor allem als eigenständiges Programm. Als Plugin läuft "
+            "es ebenso, dort ist es in Version 0.2.0 aber noch nicht erprobt.\n"
+            "\n"
+            "Die Einstellungen sind noch etwas kryptisch. Am schnellsten kommst du "
+            "über die mitgelieferten Presets hinein, die hier States heißen: zu "
+            "finden über den Knopf Options oben links, unter \"Load a saved "
+            "state...\"."),
         juce::dontSendNotification);
-    bodyLabel.setFont (juce::Font (juce::FontOptions (14.5f)));
+    bodyLabel.setFont (schrift (17.5f, juce::Font::plain));
     bodyLabel.setJustificationType (juce::Justification::topLeft);
     bodyLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd8d8d8));
     bodyLabel.setMinimumHorizontalScale (1.0f);
     addAndMakeVisible (bodyLabel);
 
+    okButton.setLookAndFeel (nullptr);
     okButton.onClick = [this] { okClicked(); };
     addAndMakeVisible (okButton);
 
@@ -103,6 +146,7 @@ WelcomeOverlay::WelcomeOverlay()
     // nicht der Knopf sein, den man aus Versehen zuerst trifft.
     dontShowButton.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
     dontShowButton.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff8a8a8a));
+    dontShowButton.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
     dontShowButton.onClick = [this] { dontShowClicked(); };
     addAndMakeVisible (dontShowButton);
 
@@ -112,6 +156,7 @@ WelcomeOverlay::WelcomeOverlay()
     // (@dpa: "darf dann GAR NICHT erscheinen").
     if (juce::StandalonePluginHolder::getInstance() != nullptr)
     {
+        openStatesButton.setButtonText (juce::String::fromUTF8 ("\xc3\xb6" "ffne states"));
         openStatesButton.onClick = [this] { openStatesClicked(); };
         addAndMakeVisible (openStatesButton);
     }
@@ -134,6 +179,61 @@ void WelcomeOverlay::paint (juce::Graphics& g)
     // dieselbe Machart wie das Settings-Fenster an anderer Stelle im Projekt.
     g.setColour (juce::Colour (0x22ffffff));
     g.drawRoundedRectangle (card, cornerRadius, 1.0f);
+
+    drawDopplerFigure (g, figureArea.toFloat());
+}
+
+void WelcomeOverlay::drawDopplerFigure (juce::Graphics& g, juce::Rectangle<float> area) const
+{
+    // Das Bild zum Namen: eine Quelle, die nach rechts zieht, und ihre
+    // Wellenfronten. Jede Front wurde an einem anderen Ort abgestrahlt und
+    // waechst seither gleichmaessig weiter - vorne draengen sie sich deshalb
+    // zusammen (hoeher), hinten ziehen sie sich auseinander (tiefer). Genau
+    // das rechnet das Plugin, hier steht es still.
+    //
+    // Flach gekippt statt frontal: als Kreise waere es ein Zielscheiben-Symbol,
+    // als Ellipsen liest es sich als Flaeche, ueber die etwas hinwegzieht.
+    const float cx = area.getCentreX();
+    const float cy = area.getCentreY();
+    const float kippung = 0.42f;        // Hoehe zu Breite, also der Blickwinkel
+
+    constexpr int fronts = 6;
+
+    for (int i = fronts; i >= 1; --i)
+    {
+        // Alter der Front: die aelteste ist am weitesten gewachsen und wurde am
+        // weitesten links abgestrahlt.
+        const float alter  = (float) i / (float) fronts;
+        const float radius = 24.0f + alter * 118.0f;
+        const float quelleDamals = cx - alter * 66.0f;
+
+        // Aeltere Fronten verblassen - sonst wird das Bild vorne dicht und
+        // hinten genauso laut, und die Bewegungsrichtung geht verloren.
+        const float deckkraft = 0.10f + 0.34f * (1.0f - alter);
+
+        g.setColour (juce::Colour (0xff4ec9c9).withAlpha (deckkraft));
+        g.drawEllipse (quelleDamals - radius, cy - radius * kippung,
+                       radius * 2.0f, radius * 2.0f * kippung, 1.4f);
+    }
+
+    // Die Quelle selbst, dort wo sie JETZT ist: hell, damit klar ist, welcher
+    // Punkt die Fronten ausgesendet hat. Gelb wie im Feld.
+    const juce::Colour quellFarbe (0xffe8d44a);
+
+    g.setColour (quellFarbe.withAlpha (0.25f));
+    g.fillEllipse (cx - 9.0f, cy - 9.0f * kippung - 1.0f, 18.0f, 18.0f * kippung + 2.0f);
+
+    g.setColour (quellFarbe);
+    g.fillEllipse (cx - 4.0f, cy - 4.0f, 8.0f, 8.0f);
+
+    // Bewegungsrichtung als kurzer Schweif hinter der Quelle - ohne ihn
+    // koennte das Bild auch eine ruhende Quelle mit Ringen sein.
+    juce::Path schweif;
+    schweif.startNewSubPath (cx - 74.0f, cy);
+    schweif.lineTo (cx - 16.0f, cy);
+
+    g.setColour (quellFarbe.withAlpha (0.30f));
+    g.strokePath (schweif, juce::PathStrokeType (1.6f));
 }
 
 void WelcomeOverlay::resized()
@@ -141,8 +241,13 @@ void WelcomeOverlay::resized()
     auto card = getLocalBounds().withSizeKeepingCentre (cardWidth, cardHeight);
     auto content = card.reduced (18);
 
-    titleLabel.setBounds (content.removeFromTop (30));
-    content.removeFromTop (6);
+    titleLabel.setBounds (content.removeFromTop (46));
+    creatorLabel.setBounds (content.removeFromTop (26));
+
+    content.removeFromTop (10);
+    figureArea = content.removeFromTop (figureHeight);
+    content.removeFromTop (10);
+
     bodyLabel.setBounds (content.removeFromTop (bodyHeight));
     content.removeFromTop (14);
 
@@ -215,6 +320,11 @@ void WelcomeOverlay::openStatesClicked()
     // Sichtbar (und damit klickbar) ist dieser Knopf nur, wenn der
     // Konstruktor bereits getInstance() != nullptr gesehen hat - keine
     // erneute Pruefung noetig.
+    // Zuerst aus dem Weg, dann laden: wer hier klickt, hat den Hinweis
+    // verstanden und will das geladene State sehen, nicht weiter den Hinweis
+    // darauf. Geschlossen wird wie bei OK nur fuer diese Sitzung.
+    setVisible (false);
+
     if (auto* holder = juce::StandalonePluginHolder::getInstance())
         holder->askUserToLoadState();
 }

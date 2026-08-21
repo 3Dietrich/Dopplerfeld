@@ -39,6 +39,10 @@ public:
 private:
     // Schliesst das Fenster und setzt "welcomeSeen" - der gemeinsame Weg fuer
     // Knopf, Enter und Escape.
+    // Zeichnet die Wellenfronten einer bewegten Quelle: dieselbe Sache, die das
+    // Plugin macht, als stehendes Bild.
+    void drawDopplerFigure (juce::Graphics& g, juce::Rectangle<float> area) const;
+
     void okClicked();
     void dontShowClicked();
 
@@ -47,20 +51,27 @@ private:
     void openStatesClicked();
 
     juce::Label titleLabel;
+    juce::Label creatorLabel;
+
+    // Von resized() gesetzt, von paint() bemalt.
+    juce::Rectangle<int> figureArea;
     juce::Label bodyLabel;
     juce::TextButton okButton { "OK" };
     // Klein und zurueckhaltend: es ist der einzige Weg, das Fenster dauerhaft
     // loszuwerden, soll aber nicht mit OK um Aufmerksamkeit streiten.
     juce::TextButton dontShowButton { "nicht mehr zeigen" };
-    juce::TextButton openStatesButton { "öffne states" };
+    juce::TextButton openStatesButton;   // Beschriftung im Konstruktor, siehe dort (UTF-8)
 
     // Kartengroesse - bewusst kompakt (@dpa: "nicht ausladend"), aber breit
     // genug fuer die drei Textabsaetze ohne haessliche Umbrueche.
-    static constexpr int cardWidth   = 480;
-    static constexpr int cardHeight  = 270;
-    static constexpr int bodyHeight  = 150;
-    static constexpr int buttonHeight = 28;
-    static constexpr int buttonWidth  = 90;
+    static constexpr int cardWidth   = 560;
+    static constexpr int cardHeight  = 452;
+    static constexpr int bodyHeight  = 148;
+
+    // Hoehe der Doppler-Zeichnung zwischen Kopf und Text.
+    static constexpr int figureHeight = 104;
+    static constexpr int buttonHeight = 34;
+    static constexpr int buttonWidth  = 104;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WelcomeOverlay)
 };
