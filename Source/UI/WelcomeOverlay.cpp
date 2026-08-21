@@ -160,6 +160,48 @@ WelcomeOverlay::WelcomeOverlay()
         openStatesButton.onClick = [this] { openStatesClicked(); };
         addAndMakeVisible (openStatesButton);
     }
+
+    // Erst jetzt, wo Text und Schrift feststehen: nachmessen, wie hoch der
+    // Fliesstext wird, und die Karte danach richten. Eine feste Zahl haette
+    // hier gestanden und beim naechsten Satz oder auf einem System mit anderer
+    // Schrift wieder zu wenig Platz gelassen.
+    bodyHeight = gemesseneTexthoehe (cardWidth - 2 * padding);
+
+    cardHeight = 2 * padding
+               + titleHeight + creatorHeight
+               + gapAroundFigure + figureHeight + gapAroundFigure
+               + bodyHeight
+               + gapBeforeButtons + buttonHeight;
+}
+
+int WelcomeOverlay::gemesseneTexthoehe (int breite) const
+{
+    // Gemessen wird mit demselben Mittel, mit dem spaeter gezeichnet wird:
+    // GlyphArrangement bricht an denselben Wortgrenzen um und benutzt denselben
+    // Zeilenabstand wie das Label. Ohne Hoehenvorgabe umgebrochen ergibt sich
+    // die volle Hoehe - genau die, die das Label bekommen muss, damit nichts
+    // abgeschnitten wird.
+    const juce::Font schrift = bodyLabel.getFont();
+
+    juce::GlyphArrangement anordnung;
+    anordnung.addJustifiedText (schrift, bodyLabel.getText(),
+                                0.0f, schrift.getAscent(),
+                                (float) breite, juce::Justification::left);
+
+    const auto umriss = anordnung.getBoundingBox (0, -1, true);
+
+    // Eine halbe Zeile Luft: die Unterlaengen der letzten Zeile zaehlen nur
+    // mit, wenn dort tatsaechlich eine steht, und eine punktgenau passende
+    // Hoehe kostet sonst gelegentlich die letzte Zeile.
+    return (int) std::ceil (umriss.getBottom() + schrift.getHeight() * 0.5f);
+}
+
+juce::Rectangle<int> WelcomeOverlay::kartenFlaeche() const
+{
+    // Nie hoeher als der Editor: sonst stuenden Knopfreihe oder Titel ausserhalb
+    // des Fensters. Was dann fehlt, holt sich resized() bei der Zeichnung.
+    return getLocalBounds().withSizeKeepingCentre (juce::jmin (cardWidth, getWidth()),
+                                                   juce::jmin (cardHeight, getHeight()));
 }
 
 void WelcomeOverlay::paint (juce::Graphics& g)
@@ -170,7 +212,7 @@ void WelcomeOverlay::paint (juce::Graphics& g)
 
     constexpr float cornerRadius = 4.0f;   // @dpa mag kleine Eck-Radien
 
-    auto card = getLocalBounds().withSizeKeepingCentre (cardWidth, cardHeight).toFloat();
+    auto card = kartenFlaeche().toFloat();
 
     g.setColour (juce::Colour (0xff232323));   // etwas heller als der Editorhintergrund 0xff1a1a1a
     g.fillRoundedRectangle (card, cornerRadius);
@@ -238,20 +280,23 @@ void WelcomeOverlay::drawDopplerFigure (juce::Graphics& g, juce::Rectangle<float
 
 void WelcomeOverlay::resized()
 {
-    auto card = getLocalBounds().withSizeKeepingCentre (cardWidth, cardHeight);
-    auto content = card.reduced (18);
+    auto content = kartenFlaeche().reduced (padding);
 
-    titleLabel.setBounds (content.removeFromTop (46));
-    creatorLabel.setBounds (content.removeFromTop (26));
+    titleLabel.setBounds (content.removeFromTop (titleHeight));
+    creatorLabel.setBounds (content.removeFromTop (creatorHeight));
 
-    content.removeFromTop (10);
-    figureArea = content.removeFromTop (figureHeight);
-    content.removeFromTop (10);
+    // Von unten her aufgeteilt: Knopfreihe und Fliesstext bekommen ihren Platz
+    // zuerst, die Zeichnung nimmt, was uebrig bleibt. Wird der Editor einmal zu
+    // niedrig, schrumpft also das Bild - der Text bleibt vollstaendig, denn er
+    // ist der Grund, warum dieses Fenster ueberhaupt aufgeht.
+    auto buttonRow = content.removeFromBottom (buttonHeight);
+    content.removeFromBottom (gapBeforeButtons);
 
-    bodyLabel.setBounds (content.removeFromTop (bodyHeight));
-    content.removeFromTop (14);
+    bodyLabel.setBounds (content.removeFromBottom (juce::jmin (bodyHeight, content.getHeight())));
 
-    auto buttonRow = content.removeFromTop (buttonHeight);
+    content.removeFromBottom (gapAroundFigure);
+    content.removeFromTop (gapAroundFigure);
+    figureArea = content;
 
     // Reihenfolge wie von @dpa vorgegeben: "[oeffne states] [OK]" - OK sitzt
     // deshalb rechts, oeffne states (falls vorhanden) direkt links daneben.
