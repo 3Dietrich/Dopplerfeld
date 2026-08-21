@@ -50,6 +50,14 @@ bool WelcomeOverlay::hasBeenSeen()
     return welcomeProperties().getUserSettings()->getBoolValue ("welcomeSeen", false);
 }
 
+void WelcomeOverlay::forgetSeen()
+{
+    auto* settings = welcomeProperties().getUserSettings();
+
+    settings->removeValue ("welcomeSeen");
+    settings->saveIfNeeded();
+}
+
 void WelcomeOverlay::markAsSeen()
 {
     auto* settings = welcomeProperties().getUserSettings();
@@ -75,10 +83,10 @@ WelcomeOverlay::WelcomeOverlay()
     bodyLabel.setText (
         "von DD, 3Dietrich und D.Pank\n"
         "\n"
-        "Mehr fuer Standalone (als Plugin natuerlich auch, aber in v0.2.0 ungetestet).\n"
+        "Mehr f\u00fcr Standalone (als Plugin nat\u00fcrlich auch, aber in v0.2.0 ungetestet).\n"
         "\n"
         "Die Einstellungen sind noch etwas cryptisch, deswegen empfehle ich, die\n"
-        "Presets = States ueber den Options-Knopf oben links zu entdecken\n"
+        "Presets = States \u00fcber den Options-Knopf oben links zu entdecken\n"
         "(\"Save current state...\" / \"Load a saved state...\").",
         juce::dontSendNotification);
     bodyLabel.setFont (juce::Font (juce::FontOptions (14.5f)));
@@ -89,6 +97,14 @@ WelcomeOverlay::WelcomeOverlay()
 
     okButton.onClick = [this] { okClicked(); };
     addAndMakeVisible (okButton);
+
+    // Bewusst zurueckhaltend gestaltet: kleinere Schrift, kein Fuellton, nur
+    // gedaempfte Beschriftung. Er erledigt etwas Endgueltiges und soll deshalb
+    // nicht der Knopf sein, den man aus Versehen zuerst trifft.
+    dontShowButton.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+    dontShowButton.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff8a8a8a));
+    dontShowButton.onClick = [this] { dontShowClicked(); };
+    addAndMakeVisible (dontShowButton);
 
     // "oeffne states" ergibt nur im Standalone einen Sinn - dort existiert der
     // Options-Knopf mit dem Ladedialog ueberhaupt. Im Plugin (VST3/AU) liefert
@@ -134,6 +150,10 @@ void WelcomeOverlay::resized()
 
     // Reihenfolge wie von @dpa vorgegeben: "[oeffne states] [OK]" - OK sitzt
     // deshalb rechts, oeffne states (falls vorhanden) direkt links daneben.
+    // Links in derselben Reihe, weit weg von OK: der endgueltige Knopf soll
+    // nicht direkt neben dem liegen, den man staendig drueckt.
+    dontShowButton.setBounds (buttonRow.removeFromLeft (130));
+
     okButton.setBounds (buttonRow.removeFromRight (buttonWidth));
 
     if (openStatesButton.isVisible())
@@ -175,6 +195,16 @@ void WelcomeOverlay::visibilityChanged()
 }
 
 void WelcomeOverlay::okClicked()
+{
+    // Schliesst nur diese Sitzung. Das Fenster kommt beim naechsten Oeffnen
+    // wieder, denn es ist der Hinweis auf die States, und der ist beim zweiten
+    // Mal nicht weniger wert als beim ersten (@dpa 20260821: "das
+    // Begruessungsfenster bei jedem Oeffnen anzeigen"). Dauerhaft loswerden
+    // laesst es sich nur ueber "nicht mehr zeigen".
+    setVisible (false);
+}
+
+void WelcomeOverlay::dontShowClicked()
 {
     markAsSeen();
     setVisible (false);

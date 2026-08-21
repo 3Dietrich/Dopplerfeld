@@ -567,7 +567,7 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
 
     g.setColour (juce::Colours::white.withAlpha (0.75f));
     g.setFont (13.0f);
-    g.drawText ("dopplerfeld", margin + 46, margin, 100, topBarHeight, juce::Justification::centredLeft);
+    g.drawText ("dopplerfeld", margin, margin, 100, topBarHeight, juce::Justification::centredLeft);
 
     // Bauzeit dieser Fassung, rechts aussen in der Kopfzeile. Ohne sie laesst
     // sich von aussen nicht unterscheiden, ob eine Aenderung nicht wirkt oder ob
@@ -583,7 +583,7 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
                                               10.0f, juce::Font::plain)));
     g.drawText (juce::String ("Build ") + __DATE__ + " " + __TIME__,
-                getWidth() - margin - 150, margin, 150, topBarHeight,
+                getWidth() - margin - 140, margin, 140, topBarHeight,
                 juce::Justification::centredRight);
 
     // Loeserlast-Zeile: eigener Balken + Zahl, IMMER sichtbar (siehe
@@ -665,8 +665,14 @@ void DopplerfeldEditor::resized()
 
     auto topBar = area.removeFromTop (topBarHeight);
 
-    masterOnButton.setBounds (topBar.removeFromLeft (46));
     topBar.removeFromLeft (100);   // Platz für den Schriftzug links
+
+    // Der Hauptschalter steht abgesetzt HINTER dem Schriftzug, nicht davor:
+    // direkt davor gelesen ergaeben Schalter und Name zusammen "An
+    // dopplerfeld", also einen Satz statt zweier getrennter Dinge.
+    topBar.removeFromLeft (10);
+    masterOnButton.setBounds (topBar.removeFromLeft (50));
+    topBar.removeFromLeft (14);
     sourceButton.setBounds (topBar.removeFromLeft (150));   // "Quelle: Audio In" ist der laengste Text
     topBar.removeFromLeft (8);
     tooltipsButton.setBounds (topBar.removeFromLeft (130));

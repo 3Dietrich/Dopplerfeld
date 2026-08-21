@@ -32,10 +32,15 @@ public:
     static bool hasBeenSeen();
     static void markAsSeen();
 
+    // Setzt den Merker zurueck, das Fenster erscheint danach wieder. Fuer den
+    // Testablauf gedacht, siehe tools/welcome-reset.sh.
+    static void forgetSeen();
+
 private:
     // Schliesst das Fenster und setzt "welcomeSeen" - der gemeinsame Weg fuer
     // Knopf, Enter und Escape.
     void okClicked();
+    void dontShowClicked();
 
     // Oeffnet den Standalone-Ladedialog fuer States (nur erreichbar, wenn der
     // Knopf ueberhaupt sichtbar ist, siehe Konstruktor).
@@ -44,6 +49,9 @@ private:
     juce::Label titleLabel;
     juce::Label bodyLabel;
     juce::TextButton okButton { "OK" };
+    // Klein und zurueckhaltend: es ist der einzige Weg, das Fenster dauerhaft
+    // loszuwerden, soll aber nicht mit OK um Aufmerksamkeit streiten.
+    juce::TextButton dontShowButton { "nicht mehr zeigen" };
     juce::TextButton openStatesButton { "öffne states" };
 
     // Kartengroesse - bewusst kompakt (@dpa: "nicht ausladend"), aber breit
