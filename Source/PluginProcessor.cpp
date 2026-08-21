@@ -29,6 +29,7 @@ constexpr const char* motionPlayingId = "motionWasPlaying";
 // mitkopiert werden, dafür bleiben die Preset-Dateien klein.
 constexpr const char* sourceKindId  = "sourceKind";
 constexpr const char* samplePathId  = "samplePath";
+constexpr const char* motorGateId   = "motorGateEnabled";
 
 // Fester Anker für relative Sample-Pfade (@dpa 20260818: "relativ zum
 // Presets-Ordner!"). JUCE teilt getStateInformation()/setStateInformation()
@@ -1616,6 +1617,11 @@ void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
     // stehen, die setStateInformation() beim Laden unnötig prüfen müsste.
     state.setProperty (sourceKindId, static_cast<int> (currentSourceKind()), nullptr);
 
+    // "Motor bei Griff" ist kein APVTS-Parameter (reiner Schalter, siehe
+    // setMotorGateEnabled()) und muss deshalb wie die Quellwahl als eigene
+    // Property mit in den State, sonst verliert ihn jeder Preset-/Host-Recall.
+    state.setProperty (motorGateId, isMotorGateEnabled(), nullptr);
+
     if (samplePath.isNotEmpty())
     {
         const juce::File sampleFile (samplePath);
@@ -1765,7 +1771,20 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
         selectSourceKind (static_cast<SourceKind> (kind));
     }
 
+    // Fehlt die Property (Preset aus einer Fassung ohne den Schalter), bleibt
+    // die aktuelle Einstellung stehen - wie bei den anderen nachtraeglich
+    // eingefuehrten Properties.
+    if (tree.hasProperty (motorGateId))
+        setMotorGateEnabled ((bool) tree.getProperty (motorGateId, false));
+
     apvts.replaceState (tree);
+
+    // Zum Schluss: Engine neu anlassen (@dpa: "bei/nach jedem State-load
+    // Engine Restart triggern"). Erst NACH replaceState(), damit der
+    // prepareToPlay()-Lauf im Restart schon die geladenen Parameter sieht.
+    // Nur angefordert - ausgefuehrt wird er auf dem Nachrichten-Thread
+    // (siehe requestEngineRestart() im Header).
+    requestEngineRestart();
 }
 
 // Diese Fabrikfunktion verlangt JUCE von jedem Plugin-Projekt.

@@ -158,6 +158,16 @@ public:
     // handlePendingRequests() heraus, weil prepareToPlay() selbst allokieren
     // darf (das ist sein Vertrag), im Audiothread waere das verboten.
     void restartEngine();
+
+    // Engine-Restart nach einem State-Load (@dpa: "bei/nach jedem State-load
+    // Engine Restart triggern"). setStateInformation() darf restartEngine()
+    // nicht selbst rufen: je nach Host laeuft der Recall mitten in der
+    // Audio-Verkabelung, und prepareToPlay() darf nur vom Nachrichten-Thread
+    // aus allokieren. Deshalb nur ein Flag - der Editor-Timer (Nachrichten-
+    // Thread, wie die Peak-Consumer unten) holt es ab und ruft restartEngine().
+    void requestEngineRestart() { engineRestartRequest.store (true); }
+    bool consumeEngineRestartRequest() { return engineRestartRequest.exchange (false); }
+
     int  recordedFrameCount() const { return recordedFrames.load(); }
 
     // Linearer Spitzenwert seit dem letzten Abruf (Levelmeter, @dpa-Feedback).
@@ -631,6 +641,7 @@ private:
     std::atomic<bool> flyTriggerRequest   { false };
     std::atomic<bool> flyStopRequest      { false };
     std::atomic<bool> panicRequest        { false };
+    std::atomic<bool> engineRestartRequest{ false };
 
     std::atomic<bool> motorGateEnabled    { false };
     std::atomic<bool> sourceGrabRequest   { false };

@@ -401,6 +401,16 @@ void DopplerfeldEditor::refreshDisplay()
     motionPanel.setPlaying (dopplerfeldProcessor.isPlayingMotion());
     motionPanel.setFlying (dopplerfeldProcessor.isFlyingBy());
 
+    // Nach einem Preset-/State-Load muss der Schalter den geladenen Zustand
+    // zeigen, nicht den Klick-Stand von vorher (wie der Quelle-Button oben).
+    engineControlPanel.setMotorGateEnabled (dopplerfeldProcessor.isMotorGateEnabled());
+
+    // Engine-Restart nach einem State-Load (@dpa): setStateInformation()
+    // fordert ihn nur an, ausgefuehrt wird er hier auf dem Nachrichten-
+    // Thread, weil restartEngine() in prepareToPlay() allokieren darf.
+    if (dopplerfeldProcessor.consumeEngineRestartRequest())
+        dopplerfeldProcessor.restartEngine();
+
     // Die CPU-Zeile braucht kein setLoad() mehr auf ein Panel - sie liest
     // Klonzahl/Begrenzer direkt im paint() der Editor-Zeile, genau wie die
     // CPU-Last schon vorher direkt dort gelesen wurde (s. dort).
