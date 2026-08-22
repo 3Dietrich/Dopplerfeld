@@ -28,12 +28,6 @@ jobs:
   build:
     runs-on: macos-14
     steps:
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
       - name: Dopplerfeld auschecken
         uses: actions/checkout@v4
 
