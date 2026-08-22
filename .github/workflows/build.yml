@@ -49,6 +49,7 @@ jobs:
           restore-keys: |
             juce-${{ env.JUCE_REF }}
             juce-
+            juce-
 
       - name: Konfigurieren
         run: cmake -B build -DJUCE_DIR=${{ github.workspace }}/JUCE-src -DCMAKE_BUILD_TYPE=Release
