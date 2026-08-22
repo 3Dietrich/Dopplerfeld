@@ -51,8 +51,9 @@ jobs:
             juce-
             juce-
             juce-
+            juce-
 
-      - name: Log JUCE checkout directory
+      - name: Log JUCE checkout directory contents
         run: |
           echo "Listing contents of JUCE-src directory:"
           ls -R JUCE-src || echo "JUCE-src directory not found or empty."
