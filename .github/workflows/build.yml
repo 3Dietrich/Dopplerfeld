@@ -50,6 +50,7 @@ jobs:
             juce-${{ env.JUCE_REF }}
             juce-
             juce-
+            juce-
 
       - name: Log JUCE checkout directory
         run: |
