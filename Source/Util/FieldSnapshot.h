@@ -161,6 +161,13 @@ struct FieldSnapshot
     std::uint64_t adjacentPairs   = 0;
     std::uint64_t droppedRoots    = 0;
 
+    // Auslöserichtung der N-Welle (siehe PropagationPath::BranchDeathStats):
+    // Paar-Geburt an der Kegelankunft, aufsteigender und absteigender
+    // M_r-Durchgang. Der absteigende ist der zweite Knall aus @dpas Aufnahme.
+    std::uint64_t nWavePairBirths = 0;
+    std::uint64_t nWaveRising     = 0;
+    std::uint64_t nWaveFalling    = 0;
+
     // Lage der Wände, damit die Feldanzeige sie zeichnen kann. Die Wand ist
     // eine unendliche Ebene; in der Draufsicht ist sie eine Gerade durch
     // anchor mit Richtung (cos azimuth, sin azimuth). Die Neigung ändert daran

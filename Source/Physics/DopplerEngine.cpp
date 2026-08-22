@@ -940,6 +940,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         std::uint64_t deaths = 0, loud = 0, evicted = 0, caustic = 0, abrupt = 0;
         std::uint64_t lost = 0, fresh = 0, dropped = 0, freshNear = 0, ordered = 0;
         std::uint64_t tight = 0, adjacent = 0, flips = 0, collapsed = 0, handed = 0;
+        std::uint64_t nPairs = 0, nRising = 0, nFalling = 0;
         std::array<std::uint64_t, 8> hist {};
         double envSum = 0.0, envMax = 0.0, tauSum = 0.0, tauMax = 0.0;
 
@@ -965,6 +966,9 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
             handed    += d.handovers;
             tight     += d.tightPairs;
             adjacent  += d.adjacentPairs;
+            nPairs    += d.nWavePairBirths;
+            nRising   += d.nWaveRising;
+            nFalling  += d.nWaveFalling;
 
             for (int k = 0; k < 8; ++k)
                 hist[(size_t) k] += d.rootHist[k];
@@ -991,6 +995,9 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         s.tightPairs         = tight;
         s.adjacentPairs      = adjacent;
         s.droppedRoots       = dropped;
+        s.nWavePairBirths    = nPairs;
+        s.nWaveRising        = nRising;
+        s.nWaveFalling       = nFalling;
     }
 
     for (int w = 0; w < maxWalls && w < FieldSnapshot::maxWalls; ++w)

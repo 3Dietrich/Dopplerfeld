@@ -2450,6 +2450,154 @@ int main()
                          subsonicOff.peak, subsonicOn.peak);
             failed = true;
         }
+
+        // c) EIN Vorbeiflug, EIN Knall (@dpa 20260821: "am ende gibts rueckwaerts
+        //    (fast?) den gespiegelte Ueberschall? Das hoert man NIE!!").
+        //
+        //    In seiner Aufnahme (mach2.5 vorbeiflug.wav) liegt 3,5 s nach dem
+        //    Hauptknall ein zweiter, um ~14 dB leiserer Puls - spektral dieselbe
+        //    N-Form, kein Knacks und keine Reflexion. Er kommt vom
+        //    M_r-Durchgang-Ausloeser: der zeitverkehrte Zweig laeuft nach der
+        //    Kegelankunft von M_r > 1 zurueck durch 1, und diese ABSTEIGENDE
+        //    Durchquerung loest denselben Puls ein zweites Mal aus. Der Knall
+        //    ist aber die KegelANKUNFT und passiert genau einmal.
+        //
+        //    Die Szene ist sein Preset nachgebaut: 10-km-Feld, langer Anflug,
+        //    Mach ~3,2. Erst dort steht der zeitverkehrte Zweig lange genug
+        //    ueber M_r = 1, um beim Ruecklauf noch einmal laut zu werden.
+        //
+        //    Gemessen wird die Zahl der Pulse direkt: lokale Spitzen oberhalb
+        //    10 % des Gesamtspitzenwerts (der zweite Knall liegt in der
+        //    Aufnahme bei -14 dB, also ~20 %), mindestens 0,5 s auseinander -
+        //    die N-Welle selbst ist ~90 ms lang, ihr Doppelhuegel darf nicht
+        //    als zwei Pulse zaehlen.
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            // Das ECHTE Preset laden - dieselbe Datei, die @dpa im Plugin
+            // anklickt. Nur so kommen motionFrames und playLoop mit, und
+            // genau dort liegt der Unterschied zur Einzelparameter-Szene.
+            const juce::File presetFile (DOPPLERFELD_SOURCE_DIR
+                                         "/presets/test/mach2.5 vorbeiflug");
+            juce::MemoryBlock presetData;
+
+            if (! presetFile.loadFileAsData (presetData))
+            {
+                std::printf ("FEHLER: Preset %s nicht ladbar\n",
+                             presetFile.getFullPathName().toRawUTF8());
+                failed = true;
+            }
+            else
+            {
+            proc.setStateInformation (presetData.getData(), (int) presetData.getSize());
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            // Repro nach @dpa: Preset laden, dann NUR den Vorbeiflug-Knopf -
+            // die Bahn-Wiedergabe laeuft dabei nicht.
+            Stats settle;
+            render (proc, buffer, 0.3, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            // Ausgang diesmal aufheben, um die Pulse zaehlen zu koennen.
+            juce::MidiBuffer midi;
+            FieldSnapshot snapshot;
+
+            const int numBlocks = (int) std::ceil (12.0 * sampleRate / blockSize);
+            std::vector<float> left;
+            left.reserve ((size_t) numBlocks * blockSize);
+
+            std::uint64_t lastBirths = 0;
+
+            for (int block = 0; block < numBlocks; ++block)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                const float* d = buffer.getReadPointer (0);
+
+                for (int i = 0; i < blockSize; ++i)
+                    left.push_back (d[i]);
+
+                proc.fillFieldSnapshot (snapshot);
+
+                if (snapshot.nWavePairBirths != lastBirths)
+                {
+                    std::printf ("%-22s Paar-Geburt #%llu bei t=%5.2fs (Block %d)\n",
+                                 "", (unsigned long long) snapshot.nWavePairBirths,
+                                 (double) block * blockSize / sampleRate, block);
+                    lastBirths = snapshot.nWavePairBirths;
+                }
+
+                // Quellposition alle halbe Sekunde: wo steht die Quelle, wann
+                // springt sie? Der zweite Knall in der Aufnahme faellt mit
+                // dem Ende des Vorbeiflugs zusammen.
+                if (block % (int) (0.5 * sampleRate / blockSize) == 0)
+                    std::printf ("%-22s t=%5.2fs Quelle (%7.1f, %7.1f, %6.1f) m\n",
+                                 "", (double) block * blockSize / sampleRate,
+                                 snapshot.sourcePos.x, snapshot.sourcePos.y,
+                                 snapshot.sourcePos.z);
+            }
+
+            std::printf ("%-22s N-Welle ausgeloest: Paar-Geburt %llu, M_r auf %llu, M_r ab %llu\n",
+                         "",
+                         (unsigned long long) snapshot.nWavePairBirths,
+                         (unsigned long long) snapshot.nWaveRising,
+                         (unsigned long long) snapshot.nWaveFalling);
+
+            double peak = 0.0;
+
+            for (float v : left)
+                peak = std::max (peak, (double) std::abs (v));
+
+            // Diagnose: Hüllkurve in 50-ms-Fenstern, damit man sieht, was
+            // nach dem Hauptknall noch kommt.
+            std::printf ("%-22s Hüllkurve (50 ms, dB rel. Spitze):", "");
+            const int win = (int) (0.05 * sampleRate);
+
+            for (int i = 0; i + win <= (int) left.size(); i += win * 4)
+            {
+                double s = 0.0;
+
+                for (int j = i; j < i + win; ++j)
+                    s += (double) left[j] * (double) left[j];
+
+                const double db = 20.0 * std::log10 (std::sqrt (s / win) / (peak + 1e-12) + 1e-9);
+                std::printf (" %5.2fs:%5.1f", (double) i / sampleRate, db);
+            }
+
+            std::printf ("\n");
+
+            const double threshold = 0.1 * peak;
+            const int    minGap    = (int) (0.5 * sampleRate);
+            int          pulses    = 0;
+            int          lastPulse = -minGap;
+
+            for (int i = 0; i < (int) left.size(); ++i)
+            {
+                if (std::abs ((double) left[i]) > threshold && i - lastPulse >= minGap)
+                {
+                    ++pulses;
+                    lastPulse = i;
+                }
+            }
+
+            std::printf ("%-22s ein Flug, Pulse ueber 10%% der Spitze: %d (Spitze %.4f)\n",
+                         "", pulses, peak);
+
+            if (pulses != 1)
+            {
+                std::printf ("FEHLGESCHLAGEN: ein Vorbeiflug erzeugt %d Knalle statt "
+                             "einem - der rueckwaerts laufende Zweig loest beim "
+                             "absteigenden M_r-Durchgang ein zweites Mal aus\n",
+                             pulses);
+                failed = true;
+            }
+            }
+        }
     }
 
     //==================================================================

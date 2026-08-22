@@ -137,7 +137,8 @@ target_include_directories(load_check PRIVATE
     Source
     $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
 target_compile_definitions(load_check PRIVATE
-    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>)
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(load_check PRIVATE cxx_std_20)
 
 enable_testing()

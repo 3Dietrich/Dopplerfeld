@@ -41,6 +41,10 @@ void PropagationPath::reset()
     deathTauMax.store (0.0);
     abruptCount.store (0);
     handoverCount.store (0);
+
+    nWavePairBirthCount.store (0);
+    nWaveRisingCount.store (0);
+    nWaveFallingCount.store (0);
 }
 
 void PropagationPath::setBoomLimitDb (double dB)
@@ -715,6 +719,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // einmal, nicht zweimal). Welcher der beiden trägt ist
                 // beliebig: an der Falte liegen R und tau für beide praktisch
                 // gleich.
+                nWavePairBirthCount.store (nWavePairBirthCount.load() + 1);
                 triggerNWave (a, c);
             }
         }
@@ -838,7 +843,17 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const double machNow = alive ? tg.mach : b.mach;
 
             if (nWaveOn && b.machSeen && ((b.prevMach < 1.0) != (machNow < 1.0)))
+            {
+                // Richtung der Durchquerung getrennt zählen: aufsteigend ist
+                // die Kegelankunft an einem laufenden Zweig, absteigend der
+                // Ruecklauf des zeitverkehrten Zweigs durch 1.
+                if (machNow >= 1.0)
+                    nWaveRisingCount.store (nWaveRisingCount.load() + 1);
+                else
+                    nWaveFallingCount.store (nWaveFallingCount.load() + 1);
+
                 triggerNWave (b, c);
+            }
 
             b.prevMach = machNow;
             b.machSeen = true;

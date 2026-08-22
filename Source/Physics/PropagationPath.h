@@ -262,6 +262,16 @@ public:
         std::uint64_t tightPairs    = 0;
         std::uint64_t adjacentPairs = 0;
         std::uint64_t droppedRoots = 0;
+
+        // N-Wellen-Auslöser, getrennt nach Ursache: Paar-Geburt an der
+        // Kegelankunft, aufsteigender M_r-Durchgang (Unterschall ->
+        // Überschall) und ABSTEIGENDER Durchgang (Überschall -> Unterschall).
+        // Der absteigende ist der Verdacht aus @dpas Aufnahme 20260821: der
+        // zeitverkehrte Zweig läuft nach der Kegelankunft zurück durch 1 und
+        // löst denselben Puls ein zweites Mal aus.
+        std::uint64_t nWavePairBirths = 0;
+        std::uint64_t nWaveRising     = 0;
+        std::uint64_t nWaveFalling    = 0;
     };
 
     BranchDeathStats branchDeaths() const
@@ -290,6 +300,9 @@ public:
         s.tightPairs    = solver.tightPairCount();
         s.adjacentPairs = solver.adjacentPairCount();
         s.droppedRoots  = (std::uint64_t) std::max (0, solver.droppedRoots());
+        s.nWavePairBirths = nWavePairBirthCount.load();
+        s.nWaveRising     = nWaveRisingCount.load();
+        s.nWaveFalling    = nWaveFallingCount.load();
         return s;
     }
 
@@ -626,4 +639,9 @@ private:
     pathdetail::DisplayValue<double>        deathTauMax;
     pathdetail::DisplayValue<std::uint64_t> abruptCount;
     pathdetail::DisplayValue<std::uint64_t> handoverCount;
+
+    // Auslöserichtung der N-Welle, siehe BranchDeathStats weiter oben.
+    pathdetail::DisplayValue<std::uint64_t> nWavePairBirthCount;
+    pathdetail::DisplayValue<std::uint64_t> nWaveRisingCount;
+    pathdetail::DisplayValue<std::uint64_t> nWaveFallingCount;
 };
