@@ -28,6 +28,12 @@ jobs:
   build:
     runs-on: macos-14
     steps:
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
       - name: Dopplerfeld auschecken
         uses: actions/checkout@v4
 
@@ -37,6 +43,7 @@ jobs:
           repository: juce-framework/JUCE
           ref: ${{ env.JUCE_REF }}
           path: JUCE-src
+          fetch-depth: 0
         env:
           ACTIONS_GIT_SSH_KEY_FILE: /tmp/ssh_key
 
