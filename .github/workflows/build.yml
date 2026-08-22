@@ -37,12 +37,17 @@ jobs:
           repository: juce-framework/JUCE
           ref: ${{ env.JUCE_REF }}
           path: JUCE-src
+        env:
+          ACTIONS_GIT_SSH_KEY_FILE: /tmp/ssh_key
 
       - name: JUCE-Bauartefakte cachen
         uses: actions/cache@v4
         with:
           path: JUCE-src/**/build
           key: juce-${{ env.JUCE_REF }}-${{ runner.os }}
+          restore-keys: |
+            juce-${{ env.JUCE_REF }}
+            juce-
 
       - name: Konfigurieren
         run: cmake -B build -DJUCE_DIR=${{ github.workspace }}/JUCE-src -DCMAKE_BUILD_TYPE=Release
