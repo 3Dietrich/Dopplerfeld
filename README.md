@@ -15,10 +15,10 @@ Fertig gebaute (Mac) Standalone-App, VST3 und AU liegen unter
 [Releases](../../releases) – herunterladen, entpacken, benutzen. Kein Xcode,
 kein CMake nötig.
 
-**macOS meldet beim ersten Start "kann nicht geöffnet werden, da der
+Wenn **macOS meldet beim ersten Start "kann nicht geöffnet werden, da der
 Entwickler nicht verifiziert werden kann"** (die Builds sind unsigniert,
-kein zahlungspflichtiges Apple-Entwicklerkonto dahinter). Abhilfe: im Finder
-mit Rechtsklick → Öffnen starten (statt Doppelklick), oder im Terminal:
+kein zahlungspflichtiges Apple-Entwicklerkonto dahinter)  
+Abhilfe: im Finder mit Rechtsklick → Öffnen starten (statt Doppelklick), oder im Terminal:
 
 ```
 xattr -dr com.apple.quarantine /Pfad/zur/Dopplerfeld.app
