@@ -51,6 +51,12 @@ jobs:
             juce-
             juce-
 
+      - name: Log JUCE checkout directory
+        run: |
+          echo "Listing contents of JUCE-src directory:"
+          ls -R JUCE-src || echo "JUCE-src directory not found or empty."
+          echo "---"
+
       - name: Konfigurieren
         run: cmake -B build -DJUCE_DIR=${{ github.workspace }}/JUCE-src -DCMAKE_BUILD_TYPE=Release
 
