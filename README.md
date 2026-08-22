@@ -5,7 +5,7 @@ Dopplereffekt physikalisch nachstellt – inklusive Überschall und Mach-Kegel.
 Eine Schallquelle **M** und ein Hörer **L** (mit Kopf-Orientierung) auf einer
 Feldfläche, die eine reale Modellgröße von 1 bis 10.000 Metern darstellt. Der
 Ton entsteht aus echter Laufzeitberechnung (retarded time), nicht aus einer
-Doppler-Formel als Abkürzung.
+Doppler-Formel als Abkürzung.  
 
 ![Dopplerfeld: Feldanzeige mit Wellenfronten, Bewegungsaufzeichnung/-wiedergabe und Vorbeiflug-Generator](docs/screenshot.png)
 
