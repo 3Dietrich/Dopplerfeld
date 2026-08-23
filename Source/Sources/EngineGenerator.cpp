@@ -22,6 +22,9 @@ void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
 {
     currentSampleRate = sampleRate;
 
+    // Zeitkonstante der Wellenform-Ueberblendung, siehe sineBlendSeconds.
+    sineBlendCoeff = 1.0 - std::exp (-1.0 / std::max (1.0, sineBlendSeconds * sampleRate));
+
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) maxBlockSize, 1 };
 
     noiseFilter.prepare (spec);
@@ -56,6 +59,11 @@ void EngineGenerator::reset()
     // durchlaufen und sich dadurch korrelieren.
     noiseRandom.setSeed (0x5eed1234);
     jitterRandom.setSeed (0x5eed4321);
+}
+
+void EngineGenerator::setSineMode (bool shouldUseSine)
+{
+    sineTarget = shouldUseSine ? 1.0 : 0.0;
 }
 
 double EngineGenerator::polyBlep (double phase, double phaseInc)
@@ -146,6 +154,10 @@ void EngineGenerator::renderMono (float* out, int numSamples)
 
     for (int n = 0; n < numSamples; ++n)
     {
+        // Wellenform-Ueberblendung je Sample fortschreiben (siehe sineBlend im
+        // Header).
+        sineBlend += (sineTarget - sineBlend) * sineBlendCoeff;
+
         // Jitter-Quelle: eigenes Rauschen durch den Tiefpass, normiert und geklemmt.
         const double jitterNoiseSample = (double) jitterRandom.nextFloat() * 2.0 - 1.0;
         const double jitterFiltered = (double) jitterFilter.processSample (0, (float) jitterNoiseSample);
@@ -172,7 +184,11 @@ void EngineGenerator::renderMono (float* out, int numSamples)
             if (phaseInc > 0.0)
                 saw = 2.0 * h.phase - 1.0 - polyBlep (h.phase, phaseInc);
 
-            harmonicSum += saw * s.levelGain;
+            // Sinus aus derselben Phase - kein zweiter Oszillator, damit beim
+            // Umschalten nichts auseinanderlaeuft (siehe sineBlend im Header).
+            const double sine = std::sin (juce::MathConstants<double>::twoPi * h.phase);
+
+            harmonicSum += (saw + (sine - saw) * sineBlend) * s.levelGain;
 
             h.phase += phaseInc;
 

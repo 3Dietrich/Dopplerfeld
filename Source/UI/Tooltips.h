@@ -61,6 +61,7 @@ namespace Tooltips
         SrcJitterAmount,
         SrcJitterRate,
         SrcJitterOn,
+        EngineSine,
         ReverseGain,
         ShockDuck,
         ShockDuckTime,
@@ -431,6 +432,24 @@ namespace Tooltips
                           "there is silence - and nothing is computed any more, the CPU meter "
                           "drops to zero. Switching back on restarts the trajectory, since no "
                           "motion was recorded while it was silent.";
+                case Key::EngineSine:
+                    return lang == Language::De
+                        ? "Wellenform der vier Teiltoene. Aus = Saegezahn (obertonreich, der "
+                          "bisherige Motorklang), an = reiner Sinus. Gilt fuer alle vier "
+                          "gemeinsam, sie sind ein Klang und keine vier Einzelstimmen. Mit "
+                          "Sinus bleibt vom Motor nur das, was Verhaeltnis, Verstimmung und "
+                          "Pegel der vier Teiltoene selbst hergeben - gut, um genau diese "
+                          "Einstellungen zu hoeren, und fuer alles, was nach Turbine statt nach "
+                          "Kolbenmotor klingen soll. Umgeschaltet wird ueberblendet, die Phase "
+                          "laeuft dabei durch: kein Knacks, kein Tonhoehensprung."
+                        : "Waveform of the four partials. Off = sawtooth (harmonically rich, the "
+                          "engine sound so far), on = pure sine. Applies to all four together, "
+                          "they are one sound and not four separate voices. With sine, all that "
+                          "is left of the engine is what ratio, detune and level of the four "
+                          "partials give on their own - useful to hear exactly those settings, "
+                          "and for anything meant to sound like a turbine rather than a piston "
+                          "engine. Switching crossfades while the phase keeps running: no click, "
+                          "no jump in pitch.";
                 case Key::ReverseGain:
                     return lang == Language::De
                         ? "Pegel des RUECKWAERTS gehoerten Anteils in dB. Bei Ueberschall gibt es "

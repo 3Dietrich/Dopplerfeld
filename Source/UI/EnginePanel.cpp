@@ -32,6 +32,10 @@ void EnginePanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 
 EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
 {
+    engineSineButton.setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
+    addAndMakeVisible (engineSineButton);
+    engineSineAttachment = std::make_unique<ButtonAttachment> (apvts, Params::engineSine, engineSineButton);
+
     const std::array<const char*, 4> ratioIds  { Params::harmRatio1,  Params::harmRatio2,  Params::harmRatio3,  Params::harmRatio4 };
     const std::array<const char*, 4> detuneIds { Params::harmDetune1, Params::harmDetune2, Params::harmDetune3, Params::harmDetune4 };
     const std::array<const char*, 4> trackIds  { Params::harmTrack1,  Params::harmTrack2,  Params::harmTrack3,  Params::harmTrack4 };
@@ -66,6 +70,8 @@ void EnginePanel::refreshTooltips()
             k->label.setTooltip (tooltip);
         }
 
+    engineSineButton.setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
+
     for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob,
                       &jitterAmountKnob, &jitterRateKnob })
     {
@@ -97,6 +103,13 @@ void EnginePanel::resized()
         layoutKnob (h.level,  column.removeFromTop (knobH));
         harmonicsArea.removeFromLeft (4); // Spaltenabstand
     }
+
+    // Wellenform-Schalter in den Rest der Teilton-Matrix, oben rechts: der
+    // Platz rechts der vier Spalten ist ohnehin frei, und der Schalter gehoert
+    // sichtbar zu den vier Teiltoenen, die er umschaltet.
+    engineSineButton.setBounds (harmonicsArea.removeFromTop (18)
+                                             .removeFromLeft (juce::jmin (90, harmonicsArea.getWidth())));
+
     area.removeFromTop (6);
 
     // Rauschband darunter, eine Reihe (Plan 3.10: fc/gain je Lo/Hi + Q).

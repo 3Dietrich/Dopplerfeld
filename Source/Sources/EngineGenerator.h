@@ -34,6 +34,12 @@ public:
     void setNoiseParams (float fcLoHz, float fcHiHz, float gainLoDb, float gainHiDb, float q);
     void setJitter (float amountPercent, float rateHz);
     void setImbalance (float amount);
+
+    // Wellenform der vier Teiltoene (@dpa 20260823: "mach die 4 Osc
+    // umschaltbar auf Sines"). false = PolyBLEP-Saegezahn wie bisher, true =
+    // reiner Sinus. Gilt fuer alle vier gemeinsam: sie sind ein Klang, keine
+    // vier Einzelstimmen.
+    void setSineMode (bool shouldUseSine);
     // Oktavlage der Unwucht, siehe Params::imbalanceOctave.
     void setImbalanceOctave (float octaves);
 
@@ -55,6 +61,17 @@ private:
     static double polyBlep (double phase, double phaseInc);
 
     static constexpr int numHarmonics = 4;
+
+    // Ueberblendung zwischen Saegezahn und Sinus. Ein harter Wechsel waere ein
+    // Sprung im Signal: bei Phase 0,25 steht der Saegezahn auf -0,5 und der
+    // Sinus auf +1. Beide Formen laufen deshalb weiter und werden ineinander
+    // geblendet - die Phase selbst bleibt dabei unangetastet, es gibt also
+    // weder Tonhoehen- noch Phasensprung.
+    double sineBlend  = 0.0;   // 0 = Saegezahn, 1 = Sinus
+    double sineTarget = 0.0;
+    double sineBlendCoeff = 1.0;   // je Sample, aus sineBlendSeconds und der Rate
+
+    static constexpr double sineBlendSeconds = 0.02;
 
     // Bezugsdrehzahl der Track-Formel aus Plan 3.10 (f_i-Formel), keine
     // Automation, daher als Konstante statt Parameter.

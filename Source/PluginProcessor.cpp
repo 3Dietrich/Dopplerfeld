@@ -262,6 +262,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.boomLimitDb     = raw (Params::boomLimitDb);
     pp.nWaveGainDb     = raw (Params::nWaveGainDb);
+    pp.engineSine      = raw (Params::engineSine);
     pp.reverseGainDb   = raw (Params::reverseGainDb);
     pp.shockDuckAmount = raw (Params::shockDuckAmount);
     pp.shockDuckMs     = raw (Params::shockDuckMs);
@@ -691,6 +692,7 @@ void DopplerfeldProcessor::applyParameters()
 
     // --- Motor ---
     engineGenerator.setRpm (pp.rpm->load());
+    engineGenerator.setSineMode (pp.engineSine->load() > 0.5f);
 
     for (int i = 0; i < 4; ++i)
         engineGenerator.setHarmonic (i,

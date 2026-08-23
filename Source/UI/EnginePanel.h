@@ -25,6 +25,7 @@ public:
 
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
     // Regler + Beschriftung + Attachment gebuendelt: die Attachment-Lebens-
     // dauer haengt so automatisch an der des Sliders (JUCE-Konvention, siehe
@@ -41,6 +42,13 @@ private:
                      const juce::String& paramID, const juce::String& labelText,
                      Tooltips::Key tooltipKey);
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
+
+    // Wellenform der vier Teiltoene: aus = Saegezahn wie bisher, an = reiner
+    // Sinus (@dpa 20260823). Steht rechts neben der Teilton-Matrix, dort ist
+    // ohnehin Platz - eine eigene Zeile dafuer wuerde das Panel nur hoeher
+    // machen, ohne mehr zu zeigen.
+    juce::ToggleButton engineSineButton { "Sinus" };
+    std::unique_ptr<ButtonAttachment> engineSineAttachment;
 
     // Je Harmonische: Verhaeltnis, Verstimmung, Tracking, Pegel - siehe
     // Params.h "--- Motor ---" (harmRatioN/harmDetuneN/harmTrackN/harmLevelN).

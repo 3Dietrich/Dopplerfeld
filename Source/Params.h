@@ -224,6 +224,12 @@ namespace Params
     // vorwaerts laufenden weitgehend unter, im Modell steht er gleich laut
     // daneben (@dpa 20260821: "die Lautstaerke des Rueckwaertssounds muss
     // leiser"). 0 dB = unveraendert.
+    // Wellenform der vier Motor-Teiltoene (@dpa 20260823: "mach die 4 Osc
+    // umschaltbar auf Sines"). Aus = PolyBLEP-Saegezahn wie bisher, an =
+    // reiner Sinus. Gilt fuer alle vier gemeinsam - sie sind ein Klang, keine
+    // vier Einzelstimmen.
+    constexpr const char* engineSine = "engineSine";
+
     constexpr const char* reverseGainDb = "reverseGainDb";
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber den

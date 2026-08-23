@@ -406,6 +406,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (nWaveGainDb, "N-Wave Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
     }
 
+    // Sinus statt Saegezahn fuer die vier Motor-Teiltoene, Default aus =
+    // bisheriges Verhalten.
+    layout.add (boolParam (engineSine, "Engine Sine", false));
+
     // Rueckwaerts-Pegel und Stossfront-Absenkung. Alle vier Defaults sind das
     // bisherige Verhalten: 0 dB, keine Absenkung, 1 ms Ausklang - bestehende
     // Presets klingen unveraendert, und was leiser oder weicher werden soll,
