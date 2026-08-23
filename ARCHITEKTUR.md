@@ -407,6 +407,86 @@ Vorgeschichte am gewuenschten Punkt" explizit behandeln statt still auf 0 zu
 lesen. Empfehlung: hoher Denkaufwand (Opus), weil physikalisch-numerisch
 kritischer Code mit bestehender `solver_check`-Abdeckung, kein Schnellschuss.
 
+## Stand 2026-08-24 (Bewegungssprung hoerbar, Begrenzer am Meter, Motor-Sinus)
+
+### Der Knall-Start war nicht zu hoeren - warum, und was jetzt hilft
+
+@dpa: "der Vorbeiflug 'Knall-Start' muesste ja mindestens subsonic zu hoeren
+sein ... Bisher ist noch nicht zu hoeren!" Nachgemessen stimmte das: im
+`load_check` lieferten weicher und abrupter Start im Startfenster dieselbe
+Spitze, und im Restfenster lag der steilste Anstieg bei beiden bei 19,0 dB
+zur selben Zeit - das ist die Passage, kein Einsatz des Starts.
+
+Der Grund ist strukturell. Die N-Wellen-Schicht hat genau einen Ausloeser,
+M_r = 1, und bleibt unterschallig stumm. Was vom Knall-Start uebrig bleibt,
+ist ein Sprung im Amplitudenfaktor 1/(1-M_r) plus der zugehoerige
+Tonhoehensprung - und der wird ueber die Laenge eines Solver-Segments
+(64 Samples, 1,33 ms) interpoliert, wird also zur Rampe statt zur Kante.
+
+Zwei Wege dagegen, beide schaltbar, beide aus per Default:
+
+- **Sprungkante** (`jumpEdge`): Amplitude und Leseposition stehen im
+  betroffenen Segment sofort auf ihrem Zielwert.
+- **Sprungknall** (`jumpBoom`): eine Druckwelle darauf, ueber dieselbe
+  N-Wellen-Schicht, mit einer Amplitude, die mit der Sprunghoehe waechst.
+  Ein Geschwindigkeitssprung ist formal unendliche Beschleunigung, und die
+  strahlt physikalisch eine Druckwelle ab.
+
+**Wie der Sprung erkannt wird, und wie nicht.** Der erste Ansatz suchte einen
+Sprung von M_r innerhalb eines Segments. Das ist falsch, und die Messung zeigt
+warum: im normalen Ueberschallflug aendert sich M_r an der Kaustik um bis zu
+0,15 je Segment, beim Start aus dem Stand um 0,58 - die Bereiche ueberlappen,
+jede Schwelle darauf feuert bei jeder schnellen Bewegung. Stattdessen legt die
+Engine beim Umschreiben der Bahn eine **Marke** ab (Zeitpunkt in Quellzeit plus
+Sprunghoehe in m/s, `DopplerEngine::markSourceJump`), und jeder Hoerweg merkt
+die Kante, sobald seine eigene Emissionszeit darueber laeuft. Das ist exakt
+statt geraten und gilt je Zweig einzeln - ein zeitverkehrt gehoerter Zweig
+laeuft spaeter darueber als der vorwaerts laufende.
+
+**Was jeder Weg bringt** (`load_check`, Fall "Knall-Start", Vorbeiflug 200 m/s,
+Start 243 m entfernt): die Druckwelle hebt die Spitze im Ankunftsfenster von
+0,0179 auf 0,1697, also um gut 19 dB. Die Kante allein aendert am Ausgang so
+gut wie nichts - Spitze und groesster Samplesprung bleiben gleich. Der Grund
+steht in den Zahlen des Segments, in dem sie ankommt: die Amplitude springt
+dort von 0,00404 auf 0,00986, also auf einem sehr leisen Zweig. Im Test steht
+deshalb bewusst keine Pruefung auf einen Unterschied, den es nicht gibt.
+
+### Stossfront: auch zwischen den beiden Knallen still
+
+Die Absenkung des uebrigen Schalls waehrend einer N-Welle steht jetzt voll
+aufgedreht als Voreinstellung, und der Regler fuer die Rueckkehrzeit ist
+entfallen (fest 10 ms). @dpa: "es ist immer was zu hoeren zwischen den zwei
+knallen.. das soll weg" - gemeint ist die ganze Welle, auch die Strecke
+zwischen Bug- und Heckstoss, nicht nur die beiden Fronten.
+
+### Begrenzer sitzt am Pegelmesser, nicht an der CPU-Zeile
+
+@dpa: "Dann hat es bei der CPU Anzeige nichts zu suchen! Es gibt ja das Meter,
+das hat die roten clip anzeigen - das ist die Anzeige, da gehoert sie hin.
+ohne extra anzeige." Die Textmarke in der Loeserlast-Zeile ist weg; der
+Begrenzer meldet sich auf der vorhandenen Clip-Marke des Pegelmessers, mit
+deren 500-ms-Haltezeit und ohne zusaetzliches Anzeigeelement. Inhaltlich ist
+das auch der richtige Ort: er greift gerade, DAMIT nichts uebersteuert - sonst
+bliebe die Marke dunkel, waehrend der Ausgang an der Obergrenze klebt.
+
+### Motor: vier Teiltoene wahlweise als Sinus
+
+`engineSine` macht aus den vier PolyBLEP-Saegezaehnen reine Sinus, fuer alle
+vier gemeinsam. Der Sinus kommt aus DERSELBEN Phase - kein zweiter Oszillator,
+sonst liefen beim Umschalten zwei Phasen auseinander - und umgeschaltet wird
+ueber 20 ms geblendet: bei Phase 0,25 steht der Saegezahn auf -0,5 und der
+Sinus auf +1, ein harter Wechsel waere ein Sprung.
+
+### Reglergroesse
+
+@dpa wollte die Knoepfe auf zwei Drittel, und zwar (Berichtigung) **nur das
+Drehrad**: Beschriftung (18 px) und Wertefeld (80x18) bleiben, wie sie waren.
+Die Zellenhoehe schrumpft deshalb genau um das Drittel, das dem Rad gehoert
+(82 -> 67 px, im Bewegungs-Panel 100 -> 79), die Breite bleibt - sonst wuerde
+das Wertefeld beschnitten. JUCE zeichnet das Rad mit dem kleineren der beiden
+Masse, die Hoehe allein macht es also klein. Die Panelhoehen in
+`PluginEditor.h` ziehen um genau diese Differenz je Reglerreihe nach.
+
 ## Stand 2026-08-23 (Rotoren, Vorbeiflug-Schleife, Luft, Rueckwaerts-Anteil)
 
 ### Rotoren - zweite Betriebsart des Bewegungs-Wacklers
