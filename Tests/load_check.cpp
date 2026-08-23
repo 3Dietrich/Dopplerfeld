@@ -151,6 +151,16 @@ struct Stats
     double envHistory[envLookback] {};
     double worstDropDb = 0.0;
 
+    // Dieselbe Messung in die andere Richtung: der steilste ANSTIEG. Damit
+    // laesst sich pruefen, ob ein abrupt einsetzender Vorbeiflug ("Knall-
+    // Start") ueberhaupt eine Kante im Signal hinterlaesst - ein
+    // Geschwindigkeitssprung springt in Amplitude und Tonhoehe, wird aber
+    // innerhalb eines Solver-Segments interpoliert und koennte deshalb
+    // verschmieren (@dpa 20260823: "Bisher ist noch nicht zu hoeren!").
+    double worstRiseDb    = 0.0;
+    double worstRiseAtSec = 0.0;
+    double envSeconds     = 0.0;
+
     void noteLevelWindow (double rms)
     {
         double before = 0.0;
@@ -158,10 +168,18 @@ struct Stats
         for (double v : envHistory)
             before = std::max (before, v);
 
+        envSeconds += (double) envWindow / 48000.0;
+
         if (before > envAudible)
         {
             const double drop = 20.0 * std::log10 ((rms + 1.0e-12) / before);
             worstDropDb = std::min (worstDropDb, drop);
+
+            if (drop > worstRiseDb)
+            {
+                worstRiseDb    = drop;
+                worstRiseAtSec = envSeconds;
+            }
         }
 
         for (int i = envLookback - 1; i > 0; --i)
@@ -225,8 +243,9 @@ struct Stats
                      deathEnvMean, deathEnvMax, loudShare,
                      (unsigned long long) branchEvictions);
 
-        std::printf ("%-22s steilster Pegelsturz %6.1f dB in %d ms\n",
-                     "", worstDropDb, envLookback);
+        std::printf ("%-22s steilster Pegelsturz %6.1f dB in %d ms | steilster Anstieg %6.1f dB "
+                     "(bei t=%.2fs)\n",
+                     "", worstDropDb, envLookback, worstRiseDb, worstRiseAtSec);
         std::printf ("%-22s davon an der Kaustik %llu (%5.1f %%) | Ausklang tau Ø %6.3f ms max %6.3f ms\n",
                      "", (unsigned long long) causticDeaths,
                      branchDeaths > 0 ? 100.0 * (double) causticDeaths / (double) branchDeaths : 0.0,
@@ -1075,6 +1094,7 @@ int main()
             }
         }
         smoothRest.report  ("Vorbeiflug weich, Rest");
+        abruptRest.report  ("Vorbeiflug Knall, Rest");
 
         std::printf ("%-22s M_r im Startfenster: weich %.2f, Knall %.2f\n",
                      "", smoothOnset.maxMach, abruptOnset.maxMach);
