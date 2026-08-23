@@ -156,8 +156,6 @@ namespace Tooltips
 
         // Begrenzer-Marke in der Loeserlast-Zeile (nicht Kopfzeile/Scope-
         // Toolbar wie der Rest dieses Abschnitts, aber ebenfalls direkt in
-        // DopplerfeldEditor::paint() gezeichnet statt in einem eigenen Panel).
-        LimiterIndicator,
     };
 
     namespace detail
@@ -636,9 +634,21 @@ namespace Tooltips
                 case Key::LevelMeter:
                     return lang == Language::De
                         ? "Ausgangspegel (nach Gain+Limiter). Weisser Strich = -6dB. "
-                          "Rote LED oben = Clipping, haelt 500ms."
-                        : "Output level (after gain+limiter). White line = -6dB. Red LED "
-                          "at top = clipping, holds for 500ms.";
+                          "Rote LED oben = Clipping ODER der Begrenzer greift, haelt 500ms. "
+                          "Der Begrenzer ist ein Sicherheits-Softclip auf dem Summen-Ausgang "
+                          "hinter dem Output-Gain: er faengt Spitzen ab (Ueberschallknall/"
+                          "N-Welle, viele Klone), damit nichts uebersteuert - deshalb sitzt "
+                          "seine Meldung auf derselben LED. Leuchtet sie dauernd, klingt ein "
+                          "Schwarm nach einer einzigen Stimme, weil alles auf dieselbe "
+                          "Obergrenze zusammengefahren wird. Schaltbar ueber 'Limiter'."
+                        : "Output level (after gain+limiter). White line = -6dB. Red LED at "
+                          "top = clipping OR the limiter kicking in, holds for 500ms. The "
+                          "limiter is a safety soft clip on the summed output after the output "
+                          "gain: it catches peaks (sonic boom/N-wave, many clones) so nothing "
+                          "overshoots - which is why its indication shares that same LED. If "
+                          "it stays lit, a swarm sounds like a single voice, because "
+                          "everything gets squeezed onto the same ceiling. Toggled via "
+                          "'Limiter'.";
 
                 // --- WallPanel ---
                 case Key::WallOn:
@@ -1117,19 +1127,6 @@ namespace Tooltips
                     return lang == Language::De
                         ? "Sprache der Hilfehinweise umschalten (Deutsch/Englisch)."
                         : "Toggle the language of the help hints (German/English).";
-                case Key::LimiterIndicator:
-                    return lang == Language::De
-                        ? "Sicherheits-Begrenzer (Softclip) auf dem Summen-Ausgang, hinter "
-                          "Output-Gain - faengt Spitzen ab (Ueberschallknall/N-Welle, viele "
-                          "Klone), damit nichts uebersteuert. Leuchtet er dauernd, klingt ein "
-                          "Schwarm nach einer einzigen Stimme, weil alles auf dieselbe "
-                          "Obergrenze zusammengefahren wird. Schaltbar ueber 'Limiter' "
-                          "(Parameter limiterOn)."
-                        : "Safety limiter (soft clip) on the summed output, after output "
-                          "gain - catches peaks (sonic boom/N-wave, many clones) so nothing "
-                          "overshoots. If it stays lit, a swarm sounds like a single voice, "
-                          "because everything gets squeezed onto the same ceiling. Toggled "
-                          "via 'Limiter' (parameter limiterOn).";
             }
 
             return "";

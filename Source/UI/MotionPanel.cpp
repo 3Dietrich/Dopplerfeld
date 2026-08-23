@@ -8,12 +8,13 @@ void MotionPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apv
     const auto tooltip = Tooltips::text (tooltipKey);
 
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
+    knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 54, 12);
     knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
     knob.label.setText (labelText, juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
+    knob.label.setFont (juce::Font (juce::FontOptions (11.0f)));
     knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
 
@@ -86,7 +87,7 @@ void MotionPanel::setSpeedUnit (FieldComponent::SpeedUnit unit, double speedOfSo
 
 void MotionPanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 {
-    knob.label.setBounds (cell.removeFromTop (18));
+    knob.label.setBounds (cell.removeFromTop (12));
     knob.slider.setBounds (cell);
 }
 
@@ -376,8 +377,12 @@ void MotionPanel::resized()
     // nur eine der beiden Gruppen sichtbar, s. updateTabVisibility()) schafft
     // dafuer erst den Platz, ohne dass die Panel-Gesamthoehe waechst (s.
     // PluginEditor::motionContentHeight-Rechnung im Aufgabenbericht).
-    constexpr int knobW = 100;
-    constexpr int knobH = 100;
+    // Regler auf zwei Drittel der frueheren Groesse (@dpa 20260823: "mach die
+    // knobs 2/3 so gross wie jetzt"). Beschriftungszeile und Wertefeld
+    // schrumpfen mit, sonst bliebe fuer den Drehknopf selbst fast nichts
+    // uebrig: von 82 px Zellenhoehe gingen sonst 36 an Text.
+    constexpr int knobW = 67;
+    constexpr int knobH = 67;
     auto area = getLocalBounds().reduced (8);
 
     // Reiter oben: Vorbeiflug ODER Record/Play, nie beide gleichzeitig

@@ -8,12 +8,13 @@ void FieldPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvt
     const auto tooltip = Tooltips::text (tooltipKey);
 
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
+    knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 54, 12);
     knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
     knob.label.setText (labelText, juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
+    knob.label.setFont (juce::Font (juce::FontOptions (11.0f)));
     knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
 
@@ -22,7 +23,7 @@ void FieldPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvt
 
 void FieldPanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 {
-    knob.label.setBounds (cell.removeFromTop (18));
+    knob.label.setBounds (cell.removeFromTop (12));
     knob.slider.setBounds (cell);
 }
 
@@ -94,8 +95,12 @@ void FieldPanel::refreshTooltips()
 
 void FieldPanel::resized()
 {
-    constexpr int knobW = 84;
-    constexpr int knobH = 82;
+    // Regler auf zwei Drittel der frueheren Groesse (@dpa 20260823: "mach die
+    // knobs 2/3 so gross wie jetzt"). Beschriftungszeile und Wertefeld
+    // schrumpfen mit, sonst bliebe fuer den Drehknopf selbst fast nichts
+    // uebrig: von 82 px Zellenhoehe gingen sonst 36 an Text.
+    constexpr int knobW = 56;
+    constexpr int knobH = 55;
     auto area = getLocalBounds().reduced (8);
 
     auto toggleRow = area.removeFromTop (26);

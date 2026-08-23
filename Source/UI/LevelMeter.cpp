@@ -1,6 +1,6 @@
 #include "LevelMeter.h"
 
-void LevelMeter::updateChannel (Channel& c, float peakLinear, double dtMs)
+void LevelMeter::updateChannel (Channel& c, float peakLinear, double dtMs, bool limiterActive)
 {
     const double peakDb = juce::jlimit ((double) minDb, 40.0, linearToDb (peakLinear));
 
@@ -12,16 +12,17 @@ void LevelMeter::updateChannel (Channel& c, float peakLinear, double dtMs)
     else
         c.displayDb = (float) std::max ((double) minDb, (double) c.displayDb - releaseDbPerMs * dtMs);
 
-    if (peakDb >= (double) clipThresholdDb)
+    if (limiterActive || peakDb >= (double) clipThresholdDb)
         c.clipHoldMs = clipHoldDurationMs;
     else if (c.clipHoldMs > 0.0)
         c.clipHoldMs = std::max (0.0, c.clipHoldMs - dtMs);
 }
 
-void LevelMeter::pushLevels (float peakLLinear, float peakRLinear, double callIntervalMs)
+void LevelMeter::pushLevels (float peakLLinear, float peakRLinear, double callIntervalMs,
+                             bool limiterActive)
 {
-    updateChannel (left,  peakLLinear, callIntervalMs);
-    updateChannel (right, peakRLinear, callIntervalMs);
+    updateChannel (left,  peakLLinear, callIntervalMs, limiterActive);
+    updateChannel (right, peakRLinear, callIntervalMs, limiterActive);
     repaint();
 }
 

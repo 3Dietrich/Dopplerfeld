@@ -21,9 +21,10 @@ public:
 
     // Weiterleitung an das Levelmeter (@dpa-Feedback) - der Aufrufer
     // (Editor-Timer) kennt den Processor, dieses Panel nicht.
-    void pushLevels (float peakLLinear, float peakRLinear, double callIntervalMs)
+    void pushLevels (float peakLLinear, float peakRLinear, double callIntervalMs,
+                     bool limiterActive = false)
     {
-        levelMeter.pushLevels (peakLLinear, peakRLinear, callIntervalMs);
+        levelMeter.pushLevels (peakLLinear, peakRLinear, callIntervalMs, limiterActive);
     }
 
     // Setzt die Tooltips aller Regler/Schalter dieses Panels neu, in der

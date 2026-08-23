@@ -4,7 +4,13 @@
 #include <cmath>
 
 // Kompakter Stereo-Pegelmesser (@dpa-Feedback): -6dB-Marke, Clip-Anzeige mit
-// 500ms-Haltezeit. Hat keinen eigenen Timer - der Aufrufer (Editor-Timer,
+// 500ms-Haltezeit. Dieselbe Clip-Marke meldet auch den Master-Begrenzer
+// (@dpa: "es gibt ja das Meter, das hat die roten clip anzeigen - das ist die
+// Anzeige, da gehoert sie hin. ohne extra anzeige"): er greift gerade DAMIT
+// der Ausgang nicht uebersteuert, ohne seine Meldung bliebe die Marke also
+// dunkel, obwohl der Ausgang an seiner Obergrenze haengt.
+//
+// Hat keinen eigenen Timer - der Aufrufer (Editor-Timer,
 // ~30Hz) pusht periodisch den linearen Spitzenwert seit dem letzten Aufruf
 // (siehe DopplerfeldProcessor::consumeOutputPeakL/R) und das seither
 // vergangene Intervall in ms, daraus macht die Komponente Anzeige-Decay und
@@ -13,7 +19,10 @@ class LevelMeter : public juce::Component,
                     public juce::SettableTooltipClient
 {
 public:
-    void pushLevels (float peakLLinear, float peakRLinear, double callIntervalMs);
+    // limiterActive: der Master-Begrenzer hat im letzten Fenster gegriffen.
+    // Er wirkt auf die Summe, also leuchten beide Kanaele.
+    void pushLevels (float peakLLinear, float peakRLinear, double callIntervalMs,
+                     bool limiterActive = false);
 
     void paint (juce::Graphics& g) override;
 
@@ -36,7 +45,7 @@ private:
         return v > 1.0e-5f ? 20.0 * std::log10 ((double) v) : (double) minDb - 20.0;
     }
 
-    void updateChannel (Channel& c, float peakLinear, double dtMs);
+    void updateChannel (Channel& c, float peakLinear, double dtMs, bool limiterActive);
     void drawChannel (juce::Graphics& g, juce::Rectangle<float> area, const Channel& c) const;
 
     Channel left, right;

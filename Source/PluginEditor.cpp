@@ -305,11 +305,6 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     scopeSaveStatusLabel.setFont (juce::Font (juce::FontOptions (13.0f)));
     addAndMakeVisible (scopeSaveStatusLabel);
 
-    // Begrenzer-Marke in der Loeserlast-Zeile: kein sichtbares Component,
-    // nur der Hover-Bereich fuer den Tooltip - der Text selbst wird direkt
-    // in paint() gezeichnet (siehe dort und LimiterHintArea im Header).
-    limiterHintArea.setTooltip (Tooltips::text (Tooltips::Key::LimiterIndicator));
-    addAndMakeVisible (limiterHintArea);
 
     updateScopeVisibility();
 
@@ -347,7 +342,6 @@ void DopplerfeldEditor::refreshAllTooltips()
                                    + juce::String ((int) DopplerfeldProcessor::scopeMaxDisplaySeconds)
                                    + Tooltips::text (Tooltips::Key::ScopeZoomOutSuffix));
     scopeSaveButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeSave));
-    limiterHintArea.setTooltip (Tooltips::text (Tooltips::Key::LimiterIndicator));
     scope.refreshTooltips();
 
     engineControlPanel.refreshTooltips();
@@ -419,25 +413,23 @@ void DopplerfeldEditor::refreshDisplay()
         dopplerfeldProcessor.restartEngine();
 
     // Die CPU-Zeile braucht kein setLoad() mehr auf ein Panel - sie liest
-    // Klonzahl/Begrenzer direkt im paint() der Editor-Zeile, genau wie die
-    // CPU-Last schon vorher direkt dort gelesen wurde (s. dort).
-
-    // Begrenzer-Marke "nachleuchten" lassen (@dpa-Feedback: sie blitzte sonst
-    // nur einen einzigen Timer-Tick lang auf, weil limiterHitCount() im
-    // Processor in JEDEM Block neu gezaehlt wird - im naechsten 33ms-Tick
-    // steht dort oft schon wieder 0). Zeitstempel merken, solange der
-    // Begrenzer gerade greift, die Marke bleibt bis zu diesem Zeitstempel
-    // aktiv gefaerbt - derselbe Trick wie scopeSaveStatusUntilMs oben, 900ms
-    // Haltezeit, damit man sie ueberhaupt wahrnimmt.
-    if (dopplerfeldProcessor.limiterHits() > 0)
-        limiterGlowUntilMs = juce::Time::getMillisecondCounter() + 900;
+    // die Klonzahl direkt im paint() der Editor-Zeile, genau wie die CPU-Last
+    // schon vorher direkt dort gelesen wurde (s. dort).
 
     // 30Hz-Timer = ~33ms zwischen zwei Aufrufen (siehe startTimerHz weiter
     // unten) - fest verdrahtet statt gemessen, das Levelmeter braucht nur
     // eine grobe Zeitbasis für Decay/Clip-Halt, keine exakte.
+    // Der Begrenzer wird an derselben Stelle angezeigt wie das Uebersteuern,
+    // naemlich an der Clip-Marke des Pegelmessers (@dpa: "es gibt ja das
+    // Meter, das hat die roten clip anzeigen - das ist die Anzeige, da gehoert
+    // sie hin. ohne extra anzeige"). Er greift gerade DAMIT es nicht clippt -
+    // ohne diese Meldung bliebe die Marke dunkel, obwohl der Ausgang an seiner
+    // Obergrenze haengt. limiterHits() zaehlt je Block neu, die Haltezeit
+    // steckt in der Clip-Marke selbst.
     fieldPanel.pushLevels (dopplerfeldProcessor.consumeOutputPeakL(),
                            dopplerfeldProcessor.consumeOutputPeakR(),
-                           1000.0 / 30.0);
+                           1000.0 / 30.0,
+                           dopplerfeldProcessor.limiterHits() > 0);
 
     // Scope (@dpa-Feedback): nur ziehen, wenn eingeblendet - bei Freeze
     // ignoriert ScopeComponent::feed() das Fenster ohnehin, aber das Ziehen
@@ -658,26 +650,9 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
 
         g.drawText (juce::String::formatted ("CPU %4.0f %%   Klone: %d",
                                              (double) cpu, dopplerfeldProcessor.realCloneCount()),
-                    margin, meterTop + cpuMeterBarHeight + 2, fieldWidth - limiterMarkerWidth, cpuMeterLabelHeight,
+                    margin, meterTop + cpuMeterBarHeight + 2, fieldWidth, cpuMeterLabelHeight,
                     juce::Justification::centredLeft);
 
-        // Begrenzer-Marke: eigener fester Textplatz rechts in der Zeile, IMMER
-        // sichtbar statt nur bei Treffer (sonst sieht man dem Ausgang gar
-        // nicht an, dass es diesen Begrenzer ueberhaupt gibt) - dunkel/gedimmt
-        // im Ruhezustand, hervorgehoben solange limiterGlowUntilMs (siehe
-        // refreshDisplay()) noch nicht abgelaufen ist. Laeuft der Begrenzer,
-        // klingt ein Schwarm nach einer einzigen Stimme, weil alles auf
-        // dieselbe Obergrenze zusammengefahren wird - ohne diese Anzeige sieht
-        // man dem Ausgang das nicht an (Tooltip erklaert das, siehe
-        // limiterHintArea/Tooltips::Key::LimiterIndicator).
-        const bool limiterGlowing = juce::Time::getMillisecondCounter() < limiterGlowUntilMs;
-
-        g.setColour (limiterGlowing ? juce::Colours::orangered.withAlpha (0.85f)
-                                    : juce::Colours::white.withAlpha (0.30f));
-        g.drawText ("Begrenzer",
-                    margin + fieldWidth - limiterMarkerWidth, meterTop + cpuMeterBarHeight + 2,
-                    limiterMarkerWidth, cpuMeterLabelHeight,
-                    juce::Justification::centredRight);
     }
 
     // Statuszeile selbst (Tempo/L-M/Reflexionen/...) faerbt sich seit dem
@@ -759,15 +734,6 @@ void DopplerfeldEditor::resized()
     panelViewport.setBounds (area);
 
     layoutPanels();
-
-    // Hover-Bereich fuer den Begrenzer-Tooltip: dieselbe Geometrie wie die
-    // Marke in paint() (dort meterTop identisch berechnet), damit der Tooltip
-    // genau ueber dem gezeichneten Text sitzt.
-    {
-        const int meterTop = getHeight() - statusHeight - cpuMeterBlockHeight;
-        limiterHintArea.setBounds (margin + fieldWidth - limiterMarkerWidth, meterTop + cpuMeterBarHeight + 2,
-                                   limiterMarkerWidth, cpuMeterLabelHeight);
-    }
 
     // Volle Editorflaeche, ungeachtet der obigen Aufteilung - das Overlay
     // legt sich darueber, nicht daneben.

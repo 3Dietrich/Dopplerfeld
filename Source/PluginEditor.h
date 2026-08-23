@@ -176,27 +176,6 @@ private:
     juce::Label      scopeSaveStatusLabel;
     juce::uint32     scopeSaveStatusUntilMs = 0;
 
-    // Begrenzer-Marke in der Loeserlast-Zeile (@dpa-Feedback: sie blitzte nur
-    // kurz auf, weil DopplerfeldProcessor::limiterHitCount in JEDEM Block neu
-    // gezaehlt wird - im naechsten 33ms-Timer-Tick ist der Wert oft schon
-    // wieder 0). limiterGlowUntilMs merkt sich denselben Zeitstempel-Trick wie
-    // scopeSaveStatusUntilMs oben: refreshDisplay() setzt ihn auf "jetzt plus
-    // Haltezeit", sobald limiterHits() > 0 war, paint() zeigt die Marke aktiv
-    // gefaerbt, solange die aktuelle Zeit davor liegt.
-    juce::uint32 limiterGlowUntilMs = 0;
-
-    // Unsichtbarer Hover-Bereich fuer den Begrenzer-Tooltip: die Marke selbst
-    // wird direkt in paint() gezeichnet (kein eigenes Panel), JUCE fragt beim
-    // Hover aber ein Component unter der Maus nach seinem TooltipClient, keine
-    // gezeichnete Flaeche - deshalb dieses winzige, selbst nichts zeichnende
-    // Component nur fuer den Tooltip, positioniert wie die Marke in resized().
-    struct LimiterHintArea : public juce::Component,
-                              public juce::SettableTooltipClient
-    {
-    };
-
-    LimiterHintArea limiterHintArea;
-
     // Zwischenspeicher fuer das Rohfenster aus dem Processor - Mitgliedsvariable
     // statt Stack-Array im Timer. Groesse folgt der aktuellen Zoomstufe
     // (siehe ScopeComponent::captureWindowSampleCount()), deshalb ein Vektor
@@ -274,16 +253,16 @@ private:
     // Inhaltshöhen der vier Panels: was ihr resized() an Reihen und Reglern
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines
     // CollapsiblePanel setzen kann.
-    static constexpr int engineControlContentHeight = 130;   // Reihe (RPM, Imbalance) + Gate-Schalter
-    static constexpr int engineContentHeight = 520;         // 608 minus die ausgelagerte RPM-Reihe
-    static constexpr int sampleContentHeight = 220;
-    static constexpr int motionContentHeight = 372;   // Reiter Vorbeiflug/Record-Play + gemeinsame Jitter/Speed-Zeile, s. MotionPanel::resized()
-    static constexpr int fieldContentHeight  = 412;   // 306 + vierte Reihe (Rueckwaerts/Front-Duck/Luftholen/Schatten, s. FieldPanel::resized())
-    static constexpr int wallContentHeight   = 360;
+    static constexpr int engineControlContentHeight = 103;   // Reihe (RPM, Imbalance) + Gate-Schalter
+    static constexpr int engineContentHeight = 358;         // 6 Reglerreihen (4x Harmonische + Noise + Jitter) zu je 55 px plus Abstaende
+    static constexpr int sampleContentHeight = 166;   // Dateizeile + zwei Reglerreihen
+    static constexpr int motionContentHeight = 306;   // Reiter Vorbeiflug/Record-Play + gemeinsame Jitter/Speed-Zeile, s. MotionPanel::resized()
+    static constexpr int fieldContentHeight  = 304;   // vier Reglerreihen, die vierte ist Rueckwaerts/Front-Duck/Luftholen/Schatten (s. FieldPanel::resized())
+    static constexpr int wallContentHeight   = 279;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // 226 minus die 40px, die frueher fuer den CPU-Balken reserviert waren -
     // der sitzt jetzt in der eigenen Zeile am unteren Fensterrand statt hier
     // (siehe cpuMeterBlockHeight), das Panel braucht darum weniger Hoehe.
-    static constexpr int swarmContentHeight  = 186;
+    static constexpr int swarmContentHeight  = 159;
 
     // Das Feld bleibt exakt 700x400 (Plan 3.13). Die Größe ist nicht nur
     // Optik: FieldComponent rechnet die Feldhöhe in Metern aus seinem
@@ -308,13 +287,6 @@ private:
     static constexpr int cpuMeterLabelHeight = 16;
     // Balken + kleiner Abstand + Beschriftungszeile + Abstand zur Statuszeile darunter.
     static constexpr int cpuMeterBlockHeight = cpuMeterBarHeight + 2 + cpuMeterLabelHeight + 6;
-
-    // Begrenzer-Marke rechts am Ende der Loeserlast-Zeile, eigener fester
-    // Textplatz statt an "CPU .. %   Klone: N" angehaengt (@dpa-Regel
-    // "Zahlenanzeige pixelfest": Live-Anzeigen duerfen beim Umschalten nur
-    // Farbe/Zustand wechseln, nie Position/Breite - der Text "Begrenzer"
-    // bleibt darum immer gleich lang, nur die Farbe zeigt aktiv/inaktiv).
-    static constexpr int limiterMarkerWidth = 90;
 
     static constexpr int statusHeight = 44;
     static constexpr int panelColumnWidth = 470;   // breitestes Panel (Sample) plus Scrollbalken
