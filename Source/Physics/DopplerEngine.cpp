@@ -215,8 +215,10 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setDistanceCurve (distanceCurve);
     setNWave (nWaveOn, nWaveSizeM, nWaveGain);
     setReverseGain (reverseGain);
-    setShockDuck (shockDuckAmount, shockDuckRelease);
+    setShockDuck (shockDuckAmount);
     setShadowTailSeconds (shadowTailSeconds);
+    setJumpEdge (jumpEdgeOn);
+    setJumpBoom (jumpBoom);
 
     reset();
 }
@@ -319,8 +321,10 @@ void DopplerEngine::configurePendingSet (Vec3 newPos, Vec3 preVelocity)
         p.setDistanceCurve (distanceCurve);
         p.setNWave (nWaveOn, nWaveSizeM, nWaveGain);
         p.setReverseGain (reverseGain);
-        p.setShockDuck (shockDuckAmount, shockDuckRelease);
+        p.setShockDuck (shockDuckAmount);
         p.setShadowTailSeconds (shadowTailSeconds);
+        p.setJumpEdge (jumpEdgeOn);
+        p.setJumpBoom (jumpBoom);
     }
 }
 
@@ -342,6 +346,13 @@ void DopplerEngine::startGeometrySwitch (Vec3 newPos, Vec3 preVelocity, int fade
 
     configurePendingSet (newPos, preVelocity);
     geometry.beginSwitch (fadeSamples);
+}
+
+void DopplerEngine::markSourceJump (double speedStepMps)
+{
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setJumpMarker (currentTime(), speedStepMps);
 }
 
 void DopplerEngine::jumpSourceTo (Vec3 posMetres)
@@ -503,14 +514,31 @@ void DopplerEngine::setReverseGain (double gainLinear)
             p.setReverseGain (gainLinear);
 }
 
-void DopplerEngine::setShockDuck (double amount01, double releaseSeconds)
+void DopplerEngine::setShockDuck (double amount01)
 {
-    shockDuckAmount  = amount01;
-    shockDuckRelease = releaseSeconds;
+    shockDuckAmount = amount01;
 
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
-            p.setShockDuck (amount01, releaseSeconds);
+            p.setShockDuck (amount01);
+}
+
+void DopplerEngine::setJumpEdge (bool shouldPassEdge)
+{
+    jumpEdgeOn = shouldPassEdge;
+
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setJumpEdge (shouldPassEdge);
+}
+
+void DopplerEngine::setJumpBoom (double amount01)
+{
+    jumpBoom = amount01;
+
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setJumpBoom (amount01);
 }
 
 void DopplerEngine::setShadowTailSeconds (double seconds)

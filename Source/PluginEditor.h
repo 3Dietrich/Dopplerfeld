@@ -253,16 +253,16 @@ private:
     // Inhaltshöhen der vier Panels: was ihr resized() an Reihen und Reglern
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines
     // CollapsiblePanel setzen kann.
-    static constexpr int engineControlContentHeight = 103;   // Reihe (RPM, Imbalance) + Gate-Schalter
-    static constexpr int engineContentHeight = 358;         // 6 Reglerreihen (4x Harmonische + Noise + Jitter) zu je 55 px plus Abstaende
-    static constexpr int sampleContentHeight = 166;   // Dateizeile + zwei Reglerreihen
-    static constexpr int motionContentHeight = 306;   // Reiter Vorbeiflug/Record-Play + gemeinsame Jitter/Speed-Zeile, s. MotionPanel::resized()
-    static constexpr int fieldContentHeight  = 304;   // vier Reglerreihen, die vierte ist Rueckwaerts/Front-Duck/Luftholen/Schatten (s. FieldPanel::resized())
-    static constexpr int wallContentHeight   = 279;   // zwei Waende plus die gemeinsame Reflexionsreihe
+    static constexpr int engineControlContentHeight = 115;   // Reihe (RPM, Imbalance) + Gate-Schalter
+    static constexpr int engineContentHeight = 430;         // 6 Reglerreihen (4x Harmonische + Noise + Jitter) zu je 67 px plus Abstaende
+    static constexpr int sampleContentHeight = 190;   // Dateizeile + zwei Reglerreihen
+    static constexpr int motionContentHeight = 330;   // Reiter Vorbeiflug/Record-Play + gemeinsame Jitter/Speed-Zeile, s. MotionPanel::resized()
+    static constexpr int fieldContentHeight  = 352;   // vier Reglerreihen, die vierte ist Rueckwaerts/Front-Duck/Schatten/Sprungknall (s. FieldPanel::resized())
+    static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // 226 minus die 40px, die frueher fuer den CPU-Balken reserviert waren -
     // der sitzt jetzt in der eigenen Zeile am unteren Fensterrand statt hier
     // (siehe cpuMeterBlockHeight), das Panel braucht darum weniger Hoehe.
-    static constexpr int swarmContentHeight  = 159;
+    static constexpr int swarmContentHeight  = 171;
 
     // Das Feld bleibt exakt 700x400 (Plan 3.13). Die Größe ist nicht nur
     // Optik: FieldComponent rechnet die Feldhöhe in Metern aus seinem

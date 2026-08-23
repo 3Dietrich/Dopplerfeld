@@ -233,11 +233,19 @@ namespace Params
     constexpr const char* reverseGainDb = "reverseGainDb";
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber den
-    // Hoerweg laeuft, und die Zeit, in der er danach zurueckkommt (@dpa: "keine
-    // Noise vom Motor" waehrend der N-Welle, "hoechstens ein
-    // luftholen-geraeusch").
+    // Hoerweg laeuft (@dpa: "keine Noise vom Motor" waehrend der N-Welle).
+    // Gemeint ist die ganze Welle, auch die Strecke zwischen Bug- und
+    // Heckstoss: "es ist immer was zu hoeren zwischen den zwei knallen.. das
+    // soll weg". Deshalb voll aufgedreht als Voreinstellung.
     constexpr const char* shockDuckAmount = "shockDuckAmount";
-    constexpr const char* shockDuckMs     = "shockDuckMs";
+
+    // Bewegungssprung hoerbar machen (@dpa 20260823: "der Vorbeiflug
+    // 'Knall-Start' muesste ja mindestens subsonic zu hoeren sein ... Bisher
+    // ist noch nicht zu hoeren!"). Zwei Wege nebeneinander: jumpEdge laesst
+    // die Kante durch, statt sie ueber ein Solver-Segment zu interpolieren
+    // (ein Ruck), jumpBoom setzt eine Druckwelle darauf (ein Knall).
+    constexpr const char* jumpEdge = "jumpEdge";
+    constexpr const char* jumpBoom = "jumpBoom";
 
     // Mindestdauer des Ausklangs, wenn ein Hoerweg an der Kaustik
     // verschwindet, in Millisekunden. Rechnerisch folgt sie aus der Physik,

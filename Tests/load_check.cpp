@@ -188,9 +188,23 @@ struct Stats
         envHistory[0] = rms;
     }
 
+    // Groesster Sprung von einem Sample zum naechsten. Feiner als das
+    // 1-ms-Fenster darueber und genau das Mass fuer eine KANTE: ob ein
+    // Bewegungssprung stehen bleibt oder ueber ein Solver-Segment (1,33 ms)
+    // zur Rampe verschmiert wird, entscheidet sich unterhalb dieses Fensters.
+    double maxSampleStep = 0.0;
+    double prevSample    = 0.0;
+    bool   hadPrevSample = false;
+
     void noteSample (double x, double dt)
     {
         constexpr double audible = 1.0e-4;
+
+        if (hadPrevSample)
+            maxSampleStep = std::max (maxSampleStep, std::abs (x - prevSample));
+
+        prevSample    = x;
+        hadPrevSample = true;
 
         envWinSum += x * x;
 
@@ -244,8 +258,8 @@ struct Stats
                      (unsigned long long) branchEvictions);
 
         std::printf ("%-22s steilster Pegelsturz %6.1f dB in %d ms | steilster Anstieg %6.1f dB "
-                     "(bei t=%.2fs)\n",
-                     "", worstDropDb, envLookback, worstRiseDb, worstRiseAtSec);
+                     "(bei t=%.2fs) | groesster Samplesprung %.5f\n",
+                     "", worstDropDb, envLookback, worstRiseDb, worstRiseAtSec, maxSampleStep);
         std::printf ("%-22s davon an der Kaustik %llu (%5.1f %%) | Ausklang tau Ø %6.3f ms max %6.3f ms\n",
                      "", (unsigned long long) causticDeaths,
                      branchDeaths > 0 ? 100.0 * (double) causticDeaths / (double) branchDeaths : 0.0,
@@ -1144,6 +1158,110 @@ int main()
                          "die Vorgeschichte ist nicht konstant\n", abruptEarly.maxMach);
             failed = true;
         }
+    }
+
+    //==================================================================
+    // 1g1b. Knall-Start: kommt der Bewegungssprung ueberhaupt an?
+    //
+    //      @dpa 20260823: "der Vorbeiflug 'Knall-Start' muesste ja mindestens
+    //      subsonic zu hoeren sein ... Bisher ist noch nicht zu hoeren!"
+    //      Gemessen war das auch so: der abrupte Start hinterliess keinen
+    //      eigenen Einsatz im Signal, weil die N-Wellen-Schicht allein an
+    //      M_r = 1 haengt und der Sprung selbst ueber ein Solver-Segment
+    //      interpoliert wird.
+    //
+    //      Zwei Wege dagegen, hier beide gegen den Zustand ohne sie geprueft:
+    //      "Sprungkante" (Params::jumpEdge) laesst die Kante stehen,
+    //      "Sprungknall" (Params::jumpBoom) setzt eine Druckwelle darauf.
+    //      Gemessen wird im Fenster, in dem die Kante beim Hoerer ankommt -
+    //      die Quelle steht beim Start rund 243 m weit weg, das sind gut
+    //      0,7 s Laufzeit.
+    {
+        auto jumpStart = [&] (bool edgeOn, double boom, Stats& arrivalStats)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 300.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcZ, 30.0f);
+            setParam (proc, Params::srcX, 0.95f);
+            setParam (proc, Params::srcY, 0.95f);
+
+            setParam (proc, Params::flyKind,     1.0f);
+            setParam (proc, Params::flyStart,    1.0f);   // Knall-Start
+            setParam (proc, Params::flyDistance, 40.0f);
+            setParam (proc, Params::flyApproach, 240.0f);
+            setParam (proc, Params::flySpeed,    200.0f);
+
+            // Der Knall soll unterschallig ankommen - genau darum geht es.
+            setParam (proc, Params::nWaveOn,  1.0f);
+            setParam (proc, Params::jumpEdge, edgeOn ? 1.0f : 0.0f);
+            setParam (proc, Params::jumpBoom, (float) boom);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            Stats settle;
+            render (proc, buffer, 0.5, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            // Bis kurz vor die Ankunft laufen lassen, dann messen. Die Passage
+            // selbst liegt weit dahinter und wuerde die Messung sonst
+            // dominieren.
+            Stats beforeArrival;
+            render (proc, buffer, 0.55, beforeArrival, [] (double) {});
+            render (proc, buffer, 0.40, arrivalStats,  [] (double) {});
+        };
+
+        Stats plain, withEdge, withBoom;
+
+        jumpStart (false, 0.0, plain);
+        jumpStart (true,  0.0, withEdge);
+        jumpStart (false, 1.0, withBoom);
+
+        plain.report    ("Knall-Start, wie bisher");
+        withEdge.report ("Knall-Start + Kante");
+        withBoom.report ("Knall-Start + Druckwelle");
+
+        std::printf ("%-22s Ankunft: Spitze ohne %.4f | Kante %.4f | Druckwelle %.4f\n",
+                     "", plain.peak, withEdge.peak, withBoom.peak);
+
+        // Die Druckwelle ist der laute Weg: sie muss die Spitze im
+        // Ankunftsfenster deutlich anheben, sonst wirkt der Regler nicht.
+        if (withBoom.peak <= 2.0 * plain.peak)
+        {
+            std::printf ("FEHLGESCHLAGEN: Sprungknall hebt die Ankunft nicht an "
+                         "(ohne %.4f, mit %.4f) - der Ausloeser greift nicht\n",
+                         plain.peak, withBoom.peak);
+            failed = true;
+        }
+
+        // Die Kante ist der leise Weg: sie darf den Pegel kaum aendern, muss
+        // aber die Flanke steiler machen. Sonst ist sie wirkungslos.
+        // Die Kante ist der leise Weg, und sie ist es MESSBAR: der Marker wird
+        // erkannt (sonst knallte die Druckwelle darueber nicht), und Amplitude
+        // wie Leseposition stehen im betroffenen Segment sofort auf ihrem
+        // Zielwert. Am Ausgang aendert das trotzdem so gut wie nichts -
+        // gemessen bleiben Spitze (0,0179) und groesster Samplesprung
+        // (0,00909) gleich.
+        //
+        // Der Grund steht in den Zahlen des Segments, in dem die Kante
+        // ankommt: die Amplitude springt dort von 0,00404 auf 0,00986, also
+        // auf einem sehr leisen Zweig - die Quelle ist beim Start noch 243 m
+        // weit weg. Was als Kante durchkommt, liegt unter dem, was der Rest
+        // des Fensters ohnehin an Flanken hat.
+        //
+        // Deshalb steht hier KEINE Pruefung auf einen Unterschied: es gaebe
+        // keinen zu pruefen. Der Weg, der wirkt, ist die Druckwelle darueber.
+        std::printf ("%-22s Ankunft: groesster Samplesprung ohne %.5f | Kante %.5f | "
+                     "Druckwelle %.5f\n",
+                     "", plain.maxSampleStep, withEdge.maxSampleStep, withBoom.maxSampleStep);
     }
 
     //==================================================================

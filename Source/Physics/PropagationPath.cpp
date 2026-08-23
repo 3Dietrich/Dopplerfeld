@@ -157,7 +157,7 @@ double PropagationPath::nWaveAt (const Branch& b)
     return b.nAmp * shape;
 }
 
-void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow)
+void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale)
 {
     // Pulsdauer aus der Ausdehnung des Körpers: die Zeit, die der Schall
     // braucht, um ihn der Länge nach zu durchlaufen, mal zwei (Bug- und
@@ -215,7 +215,8 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow)
     b.nAmp = (nWaveLevel / nWaveRefMetres)
            * std::pow (nWaveRefMetres / std::max (b.R, minRadius), nWaveDistanceExponent)
            * std::pow (nWaveSizeM / nWaveSizeRefMetres, nWaveSizeExponent)
-           * nWaveGain;
+           * nWaveGain
+           * levelScale;
 
     b.nPhase = 0.0;
 
@@ -253,10 +254,25 @@ void PropagationPath::setShadowTailSeconds (double seconds)
     shadowTailSeconds = std::max (rampSeconds, seconds);
 }
 
-void PropagationPath::setShockDuck (double amount01, double releaseSeconds)
+void PropagationPath::setJumpEdge (bool shouldPassEdge)
 {
-    shockDuckAmount  = std::min (1.0, std::max (0.0, amount01));
-    shockDuckRelease = std::max (1.0e-4, releaseSeconds);
+    jumpEdgeOn = shouldPassEdge;
+}
+
+void PropagationPath::setJumpBoom (double amount01)
+{
+    jumpBoom = std::min (1.0, std::max (0.0, amount01));
+}
+
+void PropagationPath::setJumpMarker (double emissionTime, double speedStepMps)
+{
+    jumpMarkerTime     = emissionTime;
+    jumpMarkerStrength = std::max (0.0, speedStepMps);
+}
+
+void PropagationPath::setShockDuck (double amount01)
+{
+    shockDuckAmount = std::min (1.0, std::max (0.0, amount01));
 }
 
 void PropagationPath::setDiscoveryIntervalSeconds (double seconds)
@@ -900,6 +916,40 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 triggerNWave (b, c, tStart);
             }
 
+            // --- Bewegungssprung (siehe setJumpEdge/setJumpBoom) ---
+            //
+            // Erkannt wird er NICHT an einem Sprung von M_r: der aendert sich
+            // an der Kaustik von sich aus um mehr als jeder Startsprung, eine
+            // Schwelle darauf feuert also bei jeder schnellen Bewegung
+            // (nachgemessen: bis 0,15 je Segment im normalen Ueberschallflug,
+            // gegen 0,58 beim Start aus dem Stand - die Bereiche ueberlappen).
+            //
+            // Stattdessen weiss die Engine selbst, WANN sie die Bahn
+            // umgeschrieben hat, und legt diesen Zeitpunkt als Marke ab (siehe
+            // setJumpMarker). Hier ist nur noch zu pruefen, ob die
+            // Emissionszeit dieses Hoerwegs in diesem Segment ueber die Marke
+            // laeuft - dann kommt die Kante gerade an. Das ist exakt statt
+            // geraten, und es gilt fuer jeden Zweig einzeln: ein zeitverkehrt
+            // gehoerter Zweig laeuft spaeter darueber als der vorwaerts
+            // laufende, und ein rueckwaerts laufender sogar ein zweites Mal.
+            const double emitStart = tStart - b.tau;
+            const double emitEnd   = tEnd   - tau1;
+
+            const bool jumped = (jumpMarkerTime > -1.0e17)
+                             && ((emitStart < jumpMarkerTime) != (emitEnd < jumpMarkerTime));
+
+            if (jumped && jumpBoom > 0.0)
+            {
+                // Druckwelle auf den Sprung. Die Amplitude waechst mit der
+                // Hoehe des Geschwindigkeitssprungs, den die Engine mit der
+                // Marke abgelegt hat: ein kleiner Ruck knallt weniger als ein
+                // Start aus dem Stand auf volle Fahrt. Bezugspunkt ist ein
+                // Sprung um eine Schallgeschwindigkeit - bei Regler ganz oben
+                // ist der dann so laut wie ein Ueberschallknall.
+                triggerNWave (b, c, tStart,
+                              jumpBoom * std::min (1.0, jumpMarkerStrength / std::max (1.0, c)));
+            }
+
             b.prevMach = machNow;
             b.machSeen = true;
 
@@ -911,22 +961,30 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const double duck0 = shockDuckAt (tStart);
             const double duck1 = shockDuckAt (tStart + (double) len / sr);
 
+            // Kante durchlassen statt interpolieren (siehe setJumpEdge): bei
+            // einem erkannten Sprung stehen Amplitude und Leseposition vom
+            // ersten Sample des Segments an auf ihrem Zielwert. Sonst verteilt
+            // die Interpolation den Sprung ueber die Segmentlaenge und macht
+            // aus der Kante eine Rampe.
+            const bool passEdge = jumpEdgeOn && jumped;
+
             for (int i = 0; i < len; ++i)
             {
-                const double u  = (double) i / (double) len;
-                const double tH = tStart + (double) i / sr;
+                const double u     = (double) i / (double) len;
+                const double uEdge = passEdge ? 1.0 : u;
+                const double tH    = tStart + (double) i / sr;
 
                 // Kubisch nach Hermite (Plan 2.11). Linear wäre stückweise
                 // konstanter Doppler und damit an jedem Solver-Punkt ein
                 // Tonhöhensprung mit Stride-Wiederholrate.
-                const double tau = hermite (tau0, m0, tau1, m1, u);
+                const double tau = hermite (tau0, m0, tau1, m1, uEdge);
 
                 // Leseposition darf rückwärts wandern - bei M_r > 1 wird der
                 // Zweig zeitverkehrt gehört (Plan 2.8). Kein Sondercode, aber
                 // auch keine Annahme über Monotonie.
                 const double x = (double) sig.readAt (sig.timeToIndex (tH - tau));
 
-                const double amp = amp0 + (amp1 - amp0) * u;
+                const double amp = amp0 + (amp1 - amp0) * uEdge;
 
                 b.lpZ += coeff * (x * amp - b.lpZ);
 

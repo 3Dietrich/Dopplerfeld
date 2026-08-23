@@ -124,7 +124,21 @@ public:
 
     // Absenkung des uebrigen Schalls waehrend einer Stossfront, siehe
     // PropagationPath::setShockDuck().
-    void setShockDuck (double amount01, double releaseSeconds);
+    void setShockDuck (double amount01);
+
+    // Bewegungssprung hoerbar machen, siehe PropagationPath::setJumpEdge()
+    // und setJumpBoom().
+    void setJumpEdge (bool shouldPassEdge);
+    void setJumpBoom (double amount01);
+
+    // Legt die Sprungmarke auf JETZT, mit der Hoehe des
+    // Geschwindigkeitssprungs in m/s (siehe PropagationPath::setJumpMarker).
+    //
+    // Gerufen wird sie vom Aufrufer, der die Sprunghoehe kennt - beim
+    // Knall-Start ist das der volle Flugwert, weil die Quelle dort aus dem
+    // Stand auf Fahrt geht. jumpSourceTo() selbst kann das nicht wissen: ihm
+    // wird nur die neue Position uebergeben, nicht das Tempo danach.
+    void markSourceJump (double speedStepMps);
 
     // Mindestdauer des Ausklangs an der Kaustik, siehe
     // PropagationPath::setShadowTailSeconds().
@@ -455,8 +469,9 @@ private:
 
     // Siehe setReverseGain() / setShockDuck().
     double reverseGain      = 1.0;
-    double shockDuckAmount  = 0.0;
-    double shockDuckRelease = 0.08;
+    double shockDuckAmount = 0.0;
+    bool   jumpEdgeOn      = false;
+    double jumpBoom        = 0.0;
     double shadowTailSeconds = 1.0e-3;
 
     // Eckfrequenz der Bodendämpfung bei voller Stärke. Rund ein Kilohertz ist

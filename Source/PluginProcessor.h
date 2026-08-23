@@ -403,7 +403,8 @@ private:
         std::atomic<float>* engineSine      = nullptr;
         std::atomic<float>* reverseGainDb   = nullptr;
         std::atomic<float>* shockDuckAmount = nullptr;
-        std::atomic<float>* shockDuckMs     = nullptr;
+        std::atomic<float>* jumpEdge        = nullptr;
+        std::atomic<float>* jumpBoom        = nullptr;
         std::atomic<float>* shadowTailMs    = nullptr;
         std::atomic<float>* airAbsorbAmount = nullptr;
         std::atomic<float>* distanceCurve   = nullptr;
@@ -587,8 +588,9 @@ private:
     // alle Pfade beider Geometriesaetze und werden darum nur bei einer echten
     // Aenderung angestossen.
     double lastReverseGainDb   = 0.0;
-    double lastShockDuckAmount = 0.0;
-    double lastShockDuckMs     = 80.0;
+    double lastShockDuckAmount = 1.0;
+    bool   lastJumpEdge        = false;
+    double lastJumpBoom        = 0.0;
     double lastShadowTailMs    = 1.0;
 
     // Wie viele Klone gerade WIRKLICH mit Loeserphysik laufen - seit der

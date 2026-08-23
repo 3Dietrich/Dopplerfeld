@@ -64,7 +64,8 @@ namespace Tooltips
         EngineSine,
         ReverseGain,
         ShockDuck,
-        ShockDuckTime,
+        JumpEdge,
+        JumpBoom,
         ShadowTail,
         SrcJitterRotor,
         SrcJitterSpeed,
@@ -475,22 +476,56 @@ namespace Tooltips
                           "waehrend der N-Welle darf kein Motorgeraeusch dazukommen. Gilt fuer den "
                           "ganzen Weg, nicht nur fuer den Zweig, der den Puls traegt, sonst liefe "
                           "der Motorton ueber den Nachbarzweig weiter. Der Knall selbst wird nicht "
-                          "abgesenkt."
+                          "abgesenkt. Gemeint ist die ganze Welle, auch die Strecke zwischen "
+                          "Bug- und Heckstoss - dort darf ebenso wenig durchkommen. Danach "
+                          "kommt der Ton in gut zehn Millisekunden zurueck; diese Zeit ist fest "
+                          "und kein Regler, sie soll nur die Kante entschaerfen."
                         : "How far everything else is ducked while a shock front passes the path "
                           "to the ear. 0 = off (unchanged), 1 = fully silent during the boom. A "
                           "shock front lets nothing through beside it - no engine noise may join "
                           "in during the N-wave. Applies to the whole path, not just the branch "
                           "carrying the pulse, otherwise the engine tone would continue on the "
-                          "neighbouring branch. The boom itself is not ducked.";
-                case Key::ShockDuckTime:
+                          "neighbouring branch, and that includes the stretch between bow and "
+                          "tail shock. Afterwards the sound returns within about ten "
+                          "milliseconds; that time is fixed and not a control, it only takes "
+                          "the edge off. The boom itself is not ducked.";
+                case Key::JumpEdge:
                     return lang == Language::De
-                        ? "Zeit, in der der Ton nach der Stossfront zurueckkommt - das "
-                          "'Luftholen' nach dem Knall. Kurz heisst, der Motor ist sofort wieder "
-                          "da, lang heisst, er wird regelrecht hereingezogen. Wirkt nur, wenn "
-                          "Front-Duck ueber null steht."
-                        : "Time the sound takes to come back after the shock front - the 'gasp' "
-                          "after the boom. Short means the engine is back at once, long means it "
-                          "gets drawn back in. Only has an effect when Shock Duck is above zero.";
+                        ? "Laesst die KANTE eines Bewegungssprungs durch, statt sie zu "
+                          "verschmieren. Springt die Quelle in der Geschwindigkeit - "
+                          "Knall-Start, ein Sprung in der abgespielten Bahn -, dann springen "
+                          "beim Hoerer Lautstaerke und Tonhoehe, sobald die Kante ankommt. "
+                          "Normalerweise wird dieser Sprung ueber die Laenge eines "
+                          "Solver-Segments (1,33 ms) interpoliert und damit zur weichen Rampe; "
+                          "hier bleibt er ein Ruck. Das ist der ehrliche Rest dessen, was das "
+                          "Modell hergibt - ein Ruck, kein Knall. Fuer den Knall gibt es "
+                          "'Sprungknall' daneben, beides laesst sich einzeln oder zusammen "
+                          "einschalten."
+                        : "Lets the EDGE of a movement jump through instead of smearing it. "
+                          "When the source jumps in speed - abrupt start, a jump in a played "
+                          "back path - level and pitch jump at the listener as soon as the edge "
+                          "arrives. Normally that jump is interpolated across one solver "
+                          "segment (1.33 ms) and becomes a soft ramp; here it stays a jolt. "
+                          "That is the honest remainder of what the model gives - a jolt, not a "
+                          "boom. For the boom there is 'Jump Boom' next to it; both can be used "
+                          "separately or together.";
+                case Key::JumpBoom:
+                    return lang == Language::De
+                        ? "Setzt eine DRUCKWELLE auf einen Bewegungssprung. Ein "
+                          "Geschwindigkeitssprung ist formal unendliche Beschleunigung, und die "
+                          "strahlt physikalisch eine Druckwelle ab - deshalb knallt es auch "
+                          "unterschallig, wenn eine Quelle aus dem Stand auf volle Fahrt "
+                          "springt. Nutzt dieselbe N-Wellen-Schicht wie der Ueberschallknall; "
+                          "die Amplitude waechst mit der Sprunghoehe, ein kleiner Ruck knallt "
+                          "also weniger als ein Start aus dem Stand. Ganz oben ist ein Sprung "
+                          "um M_r = 1 so laut wie ein Ueberschallknall. 0 = aus."
+                        : "Puts a PRESSURE WAVE on a movement jump. A jump in speed is formally "
+                          "infinite acceleration, and that physically radiates a pressure wave - "
+                          "which is why it bangs even below Mach 1 when a source jumps from "
+                          "standstill to full speed. Uses the same N-wave layer as the sonic "
+                          "boom; amplitude grows with the size of the jump, so a small jolt "
+                          "bangs less than a start from standstill. At the top, a jump of "
+                          "M_r = 1 is as loud as a sonic boom. 0 = off.";
                 case Key::ShadowTail:
                     return lang == Language::De
                         ? "Wie weich ein Hoerweg ausklingt, der an der Kaustik verschwindet. "

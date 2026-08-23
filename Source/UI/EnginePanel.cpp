@@ -8,13 +8,12 @@ void EnginePanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apv
     const auto tooltip = Tooltips::text (tooltipKey);
 
     knob.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 54, 12);
+    knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
     knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
     knob.label.setText (labelText, juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
-    knob.label.setFont (juce::Font (juce::FontOptions (11.0f)));
     knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
 
@@ -26,7 +25,7 @@ void EnginePanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apv
 
 void EnginePanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 {
-    knob.label.setBounds (cell.removeFromTop (12));
+    knob.label.setBounds (cell.removeFromTop (18));
     knob.slider.setBounds (cell);
 }
 
@@ -83,12 +82,16 @@ void EnginePanel::refreshTooltips()
 
 void EnginePanel::resized()
 {
-    // Regler auf zwei Drittel der frueheren Groesse (@dpa 20260823: "mach die
-    // knobs 2/3 so gross wie jetzt"). Beschriftungszeile und Wertefeld
-    // schrumpfen mit, sonst bliebe fuer den Drehknopf selbst fast nichts
-    // uebrig: von 82 px Zellenhoehe gingen sonst 36 an Text.
-    constexpr int knobW = 56;
-    constexpr int knobH = 55;
+    // Nur das DREHRAD auf zwei Drittel (@dpa 20260823, Berichtigung: "NUR die
+    // Knobs! Label und Value sollen so bleiben wie zuvor"). Beschriftung
+    // (18 px) und Wertefeld (18 px) bleiben unveraendert, die Zellenhoehe
+    // schrumpft genau um das Drittel, das dem Drehrad selbst gehoert: aus
+    // 82 - 18 - 18 = 46 px Rad werden 31, also 31 + 36 = 67 px Zelle. Die
+    // Zellenbreite bleibt ebenfalls, sonst wuerde das Wertefeld beschnitten -
+    // JUCE zeichnet das Rad mit dem kleineren der beiden Masse, die Hoehe
+    // allein macht es also klein.
+    constexpr int knobW = 84;
+    constexpr int knobH = 67;
     auto area = getLocalBounds().reduced (8);
 
     // 4 Harmonische als Spalten, je Spalte Ratio/Detune/Track/Level

@@ -265,7 +265,8 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.engineSine      = raw (Params::engineSine);
     pp.reverseGainDb   = raw (Params::reverseGainDb);
     pp.shockDuckAmount = raw (Params::shockDuckAmount);
-    pp.shockDuckMs     = raw (Params::shockDuckMs);
+    pp.jumpEdge        = raw (Params::jumpEdge);
+    pp.jumpBoom        = raw (Params::jumpBoom);
     pp.shadowTailMs    = raw (Params::shadowTailMs);
     pp.airAbsorbAmount = raw (Params::airAbsorbAmount);
     pp.distanceCurve   = raw (Params::distanceCurve);
@@ -769,8 +770,9 @@ void DopplerfeldProcessor::applyParameters()
     // alle Pfade beider Geometriesaetze.
     const double reverseGainDb   = (double) pp.reverseGainDb->load();
     const double shockDuckAmount = (double) pp.shockDuckAmount->load();
-    const double shockDuckMs     = (double) pp.shockDuckMs->load();
     const double shadowTailMs    = (double) pp.shadowTailMs->load();
+    const bool   jumpEdge        = pp.jumpEdge->load() > 0.5f;
+    const double jumpBoom        = (double) pp.jumpBoom->load();
 
     if (std::abs (reverseGainDb - lastReverseGainDb) > 1.0e-9)
     {
@@ -778,12 +780,22 @@ void DopplerfeldProcessor::applyParameters()
         dopplerEngine.setReverseGain (juce::Decibels::decibelsToGain (reverseGainDb));
     }
 
-    if (std::abs (shockDuckAmount - lastShockDuckAmount) > 1.0e-9
-        || std::abs (shockDuckMs - lastShockDuckMs) > 1.0e-9)
+    if (std::abs (shockDuckAmount - lastShockDuckAmount) > 1.0e-9)
     {
         lastShockDuckAmount = shockDuckAmount;
-        lastShockDuckMs     = shockDuckMs;
-        dopplerEngine.setShockDuck (shockDuckAmount, shockDuckMs * 0.001);
+        dopplerEngine.setShockDuck (shockDuckAmount);
+    }
+
+    if (jumpEdge != lastJumpEdge)
+    {
+        lastJumpEdge = jumpEdge;
+        dopplerEngine.setJumpEdge (jumpEdge);
+    }
+
+    if (std::abs (jumpBoom - lastJumpBoom) > 1.0e-9)
+    {
+        lastJumpBoom = jumpBoom;
+        dopplerEngine.setJumpBoom (jumpBoom);
     }
 
     if (std::abs (shadowTailMs - lastShadowTailMs) > 1.0e-9)
@@ -1118,9 +1130,20 @@ void DopplerfeldProcessor::startFlyBy()
     // Nachlauf, und die Vorgeschichte muss zu dem passen, was gleich
     // weitergeschrieben wird.
     if (start == FlyByGenerator::Start::Continuous)
+    {
         dopplerEngine.startLinearMotion (smoothedSourcePos, direction * speed);
+    }
     else
+    {
         dopplerEngine.jumpSourceTo (smoothedSourcePos);
+
+        // Der Knall-Start setzt eine ruhende Quelle schlagartig auf volle
+        // Fahrt. Genau das ist die Kante, die spaeter beim Hoerer ankommt -
+        // hier wird sie markiert, damit die Pfade sie erkennen, sobald ihre
+        // Emissionszeit darueber laeuft (siehe DopplerEngine::markSourceJump).
+        // Der kontinuierliche Start bekommt keine Marke: dort springt nichts.
+        dopplerEngine.markSourceJump (speed);
+    }
 }
 
 void DopplerfeldProcessor::advanceMotion (double untilTime)

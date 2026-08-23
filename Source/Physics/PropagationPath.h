@@ -176,11 +176,16 @@ public:
     // Schall hinzukommen - hoechstens ein 'luftholen-geraeusch'! aber keine
     // Noise vom Motor. Das hat mit der Stossfront zu tun.").
     //
-    // amount01 ist die Tiefe (0 = aus, 1 = waehrend des Pulses ganz stumm),
-    // releaseSeconds die Zeit, in der der Ton danach zurueckkommt - genau das
-    // "Luftholen". Gilt fuer den ganzen Pfad, nicht nur fuer den Zweig, der den
-    // Puls traegt: der Motorton liefe sonst ueber den Nachbarzweig weiter.
-    void setShockDuck (double amount01, double releaseSeconds);
+    // amount01 ist die Tiefe: 0 = aus, 1 = waehrend des Pulses ganz stumm.
+    // Gilt fuer den ganzen Pfad, nicht nur fuer den Zweig, der den Puls
+    // traegt - der Motorton liefe sonst ueber den Nachbarzweig weiter.
+    //
+    // Gemeint ist die GANZE N-Welle, nicht nur ihre Fronten: zwischen Bug- und
+    // Heckstoss darf ebenfalls nichts durchkommen (@dpa 20260823: "es ist
+    // immer was zu hoeren zwischen den zwei knallen.. das soll weg"). Danach
+    // kommt der Ton ueber shockDuckRelease zurueck, kurz genug, dass es kein
+    // Nachklappen gibt, und lang genug, dass es nicht knackt.
+    void setShockDuck (double amount01);
 
     // Mindestdauer des Ausklangs, wenn ein Zweig AN DER KAUSTIK verschwindet,
     // in Sekunden.
@@ -200,6 +205,39 @@ public:
     // Regler statt einer erfundenen Konstante. Default ist rampSeconds, also
     // exakt das bisherige Verhalten.
     void setShadowTailSeconds (double seconds);
+
+    // Was ein BEWEGUNGSSPRUNG hoerbar macht (@dpa 20260823: "der Vorbeiflug
+    // 'Knall-Start' muesste ja mindestens subsonic zu hoeren sein ... Bisher
+    // ist noch nicht zu hoeren!").
+    //
+    // Ein Geschwindigkeitssprung der Quelle - Knall-Start, ein Sprung in der
+    // abgespielten Bahn - springt beim Hoerer in Amplitude und Tonhoehe,
+    // sobald die Kante ankommt. Das Modell hat dafuer bisher keine eigene
+    // Schicht: die N-Welle haengt allein an M_r = 1 und bleibt unterschallig
+    // stumm, und der Sprung selbst wird ueber die Laenge eines Solver-Segments
+    // interpoliert, wird also zur weichen Rampe statt zur Kante.
+    //
+    // Zwei getrennte Wege, beide ueber ihren eigenen Regler, beide aus per
+    // Default:
+    //
+    //   edgeOn   - die Kante durchlassen statt sie zu interpolieren. Amplitude
+    //              und Leseposition springen dann am Segmentanfang auf ihren
+    //              Zielwert. Das ist der ehrliche Rest dessen, was das Modell
+    //              hergibt: ein Ruck, kein Knall.
+    //   jumpBoom - eine Druckwelle darauf. Ein Geschwindigkeitssprung ist
+    //              formal unendliche Beschleunigung, und die strahlt
+    //              physikalisch eine Druckwelle ab. Nutzt dieselbe N-Wellen-
+    //              Schicht wie der Ueberschallknall, mit einer Amplitude, die
+    //              mit der Sprunghoehe waechst.
+    void setJumpEdge (bool shouldPassEdge);
+    void setJumpBoom (double amount01);
+
+    // Zeitpunkt (in Quellzeit), an dem die Bahn umgeschrieben wurde, und die
+    // Hoehe des Geschwindigkeitssprungs dort in m/s. Gesetzt von der Engine,
+    // die als Einzige weiss, wann sie das tut. Ein Hoerweg merkt die Kante,
+    // sobald seine Emissionszeit ueber die Marke laeuft - das ist je Zweig ein
+    // anderer Moment und genau richtig so.
+    void setJumpMarker (double emissionTime, double speedStepMps);
 
     // Phase 2 (Plan 2.7 / Abschnitt 7). In Phase 1 ohne Wirkung, damit später
     // kein Aufrufer geändert werden muss.
@@ -448,7 +486,10 @@ private:
     // Auslöser (Paar-Geburt an der Kegelankunft und M_r-Durchgang eines
     // bereits bestehenden Zweigs, siehe process()) - beide sollen exakt
     // denselben Puls erzeugen, keine zwei leicht auseinanderlaufenden Formeln.
-    void triggerNWave (Branch& b, double c, double listenerTimeNow);
+    // levelScale skaliert die Pulsamplitude. 1 = der volle Ueberschallknall;
+    // der Sprung-Knall kommt mit einem kleineren Wert herein, der mit der
+    // Sprunghoehe waechst.
+    void triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale = 1.0);
 
     // Absenkungsfaktor durch die Stossfront zur Hoererzeit t, 1 = unberuehrt.
     double shockDuckAt (double listenerTime) const;
@@ -646,8 +687,11 @@ private:
 
     // Siehe setShockDuck(). Default 0 = aus, damit bestehende Presets
     // unveraendert klingen.
-    double shockDuckAmount  = 0.0;
-    double shockDuckRelease = 0.08;
+    double shockDuckAmount = 0.0;
+
+    // Rueckkehrzeit nach der Stossfront. Feste Groesse statt Regler: sie soll
+    // nur die Kante entschaerfen, nicht gestaltet werden.
+    static constexpr double shockDuckRelease = 0.01;
 
     // Ende der zuletzt ausgeloesten Stossfront, in Hoererzeit. Pfadweit statt
     // je Zweig gefuehrt (siehe setShockDuck) und als Zeitpunkt statt als
@@ -658,6 +702,16 @@ private:
 
     // Siehe setShadowTailSeconds(). Default 1 ms = bisheriges Verhalten.
     double shadowTailSeconds = 1.0e-3;
+
+    // Siehe setJumpEdge() / setJumpBoom(). Beide aus per Default.
+    bool   jumpEdgeOn = false;
+    double jumpBoom   = 0.0;
+
+    // Siehe setJumpMarker(). Der Anfangswert liegt so weit in der
+    // Vergangenheit, dass er nie ueberschritten wird - ohne gesetzte Marke
+    // gibt es keinen Sprung.
+    double jumpMarkerTime     = -1.0e18;
+    double jumpMarkerStrength = 0.0;
 
     // Spitzendruck der N-Welle in einem Meter Abstand. Modellkonstante, kein
     // Regler: die Regler sind An/Aus und Größe. Der Wert ist so gewählt, dass

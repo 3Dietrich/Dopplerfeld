@@ -410,19 +410,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // bisheriges Verhalten.
     layout.add (boolParam (engineSine, "Engine Sine", false));
 
-    // Rueckwaerts-Pegel und Stossfront-Absenkung. Alle vier Defaults sind das
-    // bisherige Verhalten: 0 dB, keine Absenkung, 1 ms Ausklang - bestehende
-    // Presets klingen unveraendert, und was leiser oder weicher werden soll,
-    // entscheidet das Ohr am Regler.
+    // Rueckwaerts-Pegel, Stossfront-Absenkung, Schattenausklang und die beiden
+    // Wege, einen Bewegungssprung hoerbar zu machen.
+    //
+    // Bis auf die Stossfront-Absenkung ist ueberall das bisherige Verhalten
+    // voreingestellt. Die Absenkung steht voll aufgedreht, weil waehrend einer
+    // N-Welle nichts anderes zu hoeren sein soll - auch nicht zwischen Bug- und
+    // Heckstoss (@dpa 20260823).
     layout.add (floatParam (reverseGainDb, "Reverse Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
-    layout.add (floatParam (shockDuckAmount, "Shock Duck", unitRange(), 0.0f));
-    {
-        // Bis 2 s, Skew unten: das "Luftholen" nach der Front liegt im Bereich
-        // weniger Zehntelsekunden, die langen Zeiten sind der Sonderfall.
-        auto range = juce::NormalisableRange<float> (1.0f, 2000.0f);
-        range.setSkewForCentre (80.0f);
-        layout.add (floatParam (shockDuckMs, "Shock Duck Time", range, 80.0f, "ms"));
-    }
+    layout.add (floatParam (shockDuckAmount, "Shock Duck", unitRange(), 1.0f));
+
+    // Bewegungssprung: Kante durchlassen (aus) und Druckwelle darauf (0).
+    layout.add (boolParam (jumpEdge, "Jump Edge", false));
+    layout.add (floatParam (jumpBoom, "Jump Boom", unitRange(), 0.0f));
     {
         // Ab 1 ms (heutiges Verhalten) bis 1 s. Skew unten, denn der
         // interessante Bereich liegt bei wenigen bis einigen zehn
