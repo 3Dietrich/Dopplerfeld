@@ -10,7 +10,6 @@ namespace Params
 {
     // --- Feld ---
     constexpr const char* fieldMetres = "fieldMetres";
-    constexpr const char* airTempC    = "airTempC";      // vorbereitet, Phase 1 nicht in der UI
 
     // --- Quelle ---
     // x/y sind auf die Feldfläche normiert (0..1), z ist die Höhe über dem
@@ -141,6 +140,16 @@ namespace Params
     constexpr const char* boomLimitDb     = "boomLimitDb";
     constexpr const char* airAbsorbAmount = "airAbsorbAmount";
 
+    // Ausbreitungsmedium (Source/Physics/Medium.h, MediumState): Temperatur
+    // bestimmt c(T) und damit direkt die Mach-Schwelle - der Unterschied
+    // zwischen einer Peitsche auf Meereshöhe und einem Jet in grosser Höhe
+    // (dort ist es kalt, c ist niedriger). Höhe wirkt unabhängig davon über
+    // die Luftdichte auf den Ausgangspegel (siehe PluginProcessor::
+    // applyParameters, "--- Ausgang ---") - beide Regler sind bewusst
+    // getrennt, siehe Tooltips.
+    constexpr const char* airTempC    = "airTempC";
+    constexpr const char* airAltitude = "airAltitude";
+
     // Amp-Verlauf über die Entfernung: verstellt den Exponenten k in
     // A_geo = 1/R^k. 0 = physikalisch korrektes 1/R (Default und exakt das
     // bisherige Verhalten), positiv = fällt schneller ab, negativ = flacher.
@@ -208,6 +217,29 @@ namespace Params
     // sich einreihen (@dpa 20260820: "nichts was an einen Schlag oder Druck
     // oder gar nur Lautheit erinnert").
     constexpr const char* nWaveGainDb = "nWaveGainDb";
+
+    // Pegel des ZEITVERKEHRT gehoerten Anteils in dB (siehe
+    // PropagationPath::setReverseGain). Bei Ueberschall liefert der Loeser
+    // mehrere Hoerwege; einer davon laeuft rueckwaerts. Real geht der neben dem
+    // vorwaerts laufenden weitgehend unter, im Modell steht er gleich laut
+    // daneben (@dpa 20260821: "die Lautstaerke des Rueckwaertssounds muss
+    // leiser"). 0 dB = unveraendert.
+    constexpr const char* reverseGainDb = "reverseGainDb";
+
+    // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber den
+    // Hoerweg laeuft, und die Zeit, in der er danach zurueckkommt (@dpa: "keine
+    // Noise vom Motor" waehrend der N-Welle, "hoechstens ein
+    // luftholen-geraeusch").
+    constexpr const char* shockDuckAmount = "shockDuckAmount";
+    constexpr const char* shockDuckMs     = "shockDuckMs";
+
+    // Mindestdauer des Ausklangs, wenn ein Hoerweg an der Kaustik
+    // verschwindet, in Millisekunden. Rechnerisch folgt sie aus der Physik,
+    // faellt bei schnellen Vorbeifluegen aber immer auf die Untergrenze von
+    // 1 ms - und ein voll ausgesteuerter Zweig, der in einer Millisekunde weg
+    // ist, reisst hoerbar ab (@dpa zum rueckwaerts laufenden Anteil: "nur dass
+    // es ploetzlich aufhoert"). Default 1 ms = bisheriges Verhalten.
+    constexpr const char* shadowTailMs = "shadowTailMs";
 
     // "Schrot"-Muster: Klone der Quelle. cloneTotal ist die Gesamtzahl, und alle
     // davon bekommen volle Loeserphysik - eine billige Nachbildung gibt es

@@ -55,7 +55,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         range.setSkewForCentre (100.0f);
         layout.add (floatParam (fieldMetres, "Field Size", range, 100.0f, "m"));
     }
-    layout.add (floatParam (airTempC, "Air Temperature", { -20.0f, 40.0f, 0.1f }, 20.0f, "°C"));
 
     // Höhe über dem Boden. Anders als x/y NICHT normiert, sondern in echten
     // Metern: die Körpergröße eines Hörers ändert sich nicht, wenn man den
@@ -305,6 +304,34 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (boomLimitDb, "Boom Limit", { 0.0f, 60.0f, 0.1f }, 30.0f, "dB"));
     layout.add (floatParam (airAbsorbAmount, "Air Absorption", unitRange(), 1.0f));
 
+    // Lufttemperatur (Params::airTempC) - bestimmt c(T) in MediumState, siehe
+    // Physics/Medium.h. Grosszuegiger Bereich statt eines "vernuenftigen"
+    // Wetterausschnitts (keine versteckten Limits): -60°C deckt die
+    // Stratosphaeren-Kaelte in Flughoehe ab, +60°C Extremhitze. Default 20°C
+    // bleibt exakt der bisherige feste Wert aus MediumState, damit sich am
+    // Klang bestehender Presets nichts aendert.
+    layout.add (floatParam (airTempC, "Air Temperature", { -60.0f, 60.0f, 0.1f }, 20.0f, "°C"));
+
+    // Hoehe ueber NN (Params::airAltitude) - wirkt NICHT auf airTempC (siehe
+    // dort), sondern ueber die barometrische Hoehenformel auf die Luftdichte
+    // und damit den Ausgangspegel (PluginProcessor::applyParameters,
+    // "--- Ausgang ---"). Default 0 m = Meereshoehe, wie MediumState es bisher
+    // fest annahm. WICHTIG fuer bestehende Presets: bei den Defaults (20°C,
+    // 0 m) ist der physikalische Dichtefaktor rho/rho0 NICHT exakt 1.0
+    // (rho0 = 1,225 kg/m^3 gilt bei 15°C, nicht bei 20°C) - er liegt bei rund
+    // 0,983. Damit ein frisch geladenes Preset ohne diese beiden Parameter
+    // trotzdem exakt wie bisher klingt, wird der Dichte-Pegelfaktor an der
+    // Verwendungsstelle (PluginProcessor.cpp) auf den bei den DEFAULTWERTEN
+    // gemessenen Faktor normiert (durch densityGain() eines MediumState mit
+    // Default-Werten geteilt) statt hier einen festen Korrekturwert
+    // einzutragen - so bleibt die Normierung automatisch richtig, falls sich
+    // die Defaults je aendern sollten.
+    {
+        auto range = juce::NormalisableRange<float> (0.0f, 20000.0f);
+        range.setSkewForCentre (2000.0f);
+        layout.add (floatParam (airAltitude, "Air Altitude", range, 0.0f, "m"));
+    }
+
     // Amp-Verlauf über die Entfernung. Symmetrischer Reglerweg um die Mitte,
     // die Mitte ist der Default und trifft den Exponenten 1 exakt - bestehende
     // Presets ohne diesen Parameter klingen damit unverändert.
@@ -377,6 +404,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // Grosszuegig nach oben offen: der Knall DARF uebersteuern, dafuer gibt
         // es den sichtbaren Limiter. 0 dB ist die eingemessene Voreinstellung.
         layout.add (floatParam (nWaveGainDb, "N-Wave Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
+    }
+
+    // Rueckwaerts-Pegel und Stossfront-Absenkung. Alle vier Defaults sind das
+    // bisherige Verhalten: 0 dB, keine Absenkung, 1 ms Ausklang - bestehende
+    // Presets klingen unveraendert, und was leiser oder weicher werden soll,
+    // entscheidet das Ohr am Regler.
+    layout.add (floatParam (reverseGainDb, "Reverse Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+    layout.add (floatParam (shockDuckAmount, "Shock Duck", unitRange(), 0.0f));
+    {
+        // Bis 2 s, Skew unten: das "Luftholen" nach der Front liegt im Bereich
+        // weniger Zehntelsekunden, die langen Zeiten sind der Sonderfall.
+        auto range = juce::NormalisableRange<float> (1.0f, 2000.0f);
+        range.setSkewForCentre (80.0f);
+        layout.add (floatParam (shockDuckMs, "Shock Duck Time", range, 80.0f, "ms"));
+    }
+    {
+        // Ab 1 ms (heutiges Verhalten) bis 1 s. Skew unten, denn der
+        // interessante Bereich liegt bei wenigen bis einigen zehn
+        // Millisekunden.
+        auto range = juce::NormalisableRange<float> (1.0f, 1000.0f);
+        range.setSkewForCentre (30.0f);
+        layout.add (floatParam (shadowTailMs, "Shadow Tail", range, 1.0f, "ms"));
     }
 
     // --- Klone ("Schrot") ---

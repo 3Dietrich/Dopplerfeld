@@ -278,7 +278,7 @@ private:
     static constexpr int engineContentHeight = 520;         // 608 minus die ausgelagerte RPM-Reihe
     static constexpr int sampleContentHeight = 220;
     static constexpr int motionContentHeight = 372;   // Reiter Vorbeiflug/Record-Play + gemeinsame Jitter/Speed-Zeile, s. MotionPanel::resized()
-    static constexpr int fieldContentHeight  = 306;   // 218 + dritte Reihe (jetzt Amplitudenregler statt M-Jitter, s. FieldPanel::resized())
+    static constexpr int fieldContentHeight  = 412;   // 306 + vierte Reihe (Rueckwaerts/Front-Duck/Luftholen/Schatten, s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 360;
     // 226 minus die 40px, die frueher fuer den CPU-Balken reserviert waren -
     // der sitzt jetzt in der eigenen Zeile am unteren Fensterrand statt hier

@@ -50,6 +50,8 @@ namespace Tooltips
         FieldSize,
         BoomLimit,
         AirAbsorb,
+        AirTemperature,
+        AirAltitude,
         FadeManual,
         OutputGain,
         Panning,
@@ -59,6 +61,10 @@ namespace Tooltips
         SrcJitterAmount,
         SrcJitterRate,
         SrcJitterOn,
+        ReverseGain,
+        ShockDuck,
+        ShockDuckTime,
+        ShadowTail,
         SrcJitterRotor,
         SrcJitterSpeed,
         SrcJitterRandom,
@@ -309,6 +315,32 @@ namespace Tooltips
                           "Entfernung). 0 = aus, 1 = voll."
                         : "Strength of the distance-dependent air absorption (loss of highs over "
                           "distance). 0 = off, 1 = full.";
+                case Key::AirTemperature:
+                    return lang == Language::De
+                        ? "Lufttemperatur in Grad Celsius. Bestimmt die Schallgeschwindigkeit c und "
+                          "damit direkt die Ueberschall-Schwelle (Mach 1) - kalte Luft in grosser "
+                          "Hoehe hat ein niedrigeres c als warme Luft am Boden. Unabhaengig vom "
+                          "Hoehenregler daneben: wer einen Duesenjet in 10 km darstellen will, "
+                          "stellt hier die dort herrschende Kaelte UND dort die Hoehe ein."
+                        : "Air temperature in degrees Celsius. Sets the speed of sound c and "
+                          "therefore the supersonic threshold (Mach 1) directly - cold air at "
+                          "altitude has a lower c than warm air at ground level. Independent of "
+                          "the altitude control next to it: to portray a jet at 10 km, set both "
+                          "the cold there AND the altitude there.";
+                case Key::AirAltitude:
+                    return lang == Language::De
+                        ? "Hoehe ueber NN in Metern. Wirkt NICHT auf die Temperatur (eigener "
+                          "Regler daneben), sondern ueber den mit der Hoehe fallenden Luftdruck auf "
+                          "die Luftdichte - und damit als reiner Pegelfaktor auf den Ausgang: in "
+                          "duenner Hoehenluft ist alles leiser. So laesst sich die Peitsche knapp "
+                          "ueber dem Boden (dichte Luft) vom Duesenjet in grosser Hoehe (duenne, "
+                          "kalte Luft - Temperatur separat einstellen) unterscheiden."
+                        : "Altitude above sea level in metres. Does NOT affect temperature (its own "
+                          "control next to it), but lowers air density as pressure drops with "
+                          "altitude - acting as a pure level factor on the output: thin high-"
+                          "altitude air makes everything quieter. This is how a whip crack near "
+                          "the ground (dense air) differs from a jet at high altitude (thin, cold "
+                          "air - set temperature separately).";
                 case Key::FadeManual:
                     return lang == Language::De
                         ? "Feste Ueberblendzeit (ms) bei unstetigen Aenderungen, wirkt nur wenn "
@@ -401,6 +433,68 @@ namespace Tooltips
                           "there is silence - and nothing is computed any more, the CPU meter "
                           "drops to zero. Switching back on restarts the trajectory, since no "
                           "motion was recorded while it was silent.";
+                case Key::ReverseGain:
+                    return lang == Language::De
+                        ? "Pegel des RUECKWAERTS gehoerten Anteils in dB. Bei Ueberschall gibt es "
+                          "mehr als einen Hoerweg: einer laeuft vorwaerts, ein zweiter rueckwaerts "
+                          "- was die Quelle zuletzt gesendet hat, trifft zuerst ein. Beide sind "
+                          "physikalisch da, im Modell stehen sie aber gleich laut nebeneinander, "
+                          "und dann draengt sich der rueckwaerts laufende vor. Hier laesst er sich "
+                          "zuruecknehmen, ohne den Vorwaertsanteil anzufassen. 0 dB = "
+                          "unveraendert. Der Knall selbst (N-Welle) bleibt unberuehrt, er ist eine "
+                          "eigene Schicht."
+                        : "Level of the REVERSED part in dB. Above Mach 1 there is more than one "
+                          "path to the ear: one runs forward, a second one backwards - what the "
+                          "source emitted last arrives first. Both are physically there, but in "
+                          "the model they stand side by side at equal level, and then the "
+                          "reversed one pushes to the front. This takes it back without touching "
+                          "the forward part. 0 dB = unchanged. The boom itself (N-wave) is not "
+                          "affected, it is a separate layer.";
+                case Key::ShockDuck:
+                    return lang == Language::De
+                        ? "Wie stark der uebrige Schall abgesenkt wird, solange eine Stossfront "
+                          "ueber den Hoerweg laeuft. 0 = aus (unveraendert), 1 = waehrend des "
+                          "Knalls ganz still. Eine Stossfront laesst neben sich nichts durch - "
+                          "waehrend der N-Welle darf kein Motorgeraeusch dazukommen. Gilt fuer den "
+                          "ganzen Weg, nicht nur fuer den Zweig, der den Puls traegt, sonst liefe "
+                          "der Motorton ueber den Nachbarzweig weiter. Der Knall selbst wird nicht "
+                          "abgesenkt."
+                        : "How far everything else is ducked while a shock front passes the path "
+                          "to the ear. 0 = off (unchanged), 1 = fully silent during the boom. A "
+                          "shock front lets nothing through beside it - no engine noise may join "
+                          "in during the N-wave. Applies to the whole path, not just the branch "
+                          "carrying the pulse, otherwise the engine tone would continue on the "
+                          "neighbouring branch. The boom itself is not ducked.";
+                case Key::ShockDuckTime:
+                    return lang == Language::De
+                        ? "Zeit, in der der Ton nach der Stossfront zurueckkommt - das "
+                          "'Luftholen' nach dem Knall. Kurz heisst, der Motor ist sofort wieder "
+                          "da, lang heisst, er wird regelrecht hereingezogen. Wirkt nur, wenn "
+                          "Front-Duck ueber null steht."
+                        : "Time the sound takes to come back after the shock front - the 'gasp' "
+                          "after the boom. Short means the engine is back at once, long means it "
+                          "gets drawn back in. Only has an effect when Shock Duck is above zero.";
+                case Key::ShadowTail:
+                    return lang == Language::De
+                        ? "Wie weich ein Hoerweg ausklingt, der an der Kaustik verschwindet. "
+                          "Rechnerisch folgt diese Dauer aus der Physik (wie schnell der Weg "
+                          "durch die Front laeuft), praktisch faellt sie bei schnellen "
+                          "Vorbeifluegen immer auf die Untergrenze von 1 ms - und ein voll "
+                          "ausgesteuerter Hoerweg, der in einer Millisekunde weg ist, reisst "
+                          "hoerbar ab. Genau daran hoert man den rueckwaerts laufenden Anteil "
+                          "'ploetzlich aufhoeren'. Hinter der Kaustik liegt in Wirklichkeit eine "
+                          "Schattenzone, in die gebeugter Schall weiterlaeuft; wie lang, haengt "
+                          "an Geometrie und Frequenz - deshalb ein Regler und keine erfundene "
+                          "Konstante. 1 ms = bisheriges Verhalten."
+                        : "How softly a path to the ear fades out when it disappears at the "
+                          "caustic. On paper this duration follows from physics (how fast the "
+                          "path crosses the front), in practice it always drops to the 1 ms floor "
+                          "on fast fly-bys - and a fully loud path that is gone within a "
+                          "millisecond tears off audibly. That is exactly what makes the reversed "
+                          "part 'stop all of a sudden'. Behind the caustic there is in fact a "
+                          "shadow zone that diffracted sound keeps travelling into; how long "
+                          "depends on geometry and frequency - hence a control instead of an "
+                          "invented constant. 1 ms = previous behaviour.";
                 case Key::SrcJitterRotor:
                     return lang == Language::De
                         ? "Zweite Betriebsart des Wacklers: statt drei unabhaengig wackelnder "

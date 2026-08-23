@@ -400,8 +400,17 @@ private:
 
         std::atomic<float>* boomLimitDb     = nullptr;
         std::atomic<float>* nWaveGainDb     = nullptr;
+        std::atomic<float>* reverseGainDb   = nullptr;
+        std::atomic<float>* shockDuckAmount = nullptr;
+        std::atomic<float>* shockDuckMs     = nullptr;
+        std::atomic<float>* shadowTailMs    = nullptr;
         std::atomic<float>* airAbsorbAmount = nullptr;
         std::atomic<float>* distanceCurve   = nullptr;
+
+        // Ausbreitungsmedium (Source/Physics/Medium.h), siehe Params::airTempC/
+        // airAltitude.
+        std::atomic<float>* airTempC    = nullptr;
+        std::atomic<float>* airAltitude = nullptr;
 
         std::atomic<float>* groundReflectionOn = nullptr;
         std::atomic<float>* groundDampAmount   = nullptr;
@@ -572,6 +581,14 @@ private:
     bool   lastNWaveOn         = false;
     double lastNWaveSize       = 15.0;
     double lastNWaveGainDb     = 0.0;
+
+    // Dieselbe Wiedervorlage wie bei der N-Welle: die drei Setter laufen ueber
+    // alle Pfade beider Geometriesaetze und werden darum nur bei einer echten
+    // Aenderung angestossen.
+    double lastReverseGainDb   = 0.0;
+    double lastShockDuckAmount = 0.0;
+    double lastShockDuckMs     = 80.0;
+    double lastShadowTailMs    = 1.0;
 
     // Wie viele Klone gerade WIRKLICH mit Loeserphysik laufen - seit der
     // entfernten Automatik immer genau min(Regler, maxRealClones), aber der

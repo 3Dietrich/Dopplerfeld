@@ -61,6 +61,12 @@ private:
     // Pegel der Bodenreflexion, siehe Params::groundGain.
     Knob groundGainKnob;
 
+    // Höhe über NN (Params::airAltitude) - steht bei den anderen
+    // Höhenreglern dieser Reihe (Zeile aus Platzgruenden, siehe
+    // FieldPanel::resized()), wirkt aber unabhaengig von ihnen ueber die
+    // Luftdichte auf den Ausgangspegel (Physics/Medium.h).
+    Knob airAltitudeKnob;
+
     // Druckwellen-/N-Wellen-Schicht: eigener Schalter und eigene Groesse,
     // bewusst neben (nicht in) Boom Limit - das eine ist eine Pulsform, das
     // andere eine reine Amplitudendeckelung. Steht (mit distanceCurveKnob und
@@ -70,6 +76,12 @@ private:
     Knob nWaveSizeKnob;
     Knob nWaveGainKnob;
 
+    // Vierte Reihe: was nach dem Knall passiert. Der Pegel des zeitverkehrt
+    // gehoerten Anteils, die Absenkung des uebrigen Schalls waehrend der
+    // Stossfront samt ihrer Rueckkehrzeit, und wie weich ein Hoerweg an der
+    // Kaustik ausklingt.
+    Knob reverseGainKnob, shockDuckKnob, shockDuckTimeKnob, shadowTailKnob;
+
     // Entfernung -> Amplitude schaerfer/flacher als das physikalische 1/R
     // (@dpa-Skizze "Amp-Verlauf"). Steht in der dritten Reihe, s. nWaveSizeKnob
     // oben - thematisch naeher an N-Wave/Panning (Amplitude) als an Reihe 2.
@@ -78,6 +90,12 @@ private:
     // Anteil des gewoehnlichen Pegel-Pannings (@dpa-Feedback) - steht in der
     // dritten Reihe, s. nWaveSizeKnob oben.
     Knob panAmountKnob;
+
+    // Lufttemperatur (Params::airTempC) - bestimmt c(T) und damit die
+    // Mach-Schwelle (Physics/Medium.h). Steht aus Platzgruenden in der
+    // dritten Reihe (s. FieldPanel::resized()), thematisch aber Physik wie
+    // boomLimitKnob/airAbsorbKnob, nicht Amplitude.
+    Knob airTempKnob;
 
     // Neben Output Gain: -6dB-Marke, Clip-Anzeige mit 500ms-Halt (@dpa).
     LevelMeter levelMeter;

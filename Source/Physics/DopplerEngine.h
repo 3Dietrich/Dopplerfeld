@@ -118,6 +118,18 @@ public:
     // Druckwellen-/N-Wellen-Schicht, siehe PropagationPath::setNWave().
     void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear);
 
+    // Pegel der zeitverkehrt gehoerten Zweige, siehe
+    // PropagationPath::setReverseGain().
+    void setReverseGain (double gainLinear);
+
+    // Absenkung des uebrigen Schalls waehrend einer Stossfront, siehe
+    // PropagationPath::setShockDuck().
+    void setShockDuck (double amount01, double releaseSeconds);
+
+    // Mindestdauer des Ausklangs an der Kaustik, siehe
+    // PropagationPath::setShadowTailSeconds().
+    void setShadowTailSeconds (double seconds);
+
     // Anteil des gewoehnlichen Pegel-Pannings, 0..1 (siehe
     // PropagationPath::setPanning). Wird pro Block an die Pfade gereicht, weil
     // er von der Kopfausrichtung abhaengt und nicht im Pfad gespeichert bleiben
@@ -440,6 +452,12 @@ private:
 
     // Regelbarer Knall-Pegel, linear (siehe Params::nWaveGainDb).
     double nWaveGain  = 1.0;
+
+    // Siehe setReverseGain() / setShockDuck().
+    double reverseGain      = 1.0;
+    double shockDuckAmount  = 0.0;
+    double shockDuckRelease = 0.08;
+    double shadowTailSeconds = 1.0e-3;
 
     // Eckfrequenz der Bodendämpfung bei voller Stärke. Rund ein Kilohertz ist
     // die Gegend, in der eine streifende Reflexion an Gras/Erde ihre Höhen

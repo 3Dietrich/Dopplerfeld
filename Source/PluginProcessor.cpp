@@ -262,8 +262,14 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.boomLimitDb     = raw (Params::boomLimitDb);
     pp.nWaveGainDb     = raw (Params::nWaveGainDb);
+    pp.reverseGainDb   = raw (Params::reverseGainDb);
+    pp.shockDuckAmount = raw (Params::shockDuckAmount);
+    pp.shockDuckMs     = raw (Params::shockDuckMs);
+    pp.shadowTailMs    = raw (Params::shadowTailMs);
     pp.airAbsorbAmount = raw (Params::airAbsorbAmount);
     pp.distanceCurve   = raw (Params::distanceCurve);
+    pp.airTempC        = raw (Params::airTempC);
+    pp.airAltitude     = raw (Params::airAltitude);
 
     pp.groundReflectionOn = raw (Params::groundReflectionOn);
     pp.groundDampAmount   = raw (Params::groundDampAmount);
@@ -756,6 +762,34 @@ void DopplerfeldProcessor::applyParameters()
                                 juce::Decibels::decibelsToGain (nWaveGainDb));
     }
 
+    // Rueckwaerts-Pegel, Stossfront-Absenkung und Schattenausklang: dieselbe
+    // Wiedervorlage wie bei der N-Welle, denn auch diese Setter laufen ueber
+    // alle Pfade beider Geometriesaetze.
+    const double reverseGainDb   = (double) pp.reverseGainDb->load();
+    const double shockDuckAmount = (double) pp.shockDuckAmount->load();
+    const double shockDuckMs     = (double) pp.shockDuckMs->load();
+    const double shadowTailMs    = (double) pp.shadowTailMs->load();
+
+    if (std::abs (reverseGainDb - lastReverseGainDb) > 1.0e-9)
+    {
+        lastReverseGainDb = reverseGainDb;
+        dopplerEngine.setReverseGain (juce::Decibels::decibelsToGain (reverseGainDb));
+    }
+
+    if (std::abs (shockDuckAmount - lastShockDuckAmount) > 1.0e-9
+        || std::abs (shockDuckMs - lastShockDuckMs) > 1.0e-9)
+    {
+        lastShockDuckAmount = shockDuckAmount;
+        lastShockDuckMs     = shockDuckMs;
+        dopplerEngine.setShockDuck (shockDuckAmount, shockDuckMs * 0.001);
+    }
+
+    if (std::abs (shadowTailMs - lastShadowTailMs) > 1.0e-9)
+    {
+        lastShadowTailMs = shadowTailMs;
+        dopplerEngine.setShadowTailSeconds (shadowTailMs * 0.001);
+    }
+
     // Beides ist inzwischen billig: die Engine legt Schalter und Dämpfung an
     // ihrer Fläche ab und reicht sie vor jedem Block an die Pfade durch, statt
     // dass hier über alle Pfade beider Geometriesätze gelaufen werden müsste.
@@ -802,9 +836,29 @@ void DopplerfeldProcessor::applyParameters()
     dopplerEngine.setManualFade (manualFade, manualSeconds);
 
     // --- Ausgang ---
-    // Ausgangspegel, -36 bis +36 dB (siehe Params::outputGain).
+    // Ausgangspegel, -36 bis +36 dB (siehe Params::outputGain), multipliziert
+    // mit dem Dichte-Pegelfaktor der Hoehe (Params::airAltitude): der
+    // Schalldruck einer gegebenen Quelle skaliert naeherungsweise mit der
+    // Luftdichte, in duenner Hoehenluft ist alles leiser. Das ist ein reiner
+    // Amplitudenfaktor am Ausgang, keine Physik der Ausbreitung selbst -
+    // deshalb hier und nicht in den Physics-Pfaden (die rechnen weiterhin nur
+    // mit c(T) ueber MediumState).
+    //
+    // Normiert auf die Regler-Defaults (20°C, 0 m): dort ist der reale
+    // Dichtefaktor rho/rho0 physikalisch NICHT exakt 1.0 (rho0 = 1,225 kg/m^3
+    // gilt bei 15°C), sondern rund 0,983 - durch Teilen mit dem Faktor bei
+    // Default-Werten (statt einer fest eingetragenen Zahl) klingt jedes
+    // bestehende Preset ohne diese beiden Parameter exakt wie zuvor, auch
+    // falls sich die Defaults je aendern sollten.
+    MediumState currentMedium;
+    currentMedium.tempCelsius    = (double) pp.airTempC->load();
+    currentMedium.altitudeMetres = (double) pp.airAltitude->load();
+
+    const MediumState defaultMedium;   // tempCelsius=20, altitudeMetres=0
+    const double densityGain = currentMedium.densityGain() / defaultMedium.densityGain();
+
     outputGainLinear.setTargetValue (
-        juce::Decibels::decibelsToGain (pp.outputGain->load()));
+        juce::Decibels::decibelsToGain (pp.outputGain->load()) * densityGain);
     limiterEnabled = pp.limiterOn->load() > 0.5f;
 }
 
@@ -1480,11 +1534,14 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     applyParameters();
     handlePendingRequests();
 
-    // T steht in Phase 1 fest auf 20 °C (Plan 2.2 und Abschnitt 7). airTempC
-    // existiert im Layout, wird hier aber bewusst nicht gelesen: eine Änderung
-    // von c verschiebt sämtliche Laufzeiten und wäre ein unstetiges Ereignis,
-    // dessen Crossfade-Anlass (MediumChange) erst in Phase 2 verdrahtet wird.
-    const MediumState medium;
+    // T und Hoehe kommen aus den Physik-Parametern (Params::airTempC/
+    // airAltitude, siehe applyParameters()) - c(T) bestimmt darueber direkt
+    // die Mach-Schwelle in allen Loeserpfaden. Der Dichte-Pegelfaktor der
+    // Hoehe wirkt NICHT hier, sondern als reiner Ausgangs-Gain (siehe
+    // applyParameters(), "--- Ausgang ---").
+    MediumState medium;
+    medium.tempCelsius    = (double) pp.airTempC->load();
+    medium.altitudeMetres = (double) pp.airAltitude->load();
 
     const int chunkSize = std::min (motionChunkSamples, monoScratch.getNumSamples());
 

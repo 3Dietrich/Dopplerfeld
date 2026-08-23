@@ -39,6 +39,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",  Tooltips::Key::GroundDamp);
     setupKnob (groundGainKnob,  apvts, Params::groundGain,       "Ground Gain",  Tooltips::Key::GroundGain);
+    setupKnob (airAltitudeKnob, apvts, Params::airAltitude,      "Höhe",         Tooltips::Key::AirAltitude);
 
     groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
     addAndMakeVisible (groundReflectionButton);
@@ -48,6 +49,12 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (nWaveGainKnob, apvts, Params::nWaveGainDb, "N-Wave Gain", Tooltips::Key::NWaveGain);
     setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve", Tooltips::Key::DistanceCurve);
     setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",       Tooltips::Key::Panning);
+    setupKnob (airTempKnob,     apvts, Params::airTempC,        "Luft °C",       Tooltips::Key::AirTemperature);
+
+    setupKnob (reverseGainKnob,    apvts, Params::reverseGainDb,   "Rueckwaerts",  Tooltips::Key::ReverseGain);
+    setupKnob (shockDuckKnob,      apvts, Params::shockDuckAmount, "Front-Duck",   Tooltips::Key::ShockDuck);
+    setupKnob (shockDuckTimeKnob,  apvts, Params::shockDuckMs,     "Luftholen",    Tooltips::Key::ShockDuckTime);
+    setupKnob (shadowTailKnob,     apvts, Params::shadowTailMs,    "Schatten",     Tooltips::Key::ShadowTail);
 
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
     addAndMakeVisible (nWaveButton);
@@ -69,7 +76,9 @@ void FieldPanel::refreshTooltips()
 {
     for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &fadeManualKnob, &outputGainKnob,
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
-                      &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob })
+                      &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
+                      &airTempKnob, &airAltitudeKnob,
+                      &reverseGainKnob, &shockDuckKnob, &shockDuckTimeKnob, &shadowTailKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -111,12 +120,13 @@ void FieldPanel::resized()
     knobRow.removeFromLeft (4);
     levelMeter.setBounds (knobRow.removeFromLeft (24));
 
-    // Zweite Reihe: die Geometrie-Achse z und die daran hängende
-    // Bodendämpfung.
+    // Zweite Reihe: die Geometrie-Achse z, die daran hängende Bodendämpfung
+    // und (aus Platzgruenden hier, thematisch aber unabhaengig von den
+    // z-Positionen) die Hoehe ueber NN des Mediums.
     area.removeFromTop (6);
 
     auto geoRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &groundGainKnob })
+    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &groundGainKnob, &airAltitudeKnob })
     {
         layoutKnob (*k, geoRow.removeFromLeft (knobW));
         geoRow.removeFromLeft (4);
@@ -125,14 +135,28 @@ void FieldPanel::resized()
     // Dritte Reihe: Amplituden-/Pegelthemen (N-Wave-Groesse, Amp-Verlauf,
     // Panning-Anteil) - seit Jitter/Hektik/Jitter An ins Bewegungs-Panel
     // gewandert sind (@dpa-Feedback), war diese Reihe frei; die Hoehe bleibt
-    // exakt gleich (PluginEditor::fieldContentHeight unveraendert), nur die
-    // drei genannten Regler ziehen hier ein statt eine leere Reihe zu lassen.
+    // exakt gleich (PluginEditor::fieldContentHeight unveraendert). Die
+    // Lufttemperatur zieht hier aus Platzgruenden mit ein, obwohl sie
+    // thematisch zu boomLimitKnob/airAbsorbKnob in Reihe 1 gehoert.
     area.removeFromTop (6);
 
     auto ampRow = area.removeFromTop (knobH);
-    for (auto* k : { &nWaveSizeKnob, &nWaveGainKnob, &distanceCurveKnob, &panAmountKnob })
+    for (auto* k : { &nWaveSizeKnob, &nWaveGainKnob, &distanceCurveKnob, &panAmountKnob, &airTempKnob })
     {
         layoutKnob (*k, ampRow.removeFromLeft (knobW));
         ampRow.removeFromLeft (4);
+    }
+
+    // Vierte Reihe: was nach dem Knall passiert (siehe Header). Sie gehoert
+    // zur N-Welle darueber und steht deshalb direkt darunter; die Panelhoehe
+    // ist dafuer in PluginEditor::fieldContentHeight um eine Reglerreihe
+    // gewachsen.
+    area.removeFromTop (6);
+
+    auto boomRow = area.removeFromTop (knobH);
+    for (auto* k : { &reverseGainKnob, &shockDuckKnob, &shockDuckTimeKnob, &shadowTailKnob })
+    {
+        layoutKnob (*k, boomRow.removeFromLeft (knobW));
+        boomRow.removeFromLeft (4);
     }
 }

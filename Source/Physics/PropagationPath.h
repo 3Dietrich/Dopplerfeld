@@ -156,6 +156,51 @@ public:
     // als auch die Amplitude (größer = lauter, siehe triggerNWave()).
     void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear);
 
+    // Pegel der ZEITVERKEHRT gehoerten Zweige, linear (0.5 = 6 dB leiser).
+    //
+    // Bei Ueberschall liefert der Loeser mehrere Wurzeln: einen Zweig, dessen
+    // Leseposition vorwaerts laeuft, und einen, dessen Leseposition rueckwaerts
+    // laeuft - was die Quelle zuletzt gesendet hat, trifft zuerst ein. Beide
+    // sind physikalisch da. Real geht der rueckwaerts laufende Anteil neben dem
+    // vorwaerts laufenden weitgehend unter (@dpa 20260821: "es muss neben dem
+    // Rueckwaerts irgend etwas lauteres geben, sonst waere es hoerbar, und wenn
+    // hoerbar, gibt's auch Aufnahmen"); im Modell steht er gleichberechtigt
+    // daneben und draengt sich vor. Dieser Regler ist der Griff dafuer.
+    //
+    // 1.0 laesst alles wie bisher. Die N-Welle bleibt unberuehrt - der Knall
+    // ist eine eigene Schicht, kein Zweiginhalt.
+    void setReverseGain (double gainLinear);
+
+    // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber diesen
+    // Weg laeuft (@dpa 20260821: "waehrend der N-Wave darf kein zusaetzlicher
+    // Schall hinzukommen - hoechstens ein 'luftholen-geraeusch'! aber keine
+    // Noise vom Motor. Das hat mit der Stossfront zu tun.").
+    //
+    // amount01 ist die Tiefe (0 = aus, 1 = waehrend des Pulses ganz stumm),
+    // releaseSeconds die Zeit, in der der Ton danach zurueckkommt - genau das
+    // "Luftholen". Gilt fuer den ganzen Pfad, nicht nur fuer den Zweig, der den
+    // Puls traegt: der Motorton liefe sonst ueber den Nachbarzweig weiter.
+    void setShockDuck (double amount01, double releaseSeconds);
+
+    // Mindestdauer des Ausklangs, wenn ein Zweig AN DER KAUSTIK verschwindet,
+    // in Sekunden.
+    //
+    // Rechnerisch folgt diese Dauer aus der Physik (eps / dM_r/dt: wie schnell
+    // der Hoerweg durch die Front laeuft), praktisch faellt sie bei schnellen
+    // Vorbeifluegen immer auf die Untergrenze rampSeconds von 1 ms - gemessen
+    // im load_check: alle Kaustik-Tode mit Ausklang 1,000 ms bei einem
+    // Todespegel von 1,000, also volle Lautstaerke. Ein voll ausgesteuerter
+    // Zweig, der in einer Millisekunde weg ist, ist genau das, was @dpa am
+    // rueckwaerts laufenden Anteil hoert: "klingt so als waere das schon
+    // korrekt, nur dass es ploetzlich aufhoert".
+    //
+    // Physikalisch endet ein Hoerweg an der Kaustik nicht schlagartig: dahinter
+    // liegt eine Schattenzone, in die hinein gebeugter Schall weiterlaeuft. Wie
+    // lang dieser Ausklang ist, haengt an Geometrie und Frequenz - deshalb ein
+    // Regler statt einer erfundenen Konstante. Default ist rampSeconds, also
+    // exakt das bisherige Verhalten.
+    void setShadowTailSeconds (double seconds);
+
     // Phase 2 (Plan 2.7 / Abschnitt 7). In Phase 1 ohne Wirkung, damit später
     // kein Aufrufer geändert werden muss.
     // Klassisches Pegel-Panning zusaetzlich zur Ohrgeometrie (@dpa 20260819:
@@ -403,7 +448,10 @@ private:
     // Auslöser (Paar-Geburt an der Kegelankunft und M_r-Durchgang eines
     // bereits bestehenden Zweigs, siehe process()) - beide sollen exakt
     // denselben Puls erzeugen, keine zwei leicht auseinanderlaufenden Formeln.
-    void triggerNWave (Branch& b, double c) const;
+    void triggerNWave (Branch& b, double c, double listenerTimeNow);
+
+    // Absenkungsfaktor durch die Stossfront zur Hoererzeit t, 1 = unberuehrt.
+    double shockDuckAt (double listenerTime) const;
 
     double lowpassCoeff (double R) const;
 
@@ -586,6 +634,30 @@ private:
 
     // Regelbarer Pegel des Knalls, linear (siehe Params::nWaveGainDb).
     double nWaveGain      = 1.0;
+
+    // Siehe setReverseGain(). 1.0 = unveraendert.
+    double reverseGain = 1.0;
+
+    // Breite der Blende zwischen vorwaerts und rueckwaerts gehoertem Zweig,
+    // gemessen in dTau/dt. Die Leseposition eines Zweigs wandert mit
+    // (1 - dTau): unter 1 vorwaerts, ueber 1 rueckwaerts. Ohne Blende waere
+    // der Uebergang ein Pegelsprung mitten im Signal.
+    static constexpr double reverseBlendWidth = 0.25;
+
+    // Siehe setShockDuck(). Default 0 = aus, damit bestehende Presets
+    // unveraendert klingen.
+    double shockDuckAmount  = 0.0;
+    double shockDuckRelease = 0.08;
+
+    // Ende der zuletzt ausgeloesten Stossfront, in Hoererzeit. Pfadweit statt
+    // je Zweig gefuehrt (siehe setShockDuck) und als Zeitpunkt statt als
+    // Huellkurve, weil die Zweige nacheinander ueber denselben Sample-Bereich
+    // laufen - ein gemeinsamer Huellkurvenzustand liesse sich so nicht
+    // fortschreiben, ein gemeinsamer Zeitpunkt schon.
+    double shockEndTime = -1.0e18;
+
+    // Siehe setShadowTailSeconds(). Default 1 ms = bisheriges Verhalten.
+    double shadowTailSeconds = 1.0e-3;
 
     // Spitzendruck der N-Welle in einem Meter Abstand. Modellkonstante, kein
     // Regler: die Regler sind An/Aus und Größe. Der Wert ist so gewählt, dass

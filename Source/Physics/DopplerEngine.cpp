@@ -214,6 +214,9 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setAirAbsorptionAmount (airAbsorbAmount);
     setDistanceCurve (distanceCurve);
     setNWave (nWaveOn, nWaveSizeM, nWaveGain);
+    setReverseGain (reverseGain);
+    setShockDuck (shockDuckAmount, shockDuckRelease);
+    setShadowTailSeconds (shadowTailSeconds);
 
     reset();
 }
@@ -315,6 +318,9 @@ void DopplerEngine::configurePendingSet (Vec3 newPos, Vec3 preVelocity)
         p.setAirAbsorptionAmount (airAbsorbAmount);
         p.setDistanceCurve (distanceCurve);
         p.setNWave (nWaveOn, nWaveSizeM, nWaveGain);
+        p.setReverseGain (reverseGain);
+        p.setShockDuck (shockDuckAmount, shockDuckRelease);
+        p.setShadowTailSeconds (shadowTailSeconds);
     }
 }
 
@@ -486,6 +492,34 @@ void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres, double ga
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
             p.setNWave (shouldBeEnabled, sizeMetres, gainLinear);
+}
+
+void DopplerEngine::setReverseGain (double gainLinear)
+{
+    reverseGain = gainLinear;
+
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setReverseGain (gainLinear);
+}
+
+void DopplerEngine::setShockDuck (double amount01, double releaseSeconds)
+{
+    shockDuckAmount  = amount01;
+    shockDuckRelease = releaseSeconds;
+
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setShockDuck (amount01, releaseSeconds);
+}
+
+void DopplerEngine::setShadowTailSeconds (double seconds)
+{
+    shadowTailSeconds = seconds;
+
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setShadowTailSeconds (seconds);
 }
 
 Vec3 DopplerEngine::cloneOffset (int index, double spreadMetres)

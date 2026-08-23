@@ -157,7 +157,7 @@ double PropagationPath::nWaveAt (const Branch& b)
     return b.nAmp * shape;
 }
 
-void PropagationPath::triggerNWave (Branch& b, double c) const
+void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow)
 {
     // Pulsdauer aus der Ausdehnung des Körpers: die Zeit, die der Schall
     // braucht, um ihn der Länge nach zu durchlaufen, mal zwei (Bug- und
@@ -218,6 +218,45 @@ void PropagationPath::triggerNWave (Branch& b, double c) const
            * nWaveGain;
 
     b.nPhase = 0.0;
+
+    // Fenster fuer die Absenkung des uebrigen Schalls: solange die Stossfront
+    // ueber diesen Weg laeuft, kommt nichts anderes durch (siehe
+    // setShockDuck). Es wird nur verlaengert, nie verkuerzt - eine zweite,
+    // kuerzere Front darf ein noch laufendes Fenster nicht abschneiden.
+    shockEndTime = std::max (shockEndTime, listenerTimeNow + b.nDuration);
+}
+
+double PropagationPath::shockDuckAt (double listenerTime) const
+{
+    if (shockDuckAmount <= 0.0)
+        return 1.0;
+
+    const double since = listenerTime - shockEndTime;
+
+    // Waehrend des Pulses voll abgesenkt, danach kommt der Ton mit der
+    // eingestellten Zeitkonstante zurueck.
+    const double g = since <= 0.0 ? 1.0
+                                  : std::exp (-since / std::max (1.0e-4, shockDuckRelease));
+
+    return 1.0 - shockDuckAmount * g;
+}
+
+void PropagationPath::setReverseGain (double gainLinear)
+{
+    reverseGain = std::max (0.0, gainLinear);
+}
+
+void PropagationPath::setShadowTailSeconds (double seconds)
+{
+    // Nie kuerzer als die Anti-Klick-Rampe - darunter waere der Ausklang
+    // selbst wieder ein Knacks.
+    shadowTailSeconds = std::max (rampSeconds, seconds);
+}
+
+void PropagationPath::setShockDuck (double amount01, double releaseSeconds)
+{
+    shockDuckAmount  = std::min (1.0, std::max (0.0, amount01));
+    shockDuckRelease = std::max (1.0e-4, releaseSeconds);
 }
 
 void PropagationPath::setDiscoveryIntervalSeconds (double seconds)
@@ -720,7 +759,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // beliebig: an der Falte liegen R und tau für beide praktisch
                 // gleich.
                 nWavePairBirthCount.store (nWavePairBirthCount.load() + 1);
-                triggerNWave (a, c);
+                triggerNWave (a, c, tStart);
             }
         }
 
@@ -778,8 +817,14 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 const bool   diedAtCaustic  = (distanceToCone < causticWidths * eps);
 
                 if (diedAtCaustic)
-                    b.deathTau = std::min (maxDeathTailSeconds,
-                                           std::max (rampSeconds,
+                    // Untergrenze ist der eingestellte Schattenausklang (siehe
+                    // setShadowTailSeconds), nicht mehr die blosse
+                    // Anti-Klick-Rampe: die rechnerische Dauer faellt bei
+                    // schnellen Vorbeifluegen immer auf diese Untergrenze, und
+                    // dann entscheidet allein sie, ob der Zweig ausklingt oder
+                    // abreisst. Der Deckel nach oben bleibt.
+                    b.deathTau = std::min (std::max (maxDeathTailSeconds, shadowTailSeconds),
+                                           std::max (shadowTailSeconds,
                                                      eps / std::max (b.machRate, 1.0e-9)));
                 else if (b.env >= lostBranchMinEnv)
                     b.deathTau = lostBranchTailSeconds;
@@ -852,11 +897,19 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 else
                     nWaveFallingCount.store (nWaveFallingCount.load() + 1);
 
-                triggerNWave (b, c);
+                triggerNWave (b, c, tStart);
             }
 
             b.prevMach = machNow;
             b.machSeen = true;
+
+            // Absenkung durch eine laufende Stossfront: zweimal je Segment
+            // ausgewertet und dazwischen linear geblendet, statt pro Sample ein
+            // exp() zu rechnen. Segmente sind kurz (Solver-Stride), der
+            // Unterschied zum echten Exponentialverlauf liegt weit unter der
+            // Hoerschwelle - der Rechenaufwand pro Sample und Zweig nicht.
+            const double duck0 = shockDuckAt (tStart);
+            const double duck1 = shockDuckAt (tStart + (double) len / sr);
 
             for (int i = 0; i < len; ++i)
             {
@@ -940,7 +993,26 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // Zweig seinen eigenen Knall mitten im Puls abschneidet. Ihre
                 // Hüllkurve hat sie in nRise/nDuration selbst (siehe
                 // nWaveAt), sie braucht keine zweite.
-                double outSample = y * b.env;
+                // Zeitverkehrt gehoerter Zweig (siehe setReverseGain): die
+                // Leseposition wandert mit (1 - dTau), ueber dTau = 1 also
+                // rueckwaerts. Geblendet statt geschaltet, sonst waere der
+                // Uebergang ein Pegelsprung mitten im Signal.
+                double reverseFactor = 1.0;
+
+                if (reverseGain != 1.0)
+                {
+                    const double dTauNow = b.dTau + (dTau1 - b.dTau) * u;
+                    const double blend   = std::min (1.0, std::max (0.0,
+                                              (dTauNow - 1.0) / reverseBlendWidth));
+
+                    reverseFactor = 1.0 + (reverseGain - 1.0) * blend;
+                }
+
+                // Die Absenkung trifft NUR den Zweiginhalt, nicht die N-Welle
+                // darunter: gedaempft werden soll der Motor waehrend der
+                // Stossfront, nicht der Knall selbst.
+                double outSample = y * b.env * reverseFactor
+                                 * (duck0 + (duck1 - duck0) * u);
 
                 if (b.nPhase >= 0.0)
                 {
