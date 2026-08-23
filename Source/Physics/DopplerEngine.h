@@ -198,6 +198,30 @@ public:
             cloneJitterOffset[(size_t) index] = offsetMetres;
     }
 
+    // Zwei Propeller an Fluegeln (@dpa 20260823: "(2) Propeller an Fluegeln
+    // (die in n meter auseinander, immer flach in der Richtung des fluges
+    // sind..)").
+    //
+    // Sie sind zwei zusaetzliche Schallwege mit eigenem Versatz - dieselbe
+    // Maschinerie wie bei den Klonen, aber mit einem Versatz, der NICHT im
+    // Raum feststeht: er sitzt quer zur Flugrichtung und waagerecht, dreht
+    // sich also mit der Bahn mit. Genau das meint "flach in der Richtung des
+    // Fluges": die Fluegel stehen quer zum Flug, nicht quer zur Weltachse.
+    //
+    // gainLinear ist ihr Pegel; sie kommen zum Rumpfschall hinzu, statt ihn zu
+    // ersetzen. Wer nur die Propeller hoeren will, dreht den Rumpf ueber die
+    // Motor-Pegel herunter.
+    void setPropellers (bool enabled, double gainLinear);
+
+    // Der fertige Versatz je Propeller, in Metern, gegenueber der Quelle.
+    // Kommt aus dem Processor, wo die Flugrichtung ohnehin bekannt ist - die
+    // Engine kennt nur Bahnpunkte, nicht deren Ableitung.
+    void setPropellerOffset (int index, Vec3 offsetMetres)
+    {
+        if (index >= 0 && index < propellerCount)
+            propellerOffset[(size_t) index] = offsetMetres;
+    }
+
     // Mehrfachreflexionen: genau EINE zusätzliche Generation, also Wege der
     // Form Quelle -> Fläche X -> Fläche Y -> Ohr mit X != Y. Mehr nicht, und
     // ausdrücklich keine Rekursion.
@@ -344,6 +368,10 @@ private:
         // >= 0: dieser Weg gehört einem Klon, nicht der echten Quelle.
         int clone  = -1;
 
+        // 0 oder 1: dieser Weg gehoert einem der beiden Propeller an den
+        // Fluegeln, nicht dem Rumpf (siehe setPropellers). -1 sonst.
+        int prop   = -1;
+
         int order() const { return (first < 0 ? 0 : (second < 0 ? 1 : 2)); }
     };
 
@@ -436,6 +464,14 @@ private:
 
     // Wackler je Klon, siehe setCloneJitterOffset().
     std::array<Vec3, (size_t) maxRealClones> cloneJitterOffset {};
+
+    // Propellerpaar, siehe setPropellers(). Zwei Stueck - "(2) Propeller an
+    // Fluegeln", nicht beliebig viele.
+    static constexpr int propellerCount = 2;
+
+    bool   propellersOn   = false;
+    double propellerGain  = 1.0;
+    std::array<Vec3, (size_t) propellerCount> propellerOffset {};
 
     SoundSource* source = nullptr;
 

@@ -43,6 +43,18 @@ public:
     // Oktavlage der Unwucht, siehe Params::imbalanceOctave.
     void setImbalanceOctave (float octaves);
 
+    // Betriebsart des Motors (@dpa 20260824: "in 'Motor' mehrere umschaltbar
+    // machen"). kindIndex folgt exakt der Reihenfolge aus Params::engineKind
+    // (createParameterLayout()): 0=Frei, 1=Duesenantrieb, 2=Raketenantrieb,
+    // 3=Hubschrauber, 4=Propeller - siehe kindWeightTable in der .cpp.
+    // Ueberschreibt keinen der uebrigen Setter hier, gewichtet nur, wie stark
+    // ihre Ergebnisse beitragen (kein Regler wird dem Nutzer weggenommen).
+    void setEngineKind (int kindIndex);
+
+    // Nur in Betriebsart "Hubschrauber" hoerbar: Rotordrehzahl (Hz) und
+    // Blattzahl, multipliziert ergeben sie die Blattschlag-Frequenz.
+    void setHeliRotor (float rotorHz, float bladeCount);
+
 private:
     // Ein Sägezahn-Teilton: Reglerwerte atomar, Phase ist reiner Audio-Thread-
     // Zustand (kein Fremdzugriff, daher kein Atomic nötig).
@@ -72,6 +84,44 @@ private:
     double sineBlendCoeff = 1.0;   // je Sample, aus sineBlendSeconds und der Rate
 
     static constexpr double sineBlendSeconds = 0.02;
+
+    // Betriebsart des Motors (@dpa 20260824): fuenf Gewichte werden weich
+    // Richtung Zieltabelle (kindWeightTable in der .cpp) nachgefuehrt, exakt
+    // nach demselben Muster wie sineBlend oben - ein harter Umschalt waere
+    // ein Sprung im Signal. "Frei" UND "Propeller" liegen beide auf den
+    // Identitaets-Werten (harmonic=1, noise=1, alle Zusatzklaenge=0), darum
+    // klingt der Default nach diesem Umbau bitgleich wie vorher.
+    std::atomic<int> engineKind { 0 };
+
+    double kindHarmonicGain = 1.0;   // Gewicht der vier Saegezahn/Sinus-Teiltoene
+    double kindNoiseGain    = 1.0;   // Gewicht des vorhandenen RPM-Rauschbands
+    double kindJetWhistle   = 0.0;   // Turbinen-Pfeifton (Duese)
+    double kindRocketNoise  = 0.0;   // eigenes, tiefes Breitband-Rauschen (Rakete)
+    double kindHeliRotor    = 0.0;   // Rotor-Blattschlag (Hubschrauber)
+    double kindBlendCoeff = 1.0;     // wie sineBlendCoeff, aus kindBlendSeconds
+
+    static constexpr double kindBlendSeconds = 0.05;
+
+    // Turbinen-Pfeifton (Duesenantrieb): eigene Phase, ein Vielfaches der
+    // Grundfrequenz - schmalbandig, weil ein reiner Sinus.
+    double whistlePhase = 0.0;
+    static constexpr double whistleRatio   = 12.0;
+    static constexpr double whistleGainRef = 0.55;
+
+    // Rakete: eigenes, von der Motor-RPM unabhaengiges Breitband-Rauschen -
+    // eine Rakete hat keine rotierenden Teile, sie bruellt nur.
+    juce::dsp::StateVariableTPTFilter<float> rocketNoiseFilter;
+    juce::Random rocketNoiseRandom;
+    static constexpr double rocketGainRef = 0.9;
+
+    // Hubschrauber-Rotor: periodischer Blattschlag mit EIGENER Drehzahl
+    // (@dpa: "Motor, und Rotoren mit Geschwindigkeit extra"), unabhaengig
+    // vom Motorton. Frequenz = Rotordrehzahl * Blattzahl.
+    std::atomic<float> heliRotorHz { 5.0f };
+    std::atomic<float> heliBladeCount { 4.0f };
+    double rotorPhase = 0.0;
+    static constexpr double rotorSharpness = 24.0;   // je hoeher, desto kuerzer/schaerfer der Schlag
+    static constexpr double heliGainRef = 0.85;
 
     // Bezugsdrehzahl der Track-Formel aus Plan 3.10 (f_i-Formel), keine
     // Automation, daher als Konstante statt Parameter.

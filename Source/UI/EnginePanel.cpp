@@ -29,6 +29,18 @@ void EnginePanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
     knob.slider.setBounds (cell);
 }
 
+void EnginePanel::populateChoices (juce::ComboBox& combo, juce::AudioProcessorValueTreeState& apvts, const juce::String& paramID)
+{
+    if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (paramID)))
+    {
+        int itemId = 1;
+        for (auto& choice : choiceParam->choices)
+            combo.addItem (choice, itemId++);
+    }
+    // Kein Parameter oder falscher Typ unter dieser ID - waere ein Tippfehler
+    // in paramID; Dropdown bliebe dann leer statt still falsch zu wirken.
+}
+
 EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
 {
     engineSineButton.setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
@@ -57,6 +69,52 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (jitterAmountKnob, apvts, Params::jitterAmount, "Jitter Amt",  Tooltips::Key::JitterAmount);
     setupKnob (jitterRateKnob,   apvts, Params::jitterRateHz, "Jitter Rate", Tooltips::Key::JitterRate);
+
+    // --- Betriebsart (@dpa 20260824) ---
+
+    engineKindLabel.setText ("Betriebsart", juce::dontSendNotification);
+    engineKindLabel.setJustificationType (juce::Justification::centredLeft);
+    engineKindLabel.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
+    addAndMakeVisible (engineKindLabel);
+    populateChoices (engineKindCombo, apvts, Params::engineKind);
+    engineKindCombo.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
+    addAndMakeVisible (engineKindCombo);
+    engineKindAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::engineKind, engineKindCombo);
+    engineKindCombo.onChange = [this] { updateHeliControlsEnabled(); };
+
+    setupKnob (propSpanKnob,  apvts, Params::propSpan,    "Spannweite", Tooltips::Key::PropSpan);
+    setupKnob (propLevelKnob, apvts, Params::propLevelDb, "Prop Pegel", Tooltips::Key::PropLevel);
+
+    setupKnob (heliRotorHzKnob,    apvts, Params::heliRotorHz,    "Rotor Hz",  Tooltips::Key::HeliRotorHz);
+    setupKnob (heliBladeCountKnob, apvts, Params::heliBladeCount, "Blaetter",  Tooltips::Key::HeliBladeCount);
+
+    // Anfangszustand passend zur tatsaechlich geladenen Betriebsart setzen -
+    // sonst stuenden die Rotor-Regler nach dem Oeffnen des Editors aktiv,
+    // obwohl der geladene Zustand z.B. "Duesenantrieb" waehlt.
+    updateHeliControlsEnabled();
+}
+
+void EnginePanel::updateHeliControlsEnabled()
+{
+    // Index 3 = "Hubschrauber", siehe Reihenfolge in Params::engineKind
+    // (createParameterLayout()). Regler bleiben sichtbar, nur ausgegraut -
+    // sie verschwinden nicht, damit die Panelhoehe konstant bleibt.
+    const bool heliMode = engineKindCombo.getSelectedItemIndex() == 3;
+
+    heliRotorHzKnob.slider.setEnabled (heliMode);
+    heliRotorHzKnob.label.setEnabled (heliMode);
+    heliBladeCountKnob.slider.setEnabled (heliMode);
+    heliBladeCountKnob.label.setEnabled (heliMode);
+
+    // Index 4 = "Propeller", ebenfalls aus der Reihenfolge in
+    // Params::engineKind. Dieselbe Regel: sichtbar bleiben, nur ausgegraut.
+    const bool propMode = engineKindCombo.getSelectedItemIndex() == 4;
+
+    for (auto* k : { &propSpanKnob, &propLevelKnob })
+    {
+        k->slider.setEnabled (propMode);
+        k->label.setEnabled (propMode);
+    }
 }
 
 void EnginePanel::refreshTooltips()
@@ -71,13 +129,23 @@ void EnginePanel::refreshTooltips()
 
     engineSineButton.setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
 
-    for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob,
-                      &jitterAmountKnob, &jitterRateKnob })
+    for (auto* k : { &propSpanKnob, &propLevelKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
     }
+
+    for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob,
+                      &jitterAmountKnob, &jitterRateKnob, &heliRotorHzKnob, &heliBladeCountKnob })
+    {
+        const auto tooltip = Tooltips::text (k->tooltipKey);
+        k->slider.setTooltip (tooltip);
+        k->label.setTooltip (tooltip);
+    }
+
+    engineKindLabel.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
+    engineKindCombo.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
 }
 
 void EnginePanel::resized()
@@ -124,11 +192,32 @@ void EnginePanel::resized()
     }
     area.removeFromTop (6);
 
-    // Jitter als letzte Reihe.
+    // Jitter als letzte Reihe der Klang-Regler.
     auto miscRow = area.removeFromTop (knobH);
     for (auto* k : { &jitterAmountKnob, &jitterRateKnob })
     {
         layoutKnob (*k, miscRow.removeFromLeft (knobW));
         miscRow.removeFromLeft (4);
+    }
+    area.removeFromTop (6);
+
+    // Betriebsart: eigene Zeile, Label+Combo wie bei MotionPanel::flyKindCombo.
+    auto kindRow = area.removeFromTop (44);
+    auto kindArea = kindRow.removeFromLeft (juce::jmin (200, kindRow.getWidth()));
+    engineKindLabel.setBounds (kindArea.removeFromTop (18));
+    engineKindCombo.setBounds (kindArea);
+    area.removeFromTop (6);
+
+    // Rotordrehzahl/Blattzahl - nur in Betriebsart "Hubschrauber" wirksam,
+    // bleiben aber sichtbar und ausgegraut (updateHeliControlsEnabled()),
+    // damit hier keine halbleere Zeile entsteht.
+    // Rotordrehzahl/Blattzahl und die beiden Propeller-Regler teilen sich eine
+    // Zeile: es wirkt immer nur eines der beiden Paare, und zwei halbleere
+    // Zeilen nebeneinander waeren verschenkter Platz.
+    auto heliRow = area.removeFromTop (knobH);
+    for (auto* k : { &heliRotorHzKnob, &heliBladeCountKnob, &propSpanKnob, &propLevelKnob })
+    {
+        layoutKnob (*k, heliRow.removeFromLeft (knobW));
+        heliRow.removeFromLeft (4);
     }
 }

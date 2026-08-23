@@ -282,6 +282,35 @@ namespace Params
 
     constexpr const char* imbalanceOctave = "imbalanceOctave";
 
+    // Betriebsart des Motors (@dpa 20260824: "in 'Motor' mehrere umschaltbar
+    // machen"): Duesenantrieb/Raketenantrieb/Hubschrauber/Propeller/Frei.
+    // Ueberschreibt KEINEN vorhandenen Regler - der Generator gewichtet nur,
+    // wie stark Teiltoene/Rauschband beitragen, und schaltet je Betriebsart
+    // einen eigenen Zusatzklang dazu (siehe EngineGenerator). "Frei" und
+    // "Propeller" verhalten sich wie das bisherige Verhalten, "Propeller" ist
+    // vorerst nur Platzhalter fuer die Geometrie (Source/Physics, nicht Teil
+    // dieses Generators).
+    constexpr const char* engineKind = "engineKind";
+
+    // Nur in Betriebsart "Hubschrauber" wirksam: Rotordrehzahl (Hz, eigenes
+    // Tempo, unabhaengig von der Motor-RPM) und Blattzahl. Multipliziert
+    // ergeben sie die Blattschlagfrequenz - das charakteristische Wummern
+    // (@dpa: "Motor, und Rotoren mit Geschwindigkeit extra").
+    constexpr const char* heliRotorHz    = "heliRotorHz";
+    constexpr const char* heliBladeCount = "heliBladeCount";
+
+    // Nur in Betriebsart "Propeller" wirksam: die beiden Propeller sitzen an
+    // den Fluegeln, also propSpan Meter auseinander und quer zur Flugrichtung
+    // (@dpa 20260823: "(2) Propeller an Fluegeln (die in n meter auseinander,
+    // immer flach in der Richtung des fluges sind..)"). Sie sind zwei eigene
+    // Schallwege in der Geometrie, kein Klang im Generator - deshalb liegen
+    // sie hier und nicht bei den Motor-Reglern.
+    //
+    // propLevelDb ist ihr Pegel. Sie kommen zum Rumpfschall hinzu, statt ihn
+    // zu ersetzen.
+    constexpr const char* propSpan    = "propSpan";
+    constexpr const char* propLevelDb = "propLevelDb";
+
     constexpr const char* groundGain = "groundGain";
 
     // Anteil des gewoehnlichen Pegel-Pannings, 0..100 % (@dpa 20260819: "bitte

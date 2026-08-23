@@ -188,6 +188,14 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
         recipes.push_back ({ 1, -1, -1, k });
     }
 
+    // Propellerpaar: wie die Klone je ein Pfadpaar mit reinem Direktschall,
+    // dauerhaft bereitliegend und uebersprungen, solange es aus ist.
+    for (int prop = 0; prop < propellerCount; ++prop)
+    {
+        recipes.push_back ({ 0, -1, -1, -1, prop });
+        recipes.push_back ({ 1, -1, -1, -1, prop });
+    }
+
     // Der Direktschall ist die Fläche ohne Fläche: keine Spiegelung, keine
     // Dämpfung, nie abschaltbar.
     surfaces[0] = Surface{};
@@ -577,6 +585,12 @@ void DopplerEngine::setRealClones (int count, double spreadMetres, double gainLi
     cloneRealLevel = std::max (0.0, gainLinear);
 }
 
+void DopplerEngine::setPropellers (bool enabled, double gainLinear)
+{
+    propellersOn  = enabled;
+    propellerGain = std::max (0.0, gainLinear);
+}
+
 void DopplerEngine::setSecondOrderEnabled (bool shouldBeEnabled)
 {
     secondOrderOn = shouldBeEnabled;
@@ -616,6 +630,9 @@ bool DopplerEngine::recipeEnabled (const PathRecipe& r) const
     if (r.clone >= 0)
         return r.clone < realClones;
 
+    if (r.prop >= 0)
+        return propellersOn;
+
     switch (r.order())
     {
         case 0:  return true;   // Direktschall, immer
@@ -628,6 +645,18 @@ bool DopplerEngine::recipeEnabled (const PathRecipe& r) const
 
 PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
 {
+    if (r.prop >= 0)
+    {
+        // Wie beim Klon eine reine Verschiebung: Quelle um s verschieben ist
+        // dasselbe wie Empfaenger um -s verschieben. Der Versatz selbst kommt
+        // fertig aus dem Processor, weil dort die Flugrichtung bekannt ist
+        // (siehe setPropellerOffset).
+        PathTransform t;
+        t.offset = -propellerOffset[(size_t) r.prop];
+        t.gain   = (float) propellerGain;
+        return t;
+    }
+
     if (r.clone >= 0)
     {
         // Quelle um s verschieben == Empfänger um -s verschieben. Die

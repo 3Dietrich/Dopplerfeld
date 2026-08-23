@@ -372,6 +372,14 @@ private:
         std::atomic<float>* jitterRateHz = nullptr;
         std::atomic<float>* imbalance    = nullptr;
 
+        // Betriebsart (siehe Params::engineKind) und die beiden Hubschrauber-
+        // eigenen Regler, nur in dieser Betriebsart hoerbar.
+        std::atomic<float>* engineKind     = nullptr;
+        std::atomic<float>* propSpan      = nullptr;
+        std::atomic<float>* propLevelDb   = nullptr;
+        std::atomic<float>* heliRotorHz    = nullptr;
+        std::atomic<float>* heliBladeCount = nullptr;
+
         std::atomic<float>* sampleGain  = nullptr;
         std::atomic<float>* samplePitch = nullptr;
         std::atomic<float>* loopStart   = nullptr;
@@ -469,6 +477,19 @@ private:
     // der Tick-Schleife, ausgefuehrt am Anfang des naechsten advanceMotion() -
     // siehe Kommentar dort.
     bool flyLoopRestartPending = false;
+
+    // Geglaettete Flugrichtung der Quelle, fuer die Ausrichtung des
+    // Propellerpaars (siehe DopplerEngine::setPropellerOffset). Geglaettet,
+    // weil der Versatz der beiden Propeller eine ECHTE Position ist: zappelte
+    // die Richtung, zappelten die beiden Schallquellen mit, und ein
+    // Positionssprung ist formal Ueberschall. Bei Stillstand bleibt die
+    // zuletzt bekannte Richtung stehen, statt auf null zu fallen.
+    Vec3 propellerHeading { 1.0, 0.0, 0.0 };
+
+    // Zeitkonstante der Richtungsglaettung, in Sekunden. Kurz genug, dass die
+    // Fluegel einer Kurve folgen, lang genug, dass ein Ruck in der Bahn sie
+    // nicht herumreisst.
+    static constexpr double propellerHeadingTau = 0.15;
 
     // Hauptschalter, siehe Params::masterOn. Der Pegel faehrt weich auf 0 und
     // erst DANACH steigt der Block ganz aus - haette er das sofort getan, waere

@@ -1,6 +1,33 @@
 #include "EngineGenerator.h"
 #include <cmath>
 
+namespace
+{
+    // Fuenf Gewichte pro Betriebsart, exakt in der Reihenfolge von
+    // Params::engineKind (Params.cpp createParameterLayout()): 0=Frei,
+    // 1=Duesenantrieb, 2=Raketenantrieb, 3=Hubschrauber, 4=Propeller.
+    // "Frei" und "Propeller" liegen beide auf den Identitaets-Werten
+    // (harmonic=1, noise=1, alle Zusatzklaenge=0) - Bestandspresets klingen
+    // dadurch bitgleich wie vor diesem Umbau (@dpa-Vorgabe).
+    struct KindWeights
+    {
+        double harmonic;     // Gewicht der vier Teiltoene
+        double noise;        // Gewicht des vorhandenen RPM-Rauschbands
+        double jetWhistle;    // Turbinen-Pfeifton (nur Duese)
+        double rocketNoise;   // eigenes Breitband-Rauschen (nur Rakete)
+        double heliRotor;     // Rotor-Blattschlag (nur Hubschrauber)
+    };
+
+    constexpr std::array<KindWeights, 5> kindWeightTable
+    {{
+        { 1.0,  1.0, 0.0, 0.0, 0.0 },   // Frei
+        { 0.35, 1.8, 1.0, 0.0, 0.0 },   // Duesenantrieb: Rauschband dominiert, Teiltoene treten zurueck
+        { 0.05, 2.2, 0.0, 1.0, 0.0 },   // Raketenantrieb: fast nur tiefes Breitbandrauschen, keine Tonhoehe
+        { 1.0,  1.0, 0.0, 0.0, 1.0 },   // Hubschrauber: Motorton bleibt, Rotor kommt dazu
+        { 1.0,  1.0, 0.0, 0.0, 0.0 },   // Propeller: vorerst wie Frei (Geometrie folgt in Source/Physics)
+    }};
+}
+
 EngineGenerator::EngineGenerator()
 {
     // Default-Verhältnisse bewusst leicht schief (Plan 3.10): exakt
@@ -25,6 +52,9 @@ void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
     // Zeitkonstante der Wellenform-Ueberblendung, siehe sineBlendSeconds.
     sineBlendCoeff = 1.0 - std::exp (-1.0 / std::max (1.0, sineBlendSeconds * sampleRate));
 
+    // Zeitkonstante der Betriebsart-Ueberblendung, siehe kindBlendSeconds.
+    kindBlendCoeff = 1.0 - std::exp (-1.0 / std::max (1.0, kindBlendSeconds * sampleRate));
+
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) maxBlockSize, 1 };
 
     noiseFilter.prepare (spec);
@@ -32,6 +62,9 @@ void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
 
     jitterFilter.prepare (spec);
     jitterFilter.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
+
+    rocketNoiseFilter.prepare (spec);
+    rocketNoiseFilter.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
 
     reset();
 }
@@ -42,9 +75,12 @@ void EngineGenerator::reset()
         h.phase = 0.0;
 
     halfPhase = 0.0;
+    whistlePhase = 0.0;
+    rotorPhase = 0.0;
 
     noiseFilter.reset();
     jitterFilter.reset();
+    rocketNoiseFilter.reset();
 
     // Feste Startwerte statt der Uhrzeit-Aussaat, die juce::Random von sich
     // aus mitbringt. Zwei Läufe mit denselben Einstellungen liefern damit
@@ -56,9 +92,11 @@ void EngineGenerator::reset()
     // wäre nicht prüfbar.
     //
     // Zwei verschiedene Zahlen, damit Rauschen und Jitter nicht dieselbe Folge
-    // durchlaufen und sich dadurch korrelieren.
+    // durchlaufen und sich dadurch korrelieren. Der Raketen-Rauschzweig
+    // bekommt aus demselben Grund eine dritte, eigene Saat.
     noiseRandom.setSeed (0x5eed1234);
     jitterRandom.setSeed (0x5eed4321);
+    rocketNoiseRandom.setSeed (0x5eed9999);
 }
 
 void EngineGenerator::setSineMode (bool shouldUseSine)
@@ -109,6 +147,24 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     noiseFilter.setCutoffFrequency ((float) fcNoise);
     noiseFilter.setResonance (juce::jmax (0.05f, noiseQ.load()));
 
+    // Betriebsart: Zieltabelle nachschlagen (Index kommt aus setEngineKind(),
+    // dort schon auf die Tabellengroesse geklemmt). Die eigentliche
+    // Ueberblendung passiert weiter unten sample-genau, siehe kindBlendCoeff.
+    const auto& kindTarget = kindWeightTable[(size_t) engineKind.load()];
+
+    // Rakete: eigenes Breitbandrauschen, Eckfrequenz oeffnet sich leicht mit
+    // u ("Gas geben"), bleibt aber immer tief-breitbandig - keine rotierenden
+    // Teile, die einen Ton geben koennten.
+    const double rocketFc = juce::jlimit (20.0, currentSampleRate * 0.49, 80.0 + 400.0 * u);
+    rocketNoiseFilter.setCutoffFrequency ((float) rocketFc);
+    rocketNoiseFilter.setResonance (1.0f / (float) std::sqrt (2.0));
+
+    // Hubschrauber-Rotor: Blattschlagfrequenz = Rotordrehzahl * Blattzahl,
+    // beides eigene Regler, unabhaengig von der Motor-RPM (@dpa: "Motor, und
+    // Rotoren mit Geschwindigkeit extra").
+    const double rotorBpf = juce::jmax (0.01, (double) heliRotorHz.load() * (double) heliBladeCount.load());
+    const double rotorPhaseInc = juce::jlimit (0.0, 0.45, rotorBpf / currentSampleRate);
+
     // Jitter: Tiefpass 3-15 Hz aus jitterRateHz, Tiefe j = j0 * u.
     const double jitterCutoff = juce::jlimit (0.5, currentSampleRate * 0.49, (double) jitterRateHz.load());
     jitterFilter.setCutoffFrequency ((float) jitterCutoff);
@@ -158,6 +214,15 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         // Header).
         sineBlend += (sineTarget - sineBlend) * sineBlendCoeff;
 
+        // Betriebsart-Gewichte ebenso sample-genau nachfuehren, statt hart
+        // umzuschalten - sonst waere ein Wechsel der Betriebsart ein Sprung
+        // im Signal, genau wie beim Sinus/Saegezahn-Umschalter oben.
+        kindHarmonicGain += (kindTarget.harmonic    - kindHarmonicGain) * kindBlendCoeff;
+        kindNoiseGain    += (kindTarget.noise       - kindNoiseGain)    * kindBlendCoeff;
+        kindJetWhistle   += (kindTarget.jetWhistle  - kindJetWhistle)   * kindBlendCoeff;
+        kindRocketNoise  += (kindTarget.rocketNoise - kindRocketNoise)  * kindBlendCoeff;
+        kindHeliRotor    += (kindTarget.heliRotor   - kindHeliRotor)    * kindBlendCoeff;
+
         // Jitter-Quelle: eigenes Rauschen durch den Tiefpass, normiert und geklemmt.
         const double jitterNoiseSample = (double) jitterRandom.nextFloat() * 2.0 - 1.0;
         const double jitterFiltered = (double) jitterFilter.processSample (0, (float) jitterNoiseSample);
@@ -196,9 +261,43 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                 h.phase -= 1.0;   // Wrap per Subtraktion, nicht fmod/Clamp (Plan-Vorgabe)
         }
 
+        // Betriebsart gewichtet die vier Teiltoene, statt sie hart ein-/
+        // auszuschalten (kindHarmonicGain ist 1.0 in "Frei"/"Propeller" -
+        // bitgleich zum bisherigen Verhalten).
+        harmonicSum *= kindHarmonicGain;
+
         // Motorband-Rauschen durch das RPM-abhängige Bandpassfilter.
         const double noiseSample = (double) noiseRandom.nextFloat() * 2.0 - 1.0;
         const double noiseFiltered = (double) noiseFilter.processSample (0, (float) noiseSample);
+
+        // Duesenantrieb: hoher, mit der (gejitterten) Grundfrequenz mitlaufender
+        // Turbinen-Pfeifton - schmalbandig, weil reiner Sinus. Phase laeuft
+        // immer durch, kindJetWhistle blendet den Beitrag nur ein/aus, sonst
+        // gaebe es beim Umschalten einen Phasensprung.
+        const double whistleFreq = (rpmJit / 60.0) * whistleRatio;
+        const double whistlePhaseInc = juce::jlimit (0.0, 0.45, whistleFreq / currentSampleRate);
+        const double whistleSample = std::sin (juce::MathConstants<double>::twoPi * whistlePhase)
+                                    * whistleGainRef * kindJetWhistle;
+        whistlePhase += whistlePhaseInc;
+
+        while (whistlePhase >= 1.0)
+            whistlePhase -= 1.0;
+
+        // Raketenantrieb: eigenes, tiefes Breitbandrauschen statt rotierender
+        // Teile - "sie bruellt nur".
+        const double rocketNoiseSample = (double) rocketNoiseRandom.nextFloat() * 2.0 - 1.0;
+        const double rocketFiltered = (double) rocketNoiseFilter.processSample (0, (float) rocketNoiseSample);
+
+        // Hubschrauber: periodischer Rotor-Blattschlag, eigene Phase mit
+        // eigener Drehzahl (rotorBpf, s.o.). Kosinus-Potenz ergibt einen
+        // schmalen, scharfen Schlag statt einer glatten Welle - je hoeher
+        // rotorSharpness, desto kuerzer/knackiger.
+        const double rotorRaised = std::pow (0.5 + 0.5 * std::cos (juce::MathConstants<double>::twoPi * rotorPhase), rotorSharpness);
+        const double heliSample = rotorRaised * heliGainRef * kindHeliRotor;
+        rotorPhase += rotorPhaseInc;
+
+        while (rotorPhase >= 1.0)
+            rotorPhase -= 1.0;
 
         // Unwucht: Amplitudenmodulation mit einer POSITIVEN Welle, 0 bis 1
         // (@dpa 20260820: "es kam mir so vor wie eine positive (sinus?)welle
@@ -220,7 +319,11 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         while (halfPhase >= 1.0)
             halfPhase -= 1.0;
 
-        out[n] = (float) ((harmonicSum + noiseFiltered * noiseGain) * imbalanceFactor);
+        out[n] = (float) ((harmonicSum
+                          + noiseFiltered * noiseGain * kindNoiseGain
+                          + whistleSample
+                          + rocketFiltered * rocketGainRef * kindRocketNoise
+                          + heliSample) * imbalanceFactor);
     }
 }
 
@@ -271,4 +374,18 @@ void EngineGenerator::setImbalance (float amount)
 void EngineGenerator::setImbalanceOctave (float octaves)
 {
     imbalanceOctave.store (octaves);
+}
+
+void EngineGenerator::setEngineKind (int kindIndex)
+{
+    // Auf die Tabellengroesse klemmen statt zu jassert()en - eine falsche ID
+    // waere ein Params.cpp/EngineGenerator.cpp-Mismatch, kein Nutzerfehler,
+    // und soll hier nicht abstuerzen (renderMono() indiziert ungeprueft).
+    engineKind.store (juce::jlimit (0, 4, kindIndex));
+}
+
+void EngineGenerator::setHeliRotor (float rotorHz, float bladeCount)
+{
+    heliRotorHz.store (rotorHz);
+    heliBladeCount.store (bladeCount);
 }

@@ -234,6 +234,12 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.jitterRateHz = raw (Params::jitterRateHz);
     pp.imbalance    = raw (Params::imbalance);
 
+    pp.engineKind     = raw (Params::engineKind);
+    pp.propSpan       = raw (Params::propSpan);
+    pp.propLevelDb    = raw (Params::propLevelDb);
+    pp.heliRotorHz    = raw (Params::heliRotorHz);
+    pp.heliBladeCount = raw (Params::heliBladeCount);
+
     pp.sampleGain  = raw (Params::sampleGain);
     pp.samplePitch = raw (Params::samplePitch);
     pp.loopStart   = raw (Params::loopStart);
@@ -708,6 +714,16 @@ void DopplerfeldProcessor::applyParameters()
     engineGenerator.setJitter (pp.jitterAmount->load(), pp.jitterRateHz->load());
     engineGenerator.setImbalance (pp.imbalance->load());
     engineGenerator.setImbalanceOctave (pp.imbalanceOctave->load());
+
+    engineGenerator.setEngineKind ((int) pp.engineKind->load());
+
+    // Propellerpaar: eingeschaltet ueber dieselbe Betriebsart-Auswahl wie die
+    // Klangarten (Index 4, siehe Params::engineKind), aber umgesetzt in der
+    // Geometrie statt im Generator - es sind zwei zusaetzliche Schallwege,
+    // kein zweiter Klang.
+    dopplerEngine.setPropellers ((int) pp.engineKind->load() == 4,
+                                 juce::Decibels::decibelsToGain ((double) pp.propLevelDb->load()));
+    engineGenerator.setHeliRotor (pp.heliRotorHz->load(), pp.heliBladeCount->load());
 
     // --- Sample ---
     sampleSource.setGainDb (pp.sampleGain->load());
@@ -1425,6 +1441,54 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         // weiter, und der naechste Tick setzt darauf auf. Wuerde der Wackler
         // dort hineinwandern, deckelte sich seine eigene Geschwindigkeit im
         // Folgetick selbst, und die Aufnahme truege ihn ein zweites Mal.
+        // --- Propellerpaar ausrichten ---
+        //
+        // Die beiden Propeller sitzen an den Fluegeln, also quer zur
+        // Flugrichtung und waagerecht (@dpa: "immer flach in der Richtung des
+        // fluges"). Die Richtung kommt aus der tatsaechlich zurueckgelegten
+        // Strecke dieses Ticks, nicht aus einem Reglerwert - so stimmt sie
+        // fuer jede Bewegungsquelle gleichermassen (Maus, Vorbeiflug,
+        // Wiedergabe).
+        //
+        // Geglaettet, und zwar aus demselben Grund wie ueberall sonst: der
+        // Versatz IST eine Position. Zappelte die Richtung, zappelten die
+        // beiden Schallquellen mit, und ein Positionssprung ist formal
+        // Ueberschall. Steht die Quelle still, bleibt die zuletzt bekannte
+        // Richtung stehen, statt auf null zu fallen - sonst klappten die
+        // Fluegel im Stillstand zusammen.
+        {
+            const Vec3   step     = smoothedSourcePos - prevSourcePos;
+            const double stepLen  = step.length();
+
+            if (stepLen > 1.0e-9)
+            {
+                const Vec3   dir   = step * (1.0 / stepLen);
+                const double coeff = 1.0 - std::exp (-tickDt / propellerHeadingTau);
+
+                propellerHeading = propellerHeading + (dir - propellerHeading) * coeff;
+
+                const double headingLen = propellerHeading.length();
+
+                if (headingLen > 1.0e-9)
+                    propellerHeading = propellerHeading * (1.0 / headingLen);
+            }
+
+            // Quer zur Flugrichtung, in der Waagerechten: z ist die Hoehe, das
+            // Kreuzprodukt mit der Hochachse liegt also in der xy-Ebene. Fliegt
+            // die Quelle exakt senkrecht, bleibt davon nichts uebrig - dann
+            // steht der Fluegel eben quer zur x-Achse, statt zu verschwinden.
+            Vec3 side { propellerHeading.y, -propellerHeading.x, 0.0 };
+
+            const double sideLen = side.length();
+
+            side = sideLen > 1.0e-9 ? side * (1.0 / sideLen) : Vec3 { 1.0, 0.0, 0.0 };
+
+            const double halfSpan = 0.5 * (double) pp.propSpan->load();
+
+            dopplerEngine.setPropellerOffset (0, side * ( halfSpan));
+            dopplerEngine.setPropellerOffset (1, side * (-halfSpan));
+        }
+
         dopplerEngine.pushSourceTick (smoothedSourcePos + sourceJitterNow);
     }
 }

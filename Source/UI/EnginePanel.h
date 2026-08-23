@@ -24,8 +24,9 @@ public:
     void refreshTooltips();
 
 private:
-    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
-    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+    using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ButtonAttachment   = juce::AudioProcessorValueTreeState::ButtonAttachment;
+    using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     // Regler + Beschriftung + Attachment gebuendelt: die Attachment-Lebens-
     // dauer haengt so automatisch an der des Sliders (JUCE-Konvention, siehe
@@ -42,6 +43,12 @@ private:
                      const juce::String& paramID, const juce::String& labelText,
                      Tooltips::Key tooltipKey);
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
+
+    // Combo-Items werden aus der tatsaechlichen AudioParameterChoice-Liste
+    // uebernommen, nicht hier erneut als String-Literale getippt (Muster aus
+    // MotionPanel::populateChoices) - sonst waere ein zweiter Ort fuer
+    // Tippfehler bei den Choice-Texten offen.
+    static void populateChoices (juce::ComboBox& combo, juce::AudioProcessorValueTreeState& apvts, const juce::String& paramID);
 
     // Wellenform der vier Teiltoene: aus = Saegezahn wie bisher, an = reiner
     // Sinus (@dpa 20260823). Steht rechts neben der Teilton-Matrix, dort ist
@@ -63,6 +70,28 @@ private:
 
     Knob noiseFcLoKnob, noiseFcHiKnob, noiseGainLoKnob, noiseGainHiKnob, noiseQKnob;
     Knob jitterAmountKnob, jitterRateKnob;
+
+    // Betriebsart des Motors (@dpa 20260824: "in 'Motor' mehrere umschaltbar
+    // machen") - ueberschreibt keinen der Regler oben, gewichtet nur im
+    // Generator, siehe EngineGenerator::setEngineKind(). "Frei"/"Propeller"
+    // verhalten sich wie bisher.
+    juce::Label engineKindLabel;
+    juce::ComboBox engineKindCombo;
+    std::unique_ptr<ComboBoxAttachment> engineKindAttachment;
+
+    // Nur in Betriebsart "Hubschrauber" wirksam (Rotordrehzahl, Blattzahl) -
+    // bleiben in den anderen Betriebsarten sichtbar, aber ausgegraut statt zu
+    // verschwinden (Muster: MotionPanel::updateJitterEnabledState()), damit
+    // die Panelhoehe unabhaengig von der Betriebsart konstant bleibt.
+    Knob heliRotorHzKnob, heliBladeCountKnob;
+
+    // Nur in Betriebsart "Propeller" wirksam: Fluegelspanne und Pegel des
+    // Propellerpaars. Sie stehen hier bei den anderen Betriebsart-Reglern,
+    // obwohl sie in der Geometrie umgesetzt sind und nicht im Generator -
+    // bedient wird beides zusammen.
+    Knob propSpanKnob, propLevelKnob;
+
+    void updateHeliControlsEnabled();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EnginePanel)
 };

@@ -45,6 +45,11 @@ namespace Tooltips
         NoiseQ,
         JitterAmount,
         JitterRate,
+        EngineKind,
+        HeliRotorHz,
+        HeliBladeCount,
+        PropSpan,
+        PropLevel,
 
         // --- FieldPanel ---
         FieldSize,
@@ -293,6 +298,74 @@ namespace Tooltips
                     return lang == Language::De
                         ? "Geschwindigkeit der Jitter-Schwankung in Hz (3-15 Hz, langsames Wackeln)."
                         : "Speed of the jitter fluctuation in Hz (3-15 Hz, slow wobble).";
+                case Key::EngineKind:
+                    return lang == Language::De
+                        ? "Betriebsart des Motors. Ueberschreibt keinen der Regler oben - sie "
+                          "bleiben unangetastet, nur wie stark sie beitragen, wird umgewichtet. "
+                          "'Frei' und 'Propeller' klingen wie bisher. 'Duesenantrieb' laesst das "
+                          "Rauschband dominieren und die vier Teiltoene zuruecktreten, dazu ein "
+                          "hoher, mit der Drehzahl mitlaufender Turbinen-Pfeifton. "
+                          "'Raketenantrieb' ist fast nur tiefes, breitbandiges Rauschen - eine "
+                          "Rakete hat keine rotierenden Teile, sie bruellt nur. 'Hubschrauber' "
+                          "behaelt den Motorton und legt den Rotor-Blattschlag obendrauf (siehe "
+                          "Rotor Hz/Blaetter daneben). Der Wechsel ist ueberblendet, kein Sprung "
+                          "im Signal."
+                        : "Engine operating mode. Overwrites none of the controls above - they "
+                          "stay untouched, only how much they contribute gets reweighted. 'Frei' "
+                          "(free) and 'Propeller' sound as before. 'Duesenantrieb' (jet) lets the "
+                          "noise band dominate and the four partials recede, plus a high, RPM-"
+                          "tracking turbine whistle. 'Raketenantrieb' (rocket) is almost only deep, "
+                          "broadband noise - a rocket has no rotating parts, it just roars. "
+                          "'Hubschrauber' (helicopter) keeps the engine tone and adds the rotor "
+                          "blade slap on top (see Rotor Hz/Blades next to it). Switching "
+                          "crossfades, no jump in the signal.";
+                case Key::HeliRotorHz:
+                    return lang == Language::De
+                        ? "Umlaufgeschwindigkeit des Hubschrauber-Rotors in Hz, unabhaengig von "
+                          "der Motor-Drehzahl (RPM) - der Rotor hat sein eigenes Tempo. Zusammen "
+                          "mit der Blattzahl ergibt sich die Blattschlagfrequenz, das "
+                          "charakteristische Wummern. Wirkt nur in Betriebsart 'Hubschrauber'."
+                        : "Orbital rate of the helicopter rotor in Hz, independent of the engine "
+                          "RPM - the rotor has its own tempo. Together with the blade count this "
+                          "gives the blade-passing frequency, the characteristic thump. Only "
+                          "applies in 'Hubschrauber' (helicopter) mode.";
+                case Key::PropSpan:
+                    return lang == Language::De
+                        ? "Nur in Betriebsart 'Propeller': Abstand der beiden Propeller in "
+                          "Metern. Sie sitzen an den Fluegeln, also quer zur Flugrichtung und "
+                          "waagerecht - und weil die Richtung aus der tatsaechlich geflogenen "
+                          "Bahn kommt, drehen sie sich mit jeder Kurve mit, statt im Raum "
+                          "festzustehen. Grosse Spannweiten machen den Doppler der beiden "
+                          "Seiten hoerbar verschieden: beim Vorbeiflug kommt der naehere "
+                          "Propeller frueher und hoeher. Es sind zwei echte Schallwege mit "
+                          "voller Loeserphysik, keine Verdopplung des Signals - sie kosten "
+                          "entsprechend Rechenzeit."
+                        : "Propeller mode only: distance between the two propellers in metres. "
+                          "They sit on the wings, so across the flight direction and level - "
+                          "and since that direction comes from the path actually flown, they "
+                          "turn with every curve instead of staying fixed in space. Large "
+                          "spans make the doppler of the two sides audibly different: on a "
+                          "fly-by the nearer propeller arrives earlier and higher. These are "
+                          "two real propagation paths with full solver physics, not a doubled "
+                          "signal - they cost accordingly.";
+                case Key::PropLevel:
+                    return lang == Language::De
+                        ? "Nur in Betriebsart 'Propeller': Pegel der beiden Propeller in dB. "
+                          "Sie kommen zum Rumpfschall HINZU, statt ihn zu ersetzen - wer nur "
+                          "die Propeller hoeren will, nimmt die Motor-Pegel darueber zurueck."
+                        : "Propeller mode only: level of the two propellers in dB. They are "
+                          "added to the hull sound rather than replacing it - to hear only the "
+                          "propellers, turn down the engine levels above.";
+                case Key::HeliBladeCount:
+                    return lang == Language::De
+                        ? "Anzahl der Rotorblaetter, 2 bis 8. Multipliziert mit der Rotordrehzahl "
+                          "ergibt sich die Blattschlagfrequenz - mehr Blaetter machen das Wummern "
+                          "bei gleicher Rotordrehzahl dichter/schneller. Wirkt nur in Betriebsart "
+                          "'Hubschrauber'."
+                        : "Number of rotor blades, 2 to 8. Multiplied by the rotor speed this "
+                          "gives the blade-passing frequency - more blades make the thump denser/"
+                          "faster at the same rotor speed. Only applies in 'Hubschrauber' "
+                          "(helicopter) mode.";
 
                 // --- FieldPanel ---
                 case Key::FieldSize:

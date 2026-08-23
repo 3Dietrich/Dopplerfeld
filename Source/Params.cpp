@@ -410,6 +410,34 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // bisheriges Verhalten.
     layout.add (boolParam (engineSine, "Engine Sine", false));
 
+    // Betriebsart des Motors (@dpa 20260824). Reihenfolge ist bindend fuer
+    // EngineGenerator::kindWeightTable - nicht umsortieren, ohne dort
+    // mitzuziehen. Default "Frei" (Index 0) = bisheriges Verhalten, damit
+    // bestehende Presets bitgleich klingen.
+    layout.add (choiceParam (engineKind, "Engine Kind",
+                              { "Frei", "Duesenantrieb", "Raketenantrieb", "Hubschrauber", "Propeller" }, 0));
+
+    // Rotordrehzahl/Blattzahl des Hubschrauber-Rotors, nur in dieser
+    // Betriebsart wirksam. Grosszuegiger Bereich statt eines realistischen
+    // Deckels (keine versteckten Limits) - Skew Richtung typischer
+    // Hauptrotor-Drehzahl (3-7 Hz).
+    {
+        auto range = juce::NormalisableRange<float> (0.1f, 50.0f);
+        range.setSkewForCentre (5.0f);
+        layout.add (floatParam (heliRotorHz, "Heli Rotor", range, 5.0f, "Hz"));
+    }
+    layout.add (floatParam (heliBladeCount, "Heli Blades", { 2.0f, 8.0f, 1.0f }, 4.0f));
+
+    // Fluegelspanne und Pegel des Propellerpaars. Die Spanne ist grosszuegig
+    // nach oben offen: ein Modellflugzeug hat einen Meter, eine Transportmaschine
+    // vierzig, und wer den Effekt uebertreiben will, dreht weiter.
+    {
+        auto range = juce::NormalisableRange<float> (0.0f, 200.0f);
+        range.setSkewForCentre (10.0f);
+        layout.add (floatParam (propSpan, "Prop Span", range, 10.0f, "m"));
+    }
+    layout.add (floatParam (propLevelDb, "Prop Level", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
+
     // Rueckwaerts-Pegel, Stossfront-Absenkung, Schattenausklang und die beiden
     // Wege, einen Bewegungssprung hoerbar zu machen.
     //
