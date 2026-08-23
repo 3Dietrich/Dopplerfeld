@@ -407,6 +407,118 @@ Vorgeschichte am gewuenschten Punkt" explizit behandeln statt still auf 0 zu
 lesen. Empfehlung: hoher Denkaufwand (Opus), weil physikalisch-numerisch
 kritischer Code mit bestehender `solver_check`-Abdeckung, kein Schnellschuss.
 
+## Stand 2026-08-23 (Rotoren, Vorbeiflug-Schleife, Luft, Rueckwaerts-Anteil)
+
+### Rotoren - zweite Betriebsart des Bewegungs-Wacklers
+
+`PositionJitter` kann jetzt zweierlei: das bisherige Wackeln aus drei
+unabhaengigen, langsam driftenden Sinussen, und eine gleichmaessige Kreisbahn
+(@dpa: "statt Jitter Rotoren"). Im Rotoren-Modus bekommen die beiden
+vorhandenen Regler eine andere Bedeutung - der Ausschlag ist der Radius,
+"Hektik" heisst "Speed" und ist die Umlaufgeschwindigkeit. Zwei Regler kommen
+dazu und sind nur dort sichtbar:
+
+- **Randomize** 0 = sauberer Kreis mit konstantem Tempo, hoch = starke
+  Temposchwankungen. Nutzt denselben geglaetteten Frequenzwuerfel wie die
+  Hektik, nur multiplikativ um 1 herum (Faktor 1/4 bis 4, gleichverteilt im
+  Logarithmus) und mit Randomize dazwischengeblendet.
+- **Z-Jit** kippt die Kreisebene, 0 = flach in xy, 1 = senkrecht. Der Radius
+  bleibt dabei gleich, der Anteil wandert stetig von y nach z.
+
+Zwei Dinge, die nicht offensichtlich sind:
+
+- Der **Moduswechsel** wird ueber 200 ms vom zuletzt ausgegebenen Versatz aus
+  ueberblendet. Ohne das waere der Formelwechsel ein Positionssprung, und ein
+  Positionssprung ist formal Ueberschall (siehe TODO "Bahn-Historie").
+- **Startphasen** kommen aus dem eigenen Zufallsgenerator statt aus der Null.
+  Sonst stuenden alle Klone im selben Punkt ihrer Kreisbahn und drehten
+  sichtbar wie ein einziger Koerper.
+
+Die Tempogrenze laeuft wie bisher ueber die Frequenz, nicht ueber den
+Ausschlag - der Kreis wird langsamer statt kleiner.
+
+### Vorbeiflug in Dauerschleife
+
+`Params::flyLoop`. Am Streckenende faengt derselbe Flug von vorn an. Der
+Neustart wird in der Tick-Schleife nur **vorgemerkt** und am Anfang des
+naechsten `advanceMotion()` ausgefuehrt: er setzt Glaetter und Geometriesatz
+neu, und die Tick-Schleife haengt an `nextTrajectoryTime()` - ein Eingriff
+mitten darin waere ein Eingriff in ihre eigene Laufbedingung. Ausgefuehrt wird
+`startFlyBy()`, also derselbe Weg wie bei einem frisch ausgeloesten Flug samt
+Vorgeschichte und Ueberblendung. Mit Startvariante "Knall-Start" beginnt
+folgerichtig jeder Durchgang schlagartig; das ist dort der Zweck.
+
+### Luft: Temperatur und Hoehe
+
+`MediumState` ist nicht mehr fest auf 20 Grad:
+
+- **airTempC** war als Feld vorbereitet, aber nirgends verdrahtet. Jetzt
+  bestimmt er c(T) und damit die Mach-Schwelle - der Unterschied zwischen
+  Peitsche auf Meereshoehe (343 m/s) und Jet in grosser Hoehe (295 m/s).
+- **airAltitude** wirkt ueber die barometrische Hoehenformel der
+  Standardatmosphaere auf den Druck und von dort auf die Dichte, und die
+  Dichte auf den Pegel. **Nicht** auf die Temperatur: die bleibt ein eigener
+  Regler, sonst gaebe es zwei Werte fuer dieselbe Groesse.
+
+Der Dichtefaktor haengt am Ausgangspegel (`outputGainLinear`), nicht in den
+Pfaden, und ist gegen die Defaultwerte normiert - bei 20 Grad und 0 m kommt
+exakt 1.0 heraus, damit bestehende Presets nicht leiser werden.
+
+### Der rueckwaerts gehoerte Anteil
+
+Bei Ueberschall liefert der Loeser mehrere Hoerwege; die Leseposition eines
+Zweigs wandert mit (1 - dTau), ueber dTau = 1 also rueckwaerts. @dpa hoert
+diesen Anteil als zu praesent und als abreissend ("es muss neben dem
+Rueckwaerts irgend etwas lauteres geben, sonst waere es hoerbar" /
+"klingt so als waere das schon korrekt, nur dass es ploetzlich aufhoert").
+Drei Regler dafuer, alle mit dem bisherigen Verhalten als Default:
+
+- **reverseGainDb** senkt nur die zeitverkehrt gehoerten Zweige, ueber dTau
+  geblendet statt geschaltet (Breite 0,25, sonst waere der Uebergang ein
+  Pegelsprung mitten im Signal). Die N-Welle bleibt unberuehrt - der Knall ist
+  eine eigene Schicht, kein Zweiginhalt.
+- **shadowTailMs** ist die Untergrenze des Kaustik-Ausklangs. Rechnerisch
+  folgt der aus eps / (dM_r/dt), praktisch faellt er bei schnellen
+  Vorbeifluegen immer auf `rampSeconds` = 1 ms - gemessen im `load_check`:
+  alle Kaustik-Tode mit Ausklang 1,000 ms bei Todespegel 1,000, also voller
+  Lautstaerke. Ein voll ausgesteuerter Zweig, der in einer Millisekunde weg
+  ist, reisst hoerbar ab. Physikalisch liegt hinter der Kaustik eine
+  Schattenzone, in die gebeugter Schall weiterlaeuft; wie lang, haengt an
+  Geometrie und Frequenz - deshalb ein Regler statt einer erfundenen
+  Konstante.
+
+Zur **Geschwindigkeit** des Rueckwaertslaufs, weil die Frage wiederkommt: sie
+ist 1/(M_r - 1), nicht pauschal 0,5 bis 1,0. Genau 1,0 gilt bei M_r = 2, bei
+M_r = 3 ist es 0,5, bei M_r knapp ueber 1 laeuft der Anteil **schneller** als
+Echtzeit. Der Wert folgt hier aus der Geometrie und wird nirgends gesetzt.
+
+### Waehrend der Stossfront kommt nichts anderes durch
+
+**shockDuckAmount / shockDuckMs** senken den uebrigen Schall, solange eine
+N-Welle ueber den Hoerweg laeuft, und lassen ihn danach mit einstellbarer Zeit
+zurueckkommen (@dpa: "hoechstens ein luftholen-geraeusch! aber keine Noise vom
+Motor").
+
+Zwei Entscheidungen dahinter:
+
+- **Pfadweit, nicht je Zweig.** Der Motorton laeuft sonst ueber den
+  Nachbarzweig weiter. Gefuehrt wird das als gemeinsamer **Zeitpunkt**
+  (`shockEndTime`) statt als Huellkurve: die Zweige laufen nacheinander ueber
+  denselben Sample-Bereich, ein gemeinsamer Huellkurvenzustand liesse sich so
+  nicht fortschreiben, ein gemeinsamer Zeitpunkt schon.
+- Zweimal je Solver-Segment ausgewertet und dazwischen linear geblendet, statt
+  ein `exp()` pro Sample und Zweig.
+
+Die N-Welle selbst wird nicht abgesenkt.
+
+### Begrenzer-Anzeige
+
+Die Marke unter dem CPU-Balken stand nur einen Block lang da
+(`limiterHitCount` wird je Block neu gesetzt) und war unbeschriftet. Jetzt
+fester Textplatz rechts in der Zeile, immer sichtbar, nur die Farbe wechselt,
+mit 900 ms Nachleuchten im Editor (kein Eingriff in den Processor) und einem
+Tooltip, was da begrenzt wird.
+
 ## Stand 2026-08-17 (Nachmittag: vier Bugfixes, vier neue Regler)
 
 Aus einem echten Hördurchgang mit @dpa, direkt im Anschluss an z-Achse/
