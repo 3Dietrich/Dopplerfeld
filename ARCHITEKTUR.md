@@ -407,6 +407,61 @@ Vorgeschichte am gewuenschten Punkt" explizit behandeln statt still auf 0 zu
 lesen. Empfehlung: hoher Denkaufwand (Opus), weil physikalisch-numerisch
 kritischer Code mit bestehender `solver_check`-Abdeckung, kein Schnellschuss.
 
+## Stand 2026-08-24 (Motor-Betriebsarten und Propellerpaar)
+
+@dpa wollte im Motor "mehrere umschaltbar": Duesenantrieb, Raketenantrieb,
+Hubschrauber (Motor plus Rotoren mit eigener Geschwindigkeit) und zwei
+Propeller an Fluegeln. Das sind zwei ganz verschiedene Dinge, und sie liegen
+darum auch an verschiedenen Stellen.
+
+### Drei Klang-Betriebsarten im Generator
+
+`Params::engineKind` ist ein Choice mit fuenf Eintraegen ("Frei",
+"Duesenantrieb", "Raketenantrieb", "Hubschrauber", "Propeller"; die
+Reihenfolge ist bindend fuer `EngineGenerator::kindWeightTable`). Die Wahl
+**ueberschreibt keinen einzigen Regler** - sie gewichtet, was die vorhandenen
+Bausteine beitragen, und schaltet je Art einen eigenen Zusatzklang dazu:
+
+- **Duese**: Rauschband dominiert, Teiltoene treten zurueck, dazu ein
+  Turbinen-Pfeifton auf dem Zwoelffachen der gejitterten Grundfrequenz.
+- **Rakete**: fast nur breitbandiges tiefes Rauschen mit eigenem Filter und
+  eigenem Zufallsgenerator - eine Rakete hat keine rotierenden Teile.
+- **Hubschrauber**: Motorton unveraendert, dazu der Rotor als eigener
+  Baustein mit EIGENER Drehzahl (`heliRotorHz`) und Blattzahl
+  (`heliBladeCount`). Ihr Produkt ist die Blattschlagfrequenz, geformt als
+  Kosinus-Potenz - ein scharfer kurzer Schlag statt einer glatten Welle.
+- **Frei** und **Propeller** stehen auf den Identitaetsgewichten, klingen also
+  wie bisher.
+
+Alle Gewichte werden sample-genau ueber 50 ms nachgefuehrt, dasselbe Muster
+wie beim Sinus-Umschalter. Ein harter Wechsel mitten im Ton waere ein Sprung.
+
+### Das Propellerpaar ist Geometrie, kein Klang
+
+Zwei Propeller an Fluegeln sind zwei SCHALLQUELLEN an verschiedenen Orten,
+nicht ein zweiter Klang - sie gehoeren deshalb in `DopplerEngine`, nicht in
+den Generator. Umgesetzt als zwei zusaetzliche Pfadpaare mit reinem
+Direktschall (`PathRecipe::prop`), genau wie die Klone: dauerhaft
+bereitliegend, uebersprungen solange sie aus sind, und dann auch ohne
+Loeserlast.
+
+Der Unterschied zu einem Klon steckt im Versatz. Er steht nicht im Raum fest,
+sondern quer zur Flugrichtung und waagerecht - "immer flach in der Richtung
+des fluges". Berechnet wird er im Processor, weil dort die Bewegung bekannt
+ist: aus der tatsaechlich zurueckgelegten Strecke je Tick, damit er fuer Maus,
+Vorbeiflug und Wiedergabe gleichermassen stimmt.
+
+Zwei Feinheiten, die nicht weggelassen werden duerfen:
+
+- Die Richtung wird **geglaettet** (0,15 s). Der Versatz IST eine Position;
+  zappelte die Richtung, zappelten die beiden Schallquellen mit, und ein
+  Positionssprung ist formal Ueberschall.
+- Bei **Stillstand** bleibt die zuletzt bekannte Richtung stehen, statt auf
+  null zu fallen - sonst klappten die Fluegel im Stand zusammen.
+
+Die Propeller kommen zum Rumpfschall HINZU, statt ihn zu ersetzen.
+Spannweite (`propSpan`) und Pegel (`propLevelDb`) sind eigene Regler.
+
 ## Stand 2026-08-24 (Bewegungssprung hoerbar, Begrenzer am Meter, Motor-Sinus)
 
 ### Der Knall-Start war nicht zu hoeren - warum, und was jetzt hilft
