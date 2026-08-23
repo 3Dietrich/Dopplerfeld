@@ -114,6 +114,20 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (srcJitterAmountKnob, apvts, Params::srcJitterAmount, "Jitter", Tooltips::Key::SrcJitterAmount);
     setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik", Tooltips::Key::SrcJitterRate);
 
+    setupKnob (srcJitterRandomKnob, apvts, Params::srcJitterRandom, "Randomize", Tooltips::Key::SrcJitterRandom);
+    setupKnob (srcJitterZKnob,      apvts, Params::srcJitterZ,      "Z-Jit",     Tooltips::Key::SrcJitterZ);
+
+    srcJitterRotorButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterRotor));
+    addAndMakeVisible (srcJitterRotorButton);
+    srcJitterRotorAttachment = std::make_unique<ButtonAttachment> (apvts, Params::srcJitterRotor, srcJitterRotorButton);
+    // Wie beim Jitter-Schalter: Klick UND Presetwechsel laufen ueber onClick,
+    // deshalb reicht dieser eine Ort fuer Beschriftung, Ausgrauen und Layout.
+    srcJitterRotorButton.onClick = [this] { updateJitterEnabledState(); };
+
+    flyLoopButton.setTooltip (Tooltips::text (Tooltips::Key::FlyLoop));
+    addAndMakeVisible (flyLoopButton);
+    flyLoopAttachment = std::make_unique<ButtonAttachment> (apvts, Params::flyLoop, flyLoopButton);
+
     srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
     addAndMakeVisible (srcJitterOnButton);
     srcJitterOnAttachment = std::make_unique<ButtonAttachment> (apvts, Params::srcJitterOn, srcJitterOnButton);
@@ -227,11 +241,34 @@ void MotionPanel::updateJitterEnabledState()
     // ihrem Stand, damit beim Wiedereinschalten sofort der alte Ausschlag
     // greift statt bei null neu anzufangen (siehe Tooltips::Key::SrcJitterOn).
     const bool jitterOn = srcJitterOnButton.getToggleState();
+    const bool rotor    = srcJitterRotorButton.getToggleState();
 
     srcJitterAmountKnob.slider.setEnabled (jitterOn);
     srcJitterAmountKnob.label.setEnabled (jitterOn);
     srcJitterRateKnob.slider.setEnabled (jitterOn);
     srcJitterRateKnob.label.setEnabled (jitterOn);
+    srcJitterRotorButton.setEnabled (jitterOn);
+
+    // Derselbe Regler, andere Bedeutung: im Rotoren-Modus ist er die
+    // Umlaufgeschwindigkeit der Kreisbahn, sonst die Unruhe des Wackelns
+    // (@dpa: "statt Hektik gibts Speed"). Ein zweiter Parameter dafuer waere
+    // ein zweiter Wert fuer dieselbe Groesse.
+    srcJitterRateKnob.label.setText (rotor ? "Speed" : "Hektik", juce::dontSendNotification);
+    srcJitterRateKnob.slider.setTooltip (Tooltips::text (rotor ? Tooltips::Key::SrcJitterSpeed
+                                                               : Tooltips::Key::SrcJitterRate));
+
+    // Randomize und Z-Jit wirken nur im Rotoren-Modus - im Wackel-Modus
+    // stuenden sie wirkungslos herum und kosteten nur Platz.
+    for (auto* k : { &srcJitterRandomKnob, &srcJitterZKnob })
+    {
+        k->slider.setVisible (rotor);
+        k->label.setVisible (rotor);
+        k->slider.setEnabled (jitterOn);
+        k->label.setEnabled (jitterOn);
+    }
+
+    // Die Reglerzeile ist je nach Betriebsart drei oder fuenf Knoepfe breit.
+    resized();
 }
 
 void MotionPanel::updateTabVisibility()
@@ -300,6 +337,7 @@ void MotionPanel::refreshTooltips()
 {
     for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob,
                       &globalMaxSpeedKnob, &srcJitterAmountKnob, &srcJitterRateKnob,
+                      &srcJitterRandomKnob, &srcJitterZKnob,
                       &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
@@ -307,6 +345,8 @@ void MotionPanel::refreshTooltips()
         k->label.setTooltip (tooltip);
     }
 
+    srcJitterRotorButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterRotor));
+    flyLoopButton.setTooltip (Tooltips::text (Tooltips::Key::FlyLoop));
     srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
     smootherTypeLabel.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
     smootherTypeCombo.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
@@ -322,6 +362,11 @@ void MotionPanel::refreshTooltips()
     flyStartLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyStart));
     flyButton.setTooltip (Tooltips::text (Tooltips::Key::Fly));
     flyTabButton.setTooltip (Tooltips::text (Tooltips::Key::Fly));
+
+    // Der Tooltip des Speed/Hektik-Reglers haengt an der Betriebsart, nicht
+    // nur an der Sprache - die Schleife oben hat gerade den Wackel-Text
+    // gesetzt, hier steht wieder der richtige.
+    updateJitterEnabledState();
 }
 
 void MotionPanel::resized()
@@ -394,6 +439,8 @@ void MotionPanel::resized()
 
         auto flyRow = a.removeFromTop (28);
         flyButton.setBounds (flyRow.removeFromLeft (140));
+        flyRow.removeFromLeft (10);
+        flyLoopButton.setBounds (flyRow.removeFromLeft (juce::jmin (80, flyRow.getWidth())));
         a.removeFromTop (6);
 
         auto flyComboRow = a.removeFromTop (44);
@@ -420,12 +467,28 @@ void MotionPanel::resized()
     area.removeFromTop (6);
 
     auto sharedRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &globalMaxSpeedKnob })
+
+    // Im Rotoren-Modus kommen Randomize und Z-Jit dazu; im Wackel-Modus sind
+    // sie unsichtbar und bekommen darum auch keinen Platz zugewiesen (sonst
+    // klaffte eine Luecke in der Zeile).
+    const bool rotor = srcJitterRotorButton.getToggleState();
+
+    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob,
+                     rotor ? &srcJitterRandomKnob : nullptr,
+                     rotor ? &srcJitterZKnob      : nullptr,
+                     &globalMaxSpeedKnob })
     {
+        if (k == nullptr)
+            continue;
+
         layoutKnob (*k, sharedRow.removeFromLeft (knobW));
         sharedRow.removeFromLeft (4);
     }
 
-    srcJitterOnButton.setBounds (sharedRow.removeFromTop (18)
-                                          .withWidth (juce::jmin (120, sharedRow.getWidth())));
+    // Beide Schalter uebereinander in den Rest der Zeile: "Jitter An" ist das
+    // Ganz-Aus, "Rotoren" die Betriebsart darunter.
+    const int toggleW = juce::jmin (120, sharedRow.getWidth());
+    srcJitterOnButton.setBounds (sharedRow.removeFromTop (18).withWidth (toggleW));
+    sharedRow.removeFromTop (4);
+    srcJitterRotorButton.setBounds (sharedRow.removeFromTop (18).withWidth (toggleW));
 }

@@ -176,6 +176,27 @@ private:
     juce::Label      scopeSaveStatusLabel;
     juce::uint32     scopeSaveStatusUntilMs = 0;
 
+    // Begrenzer-Marke in der Loeserlast-Zeile (@dpa-Feedback: sie blitzte nur
+    // kurz auf, weil DopplerfeldProcessor::limiterHitCount in JEDEM Block neu
+    // gezaehlt wird - im naechsten 33ms-Timer-Tick ist der Wert oft schon
+    // wieder 0). limiterGlowUntilMs merkt sich denselben Zeitstempel-Trick wie
+    // scopeSaveStatusUntilMs oben: refreshDisplay() setzt ihn auf "jetzt plus
+    // Haltezeit", sobald limiterHits() > 0 war, paint() zeigt die Marke aktiv
+    // gefaerbt, solange die aktuelle Zeit davor liegt.
+    juce::uint32 limiterGlowUntilMs = 0;
+
+    // Unsichtbarer Hover-Bereich fuer den Begrenzer-Tooltip: die Marke selbst
+    // wird direkt in paint() gezeichnet (kein eigenes Panel), JUCE fragt beim
+    // Hover aber ein Component unter der Maus nach seinem TooltipClient, keine
+    // gezeichnete Flaeche - deshalb dieses winzige, selbst nichts zeichnende
+    // Component nur fuer den Tooltip, positioniert wie die Marke in resized().
+    struct LimiterHintArea : public juce::Component,
+                              public juce::SettableTooltipClient
+    {
+    };
+
+    LimiterHintArea limiterHintArea;
+
     // Zwischenspeicher fuer das Rohfenster aus dem Processor - Mitgliedsvariable
     // statt Stack-Array im Timer. Groesse folgt der aktuellen Zoomstufe
     // (siehe ScopeComponent::captureWindowSampleCount()), deshalb ein Vektor
@@ -287,6 +308,13 @@ private:
     static constexpr int cpuMeterLabelHeight = 16;
     // Balken + kleiner Abstand + Beschriftungszeile + Abstand zur Statuszeile darunter.
     static constexpr int cpuMeterBlockHeight = cpuMeterBarHeight + 2 + cpuMeterLabelHeight + 6;
+
+    // Begrenzer-Marke rechts am Ende der Loeserlast-Zeile, eigener fester
+    // Textplatz statt an "CPU .. %   Klone: N" angehaengt (@dpa-Regel
+    // "Zahlenanzeige pixelfest": Live-Anzeigen duerfen beim Umschalten nur
+    // Farbe/Zustand wechseln, nie Position/Breite - der Text "Begrenzer"
+    // bleibt darum immer gleich lang, nur die Farbe zeigt aktiv/inaktiv).
+    static constexpr int limiterMarkerWidth = 90;
 
     static constexpr int statusHeight = 44;
     static constexpr int panelColumnWidth = 470;   // breitestes Panel (Sample) plus Scrollbalken

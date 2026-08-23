@@ -101,6 +101,17 @@ private:
     // sind, keine Feldgeometrie. Wie globalMaxSpeedKnob immer sichtbar.
     Knob srcJitterAmountKnob, srcJitterRateKnob;
 
+    // Zweite Betriebsart des Wacklers (@dpa 20260821: "statt Jitter
+    // Rotoren"): gleichmaessige Kreisbahn statt Zufallswackeln. Die beiden
+    // Hauptregler bleiben dieselben - der Ausschlag wird zum Radius, "Hektik"
+    // heisst dann "Speed". Nur diese beiden Regler kommen hinzu und sind
+    // ausschliesslich im Rotoren-Modus sichtbar (Kompaktheit: im
+    // Wackel-Modus stuenden sie ohne Wirkung herum).
+    Knob srcJitterRandomKnob, srcJitterZKnob;
+
+    juce::ToggleButton srcJitterRotorButton { "Rotoren" };
+    std::unique_ptr<ButtonAttachment> srcJitterRotorAttachment;
+
     // Ganz-Aus fuer den Jitter, ohne die Regler Jitter/Hektik zurueckzusetzen
     // - deren Wert bleibt erhalten, siehe updateJitterEnabledState().
     juce::ToggleButton srcJitterOnButton { "Jitter An" };
@@ -114,6 +125,11 @@ private:
     // anzeigen, jew. mit allen Controls - spart Platz und bringt Uebersicht").
     // Klassisches Segmented-Control-Paar per setRadioGroupId(): klickbar wie
     // TextButton, aber nur einer der beiden bleibt gedrueckt.
+    // Dauerschleife des Vorbeifluges (Params::flyLoop) - steht neben dem
+    // Ausloeser, weil beides zusammen bedient wird.
+    juce::ToggleButton flyLoopButton { "Loop" };
+    std::unique_ptr<ButtonAttachment> flyLoopAttachment;
+
     juce::TextButton flyTabButton    { "Vorbeiflug" };
     juce::TextButton recordTabButton { "Record/Play" };
     void updateTabVisibility();

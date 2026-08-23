@@ -352,6 +352,9 @@ private:
         std::atomic<float>* srcJitterAmount = nullptr;
         std::atomic<float>* srcJitterRateHz = nullptr;
         std::atomic<float>* srcJitterOn     = nullptr;
+        std::atomic<float>* srcJitterRotor  = nullptr;
+        std::atomic<float>* srcJitterRandom = nullptr;
+        std::atomic<float>* srcJitterZ      = nullptr;
         std::atomic<float>* masterOn        = nullptr;
 
         std::atomic<float>* rpm = nullptr;
@@ -393,6 +396,7 @@ private:
         std::atomic<float>* flyDistance = nullptr;
         std::atomic<float>* flyApproach = nullptr;
         std::atomic<float>* flySpeed    = nullptr;
+        std::atomic<float>* flyLoop     = nullptr;
 
         std::atomic<float>* boomLimitDb     = nullptr;
         std::atomic<float>* nWaveGainDb     = nullptr;
@@ -449,6 +453,11 @@ private:
     MotionRecorder  motionRecorder;
     MotionPlayer    motionPlayer;
     FlyByGenerator  flyBy;
+
+    // Ein beendeter Flug soll wiederholt werden (Params::flyLoop). Gesetzt in
+    // der Tick-Schleife, ausgefuehrt am Anfang des naechsten advanceMotion() -
+    // siehe Kommentar dort.
+    bool flyLoopRestartPending = false;
 
     // Hauptschalter, siehe Params::masterOn. Der Pegel faehrt weich auf 0 und
     // erst DANACH steigt der Block ganz aus - haette er das sofort getan, waere

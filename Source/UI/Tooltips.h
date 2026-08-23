@@ -59,6 +59,10 @@ namespace Tooltips
         SrcJitterAmount,
         SrcJitterRate,
         SrcJitterOn,
+        SrcJitterRotor,
+        SrcJitterSpeed,
+        SrcJitterRandom,
+        SrcJitterZ,
         MasterOn,
         GroundGain,
         GroundDamp,
@@ -116,6 +120,7 @@ namespace Tooltips
         FlyApproach,
         FlySpeed,
         Fly,
+        FlyLoop,
 
         // --- SwarmPanel ---
         CloneTotal,
@@ -142,6 +147,11 @@ namespace Tooltips
         ScopeZoomOutSuffix,
         ScopeSave,
         LanguageToggle,
+
+        // Begrenzer-Marke in der Loeserlast-Zeile (nicht Kopfzeile/Scope-
+        // Toolbar wie der Rest dieses Abschnitts, aber ebenfalls direkt in
+        // DopplerfeldEditor::paint() gezeichnet statt in einem eigenen Panel).
+        LimiterIndicator,
     };
 
     namespace detail
@@ -391,6 +401,55 @@ namespace Tooltips
                           "there is silence - and nothing is computed any more, the CPU meter "
                           "drops to zero. Switching back on restarts the trajectory, since no "
                           "motion was recorded while it was silent.";
+                case Key::SrcJitterRotor:
+                    return lang == Language::De
+                        ? "Zweite Betriebsart des Wacklers: statt drei unabhaengig wackelnder "
+                          "Achsen faehrt die Quelle (und jeder Klon) eine gleichmaessige "
+                          "Kreisbahn. Der Jitter-Regler ist dann der RADIUS des Kreises, "
+                          "'Hektik' heisst 'Speed' und ist die Umlaufgeschwindigkeit. Dazu "
+                          "kommen Randomize (Temposchwankung) und Z-Jit (Neigung der "
+                          "Kreisebene). Beim Umschalten wird kurz ueberblendet, damit der "
+                          "Formelwechsel kein Sprung wird."
+                        : "Second mode of the wobbler: instead of three independently wobbling "
+                          "axes the source (and every clone) travels a steady circular orbit. "
+                          "The Jitter control then is the RADIUS of that circle, 'Hektik' "
+                          "becomes 'Speed', the orbital rate. Randomize (tempo variation) and "
+                          "Z-Jit (tilt of the orbit plane) come with it. Switching modes "
+                          "crossfades briefly so the change of formula is not a jump.";
+                case Key::SrcJitterSpeed:
+                    return lang == Language::De
+                        ? "Umlaufgeschwindigkeit der Rotoren-Kreisbahn in Hz, also Umdrehungen "
+                          "pro Sekunde. Derselbe Regler wie 'Hektik' im Wackel-Modus, nur mit "
+                          "anderer Bedeutung. Die Bahngeschwindigkeit ergibt sich aus Radius "
+                          "mal Speed und wird - wie im Wackel-Modus - vom Max-Speed-Deckel "
+                          "rund begrenzt: der Kreis wird dann langsamer statt kleiner."
+                        : "Orbital rate of the rotor circle in Hz, i.e. revolutions per second. "
+                          "The same control as 'Hektik' in wobble mode, with a different "
+                          "meaning. Path speed follows from radius times speed and - as in "
+                          "wobble mode - is smoothly capped by Max Speed: the circle slows "
+                          "down instead of shrinking.";
+                case Key::SrcJitterRandom:
+                    return lang == Language::De
+                        ? "Nur im Rotoren-Modus: Temposchwankung auf der Kreisbahn. 0 = sauberer "
+                          "Kreis mit konstantem Tempo, hohe Werte = starke Speedschwankungen "
+                          "(aehnlich der Hektik des Wackel-Modus). Der Radius bleibt dabei "
+                          "unveraendert, nur die Umlaufgeschwindigkeit atmet."
+                        : "Rotor mode only: tempo variation along the circular orbit. 0 = clean "
+                          "circle at constant rate, high values = strong speed fluctuations "
+                          "(similar to wobble mode's Hektik). The radius stays untouched, only "
+                          "the orbital rate breathes.";
+                case Key::SrcJitterZ:
+                    return lang == Language::De
+                        ? "Nur im Rotoren-Modus: Neigung der Kreisebene. 0 = flach liegend, der "
+                          "Rotor dreht nur in xy. 1 = um 90 Grad gekippt, die Bahn steht "
+                          "senkrecht und der Rotor dreht sich voll durch den z-Bereich (Hoehe). "
+                          "Dazwischen wandert der Anteil stetig von der Waagerechten in die "
+                          "Senkrechte, der Radius bleibt gleich."
+                        : "Rotor mode only: tilt of the orbit plane. 0 = flat, the rotor turns "
+                          "in xy only. 1 = tilted by 90 degrees, the orbit stands upright and "
+                          "the rotor sweeps the full z range (height). In between the share "
+                          "moves steadily from horizontal to vertical, the radius stays the "
+                          "same.";
                 case Key::SrcJitterOn:
                     return lang == Language::De
                         ? "Schaltet das Wackeln der Quelle M und aller Klone komplett ab. Die "
@@ -784,6 +843,22 @@ namespace Tooltips
                           "path integrates the current value at each moment, an "
                           "automation curve really does accelerate the source. Above "
                           "343 m/s the flight becomes supersonic.";
+                case Key::FlyLoop:
+                    return lang == Language::De
+                        ? "Vorbeiflug in Dauerschleife: am Ende der Strecke faengt derselbe Flug "
+                          "von vorn an, statt am Endpunkt stehen zu bleiben. Der Ruecksprung an "
+                          "den Anfang laeuft ueber denselben Weg wie ein frisch ausgeloester "
+                          "Flug - die Bahn bekommt eine passende Vorgeschichte und wird "
+                          "ueberblendet, statt als Positionssprung zu knacken. Mit Startvariante "
+                          "'Knall-Start' beginnt allerdings JEDER Durchgang schlagartig, das ist "
+                          "dort genau der Zweck. Der Stopp-Knopf beendet die Schleife sofort."
+                        : "Fly-by on repeat: at the end of the path the same flight starts over "
+                          "instead of stopping at the end point. The jump back to the start "
+                          "takes the same route as a freshly triggered flight - the trajectory "
+                          "gets a matching prehistory and is crossfaded instead of clicking as a "
+                          "position jump. With start variant 'abrupt' EVERY pass begins "
+                          "instantly, which is exactly the point there. The stop button ends the "
+                          "loop right away.";
                 case Key::Fly:
                     return lang == Language::De
                         ? "Vorbeiflug starten bzw. laufenden Flug abbrechen. Die Bahnart und "
@@ -948,6 +1023,19 @@ namespace Tooltips
                     return lang == Language::De
                         ? "Sprache der Hilfehinweise umschalten (Deutsch/Englisch)."
                         : "Toggle the language of the help hints (German/English).";
+                case Key::LimiterIndicator:
+                    return lang == Language::De
+                        ? "Sicherheits-Begrenzer (Softclip) auf dem Summen-Ausgang, hinter "
+                          "Output-Gain - faengt Spitzen ab (Ueberschallknall/N-Welle, viele "
+                          "Klone), damit nichts uebersteuert. Leuchtet er dauernd, klingt ein "
+                          "Schwarm nach einer einzigen Stimme, weil alles auf dieselbe "
+                          "Obergrenze zusammengefahren wird. Schaltbar ueber 'Limiter' "
+                          "(Parameter limiterOn)."
+                        : "Safety limiter (soft clip) on the summed output, after output "
+                          "gain - catches peaks (sonic boom/N-wave, many clones) so nothing "
+                          "overshoots. If it stays lit, a swarm sounds like a single voice, "
+                          "because everything gets squeezed onto the same ceiling. Toggled "
+                          "via 'Limiter' (parameter limiterOn).";
             }
 
             return "";

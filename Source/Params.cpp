@@ -152,6 +152,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Default an: der Ausschlag steht ohnehin auf 0, das Wackeln beginnt also
     // erst, wenn jemand ihn aufdreht - bestehende Presets klingen unveraendert.
     layout.add (boolParam (srcJitterOn, "Source Jitter On", true));
+
+    // Rotoren-Modus und seine beiden eigenen Regler. Default aus bzw. 0:
+    // bestehende Presets kennen die Parameter nicht und laden damit exakt das
+    // bisherige Wackeln.
+    layout.add (boolParam (srcJitterRotor, "Source Jitter Rotor", false));
+    layout.add (floatParam (srcJitterRandom, "Source Jitter Randomize", unitRange(), 0.0f));
+    layout.add (floatParam (srcJitterZ, "Source Jitter Z", unitRange(), 0.0f));
     layout.add (boolParam (masterOn, "On", true));
 
     // --- Motor ---
@@ -289,6 +296,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         range.setSkewForCentre (60.0f);
         layout.add (floatParam (flySpeed, "Fly Speed", range, 60.0f, "m/s"));
     }
+
+    // Dauerschleife des Vorbeifluges, Default aus - ein Flug endet weiterhin
+    // von selbst, solange niemand die Schleife einschaltet.
+    layout.add (boolParam (flyLoop, "Fly Loop", false));
 
     // --- Physik ---
     layout.add (floatParam (boomLimitDb, "Boom Limit", { 0.0f, 60.0f, 0.1f }, 30.0f, "dB"));

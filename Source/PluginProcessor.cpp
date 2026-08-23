@@ -205,6 +205,9 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.srcJitterAmount = raw (Params::srcJitterAmount);
     pp.srcJitterRateHz = raw (Params::srcJitterRateHz);
     pp.srcJitterOn     = raw (Params::srcJitterOn);
+    pp.srcJitterRotor  = raw (Params::srcJitterRotor);
+    pp.srcJitterRandom = raw (Params::srcJitterRandom);
+    pp.srcJitterZ      = raw (Params::srcJitterZ);
     pp.masterOn        = raw (Params::masterOn);
 
     pp.rpm = raw (Params::rpm);
@@ -255,6 +258,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.flyDistance = raw (Params::flyDistance);
     pp.flyApproach = raw (Params::flyApproach);
     pp.flySpeed    = raw (Params::flySpeed);
+    pp.flyLoop     = raw (Params::flyLoop);
 
     pp.boomLimitDb     = raw (Params::boomLimitDb);
     pp.nWaveGainDb     = raw (Params::nWaveGainDb);
@@ -601,18 +605,31 @@ void DopplerfeldProcessor::applyParameters()
     // Ausschlaegen erst brauchbar macht, was sonst Ueberschall waere.
     const double jitterMaxSpeed = (double) pp.globalMaxSpeed->load();
 
-    sourceJitter.setAmount   (jitterAmount);
-    sourceJitter.setRate     (jitterRate);
-    sourceJitter.setMaxSpeed (jitterMaxSpeed);
+    // Rotoren-Modus (@dpa 20260821): dieselben beiden Hauptregler, andere
+    // Bedeutung - Ausschlag wird zum Radius, "Hektik" zur
+    // Umlaufgeschwindigkeit. Randomize und Z-Jit wirken nur dort.
+    const bool   jitterRotor  = pp.srcJitterRotor->load() > 0.5f;
+    const double jitterRandom = (double) pp.srcJitterRandom->load();
+    const double jitterZ      = (double) pp.srcJitterZ->load();
+
+    sourceJitter.setRandomize (jitterRandom);
+    sourceJitter.setZJitter   (jitterZ);
+    sourceJitter.setRotor     (jitterRotor);
+    sourceJitter.setAmount    (jitterAmount);
+    sourceJitter.setRate      (jitterRate);
+    sourceJitter.setMaxSpeed  (jitterMaxSpeed);
 
     // Dieselben Regler wie fuer die Quelle: @dpa hat den Jitter dort
     // ausprobiert und will genau diesen auf den Klonen, nicht einen zweiten
     // Satz Regler.
     for (auto& j : cloneJitter)
     {
-        j.setAmount   (jitterAmount);
-        j.setRate     (jitterRate);
-        j.setMaxSpeed (jitterMaxSpeed);
+        j.setRandomize (jitterRandom);
+        j.setZJitter   (jitterZ);
+        j.setRotor     (jitterRotor);
+        j.setAmount    (jitterAmount);
+        j.setRate      (jitterRate);
+        j.setMaxSpeed  (jitterMaxSpeed);
     }
 
     const bool fieldJustChanged = std::abs (fieldMetresValue - lastFieldMetres) > 1.0e-9;
@@ -926,6 +943,10 @@ void DopplerfeldProcessor::handlePendingRequests()
             holdSourceTargetAt (smoothedSourcePos);
 
         flyBy.stop();
+
+        // Von Hand gestoppt heisst gestoppt, auch bei eingeschalteter
+        // Dauerschleife.
+        flyLoopRestartPending = false;
     }
 
     if (flyTriggerRequest.exchange (false))
@@ -1053,6 +1074,21 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
     if (sr <= 0.0)
         return;
 
+    // Vorgemerkte Wiederholung des Vorbeifluges (siehe unten in der
+    // Tick-Schleife). Es laeuft derselbe Weg wie bei einem frisch ausgeloesten
+    // Flug: Glaetter vorwaermen und einen neuen Geometriesatz mit passender
+    // Vorgeschichte setzen. Dadurch ist der Ruecksprung an den Anfang der
+    // Strecke kein Positionssprung, sondern ein ueberblendeter
+    // Geometriewechsel - genau das, was ein Sprung sonst waere (formal
+    // Ueberschall, also ein Knacken).
+    if (flyLoopRestartPending)
+    {
+        flyLoopRestartPending = false;
+
+        if (pp.flyLoop->load() > 0.5f)
+            startFlyBy();
+    }
+
     // Der Glätter tickt auf der Trajektorienrate, nicht auf der Blockrate
     // (Plan 3.8) - seine Dynamik hängt damit nicht daran, welche Blockgröße
     // der Host gerade liefert.
@@ -1101,7 +1137,18 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // der Glaetter die Quelle noch einen Nachlauf weiter darueber
             // hinaus.
             if (! flyBy.isRunning())
+            {
                 holdSourceTargetAt (flyBy.plannedEnd());
+
+                // Dauerschleife (@dpa 20260821): nur vormerken, nicht hier
+                // neu starten. Der Neustart setzt die Glaetter zurueck und
+                // schreibt einen neuen Geometriesatz - mitten in der
+                // Tick-Schleife, die an nextTrajectoryTime() haengt, waere das
+                // ein Eingriff in die Laufbedingung dieser Schleife selbst.
+                // Ausgefuehrt wird er darum am Anfang des naechsten
+                // advanceMotion(), also hoechstens einen Block spaeter.
+                flyLoopRestartPending = pp.flyLoop->load() > 0.5f;
+            }
         }
         else if (motionPlayer.isPlaying())
         {
