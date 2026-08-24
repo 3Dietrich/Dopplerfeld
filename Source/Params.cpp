@@ -426,7 +426,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (engineLevelDb, "Engine Level", { -36.0f, 36.0f, 0.1f }, 12.0f, "dB"));
 
     layout.add (floatParam (rocketShock, "Rocket Shock", unitRange(), 0.6f));
-    layout.add (floatParam (rotorSlap,   "Rotor Slap",   unitRange(), 0.7f));
+    // Bis 4 statt bis 1 (@dpa 20260824: "der Control 'Knattern' reicht
+    // einfach nicht"). Ueber 1 regelt er nicht mehr nur den Pegel des
+    // Schlages, sondern zieht auch die Richtwirkung der Blattspitze hoch -
+    // siehe slapSharpness in EngineGenerator. Skew auf 1, damit der
+    // physikalisch pure Bereich den halben Reglerweg behaelt.
+    {
+        auto range = juce::NormalisableRange<float> (0.0f, 4.0f);
+        range.setSkewForCentre (1.0f);
+        layout.add (floatParam (rotorSlap, "Rotor Slap", range, 0.7f));
+    }
 
     // --- Klangformung der beiden Rausch-Betriebsarten ---
     //

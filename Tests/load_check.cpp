@@ -4182,7 +4182,9 @@ int main()
     // darunter stehen alle gleich weit weg und es bleibt ein gleichmaessiges
     // Rauschen. Genau dieser Unterschied ist das, was beim Ueberflug passiert.
     {
-        auto rotorModulationDepth = [] (double rate, bool doppler, float inPlane)
+        auto rotorModulationDepth = [] (double rate, bool doppler, float inPlane,
+                                        float flightSpeed = 0.0f, float slap = 1.0f,
+                                        double* crestOut = nullptr)
         {
             constexpr int block  = 512;
             constexpr int blocks = 120;
@@ -4194,10 +4196,11 @@ int main()
             gen.setKindLevelDb (0.0f);
             gen.setRpm (2000.0f);
             gen.setHeliRotor (5.0f, 4.0f);
-            gen.setRotorSlap (1.0f);
+            gen.setRotorSlap (slap);
             gen.setRotorDoppler (doppler);
             gen.setRotorRadius (6.0f);
             gen.setRotorInPlane (inPlane);
+            gen.setRotorFlightSpeed (flightSpeed);
 
             // Der Verbrennermotor wuerde die Messung zudecken - hier geht es
             // nur um den Rotor.
@@ -4215,6 +4218,7 @@ int main()
 
             double env = 0.0;
             double sum = 0.0, sumSq = 0.0;
+            double peak = 0.0, rmsSq = 0.0;
             long long n = 0;
 
             for (int b = 0; b < blocks; ++b)
@@ -4226,16 +4230,29 @@ int main()
 
                 for (int i = 0; i < block; ++i)
                 {
-                    env += coeff * (std::abs ((double) buffer[(size_t) i]) - env);
+                    const double x = (double) buffer[(size_t) i];
+
+                    env += coeff * (std::abs (x) - env);
 
                     sum   += env;
                     sumSq += env * env;
+                    rmsSq += x * x;
+                    peak   = std::max (peak, std::abs (x));
                     ++n;
                 }
             }
 
             if (n == 0)
                 return 0.0;
+
+            // Scheitelfaktor: wie weit die lauteste Spitze ueber dem
+            // Effektivwert liegt. Genau das unterscheidet ein Hammern von
+            // einem Schwirren, und genau danach hat @dpa gefragt.
+            if (crestOut != nullptr)
+            {
+                const double rms = std::sqrt (rmsSq / (double) n);
+                *crestOut = rms > 1.0e-9 ? peak / rms : 0.0;
+            }
 
             const double mean = sum / (double) n;
             const double var  = std::max (0.0, sumSq / (double) n - mean * mean);
@@ -4245,10 +4262,25 @@ int main()
             return mean > 1.0e-9 ? std::sqrt (var) / mean : 0.0;
         };
 
+        double crestHover = 0.0, crestCruise = 0.0, crestFast = 0.0;
+        double crestSoft = 0.0, crestSharp = 0.0;
+
         const double fakeSide  = rotorModulationDepth (sampleRate, false, 1.0f);
         const double fakeAbove = rotorModulationDepth (sampleRate, false, 0.0f);
         const double realSide  = rotorModulationDepth (sampleRate, true,  1.0f);
         const double realAbove = rotorModulationDepth (sampleRate, true,  0.0f);
+
+        // Derselbe Rotor, nur unterwegs: im Schwebeflug, im Reiseflug und
+        // schnell genug, dass die Blattspitze die Delokalisierungsgrenze
+        // reisst. Dazu einmal mit weit aufgedrehtem "Knattern".
+        const double depthHover  = rotorModulationDepth (sampleRate, true, 1.0f,   0.0f, 1.0f, &crestHover);
+        const double depthCruise = rotorModulationDepth (sampleRate, true, 1.0f,  70.0f, 1.0f, &crestCruise);
+        const double depthFast   = rotorModulationDepth (sampleRate, true, 1.0f, 130.0f, 1.0f, &crestFast);
+        // Der Regler wird im Schwebeflug geprueft, nicht bei voller Fahrt:
+        // dort steht die Richtwirkung ohnehin schon am Deckel, und was ein
+        // Regler noch bewegen kann, sieht man dann nicht mehr.
+        const double depthSoft   = rotorModulationDepth (sampleRate, true, 1.0f, 0.0f, 0.25f, &crestSoft);
+        const double depthSharp  = rotorModulationDepth (sampleRate, true, 1.0f, 0.0f, 4.0f,  &crestSharp);
 
         std::printf ("%-22s Modulationstiefe: gefaket von der Seite %.3f / von unten %.3f | "
                      "Doppler von der Seite %.3f / von unten %.3f\n",
@@ -4264,7 +4296,35 @@ int main()
             failed = true;
         }
 
-        // Und der Kern: mit Doppler muss die Seitenansicht deutlich staerker
+        std::printf ("%-22s bei Knattern 1: Schwebeflug %.3f (Scheitel %.1f) | "
+                     "Reiseflug 70 m/s %.3f (%.1f) | 130 m/s %.3f (%.1f)\n",
+                     "", depthHover, crestHover, depthCruise, crestCruise,
+                     depthFast, crestFast);
+
+        std::printf ("%-22s im Schwebeflug ueber den Knattern-Regler: 0,25 -> %.3f (%.1f) | "
+                     "4 -> %.3f (%.1f)\n",
+                     "", depthSoft, crestSoft, depthSharp, crestSharp);
+
+        // Der Kern von @dpas Punkt: schneller unterwegs muss es HAERTER
+        // knallen, nicht nur lauter. Auf der vorlaufenden Seite addieren sich
+        // Umlauf und Fahrt, ueber Mach 0,88 loesen sich die Stoesse ab.
+        if (depthFast <= depthHover * 1.3)
+        {
+            std::printf ("  FEHLER: der Rotor knallt bei 130 m/s nicht haerter als im "
+                         "Schwebeflug (%.3f gegen %.3f) - die Fahrt kommt an der "
+                         "Blattspitze nicht an.\n", depthFast, depthHover);
+            failed = true;
+        }
+
+        // Und der Regler muss ueber seinen ganzen Weg deutlich etwas bewegen.
+        if (depthSharp <= depthSoft * 1.5)
+        {
+            std::printf ("  FEHLER: der Knattern-Regler bewegt den Schlag kaum "
+                         "(0,25 -> %.3f gegen 4 -> %.3f).\n", depthSoft, depthSharp);
+            failed = true;
+        }
+
+        // Und: mit Doppler muss die Seitenansicht deutlich staerker
         // moduliert sein als der Blick von unten.
         if (realSide <= realAbove * 1.3)
         {

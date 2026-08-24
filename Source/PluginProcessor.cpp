@@ -773,6 +773,12 @@ void DopplerfeldProcessor::applyParameters()
         engineGenerator.setRotorInPlane (full > 1.0e-6 ? (float) (flat / full) : 1.0f);
     }
 
+    // Wie schnell die Quelle auf den Hoerer zufaehrt. Auf der vorlaufenden
+    // Rotorseite addiert sich das zur Umfangsgeschwindigkeit der Blattspitze -
+    // erst zusammen reissen sie die Grenze, ab der die Verdichtungsstoesse
+    // sich von der Spitze loesen (siehe EngineGenerator::setRotorFlightSpeed).
+    engineGenerator.setRotorFlightSpeed ((float) sourceClosingSpeed);
+
     // --- Sample ---
     sampleSource.setGainDb (pp.sampleGain->load());
     sampleSource.setPitchSemitones (pp.samplePitch->load());
@@ -1505,6 +1511,21 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
 
             clampStep (prevSourcePos, smoothedSourcePos);
             clampStep (prevHeadPos,   listenerState.head);
+        }
+
+        // Naeherungsgeschwindigkeit fuer den Rotor (siehe
+        // sourceClosingSpeed im Header): aus dem tatsaechlichen Schritt
+        // dieses Ticks, projiziert auf die Sichtlinie zum Hoerer.
+        {
+            const Vec3   toListener = listenerState.head - smoothedSourcePos;
+            const double distance   = toListener.length();
+
+            if (distance > 1.0e-6 && tickDt > 0.0)
+            {
+                const Vec3 step = smoothedSourcePos - prevSourcePos;
+
+                sourceClosingSpeed = step.dot (toListener) / (distance * tickDt);
+            }
         }
 
         // Motor-Gating (@dpa-Feedback): nach dem Loslassen erst abwarten, bis

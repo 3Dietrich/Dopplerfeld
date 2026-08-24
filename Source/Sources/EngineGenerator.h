@@ -175,6 +175,23 @@ public:
     // kennt; der Generator bekommt nur die fertige Zahl.
     void setRotorInPlane (float factor01);
 
+    // Geschwindigkeit der Quelle ENTLANG der Sichtlinie zum Hoerer, in m/s,
+    // positiv beim Anflug (@dpa 20260824: "hoehren tut man bei einem
+    // Hubschrauberueberflug wirklich 'ganz schoene Spitzen' die an
+    // Ueberschall erinnern").
+    //
+    // Genau daran liegt es: die Blattspitze dreht sich nicht nur, der ganze
+    // Rotor fliegt auch. Auf der vorlaufenden Seite addieren sich beide
+    // Geschwindigkeiten. Bei 6 m Blatt, 5 Umdrehungen/s und 70 m/s Reisetempo
+    // sind das 258 m/s, also Mach 0,75 - und ueber Mach 0,88 loesen sich die
+    // Verdichtungsstoesse an der Blattspitze von ihr ab und laufen als eigene
+    // Wellen davon. Das ist der Knall, den man hoert, obwohl nichts
+    // Ueberschall fliegt.
+    //
+    // Der Doppler des RUMPFES steckt schon in der Ausbreitung; hier geht es
+    // allein darum, wie schnell die Blattspitze durch die Luft faehrt.
+    void setRotorFlightSpeed (float metresPerSecond);
+
 private:
     // Ein Sägezahn-Teilton: Reglerwerte atomar, Phase ist reiner Audio-Thread-
     // Zustand (kein Fremdzugriff, daher kein Atomic nötig).
@@ -385,6 +402,31 @@ private:
     std::atomic<bool>  rotorDoppler { false };
     std::atomic<float> rotorRadiusM { 5.0f };
     std::atomic<float> rotorInPlane { 1.0f };
+    std::atomic<float> rotorFlightSpeed { 0.0f };
+
+    // Ab dieser Blattspitzen-Machzahl loesen sich die Stoesse von der Spitze
+    // ab (Delokalisierung). Darunter bleibt der Ueberdruck an das Blatt
+    // gebunden und wird mit ihm herumgetragen, darueber laeuft er als eigene
+    // Welle davon - deshalb faengt genau hier das harte Knallen an.
+    static constexpr double bladeDelocalisationMach = 0.88;
+
+    // Pegel des abgeloesten Stosses an der Blattspitze. Deutlich ueber dem
+    // Schwirren: er ist der Grund, warum ein schnell fliegender Hubschrauber
+    // aus einem Schwirren ein Hammern macht.
+    static constexpr double bladeShockLevel = 3.0;
+
+    // Dauer der abgeloesten Stosswelle. Kurz genug, dass sie als Schlag und
+    // nicht als Ton wahrgenommen wird - aus der Naehe ist ein Blattstoss ein
+    // Peitschenknall, kein Brummen.
+    static constexpr double bladeShockSeconds = 0.0015;
+
+    // Anteil der Dauer, den die Flanken brauchen. Klein: es soll eine Kante
+    // sein. Ganz ohne ginge nicht, das waere reines Aliasing.
+    static constexpr double bladeShockRise = 0.06;
+
+    // Obergrenze der Richtwirkung eines Blattes, siehe slapSharpness in der
+    // .cpp. 36 dB.
+    static constexpr double maxBladeDirectivity = 64.0;
 
     // Obergrenze der Blattzahl, siehe Params::heliBladeCount (2..8).
     static constexpr int maxRotorBlades = 8;
@@ -406,6 +448,10 @@ private:
         double             slapEnv  = 0.0;
         double             prevPhase = 0.0;
         juce::Random       random;
+
+        // Laufende N-Form des abgeloesten Stosses, in Samples seit seiner
+        // Ausloesung. Negativ heisst "gerade keiner".
+        double             shockPhase = -1.0;
     };
 
     std::array<Blade, (size_t) maxRotorBlades> blades;

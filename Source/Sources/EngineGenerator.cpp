@@ -287,9 +287,10 @@ void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
             auto& blade = blades[i];
 
             blade.ring.assign ((size_t) ringLength, 0.0f);
-            blade.writePos  = 0;
-            blade.slapEnv   = 0.0;
-            blade.prevPhase = 0.0;
+            blade.writePos   = 0;
+            blade.slapEnv    = 0.0;
+            blade.prevPhase  = 0.0;
+            blade.shockPhase = -1.0;
 
             // Deutlich gestreute Startwerte, nicht nur ein anderes letztes
             // Byte: die Blaetter sollen wirklich unabhaengig rauschen.
@@ -339,9 +340,10 @@ void EngineGenerator::reset()
     for (auto& blade : blades)
     {
         std::fill (blade.ring.begin(), blade.ring.end(), 0.0f);
-        blade.writePos  = 0;
-        blade.slapEnv   = 0.0;
-        blade.prevPhase = 0.0;
+        blade.writePos   = 0;
+        blade.slapEnv    = 0.0;
+        blade.prevPhase  = 0.0;
+        blade.shockPhase = -1.0;
     }
 
     // Feste Startwerte statt der Uhrzeit-Aussaat, die juce::Random von sich
@@ -420,6 +422,11 @@ void EngineGenerator::setRotorRadius (float metres)
 void EngineGenerator::setRotorInPlane (float factor01)
 {
     rotorInPlane.store (juce::jlimit (0.0f, 1.0f, factor01));
+}
+
+void EngineGenerator::setRotorFlightSpeed (float metresPerSecond)
+{
+    rotorFlightSpeed.store (metresPerSecond);
 }
 
 void EngineGenerator::setRotorSlap (float amount01)
@@ -574,22 +581,59 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     // dadurch rund 25-mal lauter an als das ruecklaufende - genau das ist das
     // WOP-WOP, und genau das verschwindet, wenn der Hubschrauber senkrecht
     // ueber einem steht (rotorInPlane geht auf 0, mit ihm M_r).
-    const double tipMach = juce::jlimit (0.0, 0.95,
-                                         juce::MathConstants<double>::twoPi * rotorRadiusNow
-                                             * rotorRps / rotorSoundSpeed);
+    const double tipMach = juce::MathConstants<double>::twoPi * rotorRadiusNow
+                               * rotorRps / rotorSoundSpeed;
 
-    auto convectiveGain = [tipMach, rotorInPlaneNow] (double angle)
+    // Und dazu faehrt der ganze Rotor (siehe setRotorFlightSpeed). Auf der
+    // vorlaufenden Seite addieren sich beide Geschwindigkeiten - das ist der
+    // Grund, warum ein Hubschrauber im Reiseflug knallt und im Schwebeflug
+    // nur schwirrt.
+    const double flightMach = (double) rotorFlightSpeed.load() / rotorSoundSpeed;
+
+    // Wie stark der Schlag die Richtwirkung ueberhaupt ausspielt. "Knattern"
+    // regelt nicht mehr nur den Pegel des Schlages, sondern auch, wie hart er
+    // ausfaellt (@dpa 20260824: "der Control 'Knattern' reicht einfach
+    // nicht"). Bei 1 steht die Physik pur da, darueber wird sie ueberzeichnet.
+    // Untergrenze 1: dort steht die Richtwirkung unveraendert. Ein Exponent
+    // darunter wuerde sie wegbuegeln, und "kein Knattern" soll heissen "kein
+    // Schlag", nicht "kein Rotor".
+    const double slapSharpness = juce::jlimit (1.0, 4.0, slapAmount);
+
+    auto machRadialAt = [tipMach, flightMach, rotorInPlaneNow] (double angle)
     {
-        const double machRadial = tipMach * rotorInPlaneNow * std::sin (angle);
-        const double denom      = std::max (0.05, 1.0 - machRadial);
+        // Radiale Machzahl der Blattspitze: ihr Umlauf, projiziert auf die
+        // Sichtlinie, plus die Fahrt des ganzen Rotors darauf.
+        return juce::jlimit (-0.99, 0.995,
+                             tipMach * rotorInPlaneNow * std::sin (angle) + flightMach);
+    };
+
+    auto convectiveGain = [machRadialAt] (double angle)
+    {
+        const double denom = std::max (0.05, 1.0 - machRadialAt (angle));
 
         return 1.0 / (denom * denom);
     };
+
+    // Ab der Delokalisierungsgrenze loesen sich die Verdichtungsstoesse von
+    // der Blattspitze und laufen als eigene Wellen davon (siehe
+    // bladeDelocalisationMach im Header). Das ist der harte Knall, den @dpa
+    // beim Ueberflug hoert, obwohl nichts Ueberschall fliegt. Er waechst mit
+    // dem Abstand zur Grenze und ist unterhalb davon exakt null - kein
+    // weicher Uebergang, denn das Ereignis selbst hat keinen.
+    const double delocalisation = std::max (0.0, machRadialAt (0.25 * juce::MathConstants<double>::twoPi)
+                                                     - bladeDelocalisationMach)
+                                / (1.0 - bladeDelocalisationMach);
 
     // Auf gleichen Gesamtpegel normieren, sonst wuerde der Rotor mit
     // steigender Drehzahl einfach lauter statt knackiger. Der Effektivwert
     // ueber einen Umlauf, einmal je Block aus 64 Stuetzstellen - im
     // Samplepfad steht davon nur noch eine Division.
+    //
+    // Gerechnet OHNE die Fahrt. Mit ihr waere die Normierung ein Nullsummen-
+    // spiel: schneller unterwegs stiege die Ueberhoehung, und derselbe
+    // Nenner zoege sie sofort wieder ab - genau der Effekt, um den es hier
+    // geht, verschwaende in der Division. Die Drehzahl soll normiert werden,
+    // die Fahrt nicht.
     double rotorGainNorm = 1.0;
 
     {
@@ -598,8 +642,14 @@ void EngineGenerator::renderMono (float* out, int numSamples)
 
         for (int i = 0; i < steps; ++i)
         {
-            const double g = convectiveGain (juce::MathConstants<double>::twoPi
-                                             * (double) i / (double) steps);
+            const double angle = juce::MathConstants<double>::twoPi
+                                     * (double) i / (double) steps;
+
+            const double m     = juce::jlimit (-0.99, 0.995,
+                                               tipMach * rotorInPlaneNow * std::sin (angle));
+            const double denom = std::max (0.05, 1.0 - m);
+            const double g     = 1.0 / (denom * denom);
+
             sumSq += g * g;
         }
 
@@ -885,7 +935,12 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                     // also eine Leitung, die nie negativ wird.
                     const double twoPi = juce::MathConstants<double>::twoPi;
 
-                    double sum = 0.0;
+                    double sum      = 0.0;
+                    double shockSum = 0.0;
+
+                    // Laenge der abgeloesten Stosswelle in Samples, siehe
+                    // bladeShockSeconds.
+                    const double shockLen = std::max (2.0, bladeShockSeconds * currentSampleRate);
 
                     for (int k = 0; k < bladeSlots; ++k)
                     {
@@ -906,20 +961,81 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                         const double slapWrapped = slapPhase - std::floor (slapPhase);
 
                         if (slapWrapped < blade.prevPhase)
+                        {
                             blade.slapEnv = 1.0;
+
+                            // Nur wenn die Blattspitze die Grenze reisst,
+                            // loest sich ueberhaupt ein Stoss ab.
+                            if (delocalisation > 0.0)
+                                blade.shockPhase = 0.0;
+                        }
 
                         blade.prevPhase = slapWrapped;
 
                         const double bladeNoise = whiteNoise (blade.random);
 
                         // Richtwirkung dieses Blattes in seiner aktuellen
-                        // Stellung (siehe convectiveGain oben).
-                        const double directivity = convectiveGain (angle) / rotorGainNorm;
+                        // Stellung (siehe convectiveGain oben). "Knattern"
+                        // zieht sie zusaetzlich hoch: bei 1 steht die Physik
+                        // pur da, darueber wird sie ueberzeichnet.
+                        const double raw = convectiveGain (angle) / rotorGainNorm;
 
-                        const float input = (float) (directivity
-                                                     * (bladeNoise * rotorSwishLevel
-                                                        + bladeNoise * blade.slapEnv * slapAmount
-                                                              * rotorSlapLevel * slapScale));
+                        // Gedeckelt, damit der Regler auf 4 aus einer schon
+                        // hohen Ueberhoehung keine Zahl macht, die nur noch
+                        // den Begrenzer beschaeftigt. 36 dB ist reichlich -
+                        // mehr Unterschied als zwischen Fluestern und Rufen.
+                        const double directivity = std::min (maxBladeDirectivity,
+                                                             std::pow (raw, slapSharpness));
+
+                        // Die Richtwirkung trifft den SCHLAG, nicht das
+                        // Schwirren. Das ist keine Bequemlichkeit: das
+                        // Schwirren entsteht ueber die ganze Blattspanne, wo
+                        // die oertliche Machzahl von null an der Nabe bis zum
+                        // Vollen an der Spitze reicht - im Mittel also viel
+                        // weniger. Der Schlag dagegen sitzt genau an der
+                        // Spitze und bekommt die volle Ueberhoehung ab.
+                        //
+                        // Hoerbar ist der Unterschied der ganze Punkt: das
+                        // Schwirren bleibt ein gleichmaessiger Teppich, aus
+                        // dem der Schlag heraussticht, statt dass beides
+                        // zusammen atmet.
+                        const float input = (float) (bladeNoise * rotorSwishLevel
+                                                     + directivity * bladeNoise * blade.slapEnv
+                                                           * slapAmount * rotorSlapLevel * slapScale);
+
+                        // Der abgeloeste Stoss laeuft NEBEN der Leitung, nicht
+                        // in ihr: er darf nicht durch den Bandpass des
+                        // Schwirrens, sonst wird aus dem Knall ein Blubbern.
+                        // Seine Laufzeit darf er trotzdem behalten - er feuert
+                        // bei jedem Blatt am selben Azimut, dort ist die
+                        // Verzoegerung fuer alle gleich und damit eine reine,
+                        // unhoerbare Zeitverschiebung.
+                        if (blade.shockPhase >= 0.0)
+                        {
+                            const double u = blade.shockPhase / shockLen;
+
+                            if (u >= 1.0)
+                            {
+                                blade.shockPhase = -1.0;
+                            }
+                            else
+                            {
+                                // Dieselbe N-Form wie in der Ausbreitung:
+                                // Sprung auf +1, Gerade durch null, Ruecksprung
+                                // von -1. Nur viel kuerzer.
+                                double shape = 1.0 - 2.0 * u;
+
+                                if (u < bladeShockRise)
+                                    shape *= u / bladeShockRise;
+                                else if (u > 1.0 - bladeShockRise)
+                                    shape *= (1.0 - u) / bladeShockRise;
+
+                                shockSum += shape * delocalisation * bladeShockLevel
+                                                * std::min (1.0, slapAmount) * slapScale;
+
+                                blade.shockPhase += 1.0;
+                            }
+                        }
 
                         blade.slapEnv *= slapDecay;
 
@@ -946,12 +1062,15 @@ void EngineGenerator::renderMono (float* out, int numSamples)
 
                     // Auf gleiche Lautstaerke wie der gefakte Weg bringen: N
                     // unkorrelierte Quellen summieren sich mit sqrt(N).
-                    sum /= std::sqrt ((double) bladeSlots);
+                    const double norm = std::sqrt ((double) bladeSlots);
+
+                    sum /= norm;
 
                     // Gefiltert wird die Summe, nicht jedes Blatt einzeln -
                     // ein Bandpass je Blatt klaenge gleich und kostete das
-                    // Achtfache.
-                    swish = (double) rotorFilter.processSample (0, (float) sum);
+                    // Achtfache. Die Stoesse kommen erst DANACH dazu.
+                    swish = (double) rotorFilter.processSample (0, (float) sum)
+                          + shockSum / norm;
 
                     rotorRevPhase += revPhaseInc;
 

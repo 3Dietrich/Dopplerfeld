@@ -589,6 +589,12 @@ private:
     // selbst); dann zaehlt nur die Stille drumherum.
     void beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy = false);
 
+    // Geschwindigkeit der Quelle entlang der Sichtlinie zum Hoerer, positiv
+    // beim Anflug. Aus dem tatsaechlichen Positionsschritt gemessen, damit sie
+    // unabhaengig davon stimmt, welcher Glaetter oder Generator die Bewegung
+    // erzeugt hat. Geht an EngineGenerator::setRotorFlightSpeed().
+    double sourceClosingSpeed = 0.0;
+
     // Additive Mikrobewegung der Quelle M, vor sourceSmoothers eingehakt
     // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.
     PositionJitter  sourceJitter;
