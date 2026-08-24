@@ -1,5 +1,7 @@
 #include "FieldPanel.h"
 
+#include "../Util/Utf8.h"
+
 void FieldPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                              const juce::String& paramID, const juce::String& labelText,
                              Tooltips::Key tooltipKey)
@@ -39,7 +41,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",  Tooltips::Key::GroundDamp);
     setupKnob (groundGainKnob,  apvts, Params::groundGain,       "Ground Gain",  Tooltips::Key::GroundGain);
-    setupKnob (airAltitudeKnob, apvts, Params::airAltitude,      "Höhe",         Tooltips::Key::AirAltitude);
+    setupKnob (airAltitudeKnob, apvts, Params::airAltitude,      Text::utf8 ("Höhe"), Tooltips::Key::AirAltitude);
 
     groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
     addAndMakeVisible (groundReflectionButton);
@@ -49,9 +51,9 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (nWaveGainKnob, apvts, Params::nWaveGainDb, "N-Wave Gain", Tooltips::Key::NWaveGain);
     setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve", Tooltips::Key::DistanceCurve);
     setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",       Tooltips::Key::Panning);
-    setupKnob (airTempKnob,     apvts, Params::airTempC,        "Luft °C",       Tooltips::Key::AirTemperature);
+    setupKnob (airTempKnob,     apvts, Params::airTempC,        Text::utf8 ("Luft °C"), Tooltips::Key::AirTemperature);
 
-    setupKnob (reverseGainKnob, apvts, Params::reverseGainDb,   "Rueckwaerts", Tooltips::Key::ReverseGain);
+    setupKnob (reverseGainKnob, apvts, Params::reverseGainDb,   Text::utf8 ("Rückwärts"), Tooltips::Key::ReverseGain);
     setupKnob (shockDuckKnob,   apvts, Params::shockDuckAmount, "Front-Duck",  Tooltips::Key::ShockDuck);
     setupKnob (shadowTailKnob,  apvts, Params::shadowTailMs,    "Schatten",    Tooltips::Key::ShadowTail);
     setupKnob (jumpBoomKnob,    apvts, Params::jumpBoom,        "Sprungknall", Tooltips::Key::JumpBoom);

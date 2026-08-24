@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Util/Utf8.h"
 #include <juce_core/juce_core.h>
 
 // Zentrale Stelle fuer alle Hilfehinweise (Tooltips) der Oberflaeche, deutsch
@@ -50,6 +51,12 @@ namespace Tooltips
         HeliBladeCount,
         EngineLevel,
         RocketShock,
+        RocketShockSize,
+        RocketShockRate,
+        JetVoice,
+        JetTone,
+        RocketVoice,
+        RocketTone,
         RotorSlap,
         PropSpan,
         PropLevel,
@@ -373,6 +380,119 @@ namespace Tooltips
                           "three metres away is deafening, a model aircraft at the same "
                           "distance is not. The range is generous because that difference is "
                           "exactly what gets set here.";
+                case Key::RocketShockSize:
+                    return lang == Language::De
+                        ? "Nur beim Raketenantrieb: Ausdehnung einer Stoßzelle im Abgasstrahl, "
+                          "in Metern. Daraus wird die Dauer der Stoßwelle - der Schall braucht "
+                          "die Zelle einmal hin und zurück, also T = 2 x Größe / "
+                          "Schallgeschwindigkeit.\n\n"
+                          "Klein ist ein Peitschenknall (ein halber Meter sind knapp 3 ms), "
+                          "groß ein Donnern. Nach oben offen: eine Modellrakete steht unten, "
+                          "eine Trägerrakete weit oben. Die Längen der einzelnen Stöße streuen "
+                          "um diesen Wert herum, sonst klänge es nach Maschinengewehr statt "
+                          "nach Strahl."
+                        : "Rocket mode only: size of a shock cell in the exhaust jet, in "
+                          "metres. It sets the duration of the shock wave - sound has to cross "
+                          "the cell and come back, so T = 2 x size / speed of sound.\n\n"
+                          "Small is a whip crack (half a metre is just under 3 ms), large is a "
+                          "roll of thunder. Open at the top: a model rocket sits at the bottom, "
+                          "a launch vehicle far up. The individual shocks scatter around this "
+                          "value, otherwise it would sound like a machine gun rather than a jet.";
+
+                case Key::RocketShockRate:
+                    return lang == Language::De
+                        ? "Nur beim Raketenantrieb: mittlere Folge der Druckstöße. Unten "
+                          "einzelne Schläge, oben ein zusammenhängender Teppich - das "
+                          "Knattern echter Raketen liegt bei einigen zehn bis hundert Stößen "
+                          "je Sekunde, weil sich die Wellen dort überlagern.\n\n"
+                          "Der Abstand ist bewusst unregelmäßig (zwischen dem halben und dem "
+                          "anderthalbfachen mittleren Abstand): Stoßzellen sind keine Maschine "
+                          "mit fester Drehzahl."
+                        : "Rocket mode only: average rate of the pressure shocks. Single hits "
+                          "at the bottom, a continuous carpet at the top - the crackle of real "
+                          "rockets sits at a few tens to a hundred shocks per second, because "
+                          "that is where the waves start to overlap.\n\n"
+                          "The spacing is deliberately irregular (between half and one and a "
+                          "half times the mean): shock cells are not a machine running at a "
+                          "fixed speed.";
+
+                case Key::JetVoice:
+                    return lang == Language::De
+                        ? "Nur beim Düsenantrieb: fertige Klangformung des Strahlrauschens. "
+                          "Drei Bänder mit je eigenem Pegel - was die Vorlagen unterscheidet, "
+                          "ist nicht die Lautstärke, sondern wie die Energie sich auf tief, "
+                          "mittig und hoch verteilt.\n\n"
+                          "Turbofan ist der moderne Verkehrsjet: der Mantelstrom macht den "
+                          "Klang, tief und breit. Turbojet ist die ältere, schärfere Bauart, "
+                          "mit dem singenden Verdichter darüber. Nachbrenner brüllt statt zu "
+                          "zischen. Ferne ist dasselbe Triebwerk mit von der Luft "
+                          "geschluckten Höhen. Breit ist der neutrale Ausgangspunkt zum "
+                          "Selberdrehen."
+                        : "Jet mode only: ready-made voicing of the jet noise. Three bands "
+                          "with individual levels - what separates the presets is not loudness "
+                          "but how the energy is spread across low, mid and high.\n\n"
+                          "Turbofan is the modern airliner: the bypass stream makes the sound, "
+                          "low and wide. Turbojet is the older, sharper design with the "
+                          "singing compressor on top. Afterburner roars instead of hissing. "
+                          "Distant is the same engine with the highs absorbed by the air. "
+                          "Broad is the neutral starting point for dialling in your own.";
+
+                case Key::JetTone:
+                    return lang == Language::De
+                        ? "Nur beim Düsenantrieb: schiebt stufenlos über die gewählte "
+                          "Klangformung - links dunkel, Mitte die Vorlage unverändert, rechts "
+                          "hell.\n\n"
+                          "Der Regler zieht beides mit, Bänderpegel UND Eckfrequenzen (gut "
+                          "eine Oktave in jede Richtung). Nur die Pegel zu kippen klänge nach "
+                          "einer Höhenblende; erst die wandernden Frequenzen machen daraus "
+                          "einen anderen Klang statt eines lauteren Bandes."
+                        : "Jet mode only: sweeps continuously across the chosen voicing - "
+                          "dark on the left, the preset untouched in the middle, bright on the "
+                          "right.\n\n"
+                          "The control moves both band levels AND corner frequencies (a good "
+                          "octave either way). Tilting only the levels would sound like a "
+                          "treble control; it takes the moving frequencies to make it a "
+                          "different sound rather than a louder band.";
+
+                case Key::RocketVoice:
+                    return lang == Language::De
+                        ? "Nur beim Raketenantrieb: fertige Klangformung des Brüllens, nach "
+                          "demselben Dreiband-Muster wie beim Düsenantrieb - nur mit eigenen "
+                          "Vorlagen, denn ein Raketenstrahl und ein Düsenstrahl klingen nicht "
+                          "gleich.\n\n"
+                          "Vollschub ist ein Flüssigkeitstriebwerk unter Last, fast alles "
+                          "sitzt unten. Feststoff prasselt statt nur zu wummern, mit deutlich "
+                          "mehr Mitten. Zündung ist der Augenblick, in dem der Strahl "
+                          "aufreißt, breiter und heller. Ferne ist nur noch Grollen. Breit "
+                          "ist der neutrale Ausgangspunkt.\n\n"
+                          "Die Druckstöße gehen NICHT durch diese Formung: sie sind N-Wellen, "
+                          "und ihre Form ist ihr Klang - ein Filter darüber würde genau die "
+                          "senkrechten Fronten abrunden, um die es geht."
+                        : "Rocket mode only: ready-made voicing of the roar, using the same "
+                          "three-band scheme as the jet - but with its own presets, because a "
+                          "rocket plume and a jet exhaust do not sound alike.\n\n"
+                          "Full thrust is a liquid engine under load, nearly everything sits "
+                          "low. Solid fuel crackles rather than just rumbling, with far more "
+                          "midrange. Ignition is the moment the plume tears open, wider and "
+                          "brighter. Distant is nothing but a rumble. Broad is the neutral "
+                          "starting point.\n\n"
+                          "The pressure shocks do NOT run through this voicing: they are "
+                          "N-waves, and their shape is their sound - a filter would round off "
+                          "exactly the vertical fronts that matter.";
+
+                case Key::RocketTone:
+                    return lang == Language::De
+                        ? "Nur beim Raketenantrieb: schiebt stufenlos über die gewählte "
+                          "Klangformung des Brüllens - links dunkel, Mitte die Vorlage "
+                          "unverändert, rechts hell. Wirkt wie beim Düsenantrieb auf "
+                          "Bänderpegel und Eckfrequenzen zugleich.\n\n"
+                          "Betrifft nur das Brüllen, nicht die Druckstöße."
+                        : "Rocket mode only: sweeps continuously across the chosen voicing of "
+                          "the roar - dark on the left, the preset untouched in the middle, "
+                          "bright on the right. Like the jet control, it moves band levels and "
+                          "corner frequencies together.\n\n"
+                          "Affects the roar only, not the pressure shocks.";
+
                 case Key::RocketShock:
                     return lang == Language::De
                         ? "Nur beim Raketenantrieb: Stärke der Druckstöße aus der Düse. Der "
@@ -1378,6 +1498,9 @@ namespace Tooltips
     // per Component::setTooltip(), genau wie bisher mit den String-Literalen.
     inline juce::String text (Key key)
     {
-        return juce::String (detail::rawText (key, currentLanguage()));
+        // Ueber Text::utf8(), nicht ueber juce::String(const char*): die Texte
+        // hier stehen als UTF-8 im Quelltext und enthalten Umlaute. Siehe
+        // Util/Utf8.h - der direkte Weg machte aus "hört" ein "hÃ¶rt".
+        return Text::utf8 (detail::rawText (key, currentLanguage()));
     }
 }
