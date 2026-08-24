@@ -387,19 +387,31 @@ private:
     // focalPixels(). Bedienung: 2 Finger senkrecht oder Pinch in der
     // Perspektive, s. mouseWheelMove()/mouseMagnify(); per '0' (keyPressed())
     // zurueck auf perspectiveZoomDefault.
+    //
+    // Die Untergrenze steht bei 0,04: das ist rund ein Fuenfundzwanzigstel der
+    // Brennweite von 0,7 * Breite, also ein Blickwinkel, in dem auch ein
+    // 10-km-Feld als Ganzes ins Bild passt (@dpa 20260825: "soll noch weiter
+    // rauszoomen koennen"). Kein versteckter Deckel, sondern nur die Stelle,
+    // an der die Perspektive rechnerisch in eine Parallelprojektion kippt.
     static constexpr float perspectiveZoomDefault = 1.0f;
     float perspectiveZoom = perspectiveZoomDefault;
-    static constexpr float perspectiveZoomMin = 0.3f;
-    static constexpr float perspectiveZoomMax = 4.0f;
+    static constexpr float perspectiveZoomMin = 0.04f;
+    static constexpr float perspectiveZoomMax = 16.0f;
 
     // Horizontlage als Anteil der Bildhoehe von oben (@dpa-Feedback: "ob mit
     // Boden mehr oben oder mittig"). Bedienung: 2 Finger waagerecht oder
     // Umschalt+Mausrad in der Perspektive, s. mouseWheelMove(); per '0'
     // (keyPressed()) zurueck auf perspectiveHorizonFractionDefault.
+    //
+    // Der Regelweg reicht von "fast nur Boden" bis "fast nur Himmel", geht
+    // aber an keinem Ende auf null (@dpa 20260825: "die Ansicht weiter auf,
+    // also weniger (nicht unsichtbar!) Boden, und zu stellen"). Bei 0,94
+    // bleiben sechs Prozent der Bildhoehe Boden - ein schmaler Streifen, der
+    // die Weite noch lesbar macht; bei 0,04 bleibt derselbe Streifen Himmel.
     static constexpr float perspectiveHorizonFractionDefault = 0.40f;
     float perspectiveHorizonFraction = perspectiveHorizonFractionDefault;
-    static constexpr float perspectiveHorizonFractionMin = 0.15f;
-    static constexpr float perspectiveHorizonFractionMax = 0.70f;
+    static constexpr float perspectiveHorizonFractionMin = 0.04f;
+    static constexpr float perspectiveHorizonFractionMax = 0.94f;
 
     // Empfindlichkeit der Wheel-Zoom-/Horizont-Kurven (s. mouseWheelMove()) -
     // 3.0 fuer den Zoom-Exponenten uebernommen aus dem bisherigen Verhalten

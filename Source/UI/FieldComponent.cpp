@@ -937,7 +937,13 @@ void FieldComponent::drawPerspectiveGround (juce::Graphics& g) const
     const Vec3 fwd   = cameraForward();
     const Vec3 right = cameraRight();
 
-    const double lateral[] { 0.0, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0 };
+    // Bis 5 km statt bis 500 m: weit herausgezoomt (perspectiveZoomMin, s.
+    // Header) steht ein Feld von mehreren Kilometern im Bild, und mit nur
+    // zehn Linien um die Blickachse herum waere der Rest davon leer. Die
+    // Schleife bricht ohnehin ab, sobald ein Abstand groesser ist als die
+    // gezeichnete Tiefe - auf einem kleinen Feld aendert sich damit nichts.
+    const double lateral[] { 0.0, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0,
+                             500.0, 1000.0, 2000.0, 5000.0 };
 
     for (const double offset : lateral)
     {
