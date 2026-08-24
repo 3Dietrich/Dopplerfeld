@@ -19,6 +19,7 @@
 #include "PluginEditor.h"
 #include "Params.h"
 #include "UI/RoundedSlider.h"
+#include "Sources/EngineGenerator.h"
 
 #include <chrono>
 #include <cmath>
@@ -449,6 +450,202 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
 }
 }
 
+// --- Prüfung der Beschriftungen auf verunglückte Umlaute ---
+//
+// juce::String nimmt bei einem nackten `const char*` an, es sei ASCII, also
+// ein Zeichen je Byte. Die Quelldateien dieses Projekts sind aber UTF-8, und
+// dort besteht ein "ü" aus den zwei Bytes C3 BC - aus denen werden auf diesem
+// Weg die zwei Zeichen "Ã¼". Genau so stand "DÃ¼senantrieb" in der
+// Betriebsart-Auswahl (@dpa 20260824: "mit Umlauten scheinst Du deine
+// Probleme zu haben").
+//
+// Der Fehler ist nicht am Quelltext zu sehen, dort steht das "ü" richtig. Er
+// ist erst an dem zu sehen, was auf dem Bildschirm ankommt - und deshalb wird
+// hier der ECHTE Editor abgelaufen und jede sichtbare Zeichenkette geprüft.
+//
+// Erkannt wird an den beiden Zeichen Â (U+00C2) und Ã (U+00C3): sie sind die
+// erste Hälfte jedes so verunglückten Zeichens und kommen in keinem
+// deutschen oder englischen Text vor, den dieses Plugin anzeigt. Wer eines
+// davon je legitim braucht, muss diese Prüfung erweitern - und hat dann auch
+// den Anlass, darüber nachzudenken.
+namespace
+{
+    bool looksMangled (const juce::String& text)
+    {
+        return text.containsChar ((juce::juce_wchar) 0x00C2)
+            || text.containsChar ((juce::juce_wchar) 0x00C3);
+    }
+
+    // Sammelt jede Zeichenkette, die eine Component anzeigt oder als Hinweis
+    // führt, und läuft dabei über alle Kinder.
+    void collectVisibleText (juce::Component& c, std::vector<std::pair<juce::String, juce::String>>& out)
+    {
+        const auto where = c.getName().isNotEmpty() ? c.getName() : juce::String (typeid (c).name());
+
+        if (auto* tooltipClient = dynamic_cast<juce::TooltipClient*> (&c))
+            out.push_back ({ where + " (Hinweis)", tooltipClient->getTooltip() });
+
+        if (auto* label = dynamic_cast<juce::Label*> (&c))
+            out.push_back ({ where + " (Beschriftung)", label->getText() });
+
+        if (auto* button = dynamic_cast<juce::Button*> (&c))
+            out.push_back ({ where + " (Knopf)", button->getButtonText() });
+
+        if (auto* combo = dynamic_cast<juce::ComboBox*> (&c))
+            for (int i = 0; i < combo->getNumItems(); ++i)
+                out.push_back ({ where + " (Auswahl)", combo->getItemText (i) });
+
+        for (auto* child : c.getChildren())
+            if (child != nullptr)
+                collectVisibleText (*child, out);
+    }
+
+    // Prüft zusätzlich die Parameter selbst: ihre Namen, Einheiten und
+    // Auswahltexte stehen in der Automationsliste des Hosts, also auch
+    // an einer Stelle, die der Editor gar nicht durchläuft.
+    void collectParameterText (juce::AudioProcessor& proc, std::vector<std::pair<juce::String, juce::String>>& out)
+    {
+        for (auto* param : proc.getParameters())
+        {
+            const auto name = param->getName (256);
+            out.push_back ({ "Parameter " + name, name });
+            out.push_back ({ "Parameter " + name + " (Einheit)", param->getLabel() });
+
+            if (auto* choice = dynamic_cast<juce::AudioParameterChoice*> (param))
+                for (const auto& item : choice->choices)
+                    out.push_back ({ "Parameter " + name + " (Auswahl)", item });
+        }
+    }
+}
+
+// --- Nachweis, dass die Druckstoesse der Rakete Stosswellen sind ---
+//
+// Seit @dpa 20260824 sind sie echte N-Wellen und keine Rauschstoesse mehr
+// ("Die Druckstoesse sind Ueberschall, also donnernde N-Waves - ... jedenfalls
+// klingen die Noise Decays laecherlich"). Der Unterschied ist messbar, und
+// zwar an der STEILHEIT: eine N-Welle springt in wenigen Samples auf ihren
+// vollen Wert, das Bruellen darunter ist gefiltertes Rauschen und kann das
+// nicht.
+//
+// Geprueft wird deshalb der groesste Sprung von einem Sample zum naechsten,
+// einmal mit und einmal ohne Stoesse. Ein Filter ueber dem Stoss haette
+// genau diesen Sprung abgerundet - deswegen laeuft er ungefiltert.
+namespace
+{
+    struct ShockMeasurement
+    {
+        double peak = 0.0;
+        double maxStep = 0.0;   // groesster Sprung zwischen zwei Samples
+    };
+
+    // Geschaetzter spektraler Schwerpunkt eines Rauschsignals, ohne FFT.
+    //
+    // Fuer ein mittelwertfreies Signal gilt naeherungsweise
+    //   f_zentrum ~ (fs / 2*pi) * RMS(erste Differenz) / RMS(Signal),
+    // denn Differenzieren wichtet jede Frequenz mit ihrer eigenen Hoehe. Fuer
+    // die Frage "klingt Vorlage A dunkler als Vorlage B" reicht das
+    // vollkommen, und es kostet keine zusaetzliche Abhaengigkeit.
+    double centroidHz (const std::vector<float>& samples, double rate)
+    {
+        double sumSq = 0.0, sumDiffSq = 0.0;
+
+        for (size_t i = 1; i < samples.size(); ++i)
+        {
+            const double value = (double) samples[i];
+            const double diff  = value - (double) samples[i - 1];
+
+            sumSq     += value * value;
+            sumDiffSq += diff * diff;
+        }
+
+        if (sumSq <= 0.0)
+            return 0.0;
+
+        return rate / (2.0 * juce::MathConstants<double>::pi) * std::sqrt (sumDiffSq / sumSq);
+    }
+
+    // Rendert eine der beiden Rausch-Betriebsarten und gibt ihren Schwerpunkt
+    // zurueck. kind ist 1 (Duese) oder 2 (Rakete), s. Params::engineKind.
+    double measureVoiceCentroid (double rate, int kind, int voiceIndex, float tone)
+    {
+        constexpr int block = 512;
+        constexpr int blocks = 100;
+
+        EngineGenerator gen;
+        gen.prepare (rate, block);
+
+        gen.setEngineKind (kind);
+        gen.setKindLevelDb (0.0f);
+        gen.setRpm (6000.0f);
+
+        // Die Stoesse bleiben aus: gemessen wird die Klangfarbe des
+        // Rauschens, und eine N-Welle waere darin ein Fremdkoerper.
+        gen.setRocketShock (0.0f);
+
+        if (kind == 1)
+            gen.setJetVoice (voiceIndex, tone);
+        else
+            gen.setRocketVoice (voiceIndex, tone);
+
+        std::vector<float> buffer ((size_t) block);
+        std::vector<float> collected;
+        collected.reserve ((size_t) (block * blocks));
+
+        for (int b = 0; b < blocks; ++b)
+        {
+            gen.renderMono (buffer.data(), block);
+
+            // Erster Block: Betriebsart-Blende laeuft noch hoch.
+            if (b > 0)
+                collected.insert (collected.end(), buffer.begin(), buffer.end());
+        }
+
+        return centroidHz (collected, rate);
+    }
+
+    ShockMeasurement measureRocket (double rate, float shockAmount)
+    {
+        constexpr int block = 512;
+        constexpr int blocks = 200;   // rund 2 s bei 48 kHz
+
+        EngineGenerator gen;
+        gen.prepare (rate, block);
+
+        gen.setEngineKind (2);          // Raketenantrieb, s. Params::engineKind
+        gen.setKindLevelDb (0.0f);
+        gen.setRocketShock (shockAmount);
+        gen.setRocketShockShape (0.5f, 18.0f);
+        gen.setRocketVoice (0, 0.5f);
+        gen.setRpm (6000.0f);
+
+        std::vector<float> buffer ((size_t) block);
+
+        ShockMeasurement result;
+        double previous = 0.0;
+
+        for (int b = 0; b < blocks; ++b)
+        {
+            gen.renderMono (buffer.data(), block);
+
+            for (int i = 0; i < block; ++i)
+            {
+                const double value = (double) buffer[(size_t) i];
+
+                result.peak = std::max (result.peak, std::abs (value));
+
+                // Der erste Block laeuft noch in die Betriebsart-Blende
+                // hinein, dort ist jeder Sprung gedaempft - erst danach messen.
+                if (b > 0)
+                    result.maxStep = std::max (result.maxStep, std::abs (value - previous));
+
+                previous = value;
+            }
+        }
+
+        return result;
+    }
+}
+
 int main()
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
@@ -541,6 +738,124 @@ int main()
                         button->onClick();
 
             paintOnce();
+
+            // Beschriftungen prüfen. Einmal je Betriebsart des Motors, denn
+            // das Motor-Panel zeigt in jeder eine andere Auswahl an Reglern -
+            // ein falsch umgesetzter Umlaut in einem gerade unsichtbaren
+            // Regler wäre sonst nicht dabei.
+            {
+                std::vector<std::pair<juce::String, juce::String>> texts;
+
+                for (int kind = 0; kind < 5; ++kind)
+                {
+                    setParam (proc, Params::engineKind, (float) kind);
+
+                    std::unique_ptr<juce::AudioProcessorEditor> kindEditor (proc.createEditor());
+                    collectVisibleText (*kindEditor, texts);
+                }
+
+                collectParameterText (proc, texts);
+
+                int mangled = 0;
+
+                for (const auto& [where, text] : texts)
+                {
+                    if (! looksMangled (text))
+                        continue;
+
+                    ++mangled;
+
+                    if (mangled <= 10)
+                        std::printf ("  VERUNGLUECKTER UMLAUT in %s: \"%s\"\n",
+                                     where.toRawUTF8(), text.toRawUTF8());
+                }
+
+                std::printf ("%-22s %d Beschriftungen geprueft, %d verunglueckt\n",
+                             "Umlaute", (int) texts.size(), mangled);
+
+                if (mangled > 0)
+                    failed = true;
+
+                setParam (proc, Params::engineKind, 0.0f);
+            }
+
+            // Klangformung von Duese und Rakete: unterscheiden sich die
+            // Vorlagen wirklich, und wirkt der Klangfarbe-Regler?
+            //
+            // @dpa 20260824 hat beides bestellt ("einen Klangveraenderungsknob
+            // und/oder eine Auswahl an vorgefertigten (multiband?) Filtern (am
+            // besten beides)"). Eine Auswahl, deren Eintraege alle gleich
+            // klingen, waere keine - deshalb wird hier nachgemessen und nicht
+            // nur gebaut.
+            {
+                for (int kind = 1; kind <= 2; ++kind)
+                {
+                    const char* kindName = (kind == 1) ? "Duese" : "Rakete";
+
+                    double lowest = 1.0e9, highest = 0.0;
+                    juce::String line;
+
+                    for (int voice = 0; voice < 5; ++voice)
+                    {
+                        const double centroid = measureVoiceCentroid (sampleRate, kind, voice, 0.5f);
+
+                        lowest  = std::min (lowest, centroid);
+                        highest = std::max (highest, centroid);
+
+                        line << juce::String (centroid, 0) << " ";
+                    }
+
+                    // Klangfarbe-Regler am neutralen "Breit" (Index 4), damit
+                    // die Vorlage selbst nichts dazu beitraegt.
+                    const double dark   = measureVoiceCentroid (sampleRate, kind, 4, 0.0f);
+                    const double middle = measureVoiceCentroid (sampleRate, kind, 4, 0.5f);
+                    const double bright = measureVoiceCentroid (sampleRate, kind, 4, 1.0f);
+
+                    std::printf ("%-22s Vorlagen (Hz): %s| Klangfarbe dunkel %.0f -> mitte %.0f -> hell %.0f\n",
+                                 kindName, line.toRawUTF8(), dark, middle, bright);
+
+                    // Die hellste Vorlage muss deutlich ueber der dunkelsten
+                    // liegen, sonst ist die Auswahl ohne Wirkung.
+                    if (lowest <= 0.0 || highest < lowest * 1.5)
+                    {
+                        std::printf ("  FEHLER: die Vorlagen von %s klingen praktisch gleich.\n", kindName);
+                        failed = true;
+                    }
+
+                    // Und der Regler muss den Schwerpunkt monoton anheben.
+                    if (! (dark < middle && middle < bright))
+                    {
+                        std::printf ("  FEHLER: der Klangfarbe-Regler von %s wirkt nicht durchgaengig.\n", kindName);
+                        failed = true;
+                    }
+                }
+            }
+
+            // Druckstoesse der Rakete: sind es Stosswellen oder nur Rauschen?
+            {
+                const auto withShocks = measureRocket (sampleRate, 1.0f);
+                const auto without    = measureRocket (sampleRate, 0.0f);
+
+                // Verhaeltnis der Flankensteilheit. Eine N-Welle steigt in
+                // zwei Samples auf ihren vollen Wert, das tiefpassgefilterte
+                // Bruellen kann das nicht - der Unterschied muss deutlich
+                // sein, sonst ist der Stoss unterwegs verrundet worden.
+                const double ratio = without.maxStep > 0.0
+                                   ? withShocks.maxStep / without.maxStep
+                                   : 0.0;
+
+                std::printf ("%-22s Flankensprung mit Stoessen %.4f gegen %.4f ohne (%.1f x) | Spitze %.3f gegen %.3f\n",
+                             "Raketen-Stosswellen",
+                             withShocks.maxStep, without.maxStep, ratio,
+                             withShocks.peak, without.peak);
+
+                if (ratio < 3.0)
+                {
+                    std::printf ("  FEHLER: die Druckstoesse sind nicht steiler als das Bruellen - "
+                                 "das waeren keine Stosswellen.\n");
+                    failed = true;
+                }
+            }
 
             setParam (proc, Params::srcZ, 0.0f);
             setParam (proc, Params::wall1On, 0.0f);

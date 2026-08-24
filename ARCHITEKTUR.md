@@ -407,6 +407,141 @@ Vorgeschichte am gewuenschten Punkt" explizit behandeln statt still auf 0 zu
 lesen. Empfehlung: hoher Denkaufwand (Opus), weil physikalisch-numerisch
 kritischer Code mit bestehender `solver_check`-Abdeckung, kein Schnellschuss.
 
+## Stand 2026-08-24 (Klangformung, Stoßwellen, Umlaute)
+
+Vier Punkte aus @dpas Durchgang. Drei davon waren echte Fehler, keine
+Geschmacksfragen.
+
+### Umlaute: JUCE liest `const char*` als Latin-1
+
+"DÃ¼senantrieb" stand in der Betriebsart-Auswahl. Die Quelldateien sind
+richtig UTF-8 - der Fehler sitzt eine Ebene tiefer: `juce::String (const
+char*)` nimmt `CharPointer_ASCII` an, also ein Zeichen je Byte. Aus den zwei
+UTF-8-Bytes von "ü" (C3 BC) werden dabei die zwei Zeichen "Ã¼".
+
+Das betrifft **jede** sichtbare Zeichenkette mit einem Zeichen jenseits von
+ASCII, nicht nur Umlaute - auch das Gradzeichen der Winkel-Parameter stand als
+"Â°" da.
+
+Behoben mit `Text::utf8()` in `Source/Util/Utf8.h`. Der Umbau ist klein
+geblieben, weil die Texte an wenigen Engstellen zusammenlaufen:
+
+- `Tooltips::text()` ist die **einzige** Stelle, an der die rund 260
+  Hilfetexte zu einem `juce::String` werden. Eine Zeile dort repariert alle.
+- `Params.cpp` hat acht Literale (Einheiten und die Betriebsart-Liste).
+- Einzelne Beschriftungen in `FieldPanel.cpp` und `EnginePanel.cpp`.
+
+Gegen das Wiederauftreten gibt es jetzt eine **Prüfung im `load_check`**: sie
+baut den echten Editor - einmal je Betriebsart, weil das Motor-Panel in jeder
+andere Regler zeigt -, läuft rekursiv über alle Komponenten und sammelt
+Beschriftungen, Knopftexte, Auswahleinträge und Hinweise ein, dazu die
+Parameternamen und -einheiten aus der Automationsliste. Rund 3500
+Zeichenketten. Erkannt wird an den Zeichen `Â` (U+00C2) und `Ã` (U+00C3): sie
+sind die erste Hälfte jedes so verunglückten Zeichens und kommen in keinem
+Text dieses Plugins legitim vor.
+
+Wichtig für Folge-Sessions: **im Quelltext ist der Fehler nicht zu sehen**,
+dort steht das "ü" richtig. Nur der Lauf zeigt ihn. Die Prüfung wurde
+gegengeprüft, indem der Fix in `Tooltips::text()` kurz zurückgedreht wurde -
+sie schlug sofort an.
+
+### Dreiband-Klangformung für Düse und Rakete
+
+@dpa: "Düsenantrieb hat einfach nur weises Rauschen? Das braucht einen
+Klangveränderungsknob und/oder eine Auswahl an vorgefertigten (multiband?)
+Filtern (am besten beides)." Es ist beides geworden.
+
+`EngineGenerator::BandVoicing` ist eine Zerlegung **einer** Rauschquelle in
+Tiefband (Tiefpass), Mittenband und Hochband (beide Bandpass), dazu ein
+schmaler vierter Zweig für einen singenden Ton - den Verdichter des Turbojets.
+Alle drei Bänder bekommen dasselbe Rauschsample; drei getrennte Quellen
+klängen breiter und leerer zugleich, weil sich nichts mehr überlagert.
+
+Vorlagen in `jetVoiceTable` / `rocketVoiceTable` (Reihenfolge bindend, sie ist
+die von `Params::jetVoice` bzw. `Params::rocketVoice`). Zwei getrennte Listen,
+weil ein Düsenstrahl und ein Raketenbrüllen nicht dieselben Klangfarben haben.
+
+Zwei Konstruktionsentscheidungen, die den Unterschied machen:
+
+**Das Hochband ist ein Bandpass, kein Hochpass.** Ein Hochpass lässt alles bis
+zur Nyquistgrenze durch, und weißes Rauschen hinter einem Hochpass ist immer
+noch weißes Rauschen - genau das, was @dpa gehört hat. Erst ein oben
+begrenztes Band macht aus der Zerlegung eine Klangfarbe.
+
+**Bandbreitenausgleich.** Ohne ihn bedeuten die Pegel in der Vorlage nicht,
+was sie sagen: ein Tiefpass bei 220 Hz lässt aus weißem Rauschen ein
+Zweihundertstel der Energie durch, ein breites Band bei 3 kHz ein Viertel. Das
+Tiefband wäre chancenlos, egal wie die Pegel dastehen, und der Turbofan klänge
+so hell wie der Turbojet. Jedes Band wird deshalb mit der Wurzel des
+Bandbreitenverhältnisses hochgezogen - erst dann heißt "lowGain 1,0" wirklich
+"dieses Band in voller Lautstärke". Das war im ersten Wurf falsch und ist
+durch die Messung aufgefallen, nicht durch Nachdenken.
+
+Der Klangfarbe-Regler (`jetTone` / `rocketTone`) kippt **Bänderpegel UND
+Eckfrequenzen** (gut eine Oktave in jede Richtung). Nur die Pegel zu kippen
+klänge nach einer Höhenblende; erst die wandernden Frequenzen machen daraus
+einen anderen Klang statt eines lauteren Bandes.
+
+Gemessen wird im `load_check` über einen FFT-freien Schätzer des spektralen
+Schwerpunkts (`f ~ (fs/2π)·RMS(Δ)/RMS(x)`). Geprüft wird nicht der Absolutwert
+- der Schätzer wichtet mit `f²` und liegt darum höher, als das Ohr urteilen
+würde -, sondern dass die Vorlagen sich um mindestens Faktor 1,5
+unterscheiden und der Klangfarbe-Regler den Schwerpunkt durchgängig anhebt.
+
+### Die Druckstöße der Rakete sind jetzt N-Wellen
+
+@dpa: "'Druckstoß' sind .. laute noise stöße?? Bullshit!! ... Die Druckstöße
+sind Überschall, also donnernde N-Waves - oder nicht? jedenfalls klingen die
+Noise Decays lächerlich." Er hatte recht: es war bandpassgefiltertes Rauschen
+mit exponentiellem Decay.
+
+Jetzt ist es die N-Wellen-FORM: senkrecht auf +1, lineare Gerade durch null,
+senkrecht von −1 zurück. `EngineGenerator::nWaveShape()` ist eine **eigene
+Kopie** der Form aus `PropagationPath::nWaveAt()` und zapft die
+Ausbreitungsschicht bewusst nicht an - die hängt an M_r und bliebe stumm,
+solange die Rakete unterschallig fliegt. Hier ist aber nicht die Rakete
+überschallschnell, sondern ihr Abgasstrahl.
+
+- Kein Filter über dem Stoß. Die Form ist der Klang; ein Bandpass würde genau
+  die senkrechten Fronten abrunden, um die es geht.
+- Die Dauer kommt aus `rocketShockSize` (Meter, `T = 2·Größe/c`), wie bei
+  `nWaveSize`. Klein ist ein Peitschenknall, groß ein Donnern.
+- Die Folge kommt aus `rocketShockRate`. Vorher stand sie als 18 Hz fest im
+  Generator.
+- Anstiegszeit 0,5 % der Dauer, mindestens zwei Samples. Die Quelle steht
+  direkt an der Düse, dort ist die Front noch nicht durch den Weg durch die
+  Luft verbreitert.
+- **32 gleichzeitige Stöße.** Bei hoher Folge überlappen sie, und dieses
+  Übereinander ist das Knattern. Ein neuer Stoß sucht sich einen freien Platz
+  und fällt aus, wenn keiner frei ist - einen laufenden zu überschreiben hiesse,
+  ihn mitten in der Flanke abzuschneiden, also ein Knacken.
+- Amplitude streut, das **Vorzeichen nicht**: eine Stoßwelle beginnt immer mit
+  Überdruck. Zufälliges Vorzeichen machte aus der N-Welle wieder ein Rauschen.
+
+`rocketShockLevel` steht auf 4,0 und damit deutlich über dem Brüllen. Bei voll
+aufgedrehtem Regler darf das übersteuern - dafür gibt es den sichtbaren
+Begrenzer, und ein stiller Deckel wäre hier das Falsche.
+
+Nachgewiesen wird das im `load_check` an der **Flankensteilheit**: eine
+N-Welle springt in wenigen Samples auf ihren vollen Wert, das gefilterte
+Brüllen kann das nicht. Gemessen 5,0-fach steilerer Sample-zu-Sample-Sprung
+mit Stößen als ohne (Schwelle 3,0).
+
+### Offen für @dpa
+
+Sollen die Stöße **zusätzlich** echte N-Wellen in der Ausbreitung auslösen,
+also mit Doppler und eigener Laufzeit je Hörweg? Bisher sitzen sie
+ausschließlich im Quellsignal. Die Frage steht seit dem vorletzten Durchgang.
+
+### Max Speed unter "Bewegung"
+
+@dpa: "als letztes, kleiner, Abgeschnitten, hinzugequetscht". Der Tempo-Deckel
+stand am Ende der gemeinsamen Zeile - und weil `MotionPanel::resized()` von
+links wegnimmt, war er der erste, dem bei knapper Panelbreite die Hälfte
+fehlte. Er steht jetzt als erstes in der Zeile, 128 statt 100 px breit, mit
+fetter Beschriftung und einer Lücke dahinter, die zeigt, dass er nicht zum
+Jitter gehört, sondern über beiden Reitern steht.
+
 ## Stand 2026-08-24 (Betriebsarten sind eigene Klangerzeuger)
 
 Der erste Versuch hat die Betriebsarten als GEWICHTUNG derselben Bausteine
