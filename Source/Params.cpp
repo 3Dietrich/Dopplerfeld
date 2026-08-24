@@ -529,7 +529,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
     // Bewegungssprung: Kante durchlassen (aus) und Druckwelle darauf (0).
     layout.add (boolParam (jumpEdge, "Jump Edge", false));
-    layout.add (floatParam (jumpBoom, "Jump Boom", unitRange(), 0.0f));
+    // Default nicht mehr 0 (@dpa 20260824: "Knall bei Bewegung/Startvariante
+    // ... soll wie der Raketen-Stoss hoerbar sein, ist es aber nicht"). Wer die
+    // Startvariante "Knall-Start" waehlt, meint den Knall - der musste bisher
+    // in einem anderen Panel erst aufgedreht werden, und ohne das war der
+    // Unterschied zur weichen Startvariante nur an der Bahn zu sehen, nicht zu
+    // hoeren. Gemessen im load_check-Abschnitt "Knall-Start": bei 1,0 hebt die
+    // Druckwelle die Spitze im Ankunftsfenster um Faktor 9,5 an.
+    layout.add (floatParam (jumpBoom, "Jump Boom", unitRange(), 0.5f));
     {
         // Ab 1 ms (heutiges Verhalten) bis 1 s. Skew unten, denn der
         // interessante Bereich liegt bei wenigen bis einigen zehn

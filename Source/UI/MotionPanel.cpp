@@ -225,10 +225,17 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     flyStartLabel.setText ("Startvariante", juce::dontSendNotification);
     flyStartLabel.setJustificationType (juce::Justification::centredLeft);
     flyStartLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyStart));
+    flyJumpEdgeButton.setTooltip (Tooltips::text (Tooltips::Key::JumpEdge));
     addAndMakeVisible (flyStartLabel);
     populateChoices (flyStartCombo, apvts, Params::flyStart);
     addAndMakeVisible (flyStartCombo);
     flyStartAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::flyStart, flyStartCombo);
+
+    setupKnob (flyJumpBoomKnob, apvts, Params::jumpBoom, "Sprungknall", Tooltips::Key::JumpBoom);
+
+    flyJumpEdgeButton.setTooltip (Tooltips::text (Tooltips::Key::JumpEdge));
+    addAndMakeVisible (flyJumpEdgeButton);
+    flyJumpEdgeAttachment = std::make_unique<ButtonAttachment> (apvts, Params::jumpEdge, flyJumpEdgeButton);
 
     setupKnob (flyDistanceKnob, apvts, Params::flyDistance, "Fly Dist", Tooltips::Key::FlyDistance);
     setupKnob (flyApproachKnob, apvts, Params::flyApproach, "Fly Approach", Tooltips::Key::FlyApproach);
@@ -301,6 +308,9 @@ void MotionPanel::updateTabVisibility()
 
     for (auto* c : { (juce::Component*) &flyKindLabel, (juce::Component*) &flyKindCombo,
                       (juce::Component*) &flyStartLabel, (juce::Component*) &flyStartCombo,
+                      (juce::Component*) &flyJumpEdgeButton,
+                      (juce::Component*) &flyJumpBoomKnob.slider,
+                      (juce::Component*) &flyJumpBoomKnob.label,
                       (juce::Component*) &flyButton,
                       (juce::Component*) &flyDistanceKnob.slider, (juce::Component*) &flyDistanceKnob.label,
                       (juce::Component*) &flyApproachKnob.slider, (juce::Component*) &flyApproachKnob.label,
@@ -358,7 +368,7 @@ void MotionPanel::refreshTooltips()
     for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob,
                       &globalMaxSpeedKnob, &srcJitterAmountKnob, &srcJitterRateKnob,
                       &srcJitterRandomKnob, &srcJitterZKnob, &srcJitterMaxSpeedKnob,
-                      &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
+                      &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob, &flyJumpBoomKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -469,6 +479,13 @@ void MotionPanel::resized()
         flyButton.setBounds (flyRow.removeFromLeft (140));
         flyRow.removeFromLeft (10);
         flyLoopButton.setBounds (flyRow.removeFromLeft (juce::jmin (80, flyRow.getWidth())));
+        flyRow.removeFromLeft (10);
+
+        // Die Sprungkante gehoert zur Startvariante darunter und passt in
+        // diese Zeile: die Reglerzeile ist mit vier Knoepfen voll, dort bliebe
+        // fuer die Beschriftung kein Platz.
+        flyJumpEdgeButton.setBounds (flyRow.removeFromLeft (juce::jmin (110, flyRow.getWidth())));
+
         a.removeFromTop (6);
 
         auto flyComboRow = a.removeFromTop (44);
@@ -482,7 +499,7 @@ void MotionPanel::resized()
         a.removeFromTop (6);
 
         auto flyKnobRow = a.removeFromTop (knobH);
-        for (auto* k : { &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
+        for (auto* k : { &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob, &flyJumpBoomKnob })
         {
             layoutKnob (*k, flyKnobRow.removeFromLeft (knobW));
             flyKnobRow.removeFromLeft (4);

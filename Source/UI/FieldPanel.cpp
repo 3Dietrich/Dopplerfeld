@@ -56,11 +56,6 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (reverseGainKnob, apvts, Params::reverseGainDb,   Text::utf8 ("Rückwärts"), Tooltips::Key::ReverseGain);
     setupKnob (shockDuckKnob,   apvts, Params::shockDuckAmount, "Front-Duck",  Tooltips::Key::ShockDuck);
     setupKnob (shadowTailKnob,  apvts, Params::shadowTailMs,    "Schatten",    Tooltips::Key::ShadowTail);
-    setupKnob (jumpBoomKnob,    apvts, Params::jumpBoom,        "Sprungknall", Tooltips::Key::JumpBoom);
-
-    jumpEdgeButton.setTooltip (Tooltips::text (Tooltips::Key::JumpEdge));
-    addAndMakeVisible (jumpEdgeButton);
-    jumpEdgeAttachment = std::make_unique<ButtonAttachment> (apvts, Params::jumpEdge, jumpEdgeButton);
 
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
     addAndMakeVisible (nWaveButton);
@@ -84,7 +79,7 @@ void FieldPanel::refreshTooltips()
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
                       &airTempKnob, &airAltitudeKnob,
-                      &reverseGainKnob, &shockDuckKnob, &shadowTailKnob, &jumpBoomKnob })
+                      &reverseGainKnob, &shockDuckKnob, &shadowTailKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -95,7 +90,6 @@ void FieldPanel::refreshTooltips()
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
     fadeAutoButton.setTooltip (Tooltips::text (Tooltips::Key::FadeAuto));
     limiterOnButton.setTooltip (Tooltips::text (Tooltips::Key::LimiterOn));
-    jumpEdgeButton.setTooltip (Tooltips::text (Tooltips::Key::JumpEdge));
     levelMeter.setTooltip (Tooltips::text (Tooltips::Key::LevelMeter));
 }
 
@@ -169,14 +163,9 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto boomRow = area.removeFromTop (knobH);
-    for (auto* k : { &reverseGainKnob, &shockDuckKnob, &shadowTailKnob, &jumpBoomKnob })
+    for (auto* k : { &reverseGainKnob, &shockDuckKnob, &shadowTailKnob })
     {
         layoutKnob (*k, boomRow.removeFromLeft (knobW));
         boomRow.removeFromLeft (4);
     }
-
-    // Der Schalter fuer die Sprungkante steht neben dem Sprungknall: beides
-    // macht denselben Bewegungssprung hoerbar, auf zwei verschiedene Weisen.
-    jumpEdgeButton.setBounds (boomRow.removeFromTop (18)
-                                     .withWidth (juce::jmin (110, boomRow.getWidth())));
 }

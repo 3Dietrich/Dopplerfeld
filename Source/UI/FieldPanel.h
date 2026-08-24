@@ -81,12 +81,9 @@ private:
     // gehoerten Anteils, die Absenkung des uebrigen Schalls waehrend der
     // Stossfront samt ihrer Rueckkehrzeit, und wie weich ein Hoerweg an der
     // Kaustik ausklingt.
-    Knob reverseGainKnob, shockDuckKnob, shadowTailKnob, jumpBoomKnob;
+    Knob reverseGainKnob, shockDuckKnob, shadowTailKnob;
 
     // Kante eines Bewegungssprungs durchlassen statt interpolieren - der
-    // zweite, unabhaengige Weg neben jumpBoomKnob, deshalb direkt daneben.
-    juce::ToggleButton jumpEdgeButton { "Sprungkante" };
-    std::unique_ptr<ButtonAttachment> jumpEdgeAttachment;
 
     // Entfernung -> Amplitude schaerfer/flacher als das physikalische 1/R
     // (@dpa-Skizze "Amp-Verlauf"). Steht in der dritten Reihe, s. nWaveSizeKnob

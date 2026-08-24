@@ -150,6 +150,15 @@ private:
 
     Knob flyDistanceKnob, flyApproachKnob, flySpeedKnob;
 
+    // Was den Knall-Start hoerbar macht (@dpa 20260824: "Soll wie der
+    // Raketen-Stoss hoerbar sein, ist es aber nicht"). Beides stand vorher im
+    // Feld/Physik-Panel - drei Panels entfernt von der Startvariante, die es
+    // ausloest. Hier steht es neben seiner Ursache.
+    Knob flyJumpBoomKnob;
+
+    juce::ToggleButton flyJumpEdgeButton { "Sprungkante" };
+    std::unique_ptr<ButtonAttachment> flyJumpEdgeAttachment;
+
     juce::TextButton flyButton { "Vorbeiflug" };
 
     juce::Label smootherTypeLabel;
