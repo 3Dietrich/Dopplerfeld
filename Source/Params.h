@@ -246,6 +246,11 @@ namespace Params
     // PolyBLEP-Sägezahn, an = reiner Sinus.
     constexpr const char* harmSine[4] = { "harmSine1", "harmSine2", "harmSine3", "harmSine4" };
 
+    // Sammelschalter der vier Teiltoene (@dpa 20260825). Ein Mute neben den
+    // Level-Reglern, kein Pegel - die vier Level behalten ihre Werte.
+    // Siehe EngineGenerator::setHarmonicsOn().
+    constexpr const char* oscOn = "oscOn";
+
     // Gesamtpegel der Betriebsart in dB. Gilt für alles außer "Frei" - dort
     // machen die vier Teilton-Pegel den Pegel, und daran darf sich nichts
     // ändern, sonst klängen alte Snapshots anders.
@@ -283,6 +288,11 @@ namespace Params
     //   Rate - mittlere Folge der Stoesse in Hz. Einzelne Schlaege unten,
     //          zusammenhaengendes Grollen oben.
     constexpr const char* rocketShockSize = "rocketShockSize";
+
+    // Wie stark die Entfernung die Klangfarbe der Rakete nach unten schiebt,
+    // in Oktaven je Verdopplung des Abstands (@dpa 20260825: "Energie von
+    // weit Weit weg"). Siehe EngineGenerator::setRocketFarColour().
+    constexpr const char* rocketFarColour = "rocketFarColour";
     constexpr const char* rocketShockRate = "rocketShockRate";
 
     constexpr const char* reverseGainDb = "reverseGainDb";
@@ -320,10 +330,6 @@ namespace Params
     // die bringen nichts").
     constexpr const char* cloneTotal  = "cloneTotal";
     constexpr const char* cloneSpread = "cloneSpread";
-
-    // --- Crossfade ---
-    constexpr const char* fadeAuto     = "fadeAuto";
-    constexpr const char* fadeManualMs = "fadeManualMs";
 
     // Pegel der Bodenreflexion in dB, wie bei den Waenden (@dpa 20260819: "bei
     // Waende habe ich ja Gain, bei Boden noch nicht, was bei tiefem lopass

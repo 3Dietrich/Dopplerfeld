@@ -75,6 +75,18 @@ public:
     // Hubschrauber und Propeller) für jeden osc setzbar sein"). false =
     // PolyBLEP-Sägezahn, true = reiner Sinus. index 0..3.
     void setSineMode (int index, bool shouldUseSine);
+
+    // Die vier Teiltoene gemeinsam stummschalten (@dpa 20260825: "neben den
+    // Levels einen OSC On/Off switch (schaltet die 4 Oscillatoren aus, zum
+    // hoeren was noch alles laeuft"). Ein Mute, KEIN Pegel: die vier
+    // Level-Regler behalten ihre Werte, sie sind beim Wiedereinschalten
+    // unveraendert da.
+    //
+    // Wirkt auf "Frei" und auf den Verbrennermotor des Hubschraubers - genau
+    // dort werden die Teiltoene gerechnet. Rauschband, Rotor, Fahrtwind und
+    // Unwucht laufen weiter, und das ist der ganze Zweck: hoeren, was ohne
+    // die Oszillatoren uebrig bleibt.
+    void setHarmonicsOn (bool shouldSound);
     // Oktavlage der Unwucht, siehe Params::imbalanceOctave.
     void setImbalanceOctave (float octaves);
 
@@ -135,6 +147,40 @@ public:
     // Ausdehnung einer Stosszelle, daraus wird die Dauer der N-Welle
     // (T = 2*size/c); rateHz die mittlere Folge der Stoesse.
     void setRocketShockShape (float sizeMetres, float rateHz);
+
+    // --- Abstandsnaht der Rakete (@dpa 20260825) ---
+    //
+    // Der Generator sitzt VOR der Ausbreitung und kennt von sich aus keinen
+    // Abstand. Fuer den Pegel braucht er auch keinen: die 1/R-Daempfung der
+    // Ausbreitung greift nachweislich (load_check, Abschnitt
+    // "Raketen-Abstand": -19,9 dB je Faktor zehn). Zwei Dinge kann sie aber
+    // nicht leisten, weil sie erst NACH dem Generator passieren:
+    //
+    //   - Die KLANGFARBE aus der Ferne. Ein Triebwerk in zwei Kilometern
+    //     klingt nicht wie ein leises Triebwerk in zwei Metern, es klingt
+    //     tiefer (@dpa: "Energie von weit Weit weg"). Der Abstand schiebt die
+    //     drei Baender nach unten, wie stark, sagt der Regler dahinter
+    //     (setRocketFarColour).
+    //   - Die Tiefe der Absenkung durch die Druckstoesse. Die Stoesse der
+    //     Rakete entstehen hier im Generator und nicht als Kegelankunft in der
+    //     Ausbreitung - deshalb kam der Regler "Duck-Reichw." bei der Rakete
+    //     bisher gar nicht an (@dpa: "ich habe bei Rakete noch keinen
+    //     Unterschied zwischen den Druckreichweiten gehoert"). Mit dem
+    //     Abstand hier greift dieselbe Formel wie in
+    //     PropagationPath::triggerNWave: range / (range + R).
+    //
+    // Gefuettert vom Processor, genau wie setRotorInPlane/setRotorFlightSpeed.
+    void setRocketDistance (float metres);
+
+    // Wie stark die Entfernung die Klangfarbe nach unten schiebt, in Oktaven
+    // je Verdopplung des Abstands ueber rocketFarRefMetres hinaus. 0 = gar
+    // nicht (Klang wie am Startplatz, egal wie weit weg).
+    void setRocketFarColour (float octavesPerDoubling);
+
+    // Absenkung des Bruellens waehrend eines Druckstosses. Dieselben beiden
+    // Werte, die auch PropagationPath::setShockDuck bekommt - ein Reglerpaar,
+    // zwei Orte, an denen Stossfronten entstehen.
+    void setRocketShockDuck (float amount01, float rangeMetres);
 
     // Stärke des Blattknallens am Rotor, 0..1. Die Blattspitzen laufen
     // schneller als der Rumpf und schlagen bei jedem Umlauf in die eigene
@@ -261,8 +307,24 @@ private:
     // Liefert die drei Bandpegel zurück, die process() dann braucht.
     struct VoiceGains { double low, mid, high, narrow; };
 
+    // darkOctaves = wie weit der Klangfarbe-Regler nach UNTEN reicht, in
+    // Oktaven. Nach oben ist der Weg fuer beide Betriebsarten gleich.
+    // extraOctavesDown = zusaetzliche Verschiebung nach unten, die nicht am
+    // Regler haengt, sondern an der Entfernung (siehe setRocketDistance).
     VoiceGains applyVoicing (BandVoicing& v, const EngineVoicePreset& preset,
-                             double tone01, double u);
+                             double tone01, double u,
+                             double darkOctaves = 1.1,
+                             double extraOctavesDown = 0.0);
+
+    // Reglerweg nach unten je Betriebsart, siehe applyVoicing().
+    //
+    // Die Duese behaelt die gute Oktave, mit der sie eingehoert wurde. Die
+    // Rakete braucht mehr: 3,2 Oktaven bringen die Vorlage "Ferne" von 20 Hz
+    // auf gut 2 Hz, und mit dem Gas (uScale, mindestens 1) und der
+    // Filteruntergrenze von 4 Hz landet der praktisch erreichbare Tiefpunkt
+    // genau dort, wo @dpa ihn haben will.
+    static constexpr double jetDarkOctaves    = 1.1;
+    static constexpr double rocketDarkOctaves = 3.2;
 
     // Ein Rauschsample durch die drei Bänder, mit den Pegeln aus applyVoicing().
     static double voiceSample (BandVoicing& v, const VoiceGains& g, double in, double narrowIn);
@@ -282,6 +344,13 @@ private:
     // Zeitkonstante der Wellenform-Überblendung je Teilton (siehe Harmonic).
     double sineBlendCoeff = 1.0;
     static constexpr double sineBlendSeconds = 0.02;
+
+    // Sammelschalter der vier Teiltöne (siehe setHarmonicsOn). Nicht hart
+    // geschaltet, sondern über denselben Ein-Pol geblendet wie die
+    // Wellenform: ein Sprung von voller Amplitude auf null wäre eine
+    // senkrechte Kante im Signal, also ein Knacken.
+    std::atomic<bool> harmonicsOn { true };
+    double            harmonicsGain = 1.0;
 
     // --- Betriebsart ---
     //
@@ -360,12 +429,23 @@ private:
     // langen Wellen und hoher Folge überlappen viele, und ein zu kleiner
     // Vorrat hiesse, laufende Stöße mittendrin abzuschneiden - das wäre ein
     // Sprung im Signal, also ein Knacken.
-    static constexpr int maxShocks = 32;
+    //
+    // Seit @dpa 20260825 ist die Stosslaenge nach unten auf 10 m begrenzt
+    // ("die Stosslaenge min. 10m sonst klingt es irgendwie unecht"), und
+    // zehn Meter Zelle sind schon 58 ms Wellendauer. Bei hoher Folge liegen
+    // dann Dutzende uebereinander; mit 32 Plaetzen fiele die Mehrzahl aus,
+    // und das Knattern verlöre genau die Dichte, die es ausmacht.
+    static constexpr int maxShocks = 160;
 
     std::array<Shock, maxShocks> shocks {};
 
     juce::Random shockRandom;
     double shockCountdown = 0.0;   // Samples bis zum nächsten Stoß
+
+    // Huellwert der Absenkung durch die Stoesse (siehe setRocketShockDuck).
+    // Springt beim Einsatz eines Stosses auf dessen Staerke und klingt mit
+    // rocketDuckRelease ab.
+    double shockDuckEnv = 0.0;
     std::atomic<float> rocketShock { 0.0f };
 
     // Form der Stöße, siehe setRocketShockShape().
@@ -373,6 +453,23 @@ private:
     std::atomic<float> rocketShockRateHz { 18.0f };
 
     static constexpr double rocketNoiseLevel = 1.10;
+
+    // --- Abstandsnaht, siehe setRocketDistance() ---
+    std::atomic<float> rocketDistanceM  { 0.0f };
+    std::atomic<float> rocketFarColour  { 1.0f };
+    std::atomic<float> rocketDuckAmount { 0.0f };
+    std::atomic<float> rocketDuckRange  { 300.0f };
+
+    // Ab dieser Entfernung faengt die Verfaerbung an zu zaehlen. Darunter
+    // steht man praktisch am Triebwerk, und dort soll die Vorlage klingen wie
+    // sie ist. 30 m ist die Groessenordnung, ab der eine Rakete ueberhaupt
+    // erst "weit weg" sein kann.
+    static constexpr double rocketFarRefMetres = 30.0;
+
+    // Zeitkonstante, mit der das Bruellen nach einem Stoss zurueckkommt.
+    // Derselbe Gedanke wie PropagationPath::shockDuckRelease: waehrend der
+    // Front kommt nichts durch, danach oeffnet es wieder.
+    static constexpr double rocketDuckRelease = 0.015;
 
     // Pegel einer einzelnen N-Welle. Deutlich über dem Brüllen darunter, und
     // das ist Absicht: ein Druckstoß, der nicht aus dem Rauschen herausragt,

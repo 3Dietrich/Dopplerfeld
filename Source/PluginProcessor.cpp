@@ -273,6 +273,8 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     for (int i = 0; i < 4; ++i)
         pp.harmSine[i] = raw (Params::harmSine[i]);
 
+    pp.oscOn = raw (Params::oscOn);
+
     pp.engineLevelDb  = raw (Params::engineLevelDb);
     pp.rocketShock    = raw (Params::rocketShock);
     pp.rotorSlap      = raw (Params::rotorSlap);
@@ -282,6 +284,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.rocketVoice     = raw (Params::rocketVoice);
     pp.rocketTone      = raw (Params::rocketTone);
     pp.rocketShockSize = raw (Params::rocketShockSize);
+    pp.rocketFarColour = raw (Params::rocketFarColour);
     pp.rocketShockRate = raw (Params::rocketShockRate);
     pp.reverseGainDb   = raw (Params::reverseGainDb);
     pp.shockDuckAmount = raw (Params::shockDuckAmount);
@@ -332,8 +335,6 @@ DopplerfeldProcessor::DopplerfeldProcessor()
         }
     }
 
-    pp.fadeAuto     = raw (Params::fadeAuto);
-    pp.fadeManualMs = raw (Params::fadeManualMs);
 
     pp.imbalanceOctave = raw (Params::imbalanceOctave);
     pp.groundGain = raw (Params::groundGain);
@@ -734,9 +735,20 @@ void DopplerfeldProcessor::applyParameters()
     engineGenerator.setJetVoice ((int) pp.jetVoice->load(), pp.jetTone->load());
     engineGenerator.setRocketVoice ((int) pp.rocketVoice->load(), pp.rocketTone->load());
     engineGenerator.setRocketShockShape (pp.rocketShockSize->load(), pp.rocketShockRate->load());
+    engineGenerator.setRocketFarColour (pp.rocketFarColour->load());
+
+    // Dasselbe Reglerpaar, das die Stossfronten der Ausbreitung steuert, geht
+    // auch an die Rakete: ihre Druckstoesse entstehen im Generator und nicht
+    // als Kegelankunft, deshalb kam "Duck-Reichw." dort bisher gar nicht an
+    // (@dpa 20260825: "ich habe bei Rakete noch keinen Unterschied zwischen
+    // den Druckreichweiten gehoert").
+    engineGenerator.setRocketShockDuck (pp.shockDuckAmount->load(),
+                                        pp.shockDuckRange->load());
 
     for (int i = 0; i < 4; ++i)
         engineGenerator.setSineMode (i, pp.harmSine[i]->load() > 0.5f);
+
+    engineGenerator.setHarmonicsOn (pp.oscOn->load() > 0.5f);
 
     for (int i = 0; i < 4; ++i)
         engineGenerator.setHarmonic (i,
@@ -780,6 +792,11 @@ void DopplerfeldProcessor::applyParameters()
         const double full       = toListener.length();
 
         engineGenerator.setRotorInPlane (full > 1.0e-6 ? (float) (flat / full) : 1.0f);
+
+        // Derselbe Abstand fuettert die Rakete (siehe
+        // EngineGenerator::setRocketDistance): Klangfarbe aus der Ferne und
+        // Tiefe der Absenkung durch die Druckstoesse haengen daran.
+        engineGenerator.setRocketDistance ((float) full);
     }
 
     // Wie schnell die Quelle auf den Hoerer zufaehrt. Auf der vorlaufenden
@@ -915,15 +932,6 @@ void DopplerfeldProcessor::applyParameters()
 
         wallStateInitialised = true;
     }
-
-    // --- Crossfade ---
-    // fadeAuto = an bedeutet: Dauer aus dem Anlass berechnen. Der Zeitregler
-    // gilt nur, wenn der Schalter aus ist (Plan 3.7).
-    const bool   manualFade    = pp.fadeAuto->load() < 0.5f;
-    const double manualSeconds = (double) pp.fadeManualMs->load() * 0.001;
-
-    sourceHolder.setManualFade (manualFade, manualSeconds);
-    dopplerEngine.setManualFade (manualFade, manualSeconds);
 
     // --- Ausgang ---
     // Ausgangspegel, -36 bis +36 dB (siehe Params::outputGain), multipliziert

@@ -606,6 +606,72 @@ namespace
         return centroidHz (collected, rate);
     }
 
+    // --- Abstandsabhaengigkeit der Rakete (@dpa 20260825) ---
+    //
+    // Seine Klage: "Rauschen Bug: ist z.Z. bei jedem Abstand gleichlaut". Hier
+    // wird das nachgemessen statt geraten. Der Generator sitzt VOR der
+    // Ausbreitung und kennt keinen Abstand - die 1/R-Daempfung muss also aus
+    // der Ausbreitung kommen, und genau das prueft diese Messung.
+    //
+    // Gemessen wird der Effektivwert am Ausgang, nachdem der Schall
+    // angekommen ist (bei 2 km sind das ueber 5 s Laufzeit). Limiter und
+    // Knalldeckel sind dabei AUS: beide wuerden die Nahdistanz kappen und die
+    // Messung genau um den Unterschied bringen, um den es geht.
+    double measureRocketRms (double distanceMetres, bool withShocks)
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        // Feld gross genug, dass 2 km hineinpassen, und der Hoerer in der Mitte.
+        constexpr double field = 8000.0;
+
+        setParam (proc, Params::fieldMetres, (float) field);
+        setParam (proc, Params::limiterOn,   0.0f);
+        setParam (proc, Params::boomLimitDb, 60.0f);
+        setParam (proc, Params::airAbsorbAmount, 0.0f);   // reine Geometrie messen
+        setParam (proc, Params::lisX, 0.5f);
+        setParam (proc, Params::lisY, 0.5f);
+        setParam (proc, Params::srcY, 0.5f);
+        setParam (proc, Params::srcX, (float) (0.5 + distanceMetres / field));
+
+        setParam (proc, Params::engineKind,  2.0f);   // Raketenantrieb
+        setParam (proc, Params::rocketShock, withShocks ? 1.0f : 0.0f);
+        setParam (proc, Params::masterOn,    1.0f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        juce::AudioBuffer<float> buffer (2, blockSize);
+        juce::MidiBuffer         midi;
+
+        // Laufzeit abwarten (2 km sind rund 5,8 s), dann eine Sekunde messen.
+        const double settleSeconds  = distanceMetres / 343.0 + 2.0;
+        const int    settleBlocks   = (int) std::ceil (settleSeconds * sampleRate / blockSize);
+        const int    measureBlocks  = (int) std::ceil (1.0 * sampleRate / blockSize);
+
+        double sumSquares = 0.0;
+        int    counted    = 0;
+
+        for (int block = 0; block < settleBlocks + measureBlocks; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+
+            if (block < settleBlocks)
+                continue;
+
+            const float* data = buffer.getReadPointer (0);
+
+            for (int i = 0; i < blockSize; ++i)
+            {
+                sumSquares += (double) data[i] * (double) data[i];
+                ++counted;
+            }
+        }
+
+        return counted > 0 ? std::sqrt (sumSquares / (double) counted) : 0.0;
+    }
+
     ShockMeasurement measureRocket (double rate, float shockAmount)
     {
         constexpr int block = 512;
@@ -856,6 +922,33 @@ int main()
                 {
                     std::printf ("  FEHLER: die Druckstoesse sind nicht steiler als das Bruellen - "
                                  "das waeren keine Stosswellen.\n");
+                    failed = true;
+                }
+            }
+
+            // Wird die Rakete mit dem Abstand leiser? (@dpa 20260825:
+            // "Rauschen Bug: ist z.Z. bei jedem Abstand gleichlaut")
+            {
+                const double near10  = measureRocketRms (10.0,   false);
+                const double mid100  = measureRocketRms (100.0,  false);
+                const double far1000 = measureRocketRms (1000.0, false);
+
+                auto dB = [] (double a, double b)
+                {
+                    return (a > 0.0 && b > 0.0) ? 20.0 * std::log10 (a / b) : 0.0;
+                };
+
+                std::printf ("%-22s Bruellen RMS 10 m %.5f | 100 m %.5f (%+.1f dB) | 1000 m %.5f (%+.1f dB)\n",
+                             "Raketen-Abstand",
+                             near10, mid100, dB (mid100, near10),
+                             far1000, dB (far1000, mid100));
+
+                // 1/R heisst -20 dB je Faktor zehn. Wer hier weniger als
+                // 12 dB findet, hoert die Rakete tatsaechlich "bei jedem
+                // Abstand gleichlaut" - dann greift die Ausbreitung nicht.
+                if (dB (mid100, near10) > -12.0 || dB (far1000, mid100) > -12.0)
+                {
+                    std::printf ("  FEHLER: die Rakete wird mit dem Abstand nicht leiser.\n");
                     failed = true;
                 }
             }

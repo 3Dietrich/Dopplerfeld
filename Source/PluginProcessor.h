@@ -418,6 +418,8 @@ private:
         std::atomic<float>* boomLimitDb     = nullptr;
         std::atomic<float>* nWaveGainDb     = nullptr;
         std::atomic<float>* harmSine[4] { nullptr, nullptr, nullptr, nullptr };
+        std::atomic<float>* oscOn = nullptr;
+        std::atomic<float>* rocketFarColour = nullptr;
         std::atomic<float>* engineLevelDb = nullptr;
         std::atomic<float>* rocketShock   = nullptr;
         std::atomic<float>* rotorSlap     = nullptr;
@@ -465,9 +467,6 @@ private:
         std::atomic<float>* reflect2ndOn = nullptr;
         std::atomic<float>* bounceGain   = nullptr;
         std::atomic<float>* bounceGainDb = nullptr;
-
-        std::atomic<float>* fadeAuto     = nullptr;
-        std::atomic<float>* fadeManualMs = nullptr;
 
         std::atomic<float>* imbalanceOctave = nullptr;
         std::atomic<float>* groundGain = nullptr;

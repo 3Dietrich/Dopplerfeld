@@ -95,6 +95,14 @@ private:
     std::array<juce::ToggleButton, 4> harmSineButtons;
     std::array<std::unique_ptr<ButtonAttachment>, 4> harmSineAttachments;
 
+    // Sammelschalter der vier Oszillatoren (@dpa 20260825). Steht auf Hoehe
+    // der Level-Zeile rechts neben der Teilton-Matrix - dort ist der Platz
+    // ohnehin frei, und "neben den Levels" ist genau die Stelle, an der man
+    // ihn sucht, wenn man wissen will, was ohne die Oszillatoren uebrig
+    // bleibt.
+    juce::ToggleButton oscOnButton { "OSC" };
+    std::unique_ptr<ButtonAttachment> oscOnAttachment;
+
     // Je Harmonische: Verhaeltnis, Verstimmung, Tracking, Pegel - siehe
     // Params.h "--- Motor ---" (harmRatioN/harmDetuneN/harmTrackN/harmLevelN).
     // RPM und Imbalance sitzen NICHT hier, sondern im eigenen EngineControlPanel
@@ -156,7 +164,7 @@ private:
     // Form der Druckstoesse aus der Raketenduese: Laenge einer Stosswelle und
     // ihre Folge. Erst mit diesen beiden ist der Stoss einstellbar - vorher
     // steckten beide Groessen als Festwerte im Generator.
-    Knob rocketShockSizeKnob, rocketShockRateKnob;
+    Knob rocketShockSizeKnob, rocketShockRateKnob, rocketFarColourKnob;
 
     // Beschriftete Auswahlliste, gebuendelt wie Knob - dieselbe Begruendung:
     // die Lebensdauer des Attachments haengt so an der der ComboBox.

@@ -84,6 +84,10 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
             apvts, Params::harmSine[i], harmSineButtons[(size_t) i]);
     }
 
+    oscOnButton.setTooltip (Tooltips::text (Tooltips::Key::EngineOscOn));
+    addAndMakeVisible (oscOnButton);
+    oscOnAttachment = std::make_unique<ButtonAttachment> (apvts, Params::oscOn, oscOnButton);
+
     const std::array<const char*, 4> ratioIds  { Params::harmRatio1,  Params::harmRatio2,  Params::harmRatio3,  Params::harmRatio4 };
     const std::array<const char*, 4> detuneIds { Params::harmDetune1, Params::harmDetune2, Params::harmDetune3, Params::harmDetune4 };
     const std::array<const char*, 4> trackIds  { Params::harmTrack1,  Params::harmTrack2,  Params::harmTrack3,  Params::harmTrack4 };
@@ -131,6 +135,7 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (jetToneKnob,    apvts, Params::jetTone,    "Klangfarbe", Tooltips::Key::JetTone);
     setupKnob (rocketToneKnob, apvts, Params::rocketTone, "Klangfarbe", Tooltips::Key::RocketTone);
 
+    setupKnob (rocketFarColourKnob, apvts, Params::rocketFarColour, "Fern-Farbe", Tooltips::Key::RocketFarColour);
     setupKnob (rocketShockSizeKnob, apvts, Params::rocketShockSize, "Stoßlänge", Tooltips::Key::RocketShockSize);
     setupKnob (rocketShockRateKnob, apvts, Params::rocketShockRate, "Stoßfolge", Tooltips::Key::RocketShockRate);
 
@@ -181,7 +186,7 @@ std::vector<const EnginePanel::Knob*> EnginePanel::kindKnobs() const
     switch (engineKindCombo.getSelectedItemIndex())
     {
         case 1:  return { &kindLevelKnob, &jetToneKnob };
-        case 2:  return { &kindLevelKnob, &rocketToneKnob, &rocketShockKnob,
+        case 2:  return { &kindLevelKnob, &rocketToneKnob, &rocketFarColourKnob, &rocketShockKnob,
                           &rocketShockSizeKnob, &rocketShockRateKnob };
         case 3:  return { &kindLevelKnob, &rotorSlapKnob, &heliRotorHzKnob, &heliBladeCountKnob,
                           &heliRotorRadiusKnob };
@@ -255,7 +260,7 @@ void EnginePanel::updateHeliControlsEnabled()
                       &heliRotorHzKnob, &heliBladeCountKnob, &heliRotorRadiusKnob,
                       &propSpanKnob, &propLevelKnob,
                       &jetToneKnob, &rocketToneKnob,
-                      &rocketShockSizeKnob, &rocketShockRateKnob })
+                      &rocketShockSizeKnob, &rocketShockRateKnob, &rocketFarColourKnob })
     {
         const bool visible = std::find (active.begin(), active.end(), k) != active.end();
 
@@ -295,6 +300,8 @@ void EnginePanel::updateHeliControlsEnabled()
 
     for (auto& b : harmSineButtons)
         b.setVisible (harmonicsAudible);
+
+    oscOnButton.setVisible (harmonicsAudible);
 
     for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob })
     {
@@ -370,10 +377,12 @@ void EnginePanel::refreshTooltips()
     for (auto& b : harmSineButtons)
         b.setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
 
+    oscOnButton.setTooltip (Tooltips::text (Tooltips::Key::EngineOscOn));
+
     for (auto* k : { &propSpanKnob, &propLevelKnob,
                       &kindLevelKnob, &rocketShockKnob, &rotorSlapKnob,
                       &jetToneKnob, &rocketToneKnob,
-                      &rocketShockSizeKnob, &rocketShockRateKnob })
+                      &rocketShockSizeKnob, &rocketShockRateKnob, &rocketFarColourKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -509,6 +518,13 @@ void EnginePanel::resized()
             layoutKnob (h.level,  column.removeFromTop (knobH));
             harmonicsArea.removeFromLeft (4); // Spaltenabstand
         }
+
+        // Der Sammelschalter neben den Levels: dieselbe Zeile wie die vierte
+        // Reglerreihe, rechts von der letzten Spalte. harmonicsArea ist an
+        // dieser Stelle genau das, was von den vier Spalten uebrig blieb.
+        oscOnButton.setBounds (harmonicsArea.removeFromBottom (knobH)
+                                            .removeFromTop (22)
+                                            .removeFromLeft (56));
 
         area.removeFromTop (6);
 

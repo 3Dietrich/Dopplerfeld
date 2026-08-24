@@ -54,6 +54,7 @@ namespace Tooltips
         HeliRotorRadius,
         EngineLevel,
         RocketShock,
+        RocketFarColour,
         RocketShockSize,
         RocketShockRate,
         JetVoice,
@@ -70,7 +71,6 @@ namespace Tooltips
         AirAbsorb,
         AirTemperature,
         AirAltitude,
-        FadeManual,
         OutputGain,
         Panning,
         DistanceCurve,
@@ -80,6 +80,7 @@ namespace Tooltips
         SrcJitterRate,
         SrcJitterOn,
         EngineSine,
+        EngineOscOn,
         ReverseGain,
         ShockDuck,
         ShockDuckRange,
@@ -94,7 +95,6 @@ namespace Tooltips
         NWaveSize,
         NWaveGain,
         NWave,
-        FadeAuto,
         LimiterOn,
         LevelMeter,
 
@@ -383,6 +383,20 @@ namespace Tooltips
                           "three metres away is deafening, a model aircraft at the same "
                           "distance is not. The range is generous because that difference is "
                           "exactly what gets set here.";
+                case Key::RocketFarColour:
+                    return lang == Language::De
+                        ? "Wie stark die Entfernung die Klangfarbe nach unten schiebt, in "
+                          "Oktaven je Verdopplung des Abstands. 0 = die Rakete klingt in zwei "
+                          "Kilometern wie am Startplatz, nur leiser. 1 = in 2 km liegt der "
+                          "Klang gut sechs Oktaven tiefer: Energie von weit weg, die man eher "
+                          "spürt als hört. Der PEGEL hängt nicht hier dran, den rechnet die "
+                          "Ausbreitung mit 1/Abstand - hier geht es allein um die Farbe."
+                        : "How strongly distance shifts the timbre downwards, in octaves per "
+                          "doubling of range. 0 = the rocket sounds the same at two kilometres "
+                          "as on the pad, just quieter. 1 = at 2 km the sound sits a good six "
+                          "octaves lower: energy from far away, felt more than heard. LEVEL is "
+                          "not affected here - propagation handles that with 1/distance; this "
+                          "is purely about colour.";
                 case Key::RocketShockSize:
                     return lang == Language::De
                         ? "Nur beim Raketenantrieb: Ausdehnung einer Stoßzelle im Abgasstrahl, "
@@ -674,12 +688,6 @@ namespace Tooltips
                           "altitude air makes everything quieter. This is how a whip crack near "
                           "the ground (dense air) differs from a jet at high altitude (thin, cold "
                           "air - set temperature separately).";
-                case Key::FadeManual:
-                    return lang == Language::De
-                        ? "Feste Ueberblendzeit (ms) bei unstetigen Aenderungen, wirkt nur wenn "
-                          "'Fade Auto' ausgeschaltet ist."
-                        : "Fixed crossfade time (ms) for discontinuous changes, only takes "
-                          "effect while 'Fade Auto' is switched off.";
                 case Key::OutputGain:
                     return lang == Language::De
                         ? "Ausgangslautstärke, -36 bis +36 dB. Der Pegel folgt 1/Abstand ohne "
@@ -766,6 +774,20 @@ namespace Tooltips
                           "there is silence - and nothing is computed any more, the CPU meter "
                           "drops to zero. Switching back on restarts the trajectory, since no "
                           "motion was recorded while it was silent.";
+                case Key::EngineOscOn:
+                    return lang == Language::De
+                        ? "Die vier Oszillatoren zusammen stumm - zum Hören, was ohne sie "
+                          "noch alles läuft: Rauschband, Fahrtwind, Unwucht und beim "
+                          "Hubschrauber der Rotor. Ein reiner Mute, kein Pegel: die vier "
+                          "Level-Regler behalten ihre Werte und stehen beim Wiedereinschalten "
+                          "unverändert da. Wird überblendet, nicht geschaltet, und die Phasen "
+                          "laufen weiter - kein Knacks in beide Richtungen."
+                        : "Mutes the four oscillators together - to hear what is still "
+                          "running without them: noise band, slipstream, imbalance and, on the "
+                          "helicopter, the rotor. A pure mute, not a level: the four level "
+                          "controls keep their values and are unchanged when switched back on. "
+                          "Crossfaded rather than switched, with the phases running on - no "
+                          "click in either direction.";
                 case Key::EngineSine:
                     return lang == Language::De
                         ? "Wellenform DIESES Teiltons. Aus = Sägezahn (obertonreich, der "
@@ -1003,14 +1025,6 @@ namespace Tooltips
                           "on top of the normal sound, the existing amplitude formula stays "
                           "unchanged. Not to be confused with 'Boom Limit' (pure amplitude "
                           "capping, no pulse shape) or with the output limiter. Off by default.";
-                case Key::FadeAuto:
-                    return lang == Language::De
-                        ? "Ueberblendzeit bei Sprüngen automatisch aus der jeweiligen "
-                          "Aenderung ableiten (Distanz/Klangfrequenz), statt eine feste "
-                          "Zeit ('Fade Manual') zu benutzen."
-                        : "Derive the crossfade time for jumps automatically from the "
-                          "respective change (distance/pitch), instead of using a fixed "
-                          "time ('Fade Manual').";
                 case Key::LimiterOn:
                     return lang == Language::De
                         ? "Sicherheitsbegrenzer am Ausgang (weiche Kniekennlinie, ein sanfter "

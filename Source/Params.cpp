@@ -421,6 +421,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     for (int i = 0; i < 4; ++i)
         layout.add (boolParam (harmSine[i], "Sine " + juce::String (i + 1), false));
 
+    // Sammelschalter der vier Teiltoene, Default AN: bestehende Snapshots
+    // klingen unveraendert, und wer den Schalter nie anfasst, merkt nicht,
+    // dass es ihn gibt.
+    layout.add (boolParam (oscOn, "OSC", true));
+
     // Pegel der Betriebsart. Grosszuegiger Bereich, denn hier geht es um den
     // Unterschied zwischen einem Modellflugzeug und einem Hubschrauber in drei
     // Metern Abstand (@dpa: "die Lautstaerken sind noch irgendwie voellig
@@ -429,7 +434,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // nicht aus vier einzeln gedrehten Teiltoenen.
     layout.add (floatParam (engineLevelDb, "Engine Level", { -36.0f, 36.0f, 0.1f }, 12.0f, "dB"));
 
-    layout.add (floatParam (rocketShock, "Rocket Shock", unitRange(), 0.6f));
+    // Bis 4 statt bis 1, genau wie beim Knattern des Rotors, und Default 1
+    // statt 0,6 (@dpa 20260825: "die Druckstoesse sind bei mir immer auf 1,
+    // leiser machts keinen sinn"). Wenn der ganze bisherige Regelweg unter
+    // dem liegt, was man tatsaechlich einstellt, ist der Regelweg falsch
+    // gewaehlt und nicht die Einstellung. Skew auf 1, damit die bisherige
+    // Obergrenze den halben Reglerweg behaelt.
+    {
+        auto range = juce::NormalisableRange<float> (0.0f, 4.0f);
+        range.setSkewForCentre (1.0f);
+        layout.add (floatParam (rocketShock, "Rocket Shock", range, 1.0f));
+    }
     // Bis 4 statt bis 1 (@dpa 20260824: "der Control 'Knattern' reicht
     // einfach nicht"). Ueber 1 regelt er nicht mehr nur den Pegel des
     // Schlages, sondern zieht auch die Richtwirkung der Blattspitze hoch -
@@ -469,16 +484,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (jetTone,    "Jet Tone",    unitRange(), 0.5f));
     layout.add (floatParam (rocketTone, "Rocket Tone", unitRange(), 0.5f));
 
-    // Ausdehnung einer Stosszelle im Raketenstrahl. Nach oben offen wie
-    // nWaveSize (keine versteckten Limits): unten steht der Peitschenknall
-    // einer Modellrakete, oben das Donnern einer Traegerrakete. Skew auf
-    // einen halben Meter, weil dort der interessante Bereich liegt - das
-    // sind knapp 3 ms Wellendauer.
+    // Ausdehnung einer Stosszelle im Raketenstrahl. Untergrenze 10 m
+    // (@dpa 20260825: "die Stosslaenge min. 10m sonst klingt es irgendwie
+    // unecht"): darunter wird die N-Welle kuerzer als 58 ms, und was so kurz
+    // ist, hoert man als Klick statt als Druckstoss - genau das "unecht".
+    // Nach oben grosszuegig bis 600 m, das ist das Donnern einer
+    // Traegerrakete. Skew auf 30 m, dort liegt der interessante Bereich.
+    //
+    // Die tatsaechliche Dauer je Stoss streut um diesen Wert herum
+    // multiplikativ (Faktor 0,37 bis 2,7, siehe EngineGenerator) - der
+    // Regler stellt den Mittelwert, nicht eine feste Groesse.
     {
-        auto range = juce::NormalisableRange<float> (0.02f, 60.0f);
-        range.setSkewForCentre (0.5f);
-        layout.add (floatParam (rocketShockSize, "Rocket Shock Size", range, 0.5f, "m"));
+        auto range = juce::NormalisableRange<float> (10.0f, 600.0f);
+        range.setSkewForCentre (30.0f);
+        layout.add (floatParam (rocketShockSize, "Rocket Shock Size", range, 20.0f, "m"));
     }
+
+    // Verfaerbung durch die Entfernung. 0 = die Rakete klingt in zwei
+    // Kilometern wie am Startplatz, nur leiser. 1 = je Verdopplung des
+    // Abstands wandert der Klang eine Oktave nach unten, in 2 km sind das
+    // gut sechs Oktaven - das ist "Energie von weit Weit weg". Bis 3, denn
+    // was hier zu wenig ist, laesst sich nirgends sonst nachholen.
+    layout.add (floatParam (rocketFarColour, "Rocket Far Colour", { 0.0f, 3.0f, 0.01f }, 1.0f, "Okt"));
 
     // Mittlere Folge der Stoesse. Unten einzelne Schlaege, oben ein
     // zusammenhaengender Teppich - das Knattern echter Raketen ("crackle")
@@ -603,9 +630,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // unveraendert.
     layout.add (floatParam (cloneRealLevel, "Clone Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
 
-    // --- Crossfade ---
-    layout.add (boolParam (fadeAuto, "Fade Auto", true));
-    layout.add (floatParam (fadeManualMs, "Fade Manual", { 5.0f, 500.0f, 0.1f }, 50.0f, "ms"));
+    // Kein Crossfade-Parameterpaar mehr: die Fadedauer kommt seit
+    // @dpa 20260825 ausschliesslich aus dem Anlass (siehe
+    // computeFadeSamples). Alte Presets, die "fadeAuto"/"fadeManualMs" noch
+    // enthalten, laden weiterhin - unbekannte Eintraege ignoriert die APVTS.
 
     // --- Ausgang ---
     layout.add (floatParam (panAmount, "Panning", { 0.0f, 100.0f, 1.0f }, 0.0f, "%"));

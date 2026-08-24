@@ -56,25 +56,39 @@ const std::array<EngineVoicePreset, 5> jetVoiceTable
     { 250.0, 1000.0, 0.55, 2500.0,   0.85, 0.85, 0.85,      0.0, 1.0, 0.00 }
 }};
 
+// Die Raketen-Vorlagen liegen seit @dpa 20260825 eine gute Oktave tiefer als
+// zuvor ("muss noch tiefer gehen, subsubbass tief. Energie von weit Weit
+// weg.. also zutiefst (bis 5Hz cutoff) aber druckvoll (amp)"). Zusammen mit
+// dem erweiterten Reglerweg nach unten (rocketDarkOctaves) und der auf 4 Hz
+// gesenkten Filteruntergrenze erreicht das Tiefband der Vorlage "Ferne" bei
+// ganz dunklem Regler die geforderten 5 Hz.
+//
+// Der Druck kommt dabei nicht aus einem hoeheren Gesamtpegel, sondern aus dem
+// Bandbreiten-Ausgleich in place(): je schmaler das Tiefband, desto staerker
+// wird es hochgezogen, damit "lowGain 1,0" weiter heisst, was es sagt. Ein
+// 8-Hz-Tiefpass bekommt daher von selbst ein Vielfaches der Verstaerkung
+// eines 70-Hz-Tiefpasses - genau das ist die Energie, die man eher spuert
+// als hoert.
 const std::array<EngineVoicePreset, 5> rocketVoiceTable
 {{
     // Vollschub: ein Flüssigkeitstriebwerk unter Last. Fast alles sitzt
     // unten, das ist das Wummern, das man im Bauch spürt.
-    {  70.0,  260.0, 0.50, 1200.0,   1.55, 0.80, 0.28,      0.0, 1.0, 0.00 },
+    {  32.0,  180.0, 0.50, 1200.0,   1.85, 0.70, 0.24,      0.0, 1.0, 0.00 },
 
     // Feststoff: rauer und körniger als flüssig, mit deutlich mehr Mitten -
     // ein Feststoffbooster prasselt, er wummert nicht nur.
-    { 110.0,  600.0, 0.85, 2200.0,   1.00, 1.25, 0.55,      0.0, 1.0, 0.00 },
+    {  55.0,  450.0, 0.85, 2200.0,   1.20, 1.15, 0.50,      0.0, 1.0, 0.00 },
 
     // Zündung: der Augenblick, in dem der Strahl aufreißt. Breiter als der
     // eingeschwungene Vollschub, mit deutlich mehr Obenrum.
-    {  90.0,  450.0, 0.65, 3200.0,   1.20, 1.00, 0.80,      0.0, 1.0, 0.00 },
+    {  45.0,  340.0, 0.65, 3200.0,   1.40, 0.95, 0.75,      0.0, 1.0, 0.00 },
 
-    // Ferne: nur noch Grollen, die Luft hat den Rest geschluckt.
-    {  60.0,  200.0, 0.50,  900.0,   1.60, 0.45, 0.04,      0.0, 1.0, 0.00 },
+    // Ferne: nur noch Grollen, die Luft hat den Rest geschluckt. Die
+    // tiefste der fuenf - hier sitzt der Subsubbass, den @dpa sucht.
+    {  20.0,  120.0, 0.50,  700.0,   2.20, 0.35, 0.03,      0.0, 1.0, 0.00 },
 
     // Breit: neutraler Ausgangspunkt.
-    { 120.0,  500.0, 0.55, 2000.0,   1.00, 1.00, 1.00,      0.0, 1.0, 0.00 }
+    {  60.0,  400.0, 0.55, 2000.0,   1.10, 0.95, 0.95,      0.0, 1.0, 0.00 }
 }};
 
 EngineGenerator::EngineGenerator()
@@ -124,7 +138,9 @@ void EngineGenerator::BandVoicing::reset()
 
 EngineGenerator::VoiceGains EngineGenerator::applyVoicing (BandVoicing& v,
                                                             const EngineVoicePreset& preset,
-                                                            double tone01, double u)
+                                                            double tone01, double u,
+                                                            double darkOctaves,
+                                                            double extraOctavesDown)
 {
     // Klangfarbe als Kippung um die Mitte: -1 ganz dunkel, 0 die Vorlage
     // unveraendert, +1 ganz hell.
@@ -133,8 +149,23 @@ EngineGenerator::VoiceGains EngineGenerator::applyVoicing (BandVoicing& v,
     // Der Regler zieht BEIDES mit, Baenderpegel und Eckfrequenzen. Nur die
     // Pegel zu kippen klaenge nach einer Hoehenblende; erst die wandernden
     // Frequenzen machen daraus einen anderen Klang statt eines lauteren
-    // Bandes. Eine gute Oktave Weg nach oben wie nach unten.
-    const double fScale = std::pow (2.0, tilt * 1.1);
+    // Bandes. Eine gute Oktave Weg nach oben.
+    //
+    // Nach UNTEN ist der Weg je Betriebsart verschieden (darkOctaves): die
+    // Duese behaelt ihre gute Oktave, die Rakete bekommt seit @dpa 20260825
+    // ein Vielfaches davon, denn nur so kommt ihr Tiefband ueberhaupt in die
+    // Naehe der geforderten 5 Hz. Asymmetrisch und nicht einfach breiter,
+    // weil oben nichts fehlte - eine Rakete, die zwei Oktaven ueber ihrer
+    // Vorlage sitzt, ist keine Rakete mehr.
+    //
+    // extraOctavesDown kommt oben drauf und ist keine Reglerstellung, sondern
+    // die Entfernung (siehe setRocketDistance): Schall von weit her hat seine
+    // Hoehen unterwegs verloren, und was uebrig bleibt, ist der Kern weiter
+    // unten.
+    const double downOctaves = std::max (0.0, darkOctaves);
+
+    const double fScale = std::pow (2.0, tilt >= 0.0 ? tilt * 1.1 : tilt * downOctaves)
+                        * std::pow (2.0, -std::max (0.0, extraOctavesDown));
 
     // Gas hebt die Baender ebenfalls an - ein Triebwerk unter Last klingt
     // nicht nur lauter, sondern hoeher.
@@ -157,7 +188,12 @@ EngineGenerator::VoiceGains EngineGenerator::applyVoicing (BandVoicing& v,
     // in voller Lautstaerke".
     auto place = [&] (juce::dsp::StateVariableTPTFilter<float>& f, double fc, double q, double bandwidth)
     {
-        const double placed = juce::jlimit (20.0, nyquist, fc * fScale * uScale);
+        // Untergrenze 4 statt 20 Hz: das Tiefband der Rakete soll bis in den
+        // Bereich kommen, den man nur noch spuert (@dpa 20260825: "bis 5Hz
+        // cutoff"). Fuer die Duese aendert das nichts - ihre tiefste Vorlage
+        // liegt bei 90 Hz und kommt selbst ganz unten am Regler nicht unter
+        // 42 Hz.
+        const double placed = juce::jlimit (4.0, nyquist, fc * fScale * uScale);
 
         f.setCutoffFrequency ((float) placed);
         f.setResonance ((float) juce::jmax (0.05, q));
@@ -319,6 +355,7 @@ void EngineGenerator::reset()
 
     shockCountdown = 0.0;
     shocks.fill ({});
+    shockDuckEnv   = 0.0;
     slapEnv        = 0.0;
 
     activeKind = engineKind.load();
@@ -326,6 +363,10 @@ void EngineGenerator::reset()
 
     for (auto& h : harmonics)
         h.sineBlend = (double) h.sineTarget.load();
+
+    // Nach einem reset() steht der Sammelschalter sofort da, wo er hingehoert -
+    // sonst blendeten die Teiltoene nach jedem Neuanlassen erst wieder auf.
+    harmonicsGain = harmonicsOn.load() ? 1.0 : 0.0;
 
     noiseFilter.reset();
     jitterFilter.reset();
@@ -374,6 +415,27 @@ void EngineGenerator::setSineMode (int index, bool shouldUseSine)
 {
     if (index >= 0 && index < numHarmonics)
         harmonics[(size_t) index].sineTarget = shouldUseSine ? 1.0f : 0.0f;
+}
+
+void EngineGenerator::setRocketDistance (float metres)
+{
+    rocketDistanceM = std::max (0.0f, metres);
+}
+
+void EngineGenerator::setRocketFarColour (float octavesPerDoubling)
+{
+    rocketFarColour = std::max (0.0f, octavesPerDoubling);
+}
+
+void EngineGenerator::setRocketShockDuck (float amount01, float rangeMetres)
+{
+    rocketDuckAmount = juce::jlimit (0.0f, 1.0f, amount01);
+    rocketDuckRange  = std::max (0.0f, rangeMetres);
+}
+
+void EngineGenerator::setHarmonicsOn (bool shouldSound)
+{
+    harmonicsOn = shouldSound;
 }
 
 void EngineGenerator::setKindLevelDb (float levelDb)
@@ -509,11 +571,37 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     // alle uebrigen Filter hier auch.
     const auto jetGains = applyVoicing (jetVoicing,
                                         jetVoiceTable[(size_t) jetVoiceIndex.load()],
-                                        (double) jetTone.load(), u);
+                                        (double) jetTone.load(), u,
+                                        jetDarkOctaves);
+
+    // Verfaerbung durch die Entfernung (siehe setRocketDistance): je
+    // Verdopplung des Abstands ueber rocketFarRefMetres hinaus wandern die
+    // Baender um rocketFarColour Oktaven nach unten. Logarithmisch und nicht
+    // linear, weil Entfernung so gehoert wird - der Unterschied zwischen 100
+    // und 200 Metern ist derselbe wie zwischen 1 und 2 Kilometern.
+    const double rocketR = (double) rocketDistanceM.load();
+
+    const double farOctaves = (double) rocketFarColour.load()
+                            * std::log2 (1.0 + rocketR / rocketFarRefMetres);
 
     const auto rocketGains = applyVoicing (rocketVoicing,
                                            rocketVoiceTable[(size_t) rocketVoiceIndex.load()],
-                                           (double) rocketTone.load(), u);
+                                           (double) rocketTone.load(), u,
+                                           rocketDarkOctaves,
+                                           farOctaves);
+
+    // Tiefe der Absenkung durch einen Druckstoss. Dieselbe Formel wie in
+    // PropagationPath::triggerNWave: nah ist die Front eine echte
+    // Diskontinuitaet und nimmt alles mit, weit weg ist sie zerfallen und
+    // laesst das Drumherum stehen.
+    const double duckAmount = (double) rocketDuckAmount.load();
+    const double duckRange  = (double) rocketDuckRange.load();
+
+    const double duckDepth = duckAmount * (duckRange > 0.0
+                                           ? duckRange / (duckRange + rocketR)
+                                           : 1.0);
+
+    const double duckReleaseCoeff = std::exp (-1.0 / std::max (1.0, rocketDuckRelease * currentSampleRate));
 
     // Druckstoesse im Raketenstrahl: Dauer aus der Ausdehnung der Stosszelle
     // (wie Params::nWaveSize: Hin- und Rueckweg des Schalls durch die Zelle),
@@ -522,11 +610,8 @@ void EngineGenerator::renderMono (float* out, int numSamples)
 
     const double shockDurationSeconds = 2.0 * (double) rocketShockSizeM.load() / shockSpeedOfSound;
 
-    // Anstiegszeit der beiden Fronten: ein fester Bruchteil der Wellendauer,
-    // nach unten aber nie kuerzer als zwei Samples - darunter waere die Front
-    // nicht mehr darstellbar und faltete als Aliasing zurueck.
-    const double shockRise = std::max (shockDurationSeconds * shockRiseFraction,
-                                       2.0 / currentSampleRate);
+    // Die Anstiegszeit der beiden Fronten wird je Welle aus IHRER Dauer
+    // gerechnet, nicht aus dem Mittelwert - siehe unten beim Ausloesen.
 
     const double shockMeanSamples = currentSampleRate
                                   / std::max (0.01, (double) rocketShockRateHz.load());
@@ -757,6 +842,12 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         // gebraucht wird, soll auch nichts kosten.
         double harmonicSum = 0.0;
 
+        // Sammel-Mute der vier Oszillatoren (siehe setHarmonicsOn). Wird
+        // geblendet, nicht geschaltet - und die Phasen laufen dabei weiter,
+        // damit beim Wiedereinschalten kein Neustart der Wellenform zu hören
+        // ist.
+        harmonicsGain += ((harmonicsOn.load() ? 1.0 : 0.0) - harmonicsGain) * sineBlendCoeff;
+
         if (activeKind == KindFree || activeKind == KindHeli)
         {
             for (int i = 0; i < numHarmonics; ++i)
@@ -780,7 +871,7 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                 // beim Umschalten nichts auseinanderläuft.
                 const double sine = std::sin (juce::MathConstants<double>::twoPi * h.phase);
 
-                harmonicSum += (saw + (sine - saw) * h.sineBlend) * sn.levelGain;
+                harmonicSum += (saw + (sine - saw) * h.sineBlend) * sn.levelGain * harmonicsGain;
 
                 h.phase += phaseInc;
 
@@ -856,15 +947,45 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                                                  whiteNoise (rocketNoiseRandom),
                                                  whiteNoise (rocketNarrowRandom));
 
+                // Staerke eines in DIESEM Sample ausgeloesten Stosses, 0 =
+                // keiner. Steuert die Absenkung weiter unten.
+                double fired = 0.0;
+
                 shockCountdown -= 1.0;
 
                 if (shockCountdown <= 0.0 && shockAmount > 0.0)
                 {
-                    // Unregelmäßiger Abstand, nicht im Takt: Stoßzellen sind
-                    // keine Maschine mit fester Drehzahl. Der nächste Stoß
-                    // liegt zwischen dem halben und dem anderthalbfachen
-                    // mittleren Abstand.
-                    shockCountdown = shockMeanSamples * (0.5 + (double) shockRandom.nextFloat());
+                    // Poisson-Folge statt gejittertem Raster (@dpa 20260825:
+                    // "Stossfolge ist mir noch nicht random genug. bitte
+                    // prueft das nochmal wie ein echter Raketenantrieb seine
+                    // supersonics herausbringt").
+                    //
+                    // Ein echter Antrieb bringt sie nicht im Takt heraus. Das
+                    // Knattern ("crackle") entsteht nicht an den stehenden
+                    // Mach-Zellen selbst, sondern daran, dass die turbulente
+                    // Scherschicht des Strahls fortwaehrend einzelne steile
+                    // Kompressionsfronten abgibt - unabhaengige Ereignisse mit
+                    // einer mittleren Rate, also ein Poisson-Prozess. Sein
+                    // Kennzeichen sind exponentiell verteilte Abstaende, und
+                    // die haben etwas, das ein Raster mit Jitter nicht
+                    // hinbekommt: sie ballen sich. Mal liegen drei Stoesse
+                    // fast uebereinander, dann eine auffaellige Luecke. Genau
+                    // das ist der Unterschied zwischen "prasselt" und
+                    // "rattert".
+                    //
+                    // Uniform in [0,5 .. 1,5] wie zuvor konnte das nicht: die
+                    // Abstaende blieben in einem schmalen Band um den
+                    // Mittelwert, das Ohr fand darin sofort ein Tempo.
+                    //
+                    // -mean * ln(u) ist die Inversionsformel der
+                    // Exponentialverteilung. u wird von der Null weggehalten,
+                    // sonst waere der Logarithmus unendlich.
+                    const double u01 = juce::jlimit (1.0e-6, 1.0,
+                                                     (double) shockRandom.nextFloat());
+
+                    shockCountdown = std::max (1.0, -shockMeanSamples * std::log (u01));
+
+                    fired = 0.0;
 
                     // Auf einen FREIEN Platz legen. Einen noch laufenden
                     // Stoß zu überschreiben hiesse, ihn mitten in seiner
@@ -889,15 +1010,47 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                         // Streuung der Dauer: Stoßzellen sind nicht alle
                         // gleich groß, und lauter identische N-Wellen klängen
                         // nach einem Maschinengewehr statt nach einem Strahl.
-                        free->duration = shockDurationSeconds * (0.6 + 0.8 * (double) shockRandom.nextFloat());
-                        free->rise     = shockRise;
+                        //
+                        // Multiplikativ gestreut statt additiv (Faktor e^-1
+                        // bis e^+1, also 0,37 bis 2,7): Groessen in einem
+                        // turbulenten Strahl verteilen sich logarithmisch, und
+                        // eine additive Streuung um plus/minus 40 Prozent
+                        // liesse die grossen, langen Wellen gar nicht erst
+                        // entstehen - genau die, die das Donnern ausmachen.
+                        const double sizeSpread =
+                            std::exp (2.0 * (double) shockRandom.nextFloat() - 1.0);
+
+                        free->duration = shockDurationSeconds * sizeSpread;
+
+                        // Die Anstiegszeit gehoert zur Welle, nicht zum
+                        // Mittelwert: eine lange Welle hat auch eine
+                        // entsprechend traegere Front.
+                        free->rise = std::max (free->duration * shockRiseFraction,
+                                               2.0 / currentSampleRate);
 
                         // Amplitude streut, das Vorzeichen NICHT: eine
                         // Stoßwelle beginnt immer mit Überdruck. Ein
                         // zufälliges Vorzeichen machte aus der N-Welle wieder
                         // ein Rauschen.
-                        free->amp   = 0.6 + 0.4 * (double) shockRandom.nextFloat();
+                        //
+                        // Ebenfalls exponentiell verteilt (Mittelwert 1, nach
+                        // oben gedeckelt bei 4): das Kennmass des Knatterns
+                        // ist die SCHIEFE des Drucksignals - viele schwache
+                        // Stoesse, dazwischen ein paar sehr starke. Eine
+                        // gleichverteilte Amplitude zwischen 0,6 und 1,0
+                        // hatte davon nichts.
+                        const double ampU = juce::jlimit (1.0e-6, 1.0,
+                                                          (double) shockRandom.nextFloat());
+
+                        free->amp   = std::min (4.0, -std::log (ampU));
                         free->phase = 0.0;
+
+                        // Wie tief dieser eine Stoss absenkt: proportional zu
+                        // seiner eigenen Staerke, nicht pauschal voll. Ein
+                        // schwacher Stoss ist keine Wand, hinter der alles
+                        // verstummt - erst die starken sind es, und die sind
+                        // selten (siehe die Amplitudenverteilung oben).
+                        fired = std::min (1.0, free->amp);
                     }
                 }
 
@@ -916,7 +1069,22 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                     sh.phase += sampleSeconds;
                 }
 
-                kindSample = roar * rocketNoiseLevel * (0.3 + 0.7 * u)
+                // Absenkung des uebrigen Schalls, solange eine Stossfront
+                // laeuft (siehe setRocketShockDuck). Hinter einer echten
+                // Stossfront kommt fuer ihre Dauer nichts anderes durch;
+                // danach oeffnet es mit rocketDuckRelease wieder.
+                //
+                // Ausgeloest wird die Absenkung von der Front, nicht von der
+                // Summe: shockSum wechselt innerhalb einer N-Welle das
+                // Vorzeichen und geht dabei durch null, ein Betrag davon
+                // waere also selbst moduliert. Gehalten wird stattdessen ein
+                // Huellwert, der beim Einsatz eines Stosses auf 1 springt und
+                // danach abklingt.
+                shockDuckEnv = std::max (shockDuckEnv * duckReleaseCoeff, fired);
+
+                const double duckGain = 1.0 - duckDepth * shockDuckEnv;
+
+                kindSample = roar * rocketNoiseLevel * (0.3 + 0.7 * u) * duckGain
                            + shockSum * shockAmount * rocketShockLevel;
                 break;
             }

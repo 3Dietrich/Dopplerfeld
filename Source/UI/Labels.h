@@ -50,6 +50,7 @@ namespace Labels
             { "Druckstoß",      "Shock"       },
             { "Stoßfolge",      "Shock Rate"  },
             { "Stoßlänge",      "Shock Size"  },
+            { "Fern-Farbe",     "Far Colour"  },
             { "Spannweite",     "Span"        },
             { "Prop Pegel",     "Prop Level"  },
             { "Pegel",          "Level"       },
