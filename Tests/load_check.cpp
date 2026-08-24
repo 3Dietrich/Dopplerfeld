@@ -19,6 +19,7 @@
 #include "PluginEditor.h"
 #include "Params.h"
 #include "UI/RoundedSlider.h"
+#include "UI/ScopeComponent.h"
 #include "Sources/EngineGenerator.h"
 
 #include <chrono>
@@ -3016,7 +3017,7 @@ int main()
                 double s = 0.0;
 
                 for (int j = i; j < i + win; ++j)
-                    s += (double) left[j] * (double) left[j];
+                    s += (double) left[(size_t) j] * (double) left[(size_t) j];
 
                 const double db = 20.0 * std::log10 (std::sqrt (s / win) / (peak + 1e-12) + 1e-9);
                 std::printf (" %5.2fs:%5.1f", (double) i / sampleRate, db);
@@ -3031,7 +3032,7 @@ int main()
 
             for (int i = 0; i < (int) left.size(); ++i)
             {
-                if (std::abs ((double) left[i]) > threshold && i - lastPulse >= minGap)
+                if (std::abs ((double) left[(size_t) i]) > threshold && i - lastPulse >= minGap)
                 {
                     ++pulses;
                     lastPulse = i;
@@ -3806,6 +3807,154 @@ int main()
                      "hingeflogen und ausgeschwungen: %.0f (%.1f x)\n",
                      "", worstOf (farRest), worstOf (loadAfter),
                      ratio (worstOf (loadAfter), worstOf (farRest)));
+    }
+
+
+    //==================================================================
+    // Knall-Trigger des Scopes (@dpa 20260824: "Der vorhandene Sync richtet
+    // an einem Nulldurchgang aus - fuer periodische Signale sinnvoll, fuer
+    // Knalle nutzlos, deshalb sehe ich nichts").
+    //
+    // Geprueft wird ohne Audio und ohne Fenster: die Komponente bekommt ein
+    // gebautes Rohfenster mit einem Einsatz an bekannter Stelle und muss ihn
+    // MITTIG zeigen. Ausgelesen wird ueber exportVisibleWindow() - den
+    // sichtbaren Ausschnitt gibt es sonst nicht von aussen zu sehen, und
+    // genau er ist das, worum es geht.
+    {
+        ScopeComponent scope;
+
+        scope.setSampleRateHint (sampleRate);
+        scope.setMaxDisplaySampleCount (1 << 20);
+        scope.setDisplaySeconds (0.1, sampleRate);          // 4800 Samples
+        scope.setEventTriggerEnabled (true);
+        scope.setHoldSeconds (5.0);
+
+        const int display    = scope.displaySampleCount();
+        const int captureLen = scope.captureWindowSampleCount();
+
+        // Rohfenster: leiser Dauerton, dann ab bangAt ein Vielfaches davon.
+        // Der Einsatz liegt bewusst nicht in der Mitte, sonst waere nicht zu
+        // unterscheiden, ob der Trigger gegriffen hat oder das Bild nur
+        // zufaellig passt.
+        const int bangAt = captureLen / 2 + display / 4;
+
+        std::vector<float> rawL ((size_t) captureLen), rawR ((size_t) captureLen);
+
+        for (int n = 0; n < captureLen; ++n)
+        {
+            const double phase = 2.0 * juce::MathConstants<double>::pi * 220.0 * (double) n / sampleRate;
+            const double base  = 0.02 * std::sin (phase);
+            const double bang  = (n >= bangAt && n < bangAt + 200) ? 0.8 : 0.0;
+
+            rawL[(size_t) n] = (float) (base + bang);
+            rawR[(size_t) n] = rawL[(size_t) n];
+        }
+
+        scope.feed (rawL.data(), rawR.data(), (std::uint32_t) captureLen);
+
+        const juce::File out = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                   .getChildFile ("dopplerfeld_scope_trigger.wav");
+        out.deleteFile();
+
+        // Gemessen wird der EINSATZ, nicht die lauteste Stelle: der Knall ist
+        // hier ein Rechteck mit ueberlagertem Sinus, seine Spitze liegt
+        // irgendwo darin, sein Anfang dagegen genau an einer Stelle.
+        int onsetIndex = -1;
+
+        if (! scope.exportVisibleWindow (out))
+        {
+            std::printf ("FEHLGESCHLAGEN: sichtbarer Scope-Ausschnitt liess sich nicht sichern\n");
+            failed = true;
+        }
+        else
+        {
+            juce::AudioFormatManager formats;
+            formats.registerBasicFormats();
+
+            std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (out));
+
+            if (reader == nullptr)
+            {
+                std::printf ("FEHLGESCHLAGEN: gesicherter Scope-Ausschnitt ist nicht lesbar\n");
+                failed = true;
+            }
+            else
+            {
+                juce::AudioBuffer<float> shown ((int) reader->numChannels, (int) reader->lengthInSamples);
+                reader->read (&shown, 0, (int) reader->lengthInSamples, 0, true, true);
+
+                const float* data = shown.getReadPointer (0);
+
+                for (int n = 0; n < shown.getNumSamples(); ++n)
+                {
+                    if (std::abs ((double) data[n]) > 0.5)
+                    {
+                        onsetIndex = n;
+                        break;
+                    }
+                }
+            }
+        }
+
+        out.deleteFile();
+
+        const double centreOffset = onsetIndex >= 0
+                                  ? std::abs ((double) onsetIndex - 0.5 * (double) display)
+                                  : -1.0;
+
+        std::printf ("%-22s Einsatz bei %d von %d Rohsamples -> im Bild bei %d von %d "
+                     "(Mitte %d, Abweichung %.0f Samples)\n",
+                     "Scope Knall-Trigger", bangAt, captureLen, onsetIndex, display,
+                     display / 2, centreOffset);
+
+        // Der Einsatz muss innerhalb eines Prozents der Zeitbasis um die
+        // Mitte liegen. Ganz genau kann er nicht treffen: der schnelle
+        // Huellkurvenfolger braucht ein paar Samples, bis er die Schwelle
+        // reisst.
+        if (onsetIndex < 0 || centreOffset > 0.01 * (double) display)
+        {
+            std::printf ("  FEHLER: der Einsatz steht nicht zentriert - der Trigger hat "
+                         "nicht gegriffen oder richtet falsch aus.\n");
+            failed = true;
+        }
+
+        // Und die Haltezeit: ein zweites Rohfenster ohne jeden Einsatz darf
+        // das Bild nicht veraendern.
+        std::vector<float> quietL ((size_t) captureLen, 0.0f), quietR ((size_t) captureLen, 0.0f);
+
+        scope.feed (quietL.data(), quietR.data(), (std::uint32_t) (2 * captureLen));
+
+        const juce::File held = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                    .getChildFile ("dopplerfeld_scope_hold.wav");
+        held.deleteFile();
+
+        double heldPeak = 0.0;
+
+        if (scope.exportVisibleWindow (held))
+        {
+            juce::AudioFormatManager formats;
+            formats.registerBasicFormats();
+
+            if (std::unique_ptr<juce::AudioFormatReader> reader { formats.createReaderFor (held) })
+            {
+                juce::AudioBuffer<float> shown ((int) reader->numChannels, (int) reader->lengthInSamples);
+                reader->read (&shown, 0, (int) reader->lengthInSamples, 0, true, true);
+
+                heldPeak = (double) shown.getMagnitude (0, 0, shown.getNumSamples());
+            }
+        }
+
+        held.deleteFile();
+
+        std::printf ("%-22s nach einem leeren Fenster steht das Bild weiter auf %.3f\n",
+                     "", heldPeak);
+
+        if (heldPeak < 0.5)
+        {
+            std::printf ("  FEHLER: die Haltezeit haelt nicht - das Bild ist dem leeren "
+                         "Fenster gefolgt.\n");
+            failed = true;
+        }
     }
 
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");

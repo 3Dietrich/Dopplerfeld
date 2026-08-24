@@ -42,6 +42,15 @@ public:
 
     int capacity() const { return (int) left.size(); }
 
+    // Absolute Zahl der bisher geschriebenen Samples. Der Leser braucht sie,
+    // um einem Fensterindex eine Stelle auf der Zeitachse zuzuordnen - anders
+    // laesst sich nicht sagen, ob ein gefundenes Ereignis dasselbe ist wie
+    // das im vorigen Fenster (die Fenster ueberlappen bei 30 Hz Anzeigetakt
+    // stark). Laeuft ueber 2^32 Samples ueber, also nach gut 24 Stunden bei
+    // 48 kHz; alle Vergleiche darauf sind Differenzen, denen das nichts
+    // ausmacht.
+    std::uint32_t writePosition() const { return writePos.load (std::memory_order_acquire); }
+
     void push (float l, float r)
     {
         if (left.empty())   // prepare() noch nicht gelaufen - sollte laut JUCE-Vertrag nicht vorkommen

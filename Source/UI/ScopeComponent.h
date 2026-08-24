@@ -45,7 +45,32 @@ public:
     // (chronologisch, aeltestes zuerst). Wird ignoriert, solange isFrozen()
     // (Live-Feed pausiert waehrend Freeze/History, s. Klassenkommentar) - die
     // zuletzt angezeigten Kurven bleiben stehen, wie am echten Geraet.
-    void feed (const float* rawLeft, const float* rawRight);
+    void feed (const float* rawLeft, const float* rawRight, std::uint32_t windowEndSample);
+
+    //------------------------------------------------------------------
+    // Ereignis-Trigger (@dpa 20260824: "Der vorhandene Sync richtet an einem
+    // Nulldurchgang aus - fuer periodische Signale sinnvoll, fuer Knalle
+    // nutzlos, deshalb sehe ich nichts").
+    //
+    // Ein Knall hat keine Periode, an der man ausrichten koennte, sondern
+    // einen Anfang: der Pegel steigt schlagartig. Genau darauf triggert diese
+    // Betriebsart - ein schneller Huellkurvenfolger gegen einen langsamen.
+    // Uebersteigt der schnelle den langsamen um riseFactor, ist das der
+    // Einsatz. Danach steht das Bild fuer holdSeconds still und schaltet sich
+    // von selbst wieder scharf.
+    //
+    // Das Ereignis landet in der MITTE des Bildes, nicht am rechten Rand:
+    // gesucht wird deshalb nur dort, wo hinter dem Fund noch ein halbes
+    // Anzeigefenster an Nachlauf im Rohfenster steht.
+    //
+    // Der manuelle Freeze hat Vorrang - er haelt das Bild unabhaengig davon,
+    // was der Trigger gerade tut (feed() steigt bei frozen ohnehin sofort
+    // aus).
+    void setEventTriggerEnabled (bool shouldTrigger);
+    bool isEventTriggerEnabled() const { return eventTriggerEnabled; }
+
+    void setHoldSeconds (double seconds) { holdSeconds = juce::jmax (0.0, seconds); }
+    double getHoldSeconds() const { return holdSeconds; }
 
     // Schaltet in den History-Modus: fullLeft/fullRight (Laenge fullLength,
     // chronologisch, aeltestes zuerst) ist die KOMPLETTE Ringpuffer-Historie
@@ -125,6 +150,12 @@ private:
     // wurde (z.B. Stille oder reiner Gleichanteil).
     static int findTriggerIndexNear (const float* left, int searchLo, int searchHi, int target);
 
+    // Sucht im Rohfenster den ersten Pegelanstieg in [searchLo, searchHi).
+    // Beide Huellkurvenfolger laufen ab Index 0 an, damit der langsame beim
+    // Erreichen des Suchbereichs schon eingeschwungen ist. -1 = kein Anstieg.
+    int findLevelRise (const float* left, const float* right,
+                       int searchLo, int searchHi) const;
+
     // Setzt eine neue Zoomstufe (Samples), klemmt auf [minDisplaySamples,
     // maxDisplaySamples]. Im History-Modus bleibt dabei die Bildmitte
     // (Sample-Position) stehen, im Live-Modus passt sich einfach die
@@ -160,6 +191,40 @@ private:
 
     bool frozen      = false;
     bool syncEnabled = false;
+
+    //------------------------------------------------------------------
+    // Ereignis-Trigger, siehe setEventTriggerEnabled().
+    bool   eventTriggerEnabled = false;
+    double holdSeconds         = 1.0;
+
+    // Zeitkonstanten der beiden Huellkurvenfolger. Der schnelle muss einer
+    // Stossfront folgen koennen (Anstiegszeit einer N-Welle liegt im
+    // Millisekundenbereich), der langsame darf ihr gerade nicht folgen -
+    // sonst gaebe es nie einen Abstand zwischen beiden.
+    static constexpr double envFastSeconds = 0.002;
+    static constexpr double envSlowSeconds = 0.150;
+
+    // Wie weit der schnelle ueber dem langsamen liegen muss. 4 = 12 dB.
+    static constexpr double riseFactor = 4.0;
+
+    // Unter diesem Pegel wird gar nicht getriggert - sonst feuert in der
+    // Stille jedes Rauschen, weil dort auch der langsame Folger fast null ist
+    // und jedes Verhaeltnis gross wird.
+    static constexpr float riseFloor = 1.0e-4f;
+
+    // Bild steht, bis diese Zeit erreicht ist (juce::Time::getMillisecond-
+    // CounterHiRes()). 0 = nicht am Halten.
+    double holdUntilMs = 0.0;
+
+    // Absolute Position des zuletzt ausgeloesten Ereignisses im Ringpuffer.
+    // Verhindert, dass dasselbe Ereignis nach Ablauf der Haltezeit erneut
+    // feuert - die Anzeigefenster ueberlappen stark, und ein Knall steht
+    // deshalb in mehreren aufeinanderfolgenden Rohfenstern.
+    std::uint32_t lastTriggerAbsolute = 0;
+    bool          hasTriggeredOnce    = false;
+
+    // Nur fuer die Statuszeile in paint(): scharf oder gerade am Halten.
+    bool holding = false;
 
     int displaySamples    = 4096;          // Default bis der Editor die Samplerate kennt
     int maxDisplaySamples = 1 << 20;        // vorlaeufig grosszuegig, s. setMaxDisplaySampleCount()

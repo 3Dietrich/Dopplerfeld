@@ -163,6 +163,8 @@ namespace Tooltips
         ScopeToggle,
         ScopeFreeze,
         ScopeSync,
+        ScopeEventTrigger,
+        ScopeHold,
         ScopeZoomIn,
         // Text mit eingeschobener Zahl (maximale Zoom-Zeitbasis in Sekunden) -
         // deshalb in Prefix/Suffix aufgeteilt, die Zahl kommt vom Aufrufer
@@ -1474,6 +1476,29 @@ namespace Tooltips
                           "des Scopes aus - der Trigger-Moment steht dann immer zentriert."
                         : "Sync: aligns a rising zero crossing of L in the middle of the "
                           "scope - the trigger moment then always stays centred.";
+                case Key::ScopeEventTrigger:
+                    return lang == Language::De
+                        ? "Knall-Trigger: löst nicht an einem Nulldurchgang aus, sondern "
+                          "am Pegelanstieg - ein schneller Hüllkurvenfolger gegen einen "
+                          "langsamen. Ein Knall hat keine Periode, an der man ausrichten "
+                          "könnte, sondern einen Einsatz. Der landet zentriert im Bild, "
+                          "danach steht es für die eingestellte Haltezeit und schaltet "
+                          "sich von selbst wieder scharf. Freeze hat Vorrang."
+                        : "Bang trigger: fires on a level rise instead of a zero crossing "
+                          "- a fast envelope follower against a slow one. A bang has no "
+                          "period to align to, only an onset. It lands centred in the "
+                          "picture, which then holds for the set hold time and re-arms "
+                          "itself. Freeze takes priority.";
+                case Key::ScopeHold:
+                    return lang == Language::De
+                        ? "Haltezeit des Knall-Triggers: so lange bleibt das Bild nach "
+                          "einem Einsatz stehen, bevor es wieder scharf wird. Zwischen "
+                          "zwei Einsätzen bleibt das letzte Bild ebenfalls stehen - "
+                          "unten rechts steht, ob gerade gehalten oder gewartet wird."
+                        : "Hold time of the bang trigger: how long the picture stays "
+                          "after an onset before it re-arms. Between two onsets the last "
+                          "picture also stays - the corner shows whether it is holding "
+                          "or waiting.";
                 case Key::ScopeZoomIn:
                     return lang == Language::De
                         ? "Reinzoomen (kürzere Zeitbasis). Wirkt wie Mausrad hoch "

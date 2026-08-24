@@ -160,6 +160,13 @@ private:
     juce::TextButton scopeFreezeButton;
     juce::TextButton scopeSyncButton;
 
+    // Knall-Trigger (@dpa 20260824: der Nulldurchgangs-Sync taugt fuer
+    // periodische Signale, nicht fuer Knalle). Schalter plus Haltezeit -
+    // beides gehoert in die Scope-Werkzeugleiste und nicht in die
+    // Parameterliste: es ist eine Anzeige-Einstellung, kein Klang.
+    juce::TextButton scopeEventButton;
+    juce::ComboBox   scopeHoldCombo;
+
     // Zoom (@dpa-Feedback: "zoombar", brauchbar auch ohne verlaessliche
     // Scroll-/Pinch-Geste) - Klick-Knoepfe als garantiert funktionierender
     // Weg, zusaetzlich zu Mausrad/Pinch direkt auf dem Scope (siehe

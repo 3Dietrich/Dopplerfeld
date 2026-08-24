@@ -33,6 +33,56 @@ int ScopeComponent::findTriggerIndexNear (const float* left, int searchLo, int s
     return -1;
 }
 
+void ScopeComponent::setEventTriggerEnabled (bool shouldTrigger)
+{
+    if (eventTriggerEnabled == shouldTrigger)
+        return;
+
+    eventTriggerEnabled = shouldTrigger;
+
+    // Frisch scharf: keine Haltezeit, kein alter Fund. Sonst wartete das Bild
+    // nach dem Einschalten noch den Rest einer Haltezeit ab, die zu einem
+    // Ereignis von vorhin gehoerte.
+    holdUntilMs      = 0.0;
+    holding          = false;
+    hasTriggeredOnce = false;
+
+    repaint();
+}
+
+int ScopeComponent::findLevelRise (const float* left, const float* right,
+                                   int searchLo, int searchHi) const
+{
+    const double sr = sampleRateHint > 0.0 ? sampleRateHint : 48000.0;
+
+    // Einpolige Glaetter, Koeffizient aus der Zeitkonstante. Beide sehen
+    // denselben Betrag (lauter der beiden Kanaele) - ein Knall, der nur auf
+    // einem Ohr ankommt, ist trotzdem ein Knall.
+    const double aFast = 1.0 - std::exp (-1.0 / (envFastSeconds * sr));
+    const double aSlow = 1.0 - std::exp (-1.0 / (envSlowSeconds * sr));
+
+    double envFast = 0.0;
+    double envSlow = 0.0;
+
+    for (int n = 0; n < searchHi; ++n)
+    {
+        const double mag = std::max (std::abs ((double) left[n]), std::abs ((double) right[n]));
+
+        envFast += aFast * (mag - envFast);
+        envSlow += aSlow * (mag - envSlow);
+
+        // Der langsame Folger braucht Anlauf: erst ab searchLo zaehlt ein
+        // Fund. Davor laeuft die Schleife nur, um beide einzuschwingen.
+        if (n < searchLo)
+            continue;
+
+        if (envFast > (double) riseFloor && envFast > riseFactor * envSlow)
+            return n;
+    }
+
+    return -1;
+}
+
 void ScopeComponent::setDisplaySampleCount (int newCount)
 {
     newCount = juce::jlimit (minDisplaySamples, juce::jmax (minDisplaySamples, maxDisplaySamples), newCount);
@@ -197,10 +247,71 @@ void ScopeComponent::mouseDrag (const juce::MouseEvent& e)
     repaint();
 }
 
-void ScopeComponent::feed (const float* rawLeft, const float* rawRight)
+void ScopeComponent::feed (const float* rawLeft, const float* rawRight, std::uint32_t windowEndSample)
 {
+    // Der manuelle Freeze hat Vorrang vor allem anderen.
     if (frozen)
         return;
+
+    if (eventTriggerEnabled)
+    {
+        const double nowMs = juce::Time::getMillisecondCounterHiRes();
+
+        if (holding)
+        {
+            if (nowMs < holdUntilMs)
+                return;                     // Bild steht, Haltezeit laeuft
+
+            // Haltezeit um: wieder scharf. Das Bild bleibt stehen, bis der
+            // naechste Einsatz kommt - ein mitlaufendes Bild waere zwischen
+            // zwei Knallen nur Gewackel und liesse nicht erkennen, dass der
+            // Trigger wartet.
+            holding = false;
+            repaint();
+        }
+
+        const int captureLen = captureWindowSampleCount();
+
+        // Das Ereignis soll MITTIG stehen, es braucht hinter dem Fund also
+        // noch ein halbes Anzeigefenster an Nachlauf. Und davor genauso viel,
+        // damit der Vorlauf zu sehen ist.
+        const int searchLo = displaySamples / 2;
+        const int searchHi = captureLen - displaySamples / 2;
+
+        const int trigger = findLevelRise (rawLeft, rawRight, searchLo, searchHi);
+
+        if (trigger < 0)
+            return;                          // nichts Neues, Bild stehen lassen
+
+        // Ist das derselbe Einsatz wie beim letzten Mal? Die Rohfenster
+        // ueberlappen bei 30 Hz Anzeigetakt stark, ein Knall steht deshalb in
+        // mehreren hintereinander. Verglichen wird auf der absoluten
+        // Zeitachse des Ringpuffers.
+        const std::uint32_t triggerAbsolute =
+            windowEndSample - (std::uint32_t) captureLen + (std::uint32_t) trigger;
+
+        if (hasTriggeredOnce
+            && (std::uint32_t) (triggerAbsolute - lastTriggerAbsolute) < (std::uint32_t) displaySamples)
+            return;
+
+        lastTriggerAbsolute = triggerAbsolute;
+        hasTriggeredOnce    = true;
+
+        const int start = trigger - displaySamples / 2;
+
+        for (int n = 0; n < displaySamples; ++n)
+        {
+            shownLeft[(size_t) n]  = rawLeft[start + n];
+            shownRight[(size_t) n] = rawRight[start + n];
+        }
+
+        lastFrameWasSynced = true;
+        holding            = true;
+        holdUntilMs        = nowMs + 1000.0 * holdSeconds;
+
+        repaint();
+        return;
+    }
 
     // Ungesynct: juengste Haelfte des Rohfensters zeigen - rawLeft/rawRight
     // haben captureWindowSampleCount() == 2*displaySamples Samples, das
@@ -357,7 +468,7 @@ void ScopeComponent::paint (juce::Graphics& g)
                                     / (float) displaySamples * area.getWidth();
         }
     }
-    else if (syncEnabled && lastFrameWasSynced)
+    else if ((syncEnabled || eventTriggerEnabled) && lastFrameWasSynced)
     {
         drawTriggerLine = true;
         triggerX = area.getCentreX();
@@ -367,6 +478,19 @@ void ScopeComponent::paint (juce::Graphics& g)
     {
         g.setColour (juce::Colours::yellow.withAlpha (0.35f));
         g.drawLine (triggerX, area.getY(), triggerX, area.getBottom(), 1.0f);
+    }
+
+    // Zustand des Ereignis-Triggers. Ohne ihn waere nicht zu unterscheiden,
+    // ob das Bild gerade auf den naechsten Einsatz wartet oder ihn schon
+    // gefangen hat und haelt - beides sieht als stehendes Bild gleich aus.
+    if (eventTriggerEnabled && ! historyMode && ! frozen)
+    {
+        g.setColour (holding ? juce::Colours::orangered.withAlpha (0.85f)
+                             : juce::Colours::white.withAlpha (0.45f));
+        g.setFont (12.0f);
+        g.drawText (holding ? "gehalten" : "scharf",
+                    area.reduced (6.0f).removeFromTop (16.0f),
+                    juce::Justification::topRight, false);
     }
 
     auto drawTrace = [&] (const float* samples, juce::Colour colour)

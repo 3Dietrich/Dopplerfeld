@@ -271,6 +271,39 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     scopeSyncButton.setButtonText ("Sync");
     addAndMakeVisible (scopeSyncButton);
 
+    scopeEventButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeEventTrigger));
+    scopeEventButton.onClick = [this]
+    {
+        const bool on = ! scope.isEventTriggerEnabled();
+        scope.setEventTriggerEnabled (on);
+        scopeEventButton.setButtonText (on ? "Knall: An" : "Knall");
+        scopeEventButton.setColour (juce::TextButton::buttonColourId,
+                                    on ? juce::Colours::orangered.withAlpha (0.35f)
+                                       : juce::Colours::transparentBlack);
+    };
+    scopeEventButton.setButtonText ("Knall");
+    addAndMakeVisible (scopeEventButton);
+
+    scopeHoldCombo.setTooltip (Tooltips::text (Tooltips::Key::ScopeHold));
+
+    // Feste Stufen statt eines Reglers: die Haltezeit wird selten und dann
+    // grob eingestellt, und die Werkzeugleiste ist schmal.
+    scopeHoldCombo.addItem ("0,5 s", 1);
+    scopeHoldCombo.addItem ("1 s",   2);
+    scopeHoldCombo.addItem ("2 s",   3);
+    scopeHoldCombo.addItem ("5 s",   4);
+    scopeHoldCombo.setSelectedId (2, juce::dontSendNotification);
+    scopeHoldCombo.onChange = [this]
+    {
+        static constexpr double seconds[] { 0.5, 1.0, 2.0, 5.0 };
+        const int id = scopeHoldCombo.getSelectedId();
+
+        if (id >= 1 && id <= 4)
+            scope.setHoldSeconds (seconds[id - 1]);
+    };
+    scope.setHoldSeconds (1.0);
+    addAndMakeVisible (scopeHoldCombo);
+
     scopeZoomInButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeZoomIn));
     scopeZoomInButton.onClick = [this] { scope.zoomStep (0.7f); };
     addAndMakeVisible (scopeZoomInButton);
@@ -341,6 +374,8 @@ void DopplerfeldEditor::refreshAllTooltips()
     scopeToggleButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeToggle));
     scopeFreezeButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeFreeze));
     scopeSyncButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeSync));
+    scopeEventButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeEventTrigger));
+    scopeHoldCombo.setTooltip (Tooltips::text (Tooltips::Key::ScopeHold));
     scopeZoomInButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeZoomIn));
     scopeZoomOutButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeZoomOutPrefix)
                                    + juce::String ((int) DopplerfeldProcessor::scopeMaxDisplaySeconds)
@@ -362,6 +397,8 @@ void DopplerfeldEditor::updateScopeVisibility()
     scope.setVisible (scopeVisible);
     scopeFreezeButton.setVisible (scopeVisible);
     scopeSyncButton.setVisible (scopeVisible);
+    scopeEventButton.setVisible (scopeVisible);
+    scopeHoldCombo.setVisible (scopeVisible);
     scopeZoomInButton.setVisible (scopeVisible);
     scopeZoomOutButton.setVisible (scopeVisible);
     scopeSaveButton.setVisible (scopeVisible);
@@ -471,7 +508,8 @@ void DopplerfeldEditor::refreshDisplay()
         }
 
         dopplerfeldProcessor.fillScopeWindow (scopeRawLeft.data(), scopeRawRight.data(), captureLen);
-        scope.feed (scopeRawLeft.data(), scopeRawRight.data());
+        scope.feed (scopeRawLeft.data(), scopeRawRight.data(),
+                    dopplerfeldProcessor.scopeWritePosition());
 
         // Bestaetigungstext nach dem Speichern nur ein paar Sekunden stehen
         // lassen, nicht dauerhaft im Toolbar rumstehen.
@@ -721,6 +759,10 @@ void DopplerfeldEditor::resized()
         scopeFreezeButton.setBounds (scopeToolbar.removeFromLeft (90));
         scopeToolbar.removeFromLeft (8);
         scopeSyncButton.setBounds (scopeToolbar.removeFromLeft (90));
+        scopeToolbar.removeFromLeft (8);
+        scopeEventButton.setBounds (scopeToolbar.removeFromLeft (90));
+        scopeToolbar.removeFromLeft (4);
+        scopeHoldCombo.setBounds (scopeToolbar.removeFromLeft (70));
         scopeToolbar.removeFromLeft (16);
         scopeZoomOutButton.setBounds (scopeToolbar.removeFromLeft (28));
         scopeToolbar.removeFromLeft (4);

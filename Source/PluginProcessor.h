@@ -203,6 +203,10 @@ public:
     // veraendern.
     int scopeRingCapacity() const { return scopeRing.capacity(); }
 
+    // Siehe ScopeRingBuffer::writePosition() - der Scope ordnet damit ein
+    // gefundenes Ereignis der Zeitachse zu.
+    std::uint32_t scopeWritePosition() const { return scopeRing.writePosition(); }
+
     // Geglättete CPU-Auslastung des Audiothreads in Prozent des Echtzeit-
     // Budgets (@dpa-Feedback: "CPU-Echtzeit-Anzeige"). >100% heißt: der Block
     // hat länger gebraucht, als er Audiozeit lieferte - hörbar als Aussetzer.
