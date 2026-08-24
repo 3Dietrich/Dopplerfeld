@@ -1,8 +1,8 @@
 #include "WallPanel.h"
 
 void WallPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                           const juce::String& paramID, const juce::String& labelText,
-                           Tooltips::Key tooltipKey)
+                           const juce::String& paramID, const char* labelText,
+                           Tooltips::Key tooltipKey, const juce::String& labelSuffix)
 {
     knob.tooltipKey = tooltipKey;
     const auto tooltip = Tooltips::text (tooltipKey);
@@ -12,7 +12,9 @@ void WallPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts
     knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
-    knob.label.setText (labelText, juce::dontSendNotification);
+    knob.labelSource = labelText;
+    knob.labelSuffix = labelSuffix;
+    knob.label.setText (Labels::text (labelText) + labelSuffix, juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
     knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
@@ -42,17 +44,17 @@ WallPanel::WallPanel (juce::AudioProcessorValueTreeState& apvts)
 
         const juce::String nr (w + 1);
 
-        wall.onButton.setButtonText ("Wand " + nr);
+        wall.onButton.setButtonText (Labels::text ("Wand ") + nr);
         wall.onButton.setTooltip (Tooltips::text (Tooltips::Key::WallOn));
         addAndMakeVisible (wall.onButton);
         wall.onAttachment = std::make_unique<ButtonAttachment> (apvts, onIds[w], wall.onButton);
 
-        setupKnob (wall.x, apvts, xIds[w], "X " + nr, Tooltips::Key::WallX);
-        setupKnob (wall.y, apvts, yIds[w], "Y " + nr, Tooltips::Key::WallY);
-        setupKnob (wall.angle, apvts, angleIds[w], "Winkel " + nr, Tooltips::Key::WallAngle);
-        setupKnob (wall.tilt, apvts, tiltIds[w], "Neigung " + nr, Tooltips::Key::WallTilt);
-        setupKnob (wall.damp, apvts, dampIds[w], "Damp " + nr, Tooltips::Key::WallDamp);
-        setupKnob (wall.gain, apvts, gainIds[w], "Gain " + nr, Tooltips::Key::WallGain);
+        setupKnob (wall.x, apvts, xIds[w], "X ", Tooltips::Key::WallX, nr);
+        setupKnob (wall.y, apvts, yIds[w], "Y ", Tooltips::Key::WallY, nr);
+        setupKnob (wall.angle, apvts, angleIds[w], "Winkel ", Tooltips::Key::WallAngle, nr);
+        setupKnob (wall.tilt, apvts, tiltIds[w], "Neigung ", Tooltips::Key::WallTilt, nr);
+        setupKnob (wall.damp, apvts, dampIds[w], "Damp ", Tooltips::Key::WallDamp, nr);
+        setupKnob (wall.gain, apvts, gainIds[w], "Gain ", Tooltips::Key::WallGain, nr);
     }
 
     secondOrderButton.setTooltip (Tooltips::text (Tooltips::Key::SecondOrder));
@@ -66,6 +68,13 @@ WallPanel::WallPanel (juce::AudioProcessorValueTreeState& apvts)
 
 void WallPanel::refreshTooltips()
 {
+    for (int w = 0; w < wallCount; ++w)
+        walls[w].onButton.setButtonText (Labels::text ("Wand ") + juce::String (w + 1));
+
+
+    // Beschriftungen mit dem Sprachumschalter mitnehmen.
+    secondOrderButton.setButtonText (Labels::text ("Mehrfachreflexion"));
+
     for (auto& wall : walls)
     {
         wall.onButton.setTooltip (Tooltips::text (Tooltips::Key::WallOn));
@@ -85,6 +94,12 @@ void WallPanel::refreshTooltips()
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
+
+        // Der Sprachumschalter nimmt die Beschriftung mit, nicht nur den
+        // Hinweis (@dpa 20260824: "bitte auch alle deutschen Labels in EN
+        // mode auf englisch").
+        k->label.setText (Labels::text (k->labelSource) + k->labelSuffix,
+                          juce::dontSendNotification);
     }
 }
 

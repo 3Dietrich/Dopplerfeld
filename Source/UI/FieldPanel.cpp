@@ -3,7 +3,7 @@
 #include "../Util/Utf8.h"
 
 void FieldPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                             const juce::String& paramID, const juce::String& labelText,
+                             const juce::String& paramID, const char* labelText,
                              Tooltips::Key tooltipKey)
 {
     knob.tooltipKey = tooltipKey;
@@ -14,7 +14,8 @@ void FieldPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvt
     knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
-    knob.label.setText (labelText, juce::dontSendNotification);
+    knob.labelSource = labelText;
+    knob.label.setText (Labels::text (labelText), juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
     knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
@@ -41,7 +42,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",  Tooltips::Key::GroundDamp);
     setupKnob (groundGainKnob,  apvts, Params::groundGain,       "Ground Gain",  Tooltips::Key::GroundGain);
-    setupKnob (airAltitudeKnob, apvts, Params::airAltitude,      Text::utf8 ("Höhe"), Tooltips::Key::AirAltitude);
+    setupKnob (airAltitudeKnob, apvts, Params::airAltitude,      "Höhe", Tooltips::Key::AirAltitude);
 
     groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
     addAndMakeVisible (groundReflectionButton);
@@ -51,9 +52,9 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (nWaveGainKnob, apvts, Params::nWaveGainDb, "N-Wave Gain", Tooltips::Key::NWaveGain);
     setupKnob (distanceCurveKnob, apvts, Params::distanceCurve, "Distance Curve", Tooltips::Key::DistanceCurve);
     setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",       Tooltips::Key::Panning);
-    setupKnob (airTempKnob,     apvts, Params::airTempC,        Text::utf8 ("Luft °C"), Tooltips::Key::AirTemperature);
+    setupKnob (airTempKnob,     apvts, Params::airTempC,        "Luft °C", Tooltips::Key::AirTemperature);
 
-    setupKnob (reverseGainKnob, apvts, Params::reverseGainDb,   Text::utf8 ("Rückwärts"), Tooltips::Key::ReverseGain);
+    setupKnob (reverseGainKnob, apvts, Params::reverseGainDb,   "Rückwärts", Tooltips::Key::ReverseGain);
     setupKnob (shockDuckKnob,   apvts, Params::shockDuckAmount, "Front-Duck",  Tooltips::Key::ShockDuck);
     setupKnob (shockDuckRangeKnob, apvts, Params::shockDuckRange, "Duck-Reichw.", Tooltips::Key::ShockDuckRange);
     setupKnob (shadowTailKnob,  apvts, Params::shadowTailMs,    "Schatten",    Tooltips::Key::ShadowTail);
@@ -76,6 +77,11 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 
 void FieldPanel::refreshTooltips()
 {
+
+    // Beschriftungen mit dem Sprachumschalter mitnehmen.
+    groundReflectionButton.setButtonText (Labels::text ("Bodenreflexion"));
+    nWaveButton.setButtonText (Labels::text ("N-Welle"));
+
     for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &fadeManualKnob, &outputGainKnob,
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
@@ -85,6 +91,11 @@ void FieldPanel::refreshTooltips()
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
+
+        // Der Sprachumschalter nimmt die Beschriftung mit, nicht nur den
+        // Hinweis (@dpa 20260824: "bitte auch alle deutschen Labels in EN
+        // mode auf englisch").
+        k->label.setText (Labels::text (k->labelSource), juce::dontSendNotification);
     }
 
     groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));

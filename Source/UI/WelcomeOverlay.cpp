@@ -1,4 +1,42 @@
 #include "WelcomeOverlay.h"
+#include "Labels.h"
+
+namespace
+{
+    // Der Begruessungstext in beiden Sprachen. Er steht bewusst NICHT in
+    // Labels.h: dort liegen kurze Beschriftungen, hier sind es Absaetze, und
+    // eine Tabelle mit Fliesstext darin waere schlecht zu pflegen.
+    //
+    // Keine festen Umbrueche - das Label bricht selbst um, sobald der Text
+    // breiter als sein Bereich ist (siehe unten).
+    juce::String welcomeText()
+    {
+        if (Tooltips::currentLanguage() == Tooltips::Language::En)
+            return juce::String::fromUTF8 (
+                "An acoustic Doppler field: a sound source moves through space, and "
+                "you hear what of it arrives at your ear.\n"
+                "\n"
+                "It is meant above all as a standalone program. It runs as a plugin "
+                "just as well, but in version 0.2.0 that has not been tried out much "
+                "yet.\n"
+                "\n"
+                "The settings are still a bit cryptic. The quickest way in is through "
+                "the presets that ship with it, called States here: find them under "
+                "the Options button at the top left, in \"Load a saved state...\".");
+
+        return juce::String::fromUTF8 (
+            "Ein akustisches Dopplerfeld: eine Schallquelle bewegt sich durch den "
+            "Raum, und du hörst, was davon an deinem Ohr ankommt.\n"
+            "\n"
+            "Gedacht ist es vor allem als eigenständiges Programm. Als Plugin läuft "
+            "es ebenso, dort ist es in Version 0.2.0 aber noch nicht erprobt.\n"
+            "\n"
+            "Die Einstellungen sind noch etwas kryptisch. Am schnellsten kommst du "
+            "über die mitgelieferten Presets hinein, die hier States heißen: zu "
+            "finden über den Knopf Options oben links, unter \"Load a saved "
+            "state...\".");
+    }
+}
 
 // juce_StandaloneFilterWindow.h setzt AudioProcessor (juce_audio_processors)
 // und AudioDeviceManager/AudioProcessorPlayer (juce_audio_utils) bereits als
@@ -118,19 +156,7 @@ WelcomeOverlay::WelcomeOverlay()
     // Umgebrochen wird NICHT von Hand: juce::Label bricht selbst an Wortgrenzen
     // um, sobald der Text breiter als sein Bereich ist. Feste Umbrueche landen
     // sonst mitten im Satz, sobald sich Breite oder Schriftgroesse aendern.
-    bodyLabel.setText (
-        juce::String::fromUTF8 (
-            "Ein akustisches Dopplerfeld: eine Schallquelle bewegt sich durch den "
-            "Raum, und du hörst, was davon an deinem Ohr ankommt.\n"
-            "\n"
-            "Gedacht ist es vor allem als eigenständiges Programm. Als Plugin läuft "
-            "es ebenso, dort ist es in Version 0.2.0 aber noch nicht erprobt.\n"
-            "\n"
-            "Die Einstellungen sind noch etwas kryptisch. Am schnellsten kommst du "
-            "über die mitgelieferten Presets hinein, die hier States heißen: zu "
-            "finden über den Knopf Options oben links, unter \"Load a saved "
-            "state...\"."),
-        juce::dontSendNotification);
+    bodyLabel.setText (welcomeText(), juce::dontSendNotification);
     bodyLabel.setFont (schrift (17.5f, juce::Font::plain));
     bodyLabel.setJustificationType (juce::Justification::topLeft);
     bodyLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd8d8d8));
@@ -147,6 +173,7 @@ WelcomeOverlay::WelcomeOverlay()
     dontShowButton.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
     dontShowButton.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff8a8a8a));
     dontShowButton.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
+    dontShowButton.setButtonText (Labels::text ("nicht mehr zeigen"));
     dontShowButton.onClick = [this] { dontShowClicked(); };
     addAndMakeVisible (dontShowButton);
 
@@ -156,7 +183,7 @@ WelcomeOverlay::WelcomeOverlay()
     // (@dpa: "darf dann GAR NICHT erscheinen").
     if (juce::StandalonePluginHolder::getInstance() != nullptr)
     {
-        openStatesButton.setButtonText (juce::String::fromUTF8 ("\xc3\xb6" "ffne states"));
+        openStatesButton.setButtonText (Labels::text ("öffne states"));
         openStatesButton.onClick = [this] { openStatesClicked(); };
         addAndMakeVisible (openStatesButton);
     }

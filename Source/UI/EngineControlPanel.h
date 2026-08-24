@@ -3,6 +3,7 @@
 #include "../Params.h"
 #include "RoundedSlider.h"
 #include "Tooltips.h"
+#include "Labels.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 
 // "Motorsteuerung" (@dpa-Feedback): RPM und Imbalance aus dem Motor-Panel
@@ -38,11 +39,18 @@ private:
         RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
+
+        // Der DEUTSCHE Beschriftungstext, so wie er im Quelltext steht.
+        // Angezeigt wird daraus Labels::text() - im EN-Betrieb also die
+        // Uebersetzung. Gemerkt wird er, damit ein Sprachwechsel die
+        // Beschriftung mitnehmen kann (siehe refreshTooltips()).
+        const char* labelSource = nullptr;
+
         Tooltips::Key tooltipKey = Tooltips::Key::EngineRpm;
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                     const juce::String& paramID, const juce::String& labelText,
+                     const juce::String& paramID, const char* labelText,
                      Tooltips::Key tooltipKey);
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 

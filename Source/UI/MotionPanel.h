@@ -4,6 +4,7 @@
 #include "RoundedSlider.h"
 #include "FieldComponent.h"
 #include "Tooltips.h"
+#include "Labels.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -55,11 +56,18 @@ private:
         RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
+
+        // Der DEUTSCHE Beschriftungstext, so wie er im Quelltext steht.
+        // Angezeigt wird daraus Labels::text() - im EN-Betrieb also die
+        // Uebersetzung. Gemerkt wird er, damit ein Sprachwechsel die
+        // Beschriftung mitnehmen kann (siehe refreshTooltips()).
+        const char* labelSource = nullptr;
+
         Tooltips::Key tooltipKey = Tooltips::Key::SmootherTau;
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                     const juce::String& paramID, const juce::String& labelText,
+                     const juce::String& paramID, const char* labelText,
                      Tooltips::Key tooltipKey);
 
 public:
@@ -85,6 +93,14 @@ private:
     // Combo-Items werden aus der tatsaechlichen AudioParameterChoice-Liste
     // uebernommen statt hier erneut als String-Literale getippt zu werden -
     // sonst waere ein zweiter Ort fuer Tippfehler bei den Choice-Texten offen.
+    // Beschriftet die Auswahlfelder in der aktuellen Sprache neu, ohne die
+    // getroffene Auswahl anzufassen (changeItemText statt neu befuellen).
+    void relabelChoices();
+
+    // Fuer relabelChoices: die Originaltexte stehen im Parameter, nicht in
+    // der ComboBox.
+    juce::AudioProcessorValueTreeState* apvtsForLabels = nullptr;
+
     static void populateChoices (juce::ComboBox& combo, juce::AudioProcessorValueTreeState& apvts, const juce::String& paramID);
 
     Knob smootherTauKnob, slewVmaxKnob, slewAmaxKnob, playSpeedKnob;
@@ -155,6 +171,10 @@ private:
 
 
     juce::TextButton flyButton { "Vorbeiflug" };
+
+    // Zustand des Flug-Knopfes, damit ein Sprachwechsel ihn nicht auf
+    // "Vorbeiflug" zuruecksetzt, waehrend gerade geflogen wird.
+    bool flyingNow = false;
 
     juce::Label smootherTypeLabel;
     juce::ComboBox smootherTypeCombo;

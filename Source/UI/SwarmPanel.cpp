@@ -1,7 +1,7 @@
 #include "SwarmPanel.h"
 
 void SwarmPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                            const juce::String& paramID, const juce::String& labelText,
+                            const juce::String& paramID, const char* labelText,
                             Tooltips::Key tooltipKey)
 {
     knob.tooltipKey = tooltipKey;
@@ -12,7 +12,8 @@ void SwarmPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvt
     knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
-    knob.label.setText (labelText, juce::dontSendNotification);
+    knob.labelSource = labelText;
+    knob.label.setText (Labels::text (labelText), juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
     knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
@@ -63,11 +64,21 @@ void SwarmPanel::updateEnabledState()
 
 void SwarmPanel::refreshTooltips()
 {
+
+    // Beschriftungen mit dem Sprachumschalter mitnehmen.
+    showButton.setButtonText (Labels::text ("Zeigen"));
+    panicButton.setButtonText (Labels::text ("Notaus: minimale Konfiguration"));
+
     for (auto* k : { &totalKnob, &spreadKnob, &realLevelKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
+
+        // Der Sprachumschalter nimmt die Beschriftung mit, nicht nur den
+        // Hinweis (@dpa 20260824: "bitte auch alle deutschen Labels in EN
+        // mode auf englisch").
+        k->label.setText (Labels::text (k->labelSource), juce::dontSendNotification);
     }
 
     panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));

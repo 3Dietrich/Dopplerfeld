@@ -3,6 +3,7 @@
 #include "../Params.h"
 #include "RoundedSlider.h"
 #include "Tooltips.h"
+#include "Labels.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
 #include <functional>
@@ -51,18 +52,37 @@ private:
         RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
+
+        // Der DEUTSCHE Beschriftungstext, so wie er im Quelltext steht.
+        // Angezeigt wird daraus Labels::text() - im EN-Betrieb also die
+        // Uebersetzung. Gemerkt wird er, damit ein Sprachwechsel die
+        // Beschriftung mitnehmen kann (siehe refreshTooltips()).
+        const char* labelSource = nullptr;
+
+        // Anhang hinter der Beschriftung, der NICHT uebersetzt wird - die
+        // laufende Nummer einer Wand oder eines Teiltons.
+        juce::String labelSuffix;
+
         Tooltips::Key tooltipKey = Tooltips::Key::HarmRatio;
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                     const juce::String& paramID, const juce::String& labelText,
-                     Tooltips::Key tooltipKey);
+                     const juce::String& paramID, const char* labelText,
+                     Tooltips::Key tooltipKey, const juce::String& labelSuffix = {});
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     // Combo-Items werden aus der tatsaechlichen AudioParameterChoice-Liste
     // uebernommen, nicht hier erneut als String-Literale getippt (Muster aus
     // MotionPanel::populateChoices) - sonst waere ein zweiter Ort fuer
     // Tippfehler bei den Choice-Texten offen.
+    // Beschriftet die Auswahlfelder in der aktuellen Sprache neu, ohne die
+    // getroffene Auswahl anzufassen (changeItemText statt neu befuellen).
+    void relabelChoices();
+
+    // Fuer relabelChoices: die Originaltexte stehen im Parameter, nicht in
+    // der ComboBox.
+    juce::AudioProcessorValueTreeState* apvtsForLabels = nullptr;
+
     static void populateChoices (juce::ComboBox& combo, juce::AudioProcessorValueTreeState& apvts, const juce::String& paramID);
 
     // Wellenform der vier Teiltoene: aus = Saegezahn wie bisher, an = reiner
@@ -140,11 +160,15 @@ private:
         juce::Label label;
         juce::ComboBox combo;
         std::unique_ptr<ComboBoxAttachment> attachment;
+
+        // Wie bei Knob: der deutsche Quelltext, angezeigt ueber Labels::text().
+        const char* labelSource = nullptr;
+
         Tooltips::Key tooltipKey = Tooltips::Key::JetVoice;
     };
 
     void setupChoice (Choice& choice, juce::AudioProcessorValueTreeState& apvts,
-                       const juce::String& paramID, const juce::String& labelText,
+                       const juce::String& paramID, const char* labelText,
                        Tooltips::Key tooltipKey);
 
     Choice jetVoiceChoice, rocketVoiceChoice;

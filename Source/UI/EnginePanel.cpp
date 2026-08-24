@@ -5,8 +5,8 @@
 #include <algorithm>
 
 void EnginePanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                              const juce::String& paramID, const juce::String& labelText,
-                              Tooltips::Key tooltipKey)
+                              const juce::String& paramID, const char* labelText,
+                              Tooltips::Key tooltipKey, const juce::String& labelSuffix)
 {
     knob.tooltipKey = tooltipKey;
     const auto tooltip = Tooltips::text (tooltipKey);
@@ -16,7 +16,9 @@ void EnginePanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apv
     knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
-    knob.label.setText (labelText, juce::dontSendNotification);
+    knob.labelSource = labelText;
+    knob.labelSuffix = labelSuffix;
+    knob.label.setText (Labels::text (labelText) + labelSuffix, juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
     knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
@@ -34,13 +36,14 @@ void EnginePanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 }
 
 void EnginePanel::setupChoice (Choice& choice, juce::AudioProcessorValueTreeState& apvts,
-                                const juce::String& paramID, const juce::String& labelText,
+                                const juce::String& paramID, const char* labelText,
                                 Tooltips::Key tooltipKey)
 {
     choice.tooltipKey = tooltipKey;
     const auto tooltip = Tooltips::text (tooltipKey);
 
-    choice.label.setText (labelText, juce::dontSendNotification);
+    choice.labelSource = labelText;
+    choice.label.setText (Labels::text (labelText), juce::dontSendNotification);
     choice.label.setJustificationType (juce::Justification::centredLeft);
     choice.label.setTooltip (tooltip);
     addAndMakeVisible (choice.label);
@@ -57,8 +60,12 @@ void EnginePanel::populateChoices (juce::ComboBox& combo, juce::AudioProcessorVa
     if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (paramID)))
     {
         int itemId = 1;
+
+        // Angezeigt wird die uebersetzte Fassung; der Parameter behaelt seine
+        // eigene Liste (siehe Labels.h). combo.addItem() nimmt den Text nur
+        // zur Anzeige - verknuepft wird ueber den Index.
         for (auto& choice : choiceParam->choices)
-            combo.addItem (choice, itemId++);
+            combo.addItem (Labels::text (choice.toRawUTF8()), itemId++);
     }
     // Kein Parameter oder falscher Typ unter dieser ID - waere ein Tippfehler
     // in paramID; Dropdown bliebe dann leer statt still falsch zu wirken.
@@ -66,6 +73,8 @@ void EnginePanel::populateChoices (juce::ComboBox& combo, juce::AudioProcessorVa
 
 EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
 {
+    apvtsForLabels = &apvts;
+
     for (int i = 0; i < 4; ++i)
     {
         harmSineButtons[(size_t) i].setButtonText ("Sin");
@@ -83,10 +92,10 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
     for (int i = 0; i < 4; ++i)
     {
         const juce::String n = juce::String (i + 1);
-        setupKnob (harmonics[(size_t) i].ratio,  apvts, ratioIds[(size_t) i],  "Ratio "  + n,  Tooltips::Key::HarmRatio);
-        setupKnob (harmonics[(size_t) i].detune, apvts, detuneIds[(size_t) i], "Detune " + n,  Tooltips::Key::HarmDetune);
-        setupKnob (harmonics[(size_t) i].track,  apvts, trackIds[(size_t) i],  "Track "  + n,  Tooltips::Key::HarmTrack);
-        setupKnob (harmonics[(size_t) i].level,  apvts, levelIds[(size_t) i],  "Level "  + n,  Tooltips::Key::HarmLevel);
+        setupKnob (harmonics[(size_t) i].ratio,  apvts, ratioIds[(size_t) i],  "Ratio ",  Tooltips::Key::HarmRatio,  n);
+        setupKnob (harmonics[(size_t) i].detune, apvts, detuneIds[(size_t) i], "Detune ", Tooltips::Key::HarmDetune, n);
+        setupKnob (harmonics[(size_t) i].track,  apvts, trackIds[(size_t) i],  "Track ",  Tooltips::Key::HarmTrack,  n);
+        setupKnob (harmonics[(size_t) i].level,  apvts, levelIds[(size_t) i],  "Level ",  Tooltips::Key::HarmLevel,  n);
     }
 
     setupKnob (noiseFcLoKnob,   apvts, Params::noiseFcLo,   "Noise Fc Lo",   Tooltips::Key::NoiseFcLo);
@@ -100,7 +109,7 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
 
     // --- Betriebsart (@dpa 20260824) ---
 
-    engineKindLabel.setText ("Betriebsart", juce::dontSendNotification);
+    engineKindLabel.setText (Labels::text ("Betriebsart"), juce::dontSendNotification);
     engineKindLabel.setJustificationType (juce::Justification::centredLeft);
     engineKindLabel.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
     addAndMakeVisible (engineKindLabel);
@@ -111,26 +120,26 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
     engineKindCombo.onChange = [this] { updateHeliControlsEnabled(); };
 
     setupKnob (kindLevelKnob,   apvts, Params::engineLevelDb, "Pegel",     Tooltips::Key::EngineLevel);
-    setupKnob (rocketShockKnob, apvts, Params::rocketShock,   Text::utf8 ("Druckstoß"), Tooltips::Key::RocketShock);
+    setupKnob (rocketShockKnob, apvts, Params::rocketShock,   "Druckstoß", Tooltips::Key::RocketShock);
     setupKnob (rotorSlapKnob,   apvts, Params::rotorSlap,     "Knattern",   Tooltips::Key::RotorSlap);
 
     // Klangformung von Duese und Rakete: je eine Vorlagenliste und ein
     // stufenloser Regler darueber (@dpa 20260824: "am besten beides").
     setupChoice (jetVoiceChoice,    apvts, Params::jetVoice,    "Strahlklang",            Tooltips::Key::JetVoice);
-    setupChoice (rocketVoiceChoice, apvts, Params::rocketVoice, Text::utf8 ("Brüllen"),   Tooltips::Key::RocketVoice);
+    setupChoice (rocketVoiceChoice, apvts, Params::rocketVoice, "Brüllen",   Tooltips::Key::RocketVoice);
 
     setupKnob (jetToneKnob,    apvts, Params::jetTone,    "Klangfarbe", Tooltips::Key::JetTone);
     setupKnob (rocketToneKnob, apvts, Params::rocketTone, "Klangfarbe", Tooltips::Key::RocketTone);
 
-    setupKnob (rocketShockSizeKnob, apvts, Params::rocketShockSize, Text::utf8 ("Stoßlänge"), Tooltips::Key::RocketShockSize);
-    setupKnob (rocketShockRateKnob, apvts, Params::rocketShockRate, Text::utf8 ("Stoßfolge"), Tooltips::Key::RocketShockRate);
+    setupKnob (rocketShockSizeKnob, apvts, Params::rocketShockSize, "Stoßlänge", Tooltips::Key::RocketShockSize);
+    setupKnob (rocketShockRateKnob, apvts, Params::rocketShockRate, "Stoßfolge", Tooltips::Key::RocketShockRate);
 
     setupKnob (propSpanKnob,  apvts, Params::propSpan,    "Spannweite", Tooltips::Key::PropSpan);
     setupKnob (propLevelKnob, apvts, Params::propLevelDb, "Prop Pegel", Tooltips::Key::PropLevel);
 
     setupKnob (heliRotorHzKnob,    apvts, Params::heliRotorHz,    "Rotor Hz",  Tooltips::Key::HeliRotorHz);
-    setupKnob (heliBladeCountKnob, apvts, Params::heliBladeCount, Text::utf8 ("Blätter"), Tooltips::Key::HeliBladeCount);
-    setupKnob (heliRotorRadiusKnob, apvts, Params::heliRotorRadius, Text::utf8 ("Blattlänge"), Tooltips::Key::HeliRotorRadius);
+    setupKnob (heliBladeCountKnob, apvts, Params::heliBladeCount, "Blätter", Tooltips::Key::HeliBladeCount);
+    setupKnob (heliRotorRadiusKnob, apvts, Params::heliRotorRadius, "Blattlänge", Tooltips::Key::HeliRotorRadius);
 
     heliDopplerButton.setTooltip (Tooltips::text (Tooltips::Key::HeliDoppler));
     addAndMakeVisible (heliDopplerButton);
@@ -306,8 +315,42 @@ void EnginePanel::updateHeliControlsEnabled()
         onLayoutChanged();
 }
 
+
+void EnginePanel::relabelChoices()
+{
+    if (apvtsForLabels == nullptr)
+        return;
+
+    auto relabel = [this] (juce::ComboBox& combo, const juce::String& paramID)
+    {
+        if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*> (
+                apvtsForLabels->getParameter (paramID)))
+        {
+            int itemId = 1;
+
+            for (auto& choice : choiceParam->choices)
+                combo.changeItemText (itemId++, Labels::text (choice.toRawUTF8()));
+        }
+    };
+
+    relabel (engineKindCombo, Params::engineKind);
+    relabel (jetVoiceChoice.combo, Params::jetVoice);
+    relabel (rocketVoiceChoice.combo, Params::rocketVoice);
+
+    // changeItemText allein zeichnet das geschlossene Feld nicht neu.
+    repaint();
+}
+
 void EnginePanel::refreshTooltips()
 {
+    relabelChoices();
+
+    engineKindLabel.setText (Labels::text ("Betriebsart"), juce::dontSendNotification);
+
+
+    // Beschriftungen mit dem Sprachumschalter mitnehmen.
+    heliDopplerButton.setButtonText (Labels::text ("Doppler"));
+
     for (auto& h : harmonics)
         for (auto* k : { &h.ratio, &h.detune, &h.track, &h.level })
         {
@@ -327,6 +370,12 @@ void EnginePanel::refreshTooltips()
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
+
+        // Der Sprachumschalter nimmt die Beschriftung mit, nicht nur den
+        // Hinweis (@dpa 20260824: "bitte auch alle deutschen Labels in EN
+        // mode auf englisch").
+        k->label.setText (Labels::text (k->labelSource) + k->labelSuffix,
+                          juce::dontSendNotification);
     }
 
     for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob,
@@ -336,6 +385,12 @@ void EnginePanel::refreshTooltips()
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
+
+        // Der Sprachumschalter nimmt die Beschriftung mit, nicht nur den
+        // Hinweis (@dpa 20260824: "bitte auch alle deutschen Labels in EN
+        // mode auf englisch").
+        k->label.setText (Labels::text (k->labelSource) + k->labelSuffix,
+                          juce::dontSendNotification);
     }
 
     engineKindLabel.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));

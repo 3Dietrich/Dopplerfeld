@@ -1,7 +1,7 @@
 #include "MotionPanel.h"
 
 void MotionPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                              const juce::String& paramID, const juce::String& labelText,
+                              const juce::String& paramID, const char* labelText,
                               Tooltips::Key tooltipKey)
 {
     knob.tooltipKey = tooltipKey;
@@ -12,7 +12,8 @@ void MotionPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apv
     knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
-    knob.label.setText (labelText, juce::dontSendNotification);
+    knob.labelSource = labelText;
+    knob.label.setText (Labels::text (labelText), juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
     knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
@@ -100,8 +101,12 @@ void MotionPanel::populateChoices (juce::ComboBox& combo, juce::AudioProcessorVa
     if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (paramID)))
     {
         int itemId = 1;
+
+        // Angezeigt wird die uebersetzte Fassung; der Parameter behaelt seine
+        // eigene Liste (siehe Labels.h). combo.addItem() nimmt den Text nur
+        // zur Anzeige - verknuepft wird ueber den Index.
         for (auto& choice : choiceParam->choices)
-            combo.addItem (choice, itemId++);
+            combo.addItem (Labels::text (choice.toRawUTF8()), itemId++);
     }
     // Kein Parameter oder falscher Typ unter dieser ID gefunden - waere ein
     // Tippfehler in paramID; Dropdown bliebe dann leer und faellt im
@@ -110,6 +115,8 @@ void MotionPanel::populateChoices (juce::ComboBox& combo, juce::AudioProcessorVa
 
 MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 {
+    apvtsForLabels = &apvts;
+
     setupKnob (smootherTauKnob, apvts, Params::smootherTau, "Tau", Tooltips::Key::SmootherTau);
     setupKnob (slewVmaxKnob,    apvts, Params::slewVmax,    "Slew Vmax", Tooltips::Key::SlewVmax);
     setupKnob (slewAmaxKnob,    apvts, Params::slewAmax,    "Slew Amax", Tooltips::Key::SlewAmax);
@@ -167,7 +174,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     // Generator-Modus, den man bewusst dazuschaltet.
     recordTabButton.setToggleState (true, juce::dontSendNotification);
 
-    smootherTypeLabel.setText ("Smoother", juce::dontSendNotification);
+    smootherTypeLabel.setText (Labels::text ("Smoother"), juce::dontSendNotification);
     smootherTypeLabel.setJustificationType (juce::Justification::centredLeft);
     smootherTypeLabel.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
     addAndMakeVisible (smootherTypeLabel);
@@ -177,7 +184,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     smootherTypeAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::smootherType, smootherTypeCombo);
     smootherTypeCombo.onChange = [this] { updateSlewControlsVisibility(); };
 
-    playInterpLabel.setText ("Play Interp", juce::dontSendNotification);
+    playInterpLabel.setText (Labels::text ("Play Interp"), juce::dontSendNotification);
     playInterpLabel.setJustificationType (juce::Justification::centredLeft);
     playInterpLabel.setTooltip (Tooltips::text (Tooltips::Key::PlayInterp));
     addAndMakeVisible (playInterpLabel);
@@ -210,7 +217,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 
     // --- Vorbeiflug-Generatoren ---
 
-    flyKindLabel.setText ("Vorbeiflug-Bahn", juce::dontSendNotification);
+    flyKindLabel.setText (Labels::text ("Vorbeiflug-Bahn"), juce::dontSendNotification);
     flyKindLabel.setJustificationType (juce::Justification::centredLeft);
     flyKindLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyKind));
     addAndMakeVisible (flyKindLabel);
@@ -218,7 +225,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     addAndMakeVisible (flyKindCombo);
     flyKindAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::flyKind, flyKindCombo);
 
-    flyStartLabel.setText ("Startvariante", juce::dontSendNotification);
+    flyStartLabel.setText (Labels::text ("Startvariante"), juce::dontSendNotification);
     flyStartLabel.setJustificationType (juce::Justification::centredLeft);
     flyStartLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyStart));
     addAndMakeVisible (flyStartLabel);
@@ -322,7 +329,9 @@ void MotionPanel::setPlaying (bool isPlaying)
 
 void MotionPanel::setFlying (bool isFlying)
 {
-    flyButton.setButtonText (isFlying ? "Flug stoppen" : "Vorbeiflug");
+    flyingNow = isFlying;
+
+    flyButton.setButtonText (Labels::text (isFlying ? "Flug stoppen" : "Vorbeiflug"));
 }
 
 void MotionPanel::setCoastEnabled (bool shouldCoast)
@@ -330,8 +339,56 @@ void MotionPanel::setCoastEnabled (bool shouldCoast)
     coastButton.setToggleState (shouldCoast, juce::dontSendNotification);
 }
 
+
+void MotionPanel::relabelChoices()
+{
+    if (apvtsForLabels == nullptr)
+        return;
+
+    auto relabel = [this] (juce::ComboBox& combo, const juce::String& paramID)
+    {
+        if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*> (
+                apvtsForLabels->getParameter (paramID)))
+        {
+            int itemId = 1;
+
+            for (auto& choice : choiceParam->choices)
+                combo.changeItemText (itemId++, Labels::text (choice.toRawUTF8()));
+        }
+    };
+
+    relabel (smootherTypeCombo, Params::smootherType);
+    relabel (playInterpCombo, Params::playInterp);
+    relabel (flyKindCombo, Params::flyKind);
+    relabel (flyStartCombo, Params::flyStart);
+
+    // changeItemText allein zeichnet das geschlossene Feld nicht neu.
+    repaint();
+}
+
 void MotionPanel::refreshTooltips()
 {
+    relabelChoices();
+
+    smootherTypeLabel.setText (Labels::text ("Smoother"), juce::dontSendNotification);
+    playInterpLabel.setText (Labels::text ("Play Interp"), juce::dontSendNotification);
+    flyKindLabel.setText (Labels::text ("Vorbeiflug-Bahn"), juce::dontSendNotification);
+    flyStartLabel.setText (Labels::text ("Startvariante"), juce::dontSendNotification);
+
+
+    // Beschriftungen mit dem Sprachumschalter mitnehmen.
+    srcJitterOnButton.setButtonText (Labels::text ("Jitter An"));
+    flyLoopButton.setButtonText (Labels::text ("Loop"));
+    flyTabButton.setButtonText (Labels::text ("Vorbeiflug"));
+
+    // Der Flug-Knopf traegt seinen Zustand im Text (siehe setFlying) - beim
+    // Sprachwechsel bekommt er den Text zum aktuellen Zustand, nicht
+    // stumpf "Vorbeiflug".
+    flyButton.setButtonText (Labels::text (flyingNow ? "Flug stoppen" : "Vorbeiflug"));
+    playLoopButton.setButtonText (Labels::text ("Loop"));
+    coastButton.setButtonText (Labels::text ("Nachlauf"));
+    mouseFrameButton.setButtonText (Labels::text ("Maus glatt"));
+
     for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob,
                       &globalMaxSpeedKnob, &srcJitterAmountKnob, &srcJitterRateKnob,
                       &srcJitterMaxSpeedKnob,
@@ -340,6 +397,11 @@ void MotionPanel::refreshTooltips()
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
+
+        // Der Sprachumschalter nimmt die Beschriftung mit, nicht nur den
+        // Hinweis (@dpa 20260824: "bitte auch alle deutschen Labels in EN
+        // mode auf englisch").
+        k->label.setText (Labels::text (k->labelSource), juce::dontSendNotification);
     }
 
     flyLoopButton.setTooltip (Tooltips::text (Tooltips::Key::FlyLoop));

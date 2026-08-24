@@ -20,6 +20,7 @@
 #include "Params.h"
 #include "UI/RoundedSlider.h"
 #include "UI/ScopeComponent.h"
+#include "UI/Labels.h"
 #include "Sources/EngineGenerator.h"
 
 #include <chrono>
@@ -4546,6 +4547,108 @@ int main()
                          "Nulldurchgaengen.\n", withSync);
             failed = true;
         }
+    }
+
+
+    //==================================================================
+    // Deutsche Beschriftungen im EN-Betrieb (@dpa 20260824: "bitte auch alle
+    // deutschen Labels in EN mode auf englisch").
+    //
+    // Geprueft wird am ECHTEN Editor, einmal je Betriebsart (das Motor-Panel
+    // zeigt in jeder andere Regler) und einmal mit ausgeklappten Panels: die
+    // Sprache steht auf Englisch, danach darf keine der bekannten deutschen
+    // Beschriftungen mehr auf dem Bildschirm stehen.
+    //
+    // Der Massstab ist die DE-Spalte der Tabelle in Labels.h - genau die
+    // Texte also, fuer die es eine Uebersetzung gibt. Ein deutscher Text ohne
+    // Eintrag faellt hier bewusst NICHT auf: dann fehlt die Uebersetzung, und
+    // das ist eine andere Baustelle als eine, die nicht greift.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        const auto previousLanguage = Tooltips::currentLanguage();
+        Tooltips::setLanguage (Tooltips::Language::En);
+
+        std::vector<std::pair<juce::String, juce::String>> texts;
+
+        for (int kind = 0; kind <= 4; ++kind)
+        {
+            setParam (proc, Params::engineKind, (float) kind);
+
+            std::unique_ptr<juce::AudioProcessorEditor> editor (proc.createEditor());
+
+            if (auto* dopplerEditor = dynamic_cast<DopplerfeldEditor*> (editor.get()))
+            {
+                dopplerEditor->refreshDisplay();
+            }
+
+            editor->setSize (editor->getWidth(), editor->getHeight());
+            collectVisibleText (*editor, texts);
+        }
+
+        int count = 0;
+        const Labels::Entry* entries = Labels::table (count);
+
+        int leftGerman = 0;
+
+        for (const auto& entry : texts)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                const juce::String german = Text::utf8 (entries[i].de);
+
+                // Genau vergleichen, nicht "enthaelt": "Loop" steckt in
+                // "Loop Start", und "An" in fast jedem zweiten Wort.
+                if (entry.second == german && german != Text::utf8 (entries[i].en))
+                {
+                    std::printf ("  FEHLER: %s steht im EN-Betrieb weiterhin deutsch: \"%s\"\n",
+                                 entry.first.toRawUTF8(), entry.second.toRawUTF8());
+                    ++leftGerman;
+                    break;
+                }
+            }
+        }
+
+        // Zweiter, unabhaengiger Hinweis: ein Umlaut in einer BESCHRIFTUNG
+        // oder auf einem KNOPF ist im EN-Betrieb praktisch immer ein
+        // vergessener deutscher Text. Hinweise bleiben aussen vor - dort
+        // stehen @dpas Zitate teils im Original.
+        int umlauts = 0;
+
+        for (const auto& entry : texts)
+        {
+            if (entry.first.contains ("(Hinweis)"))
+                continue;
+
+            const bool hasUmlaut = entry.second.containsChar ((juce::juce_wchar) 0x00E4)   // ae
+                                || entry.second.containsChar ((juce::juce_wchar) 0x00F6)   // oe
+                                || entry.second.containsChar ((juce::juce_wchar) 0x00FC)   // ue
+                                || entry.second.containsChar ((juce::juce_wchar) 0x00DF);  // ss
+
+            if (hasUmlaut)
+            {
+                if (umlauts < 10)
+                    std::printf ("  FEHLER: %s traegt im EN-Betrieb einen Umlaut: \"%s\"\n",
+                                 entry.first.toRawUTF8(), entry.second.toRawUTF8());
+
+                ++umlauts;
+            }
+        }
+
+        Tooltips::setLanguage (previousLanguage);
+
+        std::printf ("%-22s %d sichtbare Texte in fuenf Betriebsarten geprueft, "
+                     "%d davon noch deutsch, %d mit Umlaut\n",
+                     "Beschriftungen EN", (int) texts.size(), leftGerman, umlauts);
+
+        if (umlauts > 0)
+            failed = true;
+
+        if (leftGerman > 0)
+            failed = true;
     }
 
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");

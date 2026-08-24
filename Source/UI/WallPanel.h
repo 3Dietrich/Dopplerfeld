@@ -3,6 +3,7 @@
 #include "../Params.h"
 #include "RoundedSlider.h"
 #include "Tooltips.h"
+#include "Labels.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -36,12 +37,23 @@ private:
         RoundedSlider slider;
         juce::Label label;
         std::unique_ptr<SliderAttachment> attachment;
+
+        // Der DEUTSCHE Beschriftungstext, so wie er im Quelltext steht.
+        // Angezeigt wird daraus Labels::text() - im EN-Betrieb also die
+        // Uebersetzung. Gemerkt wird er, damit ein Sprachwechsel die
+        // Beschriftung mitnehmen kann (siehe refreshTooltips()).
+        const char* labelSource = nullptr;
+
+        // Anhang hinter der Beschriftung, der NICHT uebersetzt wird - die
+        // laufende Nummer einer Wand oder eines Teiltons.
+        juce::String labelSuffix;
+
         Tooltips::Key tooltipKey = Tooltips::Key::WallX;
     };
 
     void setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                    const juce::String& paramID, const juce::String& labelText,
-                    Tooltips::Key tooltipKey);
+                    const juce::String& paramID, const char* labelText,
+                    Tooltips::Key tooltipKey, const juce::String& labelSuffix = {});
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     // Eine Wand: Schalter plus fünf Regler.

@@ -1,7 +1,7 @@
 #include "EngineControlPanel.h"
 
 void EngineControlPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
-                                     const juce::String& paramID, const juce::String& labelText,
+                                     const juce::String& paramID, const char* labelText,
                                      Tooltips::Key tooltipKey)
 {
     knob.tooltipKey = tooltipKey;
@@ -12,7 +12,8 @@ void EngineControlPanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeSta
     knob.slider.setTooltip (tooltip);
     addAndMakeVisible (knob.slider);
 
-    knob.label.setText (labelText, juce::dontSendNotification);
+    knob.labelSource = labelText;
+    knob.label.setText (Labels::text (labelText), juce::dontSendNotification);
     knob.label.setJustificationType (juce::Justification::centred);
     knob.label.setTooltip (tooltip);
     addAndMakeVisible (knob.label);
@@ -49,11 +50,20 @@ void EngineControlPanel::setMotorGateEnabled (bool shouldGate)
 
 void EngineControlPanel::refreshTooltips()
 {
+
+    // Beschriftungen mit dem Sprachumschalter mitnehmen.
+    motorGateButton.setButtonText (Labels::text ("Motor bei Griff"));
+
     for (auto* k : { &rpmKnob, &imbalanceKnob, &imbalanceOctaveKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
         k->label.setTooltip (tooltip);
+
+        // Der Sprachumschalter nimmt die Beschriftung mit, nicht nur den
+        // Hinweis (@dpa 20260824: "bitte auch alle deutschen Labels in EN
+        // mode auf englisch").
+        k->label.setText (Labels::text (k->labelSource), juce::dontSendNotification);
     }
 
     motorGateButton.setTooltip (Tooltips::text (Tooltips::Key::EngineMotorGate));

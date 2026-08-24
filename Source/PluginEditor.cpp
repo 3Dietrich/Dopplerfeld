@@ -149,9 +149,10 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         field.setViewMode (toPerspective ? FieldComponent::ViewMode::Perspective
                                          : FieldComponent::ViewMode::TopDown);
 
-        viewButton.setButtonText (toPerspective ? "Ansicht: Perspektive" : "Ansicht: Draufsicht");
+        viewButton.setButtonText (Labels::text (toPerspective ? "Ansicht: Perspektive"
+                                                          : "Ansicht: Draufsicht"));
     };
-    viewButton.setButtonText ("Ansicht: Draufsicht");
+    viewButton.setButtonText (Labels::text ("Ansicht: Draufsicht"));
     addAndMakeVisible (viewButton);
 
     speedUnitButton.setTooltip (Tooltips::text (Tooltips::Key::SpeedUnitToggle));
@@ -177,7 +178,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     motionPanel.setSpeedUnit (speedUnit, 343.0);
 
     engineResetButton.setTooltip (Tooltips::text (Tooltips::Key::EngineReset));
-    engineResetButton.setButtonText ("Engine Restart");
+    engineResetButton.setButtonText (Labels::text ("Engine Restart"));
     engineResetButton.setColour (juce::TextButton::buttonColourId,
                                  juce::Colours::orangered.withAlpha (0.35f));
     engineResetButton.onClick = [this] { dopplerfeldProcessor.restartEngine(); };
@@ -220,11 +221,11 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     addAndMakeVisible (scope);
 
     scopeToggleButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeToggle));
-    scopeToggleButton.setButtonText (scopeVisible ? "Scope ausblenden" : "Scope");
+    scopeToggleButton.setButtonText (Labels::text (scopeVisible ? "Scope ausblenden" : "Scope"));
     scopeToggleButton.onClick = [this]
     {
         scopeVisible = ! scopeVisible;
-        scopeToggleButton.setButtonText (scopeVisible ? "Scope ausblenden" : "Scope");
+        scopeToggleButton.setButtonText (Labels::text (scopeVisible ? "Scope ausblenden" : "Scope"));
         updateScopeVisibility();
     };
     addAndMakeVisible (scopeToggleButton);
@@ -243,19 +244,19 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
             dopplerfeldProcessor.fillScopeWindow (fullLeft.data(), fullRight.data(), capacity);
             scope.enterHistoryMode (fullLeft.data(), fullRight.data(), capacity);
 
-            scopeFreezeButton.setButtonText ("Freeze: An");
+            scopeFreezeButton.setButtonText (Labels::text ("Freeze: An"));
             scopeFreezeButton.setColour (juce::TextButton::buttonColourId,
                                          juce::Colours::orangered.withAlpha (0.35f));
         }
         else
         {
             scope.exitHistoryMode();
-            scopeFreezeButton.setButtonText ("Freeze");
+            scopeFreezeButton.setButtonText (Labels::text ("Freeze"));
             scopeFreezeButton.setColour (juce::TextButton::buttonColourId,
                                          juce::Colours::transparentBlack);
         }
     };
-    scopeFreezeButton.setButtonText ("Freeze");
+    scopeFreezeButton.setButtonText (Labels::text ("Freeze"));
     addAndMakeVisible (scopeFreezeButton);
 
     scopeSyncButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeSync));
@@ -263,12 +264,12 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     {
         const bool sync = ! scope.isSyncEnabled();
         scope.setSyncEnabled (sync);
-        scopeSyncButton.setButtonText (sync ? "Sync: An" : "Sync");
+        scopeSyncButton.setButtonText (Labels::text (sync ? "Sync: An" : "Sync"));
         scopeSyncButton.setColour (juce::TextButton::buttonColourId,
                                    sync ? juce::Colours::orangered.withAlpha (0.35f)
                                         : juce::Colours::transparentBlack);
     };
-    scopeSyncButton.setButtonText ("Sync");
+    scopeSyncButton.setButtonText (Labels::text ("Sync"));
     addAndMakeVisible (scopeSyncButton);
 
     scopeEventButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeEventTrigger));
@@ -276,12 +277,12 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     {
         const bool on = ! scope.isEventTriggerEnabled();
         scope.setEventTriggerEnabled (on);
-        scopeEventButton.setButtonText (on ? "Knall: An" : "Knall");
+        scopeEventButton.setButtonText (Labels::text (on ? "Knall: An" : "Knall"));
         scopeEventButton.setColour (juce::TextButton::buttonColourId,
                                     on ? juce::Colours::orangered.withAlpha (0.35f)
                                        : juce::Colours::transparentBlack);
     };
-    scopeEventButton.setButtonText ("Knall");
+    scopeEventButton.setButtonText (Labels::text ("Knall"));
     addAndMakeVisible (scopeEventButton);
 
     scopeHoldCombo.setTooltip (Tooltips::text (Tooltips::Key::ScopeHold));
@@ -352,6 +353,12 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     addAndMakeVisible (welcomeOverlay);
     welcomeOverlay.setVisible (! WelcomeOverlay::hasBeenSeen());
 
+    // Beschriftungen und Hinweise einmal in der aktuell gewaehlten Sprache
+    // setzen. Die Knoepfe tragen im Quelltext ihren deutschen Text; wird der
+    // Editor im EN-Betrieb geoeffnet, stuenden sie sonst bis zum ersten
+    // Sprachwechsel deutsch da.
+    refreshAllTooltips();
+
     // 30 Hz: schnell genug, dass eine gezogene Quelle nicht ruckelt, und
     // langsam genug, dass die Wellenfronten nicht flimmern.
     startTimerHz (30);
@@ -382,6 +389,27 @@ void DopplerfeldEditor::refreshAllTooltips()
                                    + Tooltips::text (Tooltips::Key::ScopeZoomOutSuffix));
     scopeSaveButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeSave));
     scope.refreshTooltips();
+
+    // Beschriftungen der Kopfzeile und der Scope-Leiste mit umschalten
+    // (@dpa 20260824). Die Knoepfe, deren Text den Zustand zeigt, bekommen
+    // den passenden Zustandstext - sonst stuende nach dem Sprachwechsel
+    // "Freeze" ueber einem eingefrorenen Bild.
+    masterOnButton.setButtonText (Labels::text ("An"));
+    tooltipsButton.setButtonText (Labels::text ("Hilfehinweise"));
+    scopeSaveButton.setButtonText (Labels::text ("Speichern"));
+    engineResetButton.setButtonText (Labels::text ("Engine Restart"));
+
+    viewButton.setButtonText (Labels::text (field.getViewMode() == FieldComponent::ViewMode::Perspective
+                                                ? "Ansicht: Perspektive"
+                                                : "Ansicht: Draufsicht"));
+
+    scopeToggleButton.setButtonText (Labels::text (scopeVisible ? "Scope ausblenden" : "Scope"));
+    scopeFreezeButton.setButtonText (Labels::text (scope.isFrozen() ? "Freeze: An" : "Freeze"));
+    scopeSyncButton.setButtonText (Labels::text (scope.isSyncEnabled() ? "Sync: An" : "Sync"));
+    scopeEventButton.setButtonText (Labels::text (scope.isEventTriggerEnabled() ? "Knall: An" : "Knall"));
+
+    // Der Quelle-Knopf wird ohnehin im 30-Hz-Timer gesetzt und braucht hier
+    // nichts.
 
     engineControlPanel.refreshTooltips();
     enginePanel.refreshTooltips();
@@ -434,10 +462,10 @@ void DopplerfeldEditor::refreshDisplay()
 
         switch (dopplerfeldProcessor.currentSourceKind())
         {
-            case Kind::Sample:  sourceButton.setButtonText ("Quelle: Sample");   break;
-            case Kind::AudioIn: sourceButton.setButtonText ("Quelle: Audio In"); break;
+            case Kind::Sample:  sourceButton.setButtonText (Labels::text ("Quelle: Sample"));   break;
+            case Kind::AudioIn: sourceButton.setButtonText (Labels::text ("Quelle: Audio In")); break;
             case Kind::Motor:
-            default:            sourceButton.setButtonText ("Quelle: Motor");    break;
+            default:            sourceButton.setButtonText (Labels::text ("Quelle: Motor"));    break;
         }
     }
     motionPanel.setPlaying (dopplerfeldProcessor.isPlayingMotion());
