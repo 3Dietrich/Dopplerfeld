@@ -519,6 +519,58 @@ private:
     double masterGain      = 1.0;
     bool   masterWasOn     = true;
 
+    //------------------------------------------------------------------
+    // Schnitt (@dpa 20260824: "ich wollte einen Uebergang im Sinne von
+    // 'cutten': Ende erreicht, leise, umbau, laut, start").
+    //
+    // Eine Positionsaenderung, die KEINE Bewegung ist - ein geladener
+    // Zustand, der Rundenwechsel einer Wiedergabe - darf nicht durch die
+    // Glaetter laufen. Sie machte daraus sonst eine echte Bewegung ueber die
+    // volle Strecke in Glaettungszeit: bei 1400 m und tau 0,145 s einige
+    // tausend m/s. Der Loeser sieht dort Ueberschall, spaltet die Wurzel auf
+    // und rechnet ein Vielfaches - gemessen im load_check-Abschnitt
+    // "Sprungnaht" das 43-fache an Loeser-Auswertungen, und zwar nicht als
+    // kurze Spitze, sondern so lange, wie die schnelle Stelle in der
+    // Vorgeschichte der Bahn steht (Pufferlaenge, mehrere Sekunden).
+    //
+    // Der Schnitt macht daraus drei Schritte:
+    //   1. Ausblenden (cutFadeSeconds), Quelle steht dabei still.
+    //   2. Bei Pegel null: Glaetter und Geometrie an der neuen Stelle neu
+    //      aufsetzen (DopplerEngine::cutTo) - ein Umbau, keine Bewegung.
+    //   3. Einblenden.
+    //
+    // Ausgefuehrt wird Schritt 2 am Anfang des Blocks NACH dem Ende der
+    // Ausblende (handlePendingRequests). Dazwischen liegt der Ausgang auf
+    // null, der Umbau ist also in jedem Fall unhoerbar.
+    enum class CutState { Idle, FadingOut, FadingIn };
+
+    // Kurz genug, dass es als Schnitt und nicht als Blende wahrgenommen wird,
+    // lang genug, dass keine Flanke knackt.
+    static constexpr double cutFadeSeconds = 0.012;
+
+    CutState cutState = CutState::Idle;
+    double   cutGain  = 1.0;
+
+    // Wohin geschnitten wird. Wird beim Anmelden gesetzt, nicht beim
+    // Ausfuehren: das Ziel gehoert zu dem Ereignis, das den Schnitt
+    // ausgeloest hat.
+    Vec3 cutTargetMetres { 0.0, 0.0, 0.0 };
+
+    // Waehrend der Ausblende steht die Quelle - sonst faenge sie an zu
+    // fliegen, bevor der Schnitt sie versetzt.
+    Vec3 cutHoldMetres { 0.0, 0.0, 0.0 };
+
+    // Die Ausblende ist durch, der Umbau steht am Anfang des naechsten
+    // Blocks an. Nur vom Audiothread beschrieben und gelesen.
+    bool cutExecutePending = false;
+
+    // Nach dem Umbau die Wiedergabe an den Rundenanfang setzen. Trennt den
+    // Rundenwechsel vom Zustandsladen, die sonst denselben Weg gehen.
+    bool cutRewindsPlayer = false;
+
+    // Meldet einen Schnitt an. Nur aus dem Audiothread aufzurufen.
+    void beginCut (Vec3 targetMetres, bool rewindPlayer);
+
     // Additive Mikrobewegung der Quelle M, vor sourceSmoothers eingehakt
     // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.
     PositionJitter  sourceJitter;
@@ -708,6 +760,12 @@ private:
     std::atomic<bool> flyStopRequest      { false };
     std::atomic<bool> panicRequest        { false };
     std::atomic<bool> engineRestartRequest{ false };
+
+    // Ein Zustand wurde geladen (setStateInformation). Anders als der
+    // Engine-Restart braucht dieser Weg keinen Editor: der Audiothread holt
+    // das Flag am Blockanfang ab und schneidet selbst. Ein Host ohne offenes
+    // Fenster flog sonst die ganze Strecke zur geladenen Position ab.
+    std::atomic<bool> stateLoadRequest    { false };
 
     std::atomic<bool> motorGateEnabled    { false };
     std::atomic<bool> sourceGrabRequest   { false };

@@ -36,9 +36,29 @@ public:
     // Play nur bis zum Clip-Ende oder Loop-Endlos-Betrieb ohne Ausstieg).
     // Springt NICHT auf Frame 0 zurück - ein erneutes trigger() startet ohne
     // hängengebliebene Kopfposition sauber von vorn.
-    void stop() { playing = false; }
+    void stop() { playing = false; loopEdgePending = false; }
 
     bool isPlaying() const { return playing; }
+
+    // Rundenwechsel als Schnitt (@dpa 20260824: "Ende erreicht, leise, umbau,
+    // laut, start"). Die Wiedergabe wickelt am Rundenende NICHT selbst um -
+    // sie bleibt auf dem letzten Frame stehen und meldet es hier. Der
+    // Aufrufer blendet aus, ruft restartRound() und blendet wieder ein.
+    //
+    // Das Modulo an dieser Stelle war der Grund fuer die Lastspitze am
+    // Rundenpunkt: der Sprung vom Ende zum Anfang lief als ZIEL durch die
+    // Glaettung und stand damit als echte Bewegung in der Bahn - gemessen im
+    // load_check-Abschnitt "Sprungnaht" |M_r| 16 und der teuerste Block mit
+    // 29558 statt 64 Loeser-Auswertungen.
+    bool atLoopEdge() const { return loopEdgePending; }
+
+    // Setzt an den Rundenanfang zurueck. Der Ueberhang, der beim Erreichen
+    // des Endes ueber den letzten Frame hinausging, wird dabei mitgenommen -
+    // die Runde verliert dadurch keine Zeit ausser der Schnittdauer selbst.
+    void restartRound();
+
+    // Erster Frame des Clips, in Metern - das Ziel des Schnitts.
+    Vec3 firstFrame() const { return clipFrames.empty() ? Vec3{} : clipFrames.front(); }
 
     // Rückt die interne Wiedergabeposition um dt*speed vor und liest die
     // Position an dieser Stelle aus den Clip-Frames. Rohposition, siehe
@@ -57,4 +77,8 @@ private:
 
     bool playing = false;
     double playHeadFrames = 0.0;   // Position im Clip, in Frames (nicht Sekunden)
+
+    // Die Runde ist um, der Schnitt steht aus (siehe atLoopEdge).
+    bool   loopEdgePending = false;
+    double wrapOvershoot   = 0.0;   // was ueber den letzten Frame hinausging
 };

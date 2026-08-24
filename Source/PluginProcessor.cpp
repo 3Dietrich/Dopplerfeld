@@ -505,6 +505,16 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     outputGainLinear.reset (sampleRate, 0.02);
     outputGainLinear.setCurrentAndTargetValue (
         juce::Decibels::decibelsToGain (pp.outputGain->load()));
+
+    // Ein Neustart setzt ohnehin alles an die Zielposition - ein noch
+    // laufender Schnitt haette danach nichts mehr umzubauen und liesse den
+    // Ausgang nur unnoetig leise stehen.
+    cutState          = CutState::Idle;
+    cutGain           = 1.0;
+    cutExecutePending = false;
+    cutRewindsPlayer  = false;
+    cutTargetMetres   = smoothedSourcePos;
+    cutHoldMetres     = smoothedSourcePos;
 }
 
 void DopplerfeldProcessor::restartEngine()
@@ -945,8 +955,51 @@ void DopplerfeldProcessor::applyCloneParameters()
     activeRealClones.store (effectiveRealClones);
 }
 
+void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer)
+{
+    // Ein bereits laufender Schnitt wird nicht neu angestossen, sondern nur
+    // umgelenkt: sein Ziel ist immer das zuletzt angemeldete. Sonst kaskadieren
+    // zwei kurz aufeinanderfolgende Ereignisse (Zustand laden waehrend eines
+    // Rundenwechsels) zu einer Kette halber Blenden.
+    cutTargetMetres  = targetMetres;
+    cutRewindsPlayer = cutRewindsPlayer || rewindPlayer;
+
+    if (cutState == CutState::FadingOut)
+        return;
+
+    // Wo die Quelle waehrend der Ausblende steht. Nicht das Ziel: sie soll
+    // sich bis zum Schnitt gar nicht mehr bewegen.
+    cutHoldMetres = smoothedSourcePos;
+    cutState      = CutState::FadingOut;
+}
+
 void DopplerfeldProcessor::handlePendingRequests()
 {
+    // Der Umbau des Schnitts, angemeldet von der Ausblende im Ausgang. Er
+    // steht ganz vorn: alles, was danach in diesem Block passiert, soll schon
+    // die neue Lage sehen.
+    if (cutExecutePending)
+    {
+        cutExecutePending = false;
+
+        if (cutRewindsPlayer)
+            motionPlayer.restartRound();
+
+        cutRewindsPlayer = false;
+
+        // Glaetter UND Geometrie an der neuen Stelle neu aufsetzen. Beides
+        // gehoert zusammen: ein Glaetter, der noch am alten Ort steht, schriebe
+        // im naechsten Tick den Weg dorthin zurueck.
+        smoothedSourcePos = cutTargetMetres;
+        sourceSmoothers.reset (cutTargetMetres);
+        wasMotionSlewGuardActive = false;
+
+        dopplerEngine.setSourceTarget (cutTargetMetres);
+        dopplerEngine.cutTo (cutTargetMetres);
+
+        cutState = CutState::FadingIn;
+    }
+
     if (panicRequest.exchange (false))
     {
         // Sofort, ohne auf die Parameter zu warten: das ist der Knopf für den
@@ -960,6 +1013,13 @@ void DopplerfeldProcessor::handlePendingRequests()
 
         activeRealClones.store (0);
     }
+
+    // Ein geladener Zustand ist ein Umbau, keine Bewegung: geschnitten statt
+    // hingeflogen (siehe CutState im Header). applyParameters() lief in
+    // diesem Block schon, sourceTargetMetres steht also bereits auf der
+    // geladenen Position.
+    if (stateLoadRequest.exchange (false))
+        beginCut (sourceTargetMetres, false);
 
     if (sourceSwitchRequest.exchange (false))
         sourceHolder.switchTo (sourceForKind (currentSourceKind()));
@@ -1069,7 +1129,16 @@ void DopplerfeldProcessor::handlePendingRequests()
         startFlyBy();
 
     if (playTriggerRequest.exchange (false))
+    {
         motionPlayer.trigger (dopplerEngine.currentTime());
+
+        // Der Start einer Wiedergabe ist dieselbe Naht wie ihr
+        // Rundenwechsel: die Quelle steht irgendwo, der Clip faengt woanders
+        // an. Ohne Schnitt floege sie die Strecke dazwischen ab - beim Start
+        // genauso teuer wie am Rundenpunkt.
+        if (motionPlayer.isPlaying())
+            beginCut (motionPlayer.firstFrame(), false);
+    }
 
     if (stopTriggerRequest.exchange (false))
         motionPlayer.stop();
@@ -1290,7 +1359,22 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // hoch + Loop). Nur bei Linear (bloss C0-stetig) bleibt der
             // Glätter Pflicht, siehe Klassenkommentar in MotionPlayer.h.
             bypassSmoothing = (motionPlayer.getInterp() == MotionPlayer::Interp::CatmullRom);
+
+            // Rundenende erreicht: die Wiedergabe steht jetzt auf dem letzten
+            // Frame und wartet. Der Schnitt blendet aus, setzt sie zurueck und
+            // blendet wieder ein (@dpa: "Ende erreicht, leise, umbau, laut,
+            // start") - vorher lief der Weg vom Ende zum Anfang als echte
+            // Bewegung durch die Glaettung.
+            if (motionPlayer.atLoopEdge())
+                beginCut (motionPlayer.firstFrame(), true);
         }
+
+        // Waehrend der Ausblende steht die Quelle still. Was sie jetzt noch
+        // zuruecklegte, wuerde der Schnitt ohnehin ueberschreiben - und ein
+        // weiterlaufendes Ziel liesse den Glaetter genau die Bewegung
+        // schreiben, die hier vermieden werden soll.
+        if (cutState == CutState::FadingOut)
+            target = cutHoldMetres;
 
         // M-Jitter (@dpa 20260818): additiv VOR jeglicher Glaettung auf das
         // Ziel aufgeschlagen, egal ob es von Maus/Automation, Vorbeiflug oder
@@ -1719,6 +1803,43 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
     applyOutputStage (buffer);
 
+    // Schnittblende (siehe CutState im Header). Sie liegt vor der Blende des
+    // Hauptschalters, weil sie ein anderes Ziel hat: nicht "aus", sondern eine
+    // kurze Luecke, in der der Umbau unhoerbar passiert. Je Sample gerechnet -
+    // bei 12 ms Blende waere eine Blockgrenze als Stufe hoerbar.
+    if (cutState != CutState::Idle)
+    {
+        const double step  = 1.0 / std::max (1.0, cutFadeSeconds * sr);
+        const int    numCh = buffer.getNumChannels();
+
+        float* const* data = buffer.getArrayOfWritePointers();
+
+        for (int n = 0; n < numSamples; ++n)
+        {
+            if (cutState == CutState::FadingOut)
+            {
+                cutGain = std::max (0.0, cutGain - step);
+
+                // Unten angekommen: den Umbau fuer den Anfang des naechsten
+                // Blocks anmelden (handlePendingRequests). Der Rest dieses
+                // Blocks laeuft dabei auf null weiter - genau die Luecke, in
+                // der nichts zu hoeren ist.
+                if (cutGain <= 0.0)
+                    cutExecutePending = true;
+            }
+            else
+            {
+                cutGain = std::min (1.0, cutGain + step);
+
+                if (cutGain >= 1.0)
+                    cutState = CutState::Idle;
+            }
+
+            for (int ch = 0; ch < numCh; ++ch)
+                data[ch][n] *= (float) cutGain;
+        }
+    }
+
     // Blende des Hauptschalters, ganz am Ende: sie liegt hinter Begrenzer und
     // Ausgangspegel, damit das Ausblenden von keiner Regelung wieder
     // hochgezogen wird. Je Sample gerechnet, nicht je Block - eine
@@ -2011,12 +2132,32 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
 
     apvts.replaceState (tree);
 
-    // Zum Schluss: Engine neu anlassen (@dpa: "bei/nach jedem State-load
-    // Engine Restart triggern"). Erst NACH replaceState(), damit der
-    // prepareToPlay()-Lauf im Restart schon die geladenen Parameter sieht.
-    // Nur angefordert - ausgefuehrt wird er auf dem Nachrichten-Thread
-    // (siehe requestEngineRestart() im Header).
-    requestEngineRestart();
+    // Zum Schluss: der Ladevorgang als Schnitt im Audiothread. Er greift im
+    // naechsten Block und auch dann, wenn gar kein Fenster offen ist (siehe
+    // CutState im Header).
+    //
+    // Frueher stand hier stattdessen requestEngineRestart() (@dpa: "bei/nach
+    // jedem State-load Engine Restart triggern"). Das war der einzige Weg,
+    // die Quelle ohne Anflug an ihre geladene Stelle zu bekommen - kostet
+    // aber zweierlei:
+    //
+    //   - Der Restart laeuft ueber prepareToPlay() und haelt den Audiothread
+    //     dabei an. Gemessen im load_check-Abschnitt "Sprungnaht": 7 ms bei
+    //     einem Blockbudget von 10,7 ms, bei kleineren Puffern also mehrere
+    //     Bloecke am Stueck.
+    //   - Er setzt die Zeitachse zurueck und leert dabei den Signalpuffer.
+    //     Danach ist es still, bis der Schall die neue Strecke einmal
+    //     zurueckgelegt hat - bei 1000 m gut drei Sekunden.
+    //
+    // Beides fiel bei jedem Preset-Wechsel an. Der Schnitt braucht keines von
+    // beidem: er setzt Glaetter und Geometrie an der neuen Stelle auf, laesst
+    // den Signalpuffer aber stehen, und die Vorgeschichte der Bahn ist an der
+    // neuen Stelle vollstaendig gefuellt - der neue Ort klingt sofort.
+    //
+    // Der Knopf "Audiomotor neu anlassen" bleibt unveraendert von Hand
+    // erreichbar; er ist weiterhin das Mittel gegen den ungeklaerten
+    // Ton-Ausfall (siehe restartEngine()).
+    stateLoadRequest.store (true);
 }
 
 // Diese Fabrikfunktion verlangt JUCE von jedem Plugin-Projekt.

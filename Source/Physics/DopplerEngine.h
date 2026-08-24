@@ -108,6 +108,14 @@ public:
     // noch abgedeckt ist (siehe SourceTrajectory::fillLinear).
     void startLinearMotion (Vec3 posMetres, Vec3 velocity);
 
+    // Schnitt: die Quelle steht ab sofort an der neuen Stelle, ohne dass ein
+    // zweiter Geometriesatz mitlaeuft und ohne dass irgendetwas geblendet
+    // wird. Gedacht fuer Positionsaenderungen, die KEINE Bewegung sind - ein
+    // geladener Zustand, der Rundenwechsel einer Wiedergabe. Der Aufrufer
+    // muss den Ausgang um den Schnitt herum leise machen, sonst knackt es;
+    // Begruendung und Abgrenzung zu jumpSourceTo() stehen in der .cpp.
+    void cutTo (Vec3 posMetres);
+
     void setBoomLimitDb (double dB);
     void setAirAbsorptionAmount (double amount01);
 
@@ -441,6 +449,10 @@ private:
     // Gemeinsamer Kern von Positionssprung und Feldgrößenwechsel.
     void startGeometrySwitch (Vec3 newPos, Vec3 preVelocity, int fadeSamples);
     void configurePendingSet (Vec3 newPos, Vec3 preVelocity);
+
+    // Setzt einen beliebigen Geometriesatz an newPos neu auf. Der
+    // Ueberblendweg braucht nur pending(), der Schnitt (cutTo) beide.
+    void configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity);
     void applyArmedFieldChange();
 
     int fadeSamplesFor (FadeReason reason, double positionDeltaMetres) const;

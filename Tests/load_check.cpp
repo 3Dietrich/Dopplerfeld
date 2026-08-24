@@ -3594,6 +3594,220 @@ int main()
         }
     }
 
+
+    //==================================================================
+    // Sprungnaht: was passiert, wenn sich die Quellposition NICHT durch
+    // Bewegung, sondern durch einen Eingriff aendert? Drei Wege fuehren
+    // dorthin - ein geladener Zustand, der Knopf "Audiomotor neu anlassen"
+    // und der Rundenwechsel einer laufenden Bewegungswiedergabe. Gemessen
+    // wird jeweils die Sekunde nach dem Eingriff, gegen einen sonst
+    // identischen Lauf ohne ihn.
+    //
+    // Das Mass ist nicht die Wanduhr (siehe Kopf dieser Datei), sondern der
+    // teuerste Block in Loeser-Auswertungen: eine Position, die als echte
+    // Bewegung in die Bahn geschrieben wird, treibt |M_r| ueber 1, spaltet
+    // die Wurzel auf und kostet dadurch ein Vielfaches.
+    {
+        // Ein Feld von 2000 m und ein Sprung ueber die halbe Diagonale:
+        // gross genug, dass eine ueber die Glaettungszeit "geflogene"
+        // Strecke zwangslaeufig Ueberschall waere.
+        auto prepareProcessor = [] (DopplerfeldProcessor& proc)
+        {
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 2000.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::srcX, 0.5f);
+            setParam (proc, Params::srcY, 0.9f);
+            setParam (proc, Params::srcZ, 0.0f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+        };
+
+        auto worstOf = [] (const Stats& s) { return (double) s.worstBlockEvals; };
+
+        // --- a) Zustand laden -------------------------------------------
+        juce::MemoryBlock stateFar;
+
+        {
+            DopplerfeldProcessor probe;
+            prepareProcessor (probe);
+
+            // Weit weg vom spaeteren Standort, sonst waere der geladene
+            // Zustand gar kein Sprung.
+            setParam (probe, Params::srcX, 0.05f);
+            setParam (probe, Params::srcY, 0.05f);
+
+            Stats settle;
+            render (probe, buffer, 2.0, settle, [] (double) {});
+
+            probe.getStateInformation (stateFar);
+        }
+
+        Stats loadCtl, loadJump, loadAfter, farRest;
+
+        {
+            DopplerfeldProcessor control;
+            prepareProcessor (control);
+
+            Stats warm;
+            render (control, buffer, 1.0, warm, [] (double) {});
+            render (control, buffer, 1.0, loadCtl, [] (double) {});
+        }
+
+        {
+            // Dieselbe weite Lage, aber nie hingeflogen: die Position steht
+            // schon vor prepareToPlay(), die Quelle hat sich nie bewegt.
+            // Das ist der Massstab dafuer, was die LAGE allein kostet.
+            DopplerfeldProcessor still;
+
+            still.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (still, Params::fieldMetres, 2000.0f);
+            setParam (still, Params::smootherType, 1.0f);
+            setParam (still, Params::lisX, 0.5f);
+            setParam (still, Params::lisY, 0.5f);
+            setParam (still, Params::srcX, 0.05f);
+            setParam (still, Params::srcY, 0.05f);
+            setParam (still, Params::srcZ, 0.0f);
+
+            still.prepareToPlay (sampleRate, blockSize);
+
+            Stats warm;
+            render (still, buffer, 5.0, warm, [] (double) {});
+            render (still, buffer, 1.0, farRest, [] (double) {});
+        }
+
+        {
+            DopplerfeldProcessor loaded;
+            prepareProcessor (loaded);
+
+            // Fuenf Sekunden Vorlauf, nicht eine: der Schnitt setzt die Bahn
+            // mit vollstaendiger Vorgeschichte an der neuen Stelle auf, liest
+            // dort also Quellsignal von vor der Laufzeit. Bei 1036 m sind das
+            // drei Sekunden - mit nur einer Sekunde Vorlauf laege die
+            // Emissionszeit vor dem Anfang des Puffers, und der Lauf waere
+            // still, ohne dass das etwas ueber den Schnitt aussagt.
+            Stats warm;
+            render (loaded, buffer, 5.0, warm, [] (double) {});
+
+            loaded.setStateInformation (stateFar.getData(), (int) stateFar.getSize());
+
+            render (loaded, buffer, 1.0, loadJump, [] (double) {});
+
+            // Dieselbe Geometrie, nur ohne den Eingriff: der zweite Abschnitt
+            // laeuft am geladenen Standort weiter. Erst der Vergleich mit ihm
+            // trennt die Kosten des SPRUNGES von den Kosten der neuen Lage -
+            // eine Quelle weit weg ist von sich aus teurer, weil der Loeser
+            // eine laengere Vorgeschichte durchsuchen muss.
+            render (loaded, buffer, 1.0, loadAfter, [] (double) {});
+        }
+
+        // --- b) Audiomotor neu anlassen ---------------------------------
+        Stats  resetJump, resetAfter;
+        double restartMillis = 0.0;
+
+        {
+            DopplerfeldProcessor restarted;
+            prepareProcessor (restarted);
+
+            // Am weiten Standort, wo der Loeser ohnehin am meisten zu tun hat -
+            // das ist die Lage, aus der @dpa den Knopf drueckt.
+            setParam (restarted, Params::srcX, 0.05f);
+            setParam (restarted, Params::srcY, 0.05f);
+
+            Stats warm;
+            render (restarted, buffer, 3.0, warm, [] (double) {});
+
+            // Wie der Editor-Timer es tut, nur ohne Nachrichtenschleife.
+            // Hier zaehlt ausnahmsweise die Wanduhr: der Neustart laeuft nicht
+            // im Audiothread, sondern haelt ihn an (suspendProcessing) und
+            // legt in prepareToPlay() die Puffer neu an. Was das kostet, taucht
+            // in keiner Blockzeit auf - es ist die Zeit, in der der Host gar
+            // keine Bloecke bekommt.
+            const auto restartStart = std::chrono::steady_clock::now();
+            restarted.restartEngine();
+            const auto restartStop  = std::chrono::steady_clock::now();
+
+            restartMillis = std::chrono::duration<double, std::milli> (restartStop - restartStart).count();
+
+            render (restarted, buffer, 1.0, resetJump,  [] (double) {});
+            render (restarted, buffer, 1.0, resetAfter, [] (double) {});
+        }
+
+        // --- c) Rundenwechsel der Bewegungswiedergabe --------------------
+        // Aufgezeichnet wird eine Strecke, deren Ende weit vom Anfang weg
+        // liegt. Genau dort sitzt der Uebergang, um den es geht: die
+        // Wiedergabe setzt am Ende der Runde wieder am Anfang auf.
+        Stats loopRun;
+
+        {
+            DopplerfeldProcessor player;
+            prepareProcessor (player);
+
+            setParam (player, Params::playLoop, 1.0f);
+            setParam (player, Params::playInterp, 0.0f);   // Linear
+
+            Stats warm;
+            render (player, buffer, 0.5, warm, [] (double) {});
+
+            player.toggleRecording();
+
+            Stats recording;
+            render (player, buffer, 4.0, recording, [&player] (double t)
+            {
+                // 0,9 -> 0,5 quer ueber das Feld: rund 460 m in vier
+                // Sekunden, also gut 110 m/s. Bewusst deutlich unter der
+                // Schallgeschwindigkeit - der Rundenpunkt soll die einzige
+                // schnelle Stelle des Laufs sein, sonst misst man die Bahn
+                // statt der Naht.
+                setParam (player, Params::srcY, (float) (0.9 - 0.1 * t));
+            });
+
+            player.toggleRecording();
+
+            Stats stopped;
+            render (player, buffer, 0.2, stopped, [] (double) {});
+
+            player.triggerPlayback();
+
+            // Zwei Runden zu je vier Sekunden - der Uebergang liegt in der
+            // Mitte des Abschnitts, nicht am Rand.
+            render (player, buffer, 8.5, loopRun, [] (double) {});
+        }
+
+        loadCtl.report    ("Sprungnaht, Ruhe nah");
+        farRest.report    ("Sprungnaht, Ruhe fern");
+        loadJump.report   ("Sprungnaht, Zustand geladen");
+        loadAfter.report  ("Sprungnaht, danach");
+        resetJump.report  ("Sprungnaht, Motor neu");
+        resetAfter.report ("Sprungnaht, Motor danach");
+        loopRun.report    ("Sprungnaht, Runde");
+
+        auto ratio = [] (double a, double b) { return b > 0.0 ? a / b : 0.0; };
+
+        std::printf ("%-22s teuerster Block gegen dieselbe Lage OHNE Eingriff: "
+                     "geladen %.0f gegen %.0f (%.1f x) | Motor neu %.0f gegen %.0f (%.1f x)\n",
+                     "",
+                     worstOf (loadJump),  worstOf (loadAfter),  ratio (worstOf (loadJump),  worstOf (loadAfter)),
+                     worstOf (resetJump), worstOf (resetAfter), ratio (worstOf (resetJump), worstOf (resetAfter)));
+
+        std::printf ("%-22s Runde: teuerster Block %.0f, |M_r| max %.2f - "
+                     "nah und ruhend waeren es %.0f bei %.2f\n",
+                     "", worstOf (loopRun), loopRun.maxMach, worstOf (loadCtl), loadCtl.maxMach);
+
+        std::printf ("%-22s Motor neu anlassen haelt den Audiothread %.1f ms an "
+                     "(Budget je Block %.1f ms)\n",
+                     "", restartMillis, 1000.0 * (double) blockSize / sampleRate);
+
+        std::printf ("%-22s dieselbe weite Lage, nie hingeflogen: %.0f - "
+                     "hingeflogen und ausgeschwungen: %.0f (%.1f x)\n",
+                     "", worstOf (farRest), worstOf (loadAfter),
+                     ratio (worstOf (loadAfter), worstOf (farRest)));
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }

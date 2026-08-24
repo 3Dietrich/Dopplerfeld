@@ -275,8 +275,11 @@ void DopplerEngine::setManualFade (bool shouldUseManual, double seconds)
 
 void DopplerEngine::configurePendingSet (Vec3 newPos, Vec3 preVelocity)
 {
-    auto& s = geometry.pending();
+    configureSet (geometry.pending(), newPos, preVelocity);
+}
 
+void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
+{
     // Auf dem letzten bereits geschriebenen Rasterpunkt aufsetzen, nicht auf
     // der (rasterfremden) Blockzeit - sonst läge der nächste push() vor
     // newestTime() und die Zeitachse der Trajektorie wäre nicht mehr monoton.
@@ -354,6 +357,42 @@ void DopplerEngine::startGeometrySwitch (Vec3 newPos, Vec3 preVelocity, int fade
 
     configurePendingSet (newPos, preVelocity);
     geometry.beginSwitch (fadeSamples);
+}
+
+void DopplerEngine::cutTo (Vec3 posMetres)
+{
+    // Schnitt statt Ueberblendung (@dpa 20260824: "Ende erreicht, leise,
+    // umbau, laut, start"). Der Unterschied zu jumpSourceTo() ist nicht die
+    // Fadedauer, sondern dass hier gar nichts nebeneinander laeuft:
+    //
+    //   jumpSourceTo() - zwei komplette Geometriesaetze rechnen gleichzeitig
+    //                    und werden gegeneinander geblendet. Das kostet
+    //                    doppelte Loeserzeit und ist als Bewegung hoerbar,
+    //                    weil der alte Satz waehrenddessen weiterfliegt.
+    //   cutTo()        - beide Saetze werden an der neuen Stelle neu
+    //                    aufgesetzt, mit ruhender Vorgeschichte. Nichts wird
+    //                    geblendet, nichts laeuft doppelt.
+    //
+    // Hoerbar waere der Schnitt als Knacken - deshalb liegt er im Aufrufer
+    // zwischen Aus- und Einblende des Ausgangs (siehe DopplerfeldProcessor,
+    // Schnitt-Zustandsmaschine). Die Engine selbst blendet hier bewusst
+    // nichts, sie fuehrt den Schnitt nur aus.
+    //
+    // Der Signalpuffer bleibt stehen: die Vorgeschichte der Bahn wird an der
+    // neuen Stelle vollstaendig gefuellt (configureSet), der neue Ort klingt
+    // deshalb sofort und nicht erst nach der Laufzeit. Ein Loeschen des
+    // Puffers waere Stille ueber die ganze Laufstrecke - bei 1400 m gut vier
+    // Sekunden.
+    sourceTarget = posMetres;
+
+    // Eine laufende oder angemeldete Ueberblendung gehoert zum alten Ort.
+    geometry.reset();
+
+    configureSet (geometry.active(),  posMetres, Vec3{});
+    configureSet (geometry.pending(), posMetres, Vec3{});
+
+    queuedJumpPos = posMetres;
+    queuedJumpVel = Vec3{};
 }
 
 void DopplerEngine::markSourceJump (double speedStepMps)

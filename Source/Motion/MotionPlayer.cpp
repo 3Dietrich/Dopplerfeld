@@ -11,6 +11,8 @@ void MotionPlayer::setClip (const std::vector<Vec3>& framesIn, double controlRat
     clipRateHz = controlRateHz > 0.0 ? controlRateHz : 200.0;
     playHeadFrames = 0.0;
     playing = false;
+    loopEdgePending = false;
+    wrapOvershoot   = 0.0;
 }
 
 void MotionPlayer::setSpeed (double speedIn)
@@ -30,8 +32,36 @@ void MotionPlayer::trigger (double /*now*/)
     if (clipFrames.empty())
         return;
 
-    playHeadFrames = 0.0;
-    playing = true;
+    playHeadFrames  = 0.0;
+    playing         = true;
+    loopEdgePending = false;
+    wrapOvershoot   = 0.0;
+}
+
+void MotionPlayer::restartRound()
+{
+    if (! loopEdgePending)
+        return;
+
+    loopEdgePending = false;
+
+    const int n = (int) clipFrames.size();
+
+    if (n > 1)
+    {
+        const double lastFrame = (double) (n - 1);
+
+        // Modulo auf den UEBERHANG, nicht auf die Kopfposition: die stand
+        // waehrend der Ausblende auf dem letzten Frame still, ihr Modulo waere
+        // immer null und die Runde verloere den Bruchteil eines Frames.
+        playHeadFrames = std::fmod (wrapOvershoot, lastFrame);
+    }
+    else
+    {
+        playHeadFrames = 0.0;
+    }
+
+    wrapOvershoot = 0.0;
 }
 
 Vec3 MotionPlayer::frameAt (double framePos) const
@@ -72,15 +102,34 @@ Vec3 MotionPlayer::tick (double dt)
     const int n = (int) clipFrames.size();
     const double lastFrame = (double) (n - 1);
 
+    // Am Rundenende wartet die Wiedergabe auf den Schnitt und rueckt nicht
+    // weiter (siehe atLoopEdge). Wird die Dauerschleife waehrenddessen
+    // ausgeschaltet, ist die Wiedergabe schlicht zu Ende - sonst haenge sie
+    // auf dem letzten Frame fest und liefe nie aus.
+    if (loopEdgePending)
+    {
+        if (! looping)
+        {
+            loopEdgePending = false;
+            wrapOvershoot   = 0.0;
+            playing         = false;
+        }
+
+        return frameAt (playHeadFrames);
+    }
+
     playHeadFrames += dt * speed * clipRateHz;
 
     if (playHeadFrames >= lastFrame)
     {
         if (looping && n > 1)
         {
-            // Modulo statt Clamp, damit die Phase über den Loop-Punkt hinweg
-            // nicht "hängen bleibt", sondern sauber weiterläuft.
-            playHeadFrames = std::fmod (playHeadFrames, lastFrame);
+            // Stehenbleiben und melden, statt selbst umzuwickeln - der
+            // Rundenwechsel ist ein Schnitt und gehoert dem Aufrufer
+            // (siehe atLoopEdge/restartRound in MotionPlayer.h).
+            wrapOvershoot   = playHeadFrames - lastFrame;
+            playHeadFrames  = lastFrame;
+            loopEdgePending = true;
         }
         else
         {
