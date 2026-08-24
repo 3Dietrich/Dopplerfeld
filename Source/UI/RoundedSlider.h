@@ -88,6 +88,42 @@ public:
         return juce::Slider::getValueFromText (text);
     }
 
+    // Pfeiltasten bewegen einen festen Bruchteil des REGLERWEGS, nicht einen
+    // festen Wert (@dpa 20260824: "Knobs Auflösung bei up/down arrows sind
+    // teilweise viel zu groß").
+    //
+    // JUCE nimmt fuer die Tastatur das Intervall des Parameters, und wo keines
+    // gesetzt ist, ein Hundertstel des Wertebereichs. Bei einem Regler wie Max
+    // Speed, der bis 100000 m/s reicht, sind das 1000 m/s je Tastendruck -
+    // unbrauchbar, egal wo man gerade steht. Bei einem Regler von 0 bis 1
+    // waeren dieselben zwei Prozent dagegen viel zu fein.
+    //
+    // Der Reglerweg ist das richtige Mass, weil er bereits alles enthaelt, was
+    // die Bedienung ausmacht: Bereich UND Kennlinie. Ein Schritt ist damit
+    // ueberall gleich gross, wo er sich anfuehlt wie derselbe Schritt - im
+    // krummen unteren Ende einer Skew-Kurve genauso wie am linearen oberen.
+    //
+    // Ein halbes Prozent Weg je Druck: zweihundert Schritte von Anschlag zu
+    // Anschlag. Mit Umschalt ein Zehntel davon, fuer das letzte Feintuning.
+    bool keyPressed (const juce::KeyPress& key) override
+    {
+        const bool up   = key.isKeyCode (juce::KeyPress::upKey)   || key.isKeyCode (juce::KeyPress::rightKey);
+        const bool down = key.isKeyCode (juce::KeyPress::downKey) || key.isKeyCode (juce::KeyPress::leftKey);
+
+        if (! up && ! down)
+            return juce::Slider::keyPressed (key);
+
+        const double step = key.getModifiers().isShiftDown() ? 0.0005 : 0.005;
+
+        const auto range = getNormalisableRange();
+        const double here = range.convertTo0to1 (getValue());
+        const double next = juce::jlimit (0.0, 1.0, here + (up ? step : -step));
+
+        setValue (range.convertFrom0to1 (next), juce::sendNotificationSync);
+
+        return true;
+    }
+
     // Mausrad NICHT mehr am Regler verarbeiten (@dpa 20260820): das Fenster ist hoch und
     // wird staendig gescrollt. Sobald dabei ein Regler unter den Mauszeiger geraet, hat er
     // bisher das Rad geschluckt - das Scrollen brach ab UND der Reglerwert aenderte sich

@@ -215,9 +215,10 @@ int EnginePanel::preferredContentHeight() const
         height += knobH + 6;
     }
 
-    // Jitter steht immer: er verstimmt die Drehzahl selbst und wirkt damit in
-    // jeder Betriebsart.
-    height += knobH + 8;
+    // Jitter nur in "Frei", siehe resized(). In den uebrigen Betriebsarten
+    // faellt die Zeile ganz weg, das Panel wird entsprechend kuerzer.
+    if (engineKindCombo.getSelectedItemIndex() == 0)
+        height += knobH + 8;
 
     return height;
 }
@@ -271,6 +272,19 @@ void EnginePanel::updateHeliControlsEnabled()
     {
         k->slider.setVisible (harmonicsAudible);
         k->label.setVisible (harmonicsAudible);
+    }
+
+    // Jitter nur noch in "Frei" (@dpa 20260824: "Motor: Jitter kann außer in
+    // 'Frei' überall weg"). Er verstimmt die Drehzahl der vier Teiltoene, und
+    // die gibt es nur dort: der Duesenantrieb hat einen festen Verdichterton,
+    // die Rakete gar keinen, und Hubschrauber wie Propeller holen ihr Leben
+    // aus dem Rotor, nicht aus einer zitternden Grundfrequenz.
+    const bool jitterAudible = engineKindCombo.getSelectedItemIndex() == 0;
+
+    for (auto* k : { &jitterAmountKnob, &jitterRateKnob })
+    {
+        k->slider.setVisible (jitterAudible);
+        k->label.setVisible (jitterAudible);
     }
 
     resized();
@@ -421,13 +435,16 @@ void EnginePanel::resized()
         area.removeFromTop (6);
     }
 
-    // Jitter zum Schluss: er verstimmt die Drehzahl selbst und wirkt damit in
-    // jeder Betriebsart.
-    auto miscRow = area.removeFromTop (knobH);
-
-    for (auto* k : { &jitterAmountKnob, &jitterRateKnob })
+    // Jitter zum Schluss, und nur in "Frei": er verstimmt die Drehzahl der
+    // vier Teiltoene, und die gibt es nur dort.
+    if (engineKindCombo.getSelectedItemIndex() == 0)
     {
-        layoutKnob (*k, miscRow.removeFromLeft (knobW));
-        miscRow.removeFromLeft (4);
+        auto miscRow = area.removeFromTop (knobH);
+
+        for (auto* k : { &jitterAmountKnob, &jitterRateKnob })
+        {
+            layoutKnob (*k, miscRow.removeFromLeft (knobW));
+            miscRow.removeFromLeft (4);
+        }
     }
 }
