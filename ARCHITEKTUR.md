@@ -473,6 +473,141 @@ Entschieden und **nicht** zu bauen: die Raketen-Druckstöße lösen KEINE
 zusätzlichen N-Wellen in der Ausbreitung aus (@dpa: "Das wäre ja dann doppelt?
 Nee. So wie es jetzt ist, ist es gut.").
 
+## Stand 2026-08-24 spät (Schnitt beim Vorbeiflug, Rotor-Fahrt, Sync, Sprachen)
+
+Vier Punkte aus @dpas Durchgang 19:22. Alles gemessen, **gehört hat @dpa es
+noch nicht.**
+
+### Die Sprungkante ist weg, der Vorbeiflug wird geschnitten
+
+@dpa: "Sprungkante bitte immer ohne (Sprung-)Bewegung im Audio, demnach immer
+ohne N-Wave und ohne Doppler (durch den Sprung), gefadet, default für
+Vorbeiflug! ohne On/Off toggle (weil das andere ist völlig sinnlos: von ende
+auf anfang springen??)".
+
+Der Schalter tat das Gegenteil des Gewünschten: er ließ die Kante am
+Segmentanfang stehen, statt sie zu interpolieren - also einen Ruck im Audio.
+Parameter und Sonderbehandlung im Löserpfad sind entfallen, Amplitude und
+Leseposition werden immer interpoliert.
+
+Der Positionssprung selbst - an den Startpunkt der Strecke und beim
+Rundenwechsel zurück an den Anfang - läuft jetzt über den **Schnitt**.
+`startFlyBy()` wird dafür aus dem stillen Fenster heraus gerufen
+(`cutStartsFlyBy`) und setzt Glätter, Bahn-Vorgeschichte und Geometrie dort,
+wo niemand zuhört. `DopplerEngine::cutTo()` nimmt dafür jetzt eine
+Anfangsgeschwindigkeit mit; der kontinuierliche Start braucht sie, damit die
+Quelle vom ersten Bahnpunkt an mit voller Fahrt fliegt.
+
+Der Geometrie-Crossfade war hier zweierlei zu viel: er ließ den alten Satz
+weiterfliegen, also den Sprung als Bewegung hören, und rechnete dafür zwei
+komplette Lösersätze.
+
+Gemessen (`load_check`, "Sprungnaht", Lauf "Vorbeiflug-Runde", zwei Runden
+über eine 5,3-s-Strecke bei 150 m/s): teuerster Block 227, \|M_r\| max 0,42,
+längste Stille 0,012 s - also genau das Flugtempo und die Schnittdauer.
+
+Der Sprungknall bleibt: der Sprung ist lautlos, die Druckwelle darauf ist der
+gewollte Effekt.
+
+### Rotor: die Fahrt kommt an der Blattspitze an
+
+@dpa: "das knattern kommt nicht vom Doppler, auch nicht bei höheren speeds ...
+hören tut man bei einem Hubschrauberüberflug wirklich 'ganz schöne Spitzen'
+die an Überschall erinnern."
+
+Drei Lücken, alle drei erst durch Messung sichtbar geworden:
+
+1. **Die Fahrt fehlte ganz.** Gerechnet wurde nur der Umlauf der Blattspitze
+   (6 m, 5 Umdrehungen/s = Mach 0,55). In Wahrheit fliegt der ganze Rotor mit,
+   und auf der vorlaufenden Seite addieren sich beide: mit 130 m/s sind es
+   Mach 0,93.
+2. **Über Mach 0,88 lösen sich die Verdichtungsstöße von der Blattspitze** und
+   laufen als eigene Wellen davon. Das ist der Knall, der an Überschall
+   erinnert, obwohl nichts Überschall fliegt. Er ist jetzt da: eine kurze
+   N-Form (1,5 ms) je Blattschlag, deren Stärke mit dem Abstand zur Grenze
+   wächst. Sie läuft am Bandpass des Schwirrens **vorbei** - dadurch bleibt sie
+   eine Kante statt ein Blubbern.
+3. **Die Normierung nahm den Effekt wieder weg.** Sie lief über die volle
+   Verstärkung samt Fahrt und war damit ein Nullsummenspiel. Normiert wird
+   jetzt nur die Drehzahl.
+
+Dazu trifft die Richtwirkung den **Schlag**, nicht das Schwirren: das Schwirren
+entsteht über die ganze Blattspanne, wo die örtliche Machzahl von null an der
+Nabe bis zum Vollen an der Spitze reicht, der Schlag sitzt an der Spitze. Das
+Schwirren bleibt dadurch ein gleichmäßiger Teppich, aus dem der Schlag
+heraussticht.
+
+"Knattern" geht bis 4 statt bis 1 und zieht über 1 hinaus auch die
+Richtwirkung hoch (gedeckelt bei 36 dB). Zu @dpas Frage, ob der Regler den
+Dopplerwert erhöht: bisher nicht, jetzt ja.
+
+Gemessen (Modulationstiefe der Hüllkurve):
+
+| | Wert |
+|---|---|
+| Knattern 1, Schwebeflug | 0,430 |
+| Knattern 1, 70 m/s | 0,826 |
+| Knattern 1, 130 m/s | 1,250 |
+| Schwebeflug, Knattern 0,25 | 0,170 |
+| Schwebeflug, Knattern 4 | 0,430 |
+
+**Offen** aus demselben Punkt: @dpas Beobachtung, dass die Unwucht wirksam
+klingt und mit "Rotor Hz" eigentlich zusammengehören müsste. Beim echten
+Hubschrauber sind Motor und Rotor über ein Getriebe fest gekoppelt; hier sind
+es zwei Regler, weil @dpa sie ausdrücklich getrennt wollte ("Motor, und
+Rotoren mit Geschwindigkeit extra"). Nicht angefasst, bis er entschieden hat.
+
+### Scope-Sync: erst die Grundwelle, dann die Flanke daneben
+
+@dpas Vorschlag ist gebaut, zweistufig: das Fenster wird tiefpassgefiltert
+(übrig bleibt die Grundwelle mit genau EINEM steigenden Nulldurchgang je
+Periode), der grobe Fund wird dann im Rohsignal auf die nächste echte Flanke
+gezogen.
+
+Gefiltert wird vorwärts **und** rückwärts. Ein einfacher Durchlauf verschöbe
+die Grundwelle um seine Gruppenlaufzeit, und um genau die läge der grobe Fund
+daneben. Zwei Durchläufe gegeneinander heben die Phasendrehung exakt auf; das
+geht, weil das ganze Fenster schon vorliegt.
+
+Die Grenzfrequenz kommt aus dem Signal selbst: die Nulldurchgangsrate ist eine
+grobe Frequenzschätzung, die von den Obertönen nach oben gezogen wird, ein
+Viertel davon liegt zuverlässig unter der Grundwelle. Eine feste Zahl wäre für
+jedes zweite Signal falsch.
+
+Gemessen (`load_check`, "Scope-Sync": sechs aufeinanderfolgende Fenster eines
+Klangs aus 220 Hz plus kräftigem siebten Teilton, verglichen über ihre
+Ähnlichkeit):
+
+| | Wert |
+|---|---|
+| ohne Sync | 0,585 |
+| Sync vorher | 0,486 |
+| Sync nachher | 0,998 |
+
+Der alte Sync war also **schlechter als gar keiner** - genau das, was @dpa
+gehört hat.
+
+### Beschriftungen in beiden Sprachen
+
+`Source/UI/Labels.h` ist eine Ersetzungstabelle, kein Schlüsselverzeichnis: im
+Code steht weiterhin der deutsche Text, `Labels::text()` liefert im EN-Betrieb
+seine Entsprechung. Eine fehlende Übersetzung fällt damit nicht aus, sondern
+zeigt eben Deutsch.
+
+Jeder Knob merkt sich seinen deutschen Quelltext, damit `refreshTooltips()`
+beim Sprachwechsel auch die Beschriftung mitnimmt. Knöpfe, deren Text ihren
+Zustand zeigt, bekommen dabei den Text zum aktuellen Zustand.
+
+Die Auswahlfelder zeigen ihre Einträge übersetzt (`changeItemText`, die
+Auswahl bleibt stehen). Die **Parameter** behalten ihre deutschen Einträge:
+sie stehen in der Automationsliste des Hosts und dürfen sich nicht mit der
+Anzeigesprache ändern.
+
+Geprüft im `load_check`-Abschnitt "Beschriftungen EN": der echte Editor wird
+einmal je Betriebsart gebaut, die Sprache steht auf Englisch, alle sichtbaren
+Texte werden eingesammelt (3265 Stück). Keiner steht noch deutsch da, keiner
+trägt einen Umlaut.
+
 ## Stand 2026-08-24 abends (Wackler, Stossfront-Modell, Rotor-Doppler)
 
 Zwei Durchgänge von @dpa (16:20 Bewegung, 17:53 Motor/Physik). Alles
