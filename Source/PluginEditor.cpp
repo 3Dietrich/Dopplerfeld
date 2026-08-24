@@ -51,6 +51,10 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
 
     engineControlPanelBox.setContent (&engineControlPanel);
     enginePanelBox.setContent (&enginePanel);
+
+    // Ein Wechsel der Betriebsart aendert die Hoehe des Motor-Panels - die
+    // Panelspalte muss danach neu gesetzt werden.
+    enginePanel.onLayoutChanged = [this] { layoutPanels(); };
     samplePanelBox.setContent (&samplePanel);
     motionPanelBox.setContent (&motionPanel);
     fieldPanelBox.setContent (&fieldPanel);
@@ -748,7 +752,10 @@ void DopplerfeldEditor::layoutPanels()
 
     const Entry entries[] {
         { &engineControlPanelBox, engineControlContentHeight },
-        { &enginePanelBox, engineContentHeight },
+        // Das Motor-Panel meldet seine Hoehe selbst: sie haengt an der
+        // gewaehlten Betriebsart, weil dort nur steht, was diese Betriebsart
+        // auch braucht (siehe EnginePanel::preferredContentHeight).
+        { &enginePanelBox, enginePanel.preferredContentHeight() },
         { &samplePanelBox, sampleContentHeight },
         { &motionPanelBox, motionContentHeight },
         { &fieldPanelBox,  fieldContentHeight  },

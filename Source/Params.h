@@ -228,7 +228,20 @@ namespace Params
     // umschaltbar auf Sines"). Aus = PolyBLEP-Saegezahn wie bisher, an =
     // reiner Sinus. Gilt fuer alle vier gemeinsam - sie sind ein Klang, keine
     // vier Einzelstimmen.
-    constexpr const char* engineSine = "engineSine";
+    // Wellenform JE Teilton (@dpa 20260824: "der sinus soll (zumindest bei
+    // Hubschrauber und Propeller) für jeden osc setzbar sein"). Aus =
+    // PolyBLEP-Sägezahn, an = reiner Sinus.
+    constexpr const char* harmSine[4] = { "harmSine1", "harmSine2", "harmSine3", "harmSine4" };
+
+    // Gesamtpegel der Betriebsart in dB. Gilt für alles außer "Frei" - dort
+    // machen die vier Teilton-Pegel den Pegel, und daran darf sich nichts
+    // ändern, sonst klängen alte Snapshots anders.
+    constexpr const char* engineLevelDb = "engineLevelDb";
+
+    // Stärke der Druckstöße aus der Raketendüse und des Blattknallens am
+    // Rotor - beides eigene Größen der jeweiligen Betriebsart.
+    constexpr const char* rocketShock = "rocketShock";
+    constexpr const char* rotorSlap   = "rotorSlap";
 
     constexpr const char* reverseGainDb = "reverseGainDb";
 

@@ -408,14 +408,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
     // Sinus statt Saegezahn fuer die vier Motor-Teiltoene, Default aus =
     // bisheriges Verhalten.
-    layout.add (boolParam (engineSine, "Engine Sine", false));
+    // Wellenform je Teilton, Default Saegezahn - bestehende Snapshots klingen
+    // unveraendert.
+    for (int i = 0; i < 4; ++i)
+        layout.add (boolParam (harmSine[i], "Sine " + juce::String (i + 1), false));
+
+    // Pegel der Betriebsart. Grosszuegiger Bereich, denn hier geht es um den
+    // Unterschied zwischen einem Modellflugzeug und einem Hubschrauber in drei
+    // Metern Abstand (@dpa: "die Lautstaerken sind noch irgendwie voellig
+    // unrealistisch"). Default +12 dB: die Betriebsarten sind von sich aus
+    // lauter als der freie Modus, weil ihre Pegel aus der Sache kommen und
+    // nicht aus vier einzeln gedrehten Teiltoenen.
+    layout.add (floatParam (engineLevelDb, "Engine Level", { -36.0f, 36.0f, 0.1f }, 12.0f, "dB"));
+
+    layout.add (floatParam (rocketShock, "Rocket Shock", unitRange(), 0.6f));
+    layout.add (floatParam (rotorSlap,   "Rotor Slap",   unitRange(), 0.7f));
 
     // Betriebsart des Motors (@dpa 20260824). Reihenfolge ist bindend fuer
     // EngineGenerator::kindWeightTable - nicht umsortieren, ohne dort
     // mitzuziehen. Default "Frei" (Index 0) = bisheriges Verhalten, damit
     // bestehende Presets bitgleich klingen.
     layout.add (choiceParam (engineKind, "Engine Kind",
-                              { "Frei", "Duesenantrieb", "Raketenantrieb", "Hubschrauber", "Propeller" }, 0));
+                              { "Frei", "Düsenantrieb", "Raketenantrieb", "Hubschrauber", "Propeller" }, 0));
 
     // Rotordrehzahl/Blattzahl des Hubschrauber-Rotors, nur in dieser
     // Betriebsart wirksam. Grosszuegiger Bereich statt eines realistischen

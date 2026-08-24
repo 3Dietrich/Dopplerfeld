@@ -3,29 +3,23 @@
 
 namespace
 {
-    // Fuenf Gewichte pro Betriebsart, exakt in der Reihenfolge von
-    // Params::engineKind (Params.cpp createParameterLayout()): 0=Frei,
-    // 1=Duesenantrieb, 2=Raketenantrieb, 3=Hubschrauber, 4=Propeller.
-    // "Frei" und "Propeller" liegen beide auf den Identitaets-Werten
-    // (harmonic=1, noise=1, alle Zusatzklaenge=0) - Bestandspresets klingen
-    // dadurch bitgleich wie vor diesem Umbau (@dpa-Vorgabe).
-    struct KindWeights
+    // Reihenfolge der Betriebsarten, exakt wie in Params::engineKind
+    // (Params.cpp createParameterLayout()). Wer dort umsortiert, muss hier
+    // mitziehen.
+    enum Kind
     {
-        double harmonic;     // Gewicht der vier Teiltoene
-        double noise;        // Gewicht des vorhandenen RPM-Rauschbands
-        double jetWhistle;    // Turbinen-Pfeifton (nur Duese)
-        double rocketNoise;   // eigenes Breitband-Rauschen (nur Rakete)
-        double heliRotor;     // Rotor-Blattschlag (nur Hubschrauber)
+        KindFree = 0,
+        KindJet,
+        KindRocket,
+        KindHeli,
+        KindProp
     };
 
-    constexpr std::array<KindWeights, 5> kindWeightTable
-    {{
-        { 1.0,  1.0, 0.0, 0.0, 0.0 },   // Frei
-        { 0.35, 1.8, 1.0, 0.0, 0.0 },   // Duesenantrieb: Rauschband dominiert, Teiltoene treten zurueck
-        { 0.05, 2.2, 0.0, 1.0, 0.0 },   // Raketenantrieb: fast nur tiefes Breitbandrauschen, keine Tonhoehe
-        { 1.0,  1.0, 0.0, 0.0, 1.0 },   // Hubschrauber: Motorton bleibt, Rotor kommt dazu
-        { 1.0,  1.0, 0.0, 0.0, 0.0 },   // Propeller: vorerst wie Frei (Geometrie folgt in Source/Physics)
-    }};
+    // Ein Rauschsample in [-1, 1].
+    inline double whiteNoise (juce::Random& r)
+    {
+        return (double) r.nextFloat() * 2.0 - 1.0;
+    }
 }
 
 EngineGenerator::EngineGenerator()
@@ -52,9 +46,6 @@ void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
     // Zeitkonstante der Wellenform-Ueberblendung, siehe sineBlendSeconds.
     sineBlendCoeff = 1.0 - std::exp (-1.0 / std::max (1.0, sineBlendSeconds * sampleRate));
 
-    // Zeitkonstante der Betriebsart-Ueberblendung, siehe kindBlendSeconds.
-    kindBlendCoeff = 1.0 - std::exp (-1.0 / std::max (1.0, kindBlendSeconds * sampleRate));
-
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) maxBlockSize, 1 };
 
     noiseFilter.prepare (spec);
@@ -66,6 +57,31 @@ void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
     rocketNoiseFilter.prepare (spec);
     rocketNoiseFilter.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
 
+    // Fahrtwind: Hochpass, denn Wind an Kanten ist ein Zischen, kein Wummern.
+    windFilter.prepare (spec);
+    windFilter.setType (juce::dsp::StateVariableTPTFilterType::highpass);
+
+    // Strahlrauschen der Düse: breites Band, Schwerpunkt in den oberen Mitten.
+    jetNoiseFilter.prepare (spec);
+    jetNoiseFilter.setType (juce::dsp::StateVariableTPTFilterType::highpass);
+
+    // Druckstöße der Rakete: Bandpass, damit sie knallen und nicht nur pumpen.
+    shockFilter.prepare (spec);
+    shockFilter.setType (juce::dsp::StateVariableTPTFilterType::bandpass);
+
+    // Rotor: das Schwirren sitzt in den Mitten, der Blattknall darüber.
+    rotorFilter.prepare (spec);
+    rotorFilter.setType (juce::dsp::StateVariableTPTFilterType::bandpass);
+
+    slapFilter.prepare (spec);
+    slapFilter.setType (juce::dsp::StateVariableTPTFilterType::bandpass);
+
+    // Zeitkonstante der Betriebsart-Blende: kindFade legt in kindFadeSeconds
+    // die volle Strecke zurück, deshalb ein Schritt je Sample statt eines
+    // Ein-Pols - eine Blende soll wirklich ankommen, nicht asymptotisch
+    // kriechen.
+    kindFadeStep = 1.0 / std::max (1.0, kindFadeSeconds * sampleRate);
+
     reset();
 }
 
@@ -75,12 +91,28 @@ void EngineGenerator::reset()
         h.phase = 0.0;
 
     halfPhase = 0.0;
-    whistlePhase = 0.0;
+    jetTonePhase = 0.0;
+    propTonePhase = 0.0;
     rotorPhase = 0.0;
+
+    shockEnv       = 0.0;
+    shockCountdown = 0.0;
+    slapEnv        = 0.0;
+
+    activeKind = engineKind.load();
+    kindFade   = 1.0;
+
+    for (auto& h : harmonics)
+        h.sineBlend = (double) h.sineTarget.load();
 
     noiseFilter.reset();
     jitterFilter.reset();
     rocketNoiseFilter.reset();
+    windFilter.reset();
+    jetNoiseFilter.reset();
+    shockFilter.reset();
+    rotorFilter.reset();
+    slapFilter.reset();
 
     // Feste Startwerte statt der Uhrzeit-Aussaat, die juce::Random von sich
     // aus mitbringt. Zwei Läufe mit denselben Einstellungen liefern damit
@@ -97,11 +129,37 @@ void EngineGenerator::reset()
     noiseRandom.setSeed (0x5eed1234);
     jitterRandom.setSeed (0x5eed4321);
     rocketNoiseRandom.setSeed (0x5eed9999);
+    windRandom.setSeed (0x5eed2468);
+    jetRandom.setSeed (0x5eed1357);
+    shockRandom.setSeed (0x5eedabcd);
+    rotorRandom.setSeed (0x5eedbeef);
+    slapRandom.setSeed (0x5eedf00d);
 }
 
-void EngineGenerator::setSineMode (bool shouldUseSine)
+void EngineGenerator::setSineMode (int index, bool shouldUseSine)
 {
-    sineTarget = shouldUseSine ? 1.0 : 0.0;
+    if (index >= 0 && index < numHarmonics)
+        harmonics[(size_t) index].sineTarget = shouldUseSine ? 1.0f : 0.0f;
+}
+
+void EngineGenerator::setKindLevelDb (float levelDb)
+{
+    kindLevelDb = levelDb;
+}
+
+void EngineGenerator::setAirspeed (float metresPerSecond)
+{
+    airspeedMps = std::max (0.0f, metresPerSecond);
+}
+
+void EngineGenerator::setRocketShock (float amount01)
+{
+    rocketShock = juce::jlimit (0.0f, 1.0f, amount01);
+}
+
+void EngineGenerator::setRotorSlap (float amount01)
+{
+    rotorSlap = juce::jlimit (0.0f, 1.0f, amount01);
 }
 
 double EngineGenerator::polyBlep (double phase, double phaseInc)
@@ -147,23 +205,68 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     noiseFilter.setCutoffFrequency ((float) fcNoise);
     noiseFilter.setResonance (juce::jmax (0.05f, noiseQ.load()));
 
-    // Betriebsart: Zieltabelle nachschlagen (Index kommt aus setEngineKind(),
-    // dort schon auf die Tabellengroesse geklemmt). Die eigentliche
-    // Ueberblendung passiert weiter unten sample-genau, siehe kindBlendCoeff.
-    const auto& kindTarget = kindWeightTable[(size_t) engineKind.load()];
+    // --- Betriebsart ---
+    //
+    // Gewechselt wird nur an einer Nullstelle der Blende, siehe kindFade im
+    // Header. Der gewuenschte Index steht in engineKind, gerechnet wird
+    // activeKind.
+    const int wantedKind = engineKind.load();
+    const double kindGain = (activeKind == KindFree)
+                          ? 1.0
+                          : juce::Decibels::decibelsToGain ((double) kindLevelDb.load());
+
+    // Fahrtwind, in jeder Betriebsart: der Pegel waechst mit der
+    // Geschwindigkeit, oberhalb der Bezugsgeschwindigkeit nur noch mit der
+    // Wurzel - sonst deckte er bei Ueberschall alles andere zu.
+    const double airspeed = (double) airspeedMps.load();
+    const double windNorm = airspeed / airspeedRefMps;
+    const double windAmount = windNorm <= 1.0 ? windNorm : std::sqrt (windNorm);
+
+    // Schneller Fahrtwind zischt hoeher: die Eckfrequenz wandert mit.
+    const double windFc = juce::jlimit (20.0, currentSampleRate * 0.49, 300.0 + 8.0 * airspeed);
+    windFilter.setCutoffFrequency ((float) windFc);
+    windFilter.setResonance (1.0f / (float) std::sqrt (2.0));
+
+    // Duese: Strahlrauschen als Hochpass, Eckfrequenz mit dem Gas steigend.
+    const double jetFc = juce::jlimit (20.0, currentSampleRate * 0.49, 250.0 + 2500.0 * u);
+    jetNoiseFilter.setCutoffFrequency ((float) jetFc);
+    jetNoiseFilter.setResonance (0.9f);
 
     // Rakete: eigenes Breitbandrauschen, Eckfrequenz oeffnet sich leicht mit
     // u ("Gas geben"), bleibt aber immer tief-breitbandig - keine rotierenden
     // Teile, die einen Ton geben koennten.
-    const double rocketFc = juce::jlimit (20.0, currentSampleRate * 0.49, 80.0 + 400.0 * u);
+    const double rocketFc = juce::jlimit (20.0, currentSampleRate * 0.49, 120.0 + 700.0 * u);
     rocketNoiseFilter.setCutoffFrequency ((float) rocketFc);
-    rocketNoiseFilter.setResonance (1.0f / (float) std::sqrt (2.0));
+    rocketNoiseFilter.setResonance (1.2f);
 
-    // Hubschrauber-Rotor: Blattschlagfrequenz = Rotordrehzahl * Blattzahl,
-    // beides eigene Regler, unabhaengig von der Motor-RPM (@dpa: "Motor, und
-    // Rotoren mit Geschwindigkeit extra").
-    const double rotorBpf = juce::jmax (0.01, (double) heliRotorHz.load() * (double) heliBladeCount.load());
+    // Druckstoesse im Raketenstrahl: Bandpass in den unteren Mitten, damit sie
+    // schlagen statt zu pumpen.
+    const double shockAmount = (double) rocketShock.load();
+    shockFilter.setCutoffFrequency ((float) juce::jlimit (20.0, currentSampleRate * 0.49, 180.0 + 300.0 * u));
+    shockFilter.setResonance (1.6f);
+
+    const double shockMeanSamples = currentSampleRate / std::max (0.1, shockRateHz);
+    const double shockDecay = std::exp (-1.0 / std::max (1.0, shockDecayMs * 0.001 * currentSampleRate));
+
+    // Rotor: Blattfolgefrequenz = Rotordrehzahl * Blattzahl, beides eigene
+    // Regler, unabhaengig von der Motor-RPM (@dpa: "Motor, und Rotoren mit
+    // Geschwindigkeit extra").
+    const double rotorRps = juce::jmax (0.01, (double) heliRotorHz.load());
+    const double bladeCount = juce::jmax (1.0, (double) heliBladeCount.load());
+    const double rotorBpf = rotorRps * bladeCount;
     const double rotorPhaseInc = juce::jlimit (0.0, 0.45, rotorBpf / currentSampleRate);
+
+    // Das Schwirren sitzt dort, wo die Blattspitze die Luft schneidet: mit der
+    // Umfangsgeschwindigkeit steigend, also mit der Rotordrehzahl.
+    rotorFilter.setCutoffFrequency ((float) juce::jlimit (20.0, currentSampleRate * 0.49, 350.0 + 60.0 * rotorRps));
+    rotorFilter.setResonance (0.8f);
+
+    // Der Blattknall liegt darueber und ist schmaler - das ist das Knattern.
+    slapFilter.setCutoffFrequency ((float) juce::jlimit (20.0, currentSampleRate * 0.49, 900.0 + 120.0 * rotorRps));
+    slapFilter.setResonance (2.2f);
+
+    const double slapAmount = (double) rotorSlap.load();
+    const double slapDecay  = std::exp (-1.0 / std::max (1.0, slapDecayMs * 0.001 * currentSampleRate));
 
     // Jitter: Tiefpass 3-15 Hz aus jitterRateHz, Tiefe j = j0 * u.
     const double jitterCutoff = juce::jlimit (0.5, currentSampleRate * 0.49, (double) jitterRateHz.load());
@@ -210,21 +313,28 @@ void EngineGenerator::renderMono (float* out, int numSamples)
 
     for (int n = 0; n < numSamples; ++n)
     {
-        // Wellenform-Ueberblendung je Sample fortschreiben (siehe sineBlend im
-        // Header).
-        sineBlend += (sineTarget - sineBlend) * sineBlendCoeff;
+        // --- Betriebsart blenden ---
+        //
+        // Erst herunterfahren, dann umschalten, dann wieder hoch. Umgeschaltet
+        // wird ausschliesslich bei kindFade = 0, dort ist der Ausgang still
+        // und der Wechsel folglich unhoerbar.
+        if (activeKind != wantedKind)
+        {
+            kindFade -= kindFadeStep;
 
-        // Betriebsart-Gewichte ebenso sample-genau nachfuehren, statt hart
-        // umzuschalten - sonst waere ein Wechsel der Betriebsart ein Sprung
-        // im Signal, genau wie beim Sinus/Saegezahn-Umschalter oben.
-        kindHarmonicGain += (kindTarget.harmonic    - kindHarmonicGain) * kindBlendCoeff;
-        kindNoiseGain    += (kindTarget.noise       - kindNoiseGain)    * kindBlendCoeff;
-        kindJetWhistle   += (kindTarget.jetWhistle  - kindJetWhistle)   * kindBlendCoeff;
-        kindRocketNoise  += (kindTarget.rocketNoise - kindRocketNoise)  * kindBlendCoeff;
-        kindHeliRotor    += (kindTarget.heliRotor   - kindHeliRotor)    * kindBlendCoeff;
+            if (kindFade <= 0.0)
+            {
+                kindFade   = 0.0;
+                activeKind = wantedKind;
+            }
+        }
+        else if (kindFade < 1.0)
+        {
+            kindFade = std::min (1.0, kindFade + kindFadeStep);
+        }
 
         // Jitter-Quelle: eigenes Rauschen durch den Tiefpass, normiert und geklemmt.
-        const double jitterNoiseSample = (double) jitterRandom.nextFloat() * 2.0 - 1.0;
+        const double jitterNoiseSample = whiteNoise (jitterRandom);
         const double jitterFiltered = (double) jitterFilter.processSample (0, (float) jitterNoiseSample);
         const double jitterNorm = juce::jlimit (-1.0, 1.0, jitterFiltered * jitterGainCompensation);
 
@@ -234,70 +344,195 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         double rpmJit = rpmTarget * (1.0 + (jitterDepthPercent / 100.0) * jitterNorm);
         rpmJit = juce::jmax (0.0, rpmJit);
 
+        // --- Bausteine, die mehrere Betriebsarten brauchen ---
+
+        // Die vier Teiltöne. Gerechnet werden sie nur, wo sie auch gehört
+        // werden: Düse und Rakete haben keine vier Teiltöne, und was nicht
+        // gebraucht wird, soll auch nichts kosten.
         double harmonicSum = 0.0;
 
-        for (int i = 0; i < numHarmonics; ++i)
+        if (activeKind == KindFree || activeKind == KindHeli)
         {
-            auto& h = harmonics[(size_t) i];
-            const auto& s = snap[(size_t) i];
+            for (int i = 0; i < numHarmonics; ++i)
+            {
+                auto& h = harmonics[(size_t) i];
+                const auto& sn = snap[(size_t) i];
 
-            const double freq = s.coeff * std::pow (rpmJit / rpmRef, s.trackAmount);
-            const double phaseInc = juce::jlimit (0.0, 0.45, freq / currentSampleRate);
+                const double freq = sn.coeff * std::pow (rpmJit / rpmRef, sn.trackAmount);
+                const double phaseInc = juce::jlimit (0.0, 0.45, freq / currentSampleRate);
 
-            double saw = 0.0;
+                // Wellenform dieses Teiltons nachführen (je Oszillator eigener
+                // Schalter, siehe Harmonic::sineTarget).
+                h.sineBlend += ((double) h.sineTarget.load() - h.sineBlend) * sineBlendCoeff;
 
-            if (phaseInc > 0.0)
-                saw = 2.0 * h.phase - 1.0 - polyBlep (h.phase, phaseInc);
+                double saw = 0.0;
 
-            // Sinus aus derselben Phase - kein zweiter Oszillator, damit beim
-            // Umschalten nichts auseinanderlaeuft (siehe sineBlend im Header).
-            const double sine = std::sin (juce::MathConstants<double>::twoPi * h.phase);
+                if (phaseInc > 0.0)
+                    saw = 2.0 * h.phase - 1.0 - polyBlep (h.phase, phaseInc);
 
-            harmonicSum += (saw + (sine - saw) * sineBlend) * s.levelGain;
+                // Sinus aus DERSELBEN Phase - kein zweiter Oszillator, damit
+                // beim Umschalten nichts auseinanderläuft.
+                const double sine = std::sin (juce::MathConstants<double>::twoPi * h.phase);
 
-            h.phase += phaseInc;
+                harmonicSum += (saw + (sine - saw) * h.sineBlend) * sn.levelGain;
 
-            while (h.phase >= 1.0)
-                h.phase -= 1.0;   // Wrap per Subtraktion, nicht fmod/Clamp (Plan-Vorgabe)
+                h.phase += phaseInc;
+
+                while (h.phase >= 1.0)
+                    h.phase -= 1.0;   // Wrap per Subtraktion, nicht fmod/Clamp (Plan-Vorgabe)
+            }
         }
 
-        // Betriebsart gewichtet die vier Teiltoene, statt sie hart ein-/
-        // auszuschalten (kindHarmonicGain ist 1.0 in "Frei"/"Propeller" -
-        // bitgleich zum bisherigen Verhalten).
-        harmonicSum *= kindHarmonicGain;
+        // Fahrtwind - in jeder Betriebsart AUSSER "Frei". Dort bleibt alles so,
+        // wie es war: "Frei" ist die Betriebsart, in der die alten Snapshots
+        // liegen (@dpa 20260824: "Alle 'alten' Snapshots bleiben einfach in
+        // 'frei'"), und ein zusätzliches Rauschen darin würde sie hörbar
+        // verändern. Wer den Fahrtwind will, wählt eine Betriebsart.
+        const double windSample = (activeKind == KindFree)
+                                ? 0.0
+                                : (double) windFilter.processSample (0, (float) whiteNoise (windRandom)) * windAmount;
 
         // Motorband-Rauschen durch das RPM-abhängige Bandpassfilter.
-        const double noiseSample = (double) noiseRandom.nextFloat() * 2.0 - 1.0;
-        const double noiseFiltered = (double) noiseFilter.processSample (0, (float) noiseSample);
+        const double noiseFiltered = (double) noiseFilter.processSample (0, (float) whiteNoise (noiseRandom));
 
-        // Duesenantrieb: hoher, mit der (gejitterten) Grundfrequenz mitlaufender
-        // Turbinen-Pfeifton - schmalbandig, weil reiner Sinus. Phase laeuft
-        // immer durch, kindJetWhistle blendet den Beitrag nur ein/aus, sonst
-        // gaebe es beim Umschalten einen Phasensprung.
-        const double whistleFreq = (rpmJit / 60.0) * whistleRatio;
-        const double whistlePhaseInc = juce::jlimit (0.0, 0.45, whistleFreq / currentSampleRate);
-        const double whistleSample = std::sin (juce::MathConstants<double>::twoPi * whistlePhase)
-                                    * whistleGainRef * kindJetWhistle;
-        whistlePhase += whistlePhaseInc;
+        // --- Der eigentliche Klang, je Betriebsart ---
+        double kindSample = 0.0;
 
-        while (whistlePhase >= 1.0)
-            whistlePhase -= 1.0;
+        switch (activeKind)
+        {
+            case KindJet:
+            {
+                // Ein Verdichterton, hoch und leise, plus das Strahlrauschen,
+                // das den Klang trägt. Bewusst KEIN einzelner Sinus obendrauf
+                // (@dpa: "Bei Düsenantrieb höre ich nur einen 5. Osc, sine, was
+                // hast Du dir dabei gedacht?") - der Ton ist hier eine Beigabe
+                // zum Rauschen, nicht umgekehrt.
+                const double toneFreq = (rpmJit / 60.0) * jetToneRatio;
+                const double tonePhaseInc = juce::jlimit (0.0, 0.45, toneFreq / currentSampleRate);
 
-        // Raketenantrieb: eigenes, tiefes Breitbandrauschen statt rotierender
-        // Teile - "sie bruellt nur".
-        const double rocketNoiseSample = (double) rocketNoiseRandom.nextFloat() * 2.0 - 1.0;
-        const double rocketFiltered = (double) rocketNoiseFilter.processSample (0, (float) rocketNoiseSample);
+                double tone = 0.0;
 
-        // Hubschrauber: periodischer Rotor-Blattschlag, eigene Phase mit
-        // eigener Drehzahl (rotorBpf, s.o.). Kosinus-Potenz ergibt einen
-        // schmalen, scharfen Schlag statt einer glatten Welle - je hoeher
-        // rotorSharpness, desto kuerzer/knackiger.
-        const double rotorRaised = std::pow (0.5 + 0.5 * std::cos (juce::MathConstants<double>::twoPi * rotorPhase), rotorSharpness);
-        const double heliSample = rotorRaised * heliGainRef * kindHeliRotor;
-        rotorPhase += rotorPhaseInc;
+                if (tonePhaseInc > 0.0)
+                    tone = 2.0 * jetTonePhase - 1.0 - polyBlep (jetTonePhase, tonePhaseInc);
 
-        while (rotorPhase >= 1.0)
-            rotorPhase -= 1.0;
+                jetTonePhase += tonePhaseInc;
+
+                while (jetTonePhase >= 1.0)
+                    jetTonePhase -= 1.0;
+
+                const double jetNoise = (double) jetNoiseFilter.processSample (0, (float) whiteNoise (jetRandom));
+
+                kindSample = tone * jetToneLevel * u + jetNoise * jetNoiseLevel * (0.25 + 0.75 * u);
+                break;
+            }
+
+            case KindRocket:
+            {
+                // Kein Ton. Nur Brüllen - und die Druckstöße aus den Stoßzellen
+                // des Strahls, die es auch dann gibt, wenn die Rakete selbst
+                // noch langsamer als der Schall fliegt: überschallschnell ist
+                // hier der Abgasstrahl, nicht die Rakete.
+                const double roar = (double) rocketNoiseFilter.processSample (0, (float) whiteNoise (rocketNoiseRandom));
+
+                shockCountdown -= 1.0;
+
+                if (shockCountdown <= 0.0)
+                {
+                    // Unregelmäßiger Abstand, nicht im Takt: Stoßzellen sind
+                    // keine Maschine mit fester Drehzahl. Der nächste Stoß
+                    // liegt zwischen dem halben und dem anderthalbfachen
+                    // mittleren Abstand.
+                    shockCountdown = shockMeanSamples * (0.5 + (double) shockRandom.nextFloat());
+                    shockEnv       = 1.0;
+                }
+
+                const double shockNoise = (double) shockFilter.processSample (0, (float) whiteNoise (shockRandom));
+
+                kindSample = roar * rocketNoiseLevel * (0.3 + 0.7 * u)
+                           + shockNoise * shockEnv * shockAmount * rocketShockLevel;
+
+                shockEnv *= shockDecay;
+                break;
+            }
+
+            case KindHeli:
+            case KindProp:
+            {
+                // Rotor bzw. Propeller: ein Schwirren, das mit jedem Blatt
+                // an- und abschwillt, und ein kurzer harter Schlag je Blatt.
+                //
+                // Das Schwirren ist gefiltertes Rauschen, dessen Pegel mit der
+                // Blattfolge atmet - genau das, was aus der Entfernung wie ein
+                // im Kreis laufendes Rauschen klingt. Der Schlag darüber ist
+                // das Knattern.
+                const double bladeWave = 0.5 + 0.5 * std::cos (juce::MathConstants<double>::twoPi * rotorPhase);
+                const double swishGain = 1.0 - rotorSwishDepth * (1.0 - bladeWave);
+
+                const double swish = (double) rotorFilter.processSample (0, (float) whiteNoise (rotorRandom))
+                                   * swishGain * rotorSwishLevel;
+
+                const double prevPhase = rotorPhase;
+                rotorPhase += rotorPhaseInc;
+
+                // Ein Blatt ist vorbei: harter Rauschstoß. Ausgelöst am
+                // Phasenumlauf, nicht an einer Schwelle im Wert - so kommt
+                // genau ein Schlag je Blatt, unabhängig von der Drehzahl.
+                if (rotorPhase >= 1.0)
+                {
+                    rotorPhase -= 1.0;
+                    slapEnv = 1.0;
+                }
+                else if (prevPhase == 0.0)
+                {
+                    slapEnv = 1.0;
+                }
+
+                const double slapNoise = (double) slapFilter.processSample (0, (float) whiteNoise (slapRandom));
+
+                // Am Propeller ist der Schlag deutlich weicher als am Rotor
+                // eines Hubschraubers - dort schlagen die Blattspitzen in die
+                // eigene Wirbelschleppe.
+                const double slapScale = (activeKind == KindHeli) ? 1.0 : 0.45;
+
+                double tone = 0.0;
+
+                if (activeKind == KindProp)
+                {
+                    // Ein einzelner, leiser Ton (@dpa: "Ein Propellerflugzeug
+                    // hat keine zusätzlichen 4 Oscillatoren, sondern höchstens
+                    // einen (leiseren)").
+                    const double toneFreq = rpmJit / 60.0;
+                    const double tonePhaseInc = juce::jlimit (0.0, 0.45, toneFreq / currentSampleRate);
+
+                    if (tonePhaseInc > 0.0)
+                        tone = 2.0 * propTonePhase - 1.0 - polyBlep (propTonePhase, tonePhaseInc);
+
+                    propTonePhase += tonePhaseInc;
+
+                    while (propTonePhase >= 1.0)
+                        propTonePhase -= 1.0;
+
+                    tone *= propToneLevel;
+                }
+
+                kindSample = swish
+                           + slapNoise * slapEnv * slapAmount * rotorSlapLevel * slapScale
+                           + tone;
+
+                // Der Verbrennermotor des Hubschraubers sind die vier Teiltöne
+                // (oben schon gerechnet) plus sein Rauschband.
+                if (activeKind == KindHeli)
+                    kindSample += harmonicSum + noiseFiltered * noiseGain;
+
+                slapEnv *= slapDecay;
+                break;
+            }
+
+            case KindFree:
+            default:
+                kindSample = harmonicSum + noiseFiltered * noiseGain;
+                break;
+        }
 
         // Unwucht: Amplitudenmodulation mit einer POSITIVEN Welle, 0 bis 1
         // (@dpa 20260820: "es kam mir so vor wie eine positive (sinus?)welle
@@ -319,11 +554,10 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         while (halfPhase >= 1.0)
             halfPhase -= 1.0;
 
-        out[n] = (float) ((harmonicSum
-                          + noiseFiltered * noiseGain * kindNoiseGain
-                          + whistleSample
-                          + rocketFiltered * rocketGainRef * kindRocketNoise
-                          + heliSample) * imbalanceFactor);
+        // Der Fahrtwind haengt am Fliegen, nicht am Motor - er laeuft deshalb
+        // an der Unwucht vorbei und wird auch nicht vom Betriebsart-Pegel
+        // skaliert, sondern nur von der Blende.
+        out[n] = (float) (((kindSample * kindGain) * imbalanceFactor + windSample * windLevel) * kindFade);
     }
 }
 

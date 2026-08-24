@@ -5,6 +5,8 @@
 #include "Tooltips.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
+#include <functional>
+#include <vector>
 
 // Regler fuer alle Motor-Parameter (Plan 3.11, Gruppe "Motor"). Gedacht als
 // Inhalt eines CollapsiblePanel (siehe CollapsiblePanel.h) - diese Klasse
@@ -22,6 +24,19 @@ public:
     // Tooltips::currentLanguage() gewaehlten Sprache - fuer den Sprach-
     // umschalter in der Kopfzeile (siehe PluginEditor).
     void refreshTooltips();
+
+    // Höhe, die dieses Panel bei der GERADE gewählten Betriebsart braucht.
+    //
+    // Sie ist nicht konstant, und das ist der Zweck (@dpa 20260824: "mach die
+    // Einstellungen schmal, so dass nur das nötigste da ist"): ein
+    // Düsenantrieb hat keine vier Teiltöne, also steht dort auch keine
+    // Teilton-Matrix, und das Panel ist entsprechend kürzer. Der Editor fragt
+    // diesen Wert ab, statt eine feste Zahl zu führen.
+    int preferredContentHeight() const;
+
+    // Ruft der Editor, um bei einem Wechsel der Betriebsart neu zu setzen -
+    // die Panelhöhe ändert sich dabei (siehe preferredContentHeight()).
+    std::function<void()> onLayoutChanged;
 
 private:
     using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
@@ -54,8 +69,11 @@ private:
     // Sinus (@dpa 20260823). Steht rechts neben der Teilton-Matrix, dort ist
     // ohnehin Platz - eine eigene Zeile dafuer wuerde das Panel nur hoeher
     // machen, ohne mehr zu zeigen.
-    juce::ToggleButton engineSineButton { "Sinus" };
-    std::unique_ptr<ButtonAttachment> engineSineAttachment;
+    // Wellenform JE Teilton (@dpa 20260824: "der sinus soll ... für jeden osc
+    // setzbar sein"). Ein Schalter je Spalte, direkt über dem Teilton, zu dem
+    // er gehört.
+    std::array<juce::ToggleButton, 4> harmSineButtons;
+    std::array<std::unique_ptr<ButtonAttachment>, 4> harmSineAttachments;
 
     // Je Harmonische: Verhaeltnis, Verstimmung, Tracking, Pegel - siehe
     // Params.h "--- Motor ---" (harmRatioN/harmDetuneN/harmTrackN/harmLevelN).
@@ -91,7 +109,27 @@ private:
     // bedient wird beides zusammen.
     Knob propSpanKnob, propLevelKnob;
 
+    // Pegel der Betriebsart (gilt fuer alles ausser "Frei") sowie die beiden
+    // Groessen, die nur in je einer Betriebsart etwas tun: die Staerke der
+    // Druckstoesse aus der Raketenduese und des Blattknallens am Rotor.
+    Knob kindLevelKnob, rocketShockKnob, rotorSlapKnob;
+
+    // Welche Modus-Regler die gewaehlte Betriebsart ueberhaupt braucht, in
+    // Anzeigereihenfolge. EINE Quelle fuer Sichtbarkeit, Layout und
+    // Panelhoehe - drei getrennte Listen liefen sonst auseinander.
+    std::vector<Knob*> kindKnobs();
+    std::vector<const Knob*> kindKnobs() const;
+
+    // Hat die gewaehlte Betriebsart die vier Teiltoene samt Rauschband? Bei
+    // Duese und Rakete nicht: dort steckt der eine Oszillator fest in der
+    // Betriebsart (@dpa: "braucht es hoechstens 1 Oscillator").
+    bool kindUsesHarmonics() const;
+
     void updateHeliControlsEnabled();
+
+    // Wieviele Modus-Regler nebeneinander passen, bevor eine zweite Zeile
+    // beginnt. Aus der Panelbreite, nicht geraten.
+    static constexpr int knobColumns = 5;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EnginePanel)
 };

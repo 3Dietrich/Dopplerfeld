@@ -254,7 +254,9 @@ private:
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines
     // CollapsiblePanel setzen kann.
     static constexpr int engineControlContentHeight = 115;   // Reihe (RPM, Imbalance) + Gate-Schalter
-    static constexpr int engineContentHeight = 553;         // Betriebsart-Zeile + 6 Reglerreihen (4x Harmonische + Noise + Jitter) + Rotor/Blaetter
+    // Das Motor-Panel fuehrt seine Hoehe selbst: sie haengt an der gewaehlten
+    // Betriebsart, siehe EnginePanel::preferredContentHeight(). Hier steht
+    // darum keine Konstante mehr.
     static constexpr int sampleContentHeight = 190;   // Dateizeile + zwei Reglerreihen
     static constexpr int motionContentHeight = 330;   // Reiter Vorbeiflug/Record-Play + gemeinsame Jitter/Speed-Zeile, s. MotionPanel::resized()
     static constexpr int fieldContentHeight  = 352;   // vier Reglerreihen, die vierte ist Rueckwaerts/Front-Duck/Schatten/Sprungknall (s. FieldPanel::resized())

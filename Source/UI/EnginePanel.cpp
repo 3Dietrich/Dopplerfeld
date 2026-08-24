@@ -1,5 +1,7 @@
 #include "EnginePanel.h"
 
+#include <algorithm>
+
 void EnginePanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
                               const juce::String& paramID, const juce::String& labelText,
                               Tooltips::Key tooltipKey)
@@ -43,9 +45,14 @@ void EnginePanel::populateChoices (juce::ComboBox& combo, juce::AudioProcessorVa
 
 EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
 {
-    engineSineButton.setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
-    addAndMakeVisible (engineSineButton);
-    engineSineAttachment = std::make_unique<ButtonAttachment> (apvts, Params::engineSine, engineSineButton);
+    for (int i = 0; i < 4; ++i)
+    {
+        harmSineButtons[(size_t) i].setButtonText ("Sin");
+        harmSineButtons[(size_t) i].setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
+        addAndMakeVisible (harmSineButtons[(size_t) i]);
+        harmSineAttachments[(size_t) i] = std::make_unique<ButtonAttachment> (
+            apvts, Params::harmSine[i], harmSineButtons[(size_t) i]);
+    }
 
     const std::array<const char*, 4> ratioIds  { Params::harmRatio1,  Params::harmRatio2,  Params::harmRatio3,  Params::harmRatio4 };
     const std::array<const char*, 4> detuneIds { Params::harmDetune1, Params::harmDetune2, Params::harmDetune3, Params::harmDetune4 };
@@ -82,6 +89,10 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
     engineKindAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::engineKind, engineKindCombo);
     engineKindCombo.onChange = [this] { updateHeliControlsEnabled(); };
 
+    setupKnob (kindLevelKnob,   apvts, Params::engineLevelDb, "Pegel",     Tooltips::Key::EngineLevel);
+    setupKnob (rocketShockKnob, apvts, Params::rocketShock,   "Druckstoss", Tooltips::Key::RocketShock);
+    setupKnob (rotorSlapKnob,   apvts, Params::rotorSlap,     "Knattern",   Tooltips::Key::RotorSlap);
+
     setupKnob (propSpanKnob,  apvts, Params::propSpan,    "Spannweite", Tooltips::Key::PropSpan);
     setupKnob (propLevelKnob, apvts, Params::propLevelDb, "Prop Pegel", Tooltips::Key::PropLevel);
 
@@ -94,27 +105,114 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
     updateHeliControlsEnabled();
 }
 
+std::vector<const EnginePanel::Knob*> EnginePanel::kindKnobs() const
+{
+    // Reihenfolge = Anzeigereihenfolge. Indizes wie in Params::engineKind:
+    // 0=Frei, 1=Düsenantrieb, 2=Raketenantrieb, 3=Hubschrauber, 4=Propeller.
+    switch (engineKindCombo.getSelectedItemIndex())
+    {
+        case 1:  return { &kindLevelKnob };
+        case 2:  return { &kindLevelKnob, &rocketShockKnob };
+        case 3:  return { &kindLevelKnob, &rotorSlapKnob, &heliRotorHzKnob, &heliBladeCountKnob };
+        case 4:  return { &kindLevelKnob, &rotorSlapKnob, &heliRotorHzKnob, &heliBladeCountKnob,
+                          &propSpanKnob, &propLevelKnob };
+        default: return {};   // Frei: die vier Teiltöne machen den Klang
+    }
+}
+
+std::vector<EnginePanel::Knob*> EnginePanel::kindKnobs()
+{
+    // Dieselbe Liste, nur nicht konstant - ohne zweite Aufzählung, damit die
+    // beiden nicht auseinanderlaufen können.
+    std::vector<Knob*> result;
+
+    for (auto* k : const_cast<const EnginePanel*> (this)->kindKnobs())
+        result.push_back (const_cast<Knob*> (k));
+
+    return result;
+}
+
+bool EnginePanel::kindUsesHarmonics() const
+{
+    const int kind = engineKindCombo.getSelectedItemIndex();
+
+    // Frei und Hubschrauber: beide haben einen Verbrennermotor, und der sind
+    // die vier Teiltöne samt Rauschband (@dpa: "Hubschrauber ... hat einen
+    // Verbrennermotor (+andere, also 4 Osc sind gut)").
+    return kind == 0 || kind == 3;
+}
+
+int EnginePanel::preferredContentHeight() const
+{
+    constexpr int knobH = 67;
+
+    // Betriebsart-Zeile plus Abstand - die steht immer.
+    int height = 8 + 44 + 6;
+
+    const int kindCount = (int) kindKnobs().size();
+
+    if (kindCount > 0)
+    {
+        const int rows = (kindCount + knobColumns - 1) / knobColumns;
+        height += rows * (knobH + 6);
+    }
+
+    if (kindUsesHarmonics())
+    {
+        // Schalterzeile, Teilton-Matrix, Rauschband.
+        height += 18 + 4 + 4 * knobH + 6;
+        height += knobH + 6;
+    }
+
+    // Jitter steht immer: er verstimmt die Drehzahl selbst und wirkt damit in
+    // jeder Betriebsart.
+    height += knobH + 8;
+
+    return height;
+}
+
 void EnginePanel::updateHeliControlsEnabled()
 {
-    // Index 3 = "Hubschrauber", siehe Reihenfolge in Params::engineKind
-    // (createParameterLayout()). Regler bleiben sichtbar, nur ausgegraut -
-    // sie verschwinden nicht, damit die Panelhoehe konstant bleibt.
-    const bool heliMode = engineKindCombo.getSelectedItemIndex() == 3;
+    // Die Betriebsart entscheidet, was überhaupt DA ist, nicht nur was
+    // bedienbar ist (@dpa 20260824: "mach die Einstellungen schmal, so dass
+    // nur das nötigste da ist"). Ein Düsenantrieb hat keine vier Teiltöne,
+    // also stehen sie dort auch nicht herum.
+    const auto active = kindKnobs();
 
-    heliRotorHzKnob.slider.setEnabled (heliMode);
-    heliRotorHzKnob.label.setEnabled (heliMode);
-    heliBladeCountKnob.slider.setEnabled (heliMode);
-    heliBladeCountKnob.label.setEnabled (heliMode);
-
-    // Index 4 = "Propeller", ebenfalls aus der Reihenfolge in
-    // Params::engineKind. Dieselbe Regel: sichtbar bleiben, nur ausgegraut.
-    const bool propMode = engineKindCombo.getSelectedItemIndex() == 4;
-
-    for (auto* k : { &propSpanKnob, &propLevelKnob })
+    for (auto* k : { &kindLevelKnob, &rocketShockKnob, &rotorSlapKnob,
+                      &heliRotorHzKnob, &heliBladeCountKnob,
+                      &propSpanKnob, &propLevelKnob })
     {
-        k->slider.setEnabled (propMode);
-        k->label.setEnabled (propMode);
+        const bool visible = std::find (active.begin(), active.end(), k) != active.end();
+
+        k->slider.setVisible (visible);
+        k->label.setVisible (visible);
     }
+
+    const bool harmonicsAudible = kindUsesHarmonics();
+
+    for (auto& h : harmonics)
+        for (auto* k : { &h.ratio, &h.detune, &h.track, &h.level })
+        {
+            k->slider.setVisible (harmonicsAudible);
+            k->label.setVisible (harmonicsAudible);
+        }
+
+    for (auto& b : harmSineButtons)
+        b.setVisible (harmonicsAudible);
+
+    for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob })
+    {
+        k->slider.setVisible (harmonicsAudible);
+        k->label.setVisible (harmonicsAudible);
+    }
+
+    resized();
+
+    // Die Panelhöhe hängt an der Betriebsart, der Editor muss sie neu
+    // einsetzen (siehe preferredContentHeight()).
+    if (onLayoutChanged != nullptr)
+        onLayoutChanged();
 }
 
 void EnginePanel::refreshTooltips()
@@ -127,9 +225,11 @@ void EnginePanel::refreshTooltips()
             k->label.setTooltip (tooltip);
         }
 
-    engineSineButton.setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
+    for (auto& b : harmSineButtons)
+        b.setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
 
-    for (auto* k : { &propSpanKnob, &propLevelKnob })
+    for (auto* k : { &propSpanKnob, &propLevelKnob,
+                      &kindLevelKnob, &rocketShockKnob, &rotorSlapKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -162,62 +262,85 @@ void EnginePanel::resized()
     constexpr int knobH = 67;
     auto area = getLocalBounds().reduced (8);
 
-    // 4 Harmonische als Spalten, je Spalte Ratio/Detune/Track/Level
-    // untereinander (Plan 3.11: "pro Teilton" vier Werte).
-    auto harmonicsArea = area.removeFromTop (4 * knobH);
-    for (auto& h : harmonics)
-    {
-        auto column = harmonicsArea.removeFromLeft (knobW);
-        layoutKnob (h.ratio,  column.removeFromTop (knobH));
-        layoutKnob (h.detune, column.removeFromTop (knobH));
-        layoutKnob (h.track,  column.removeFromTop (knobH));
-        layoutKnob (h.level,  column.removeFromTop (knobH));
-        harmonicsArea.removeFromLeft (4); // Spaltenabstand
-    }
-
-    // Wellenform-Schalter in den Rest der Teilton-Matrix, oben rechts: der
-    // Platz rechts der vier Spalten ist ohnehin frei, und der Schalter gehoert
-    // sichtbar zu den vier Teiltoenen, die er umschaltet.
-    engineSineButton.setBounds (harmonicsArea.removeFromTop (18)
-                                             .removeFromLeft (juce::jmin (90, harmonicsArea.getWidth())));
-
-    area.removeFromTop (6);
-
-    // Rauschband darunter, eine Reihe (Plan 3.10: fc/gain je Lo/Hi + Q).
-    auto noiseRow = area.removeFromTop (knobH);
-    for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob })
-    {
-        layoutKnob (*k, noiseRow.removeFromLeft (knobW));
-        noiseRow.removeFromLeft (4);
-    }
-    area.removeFromTop (6);
-
-    // Jitter als letzte Reihe der Klang-Regler.
-    auto miscRow = area.removeFromTop (knobH);
-    for (auto* k : { &jitterAmountKnob, &jitterRateKnob })
-    {
-        layoutKnob (*k, miscRow.removeFromLeft (knobW));
-        miscRow.removeFromLeft (4);
-    }
-    area.removeFromTop (6);
-
-    // Betriebsart: eigene Zeile, Label+Combo wie bei MotionPanel::flyKindCombo.
+    // Die Betriebsart steht ganz oben: sie entscheidet, was darunter kommt.
     auto kindRow = area.removeFromTop (44);
     auto kindArea = kindRow.removeFromLeft (juce::jmin (200, kindRow.getWidth()));
     engineKindLabel.setBounds (kindArea.removeFromTop (18));
     engineKindCombo.setBounds (kindArea);
     area.removeFromTop (6);
 
-    // Rotordrehzahl/Blattzahl - nur in Betriebsart "Hubschrauber" wirksam,
-    // bleiben aber sichtbar und ausgegraut (updateHeliControlsEnabled()),
-    // damit hier keine halbleere Zeile entsteht.
-    // Rotordrehzahl/Blattzahl und die beiden Propeller-Regler teilen sich eine
-    // Zeile: es wirkt immer nur eines der beiden Paare, und zwei halbleere
-    // Zeilen nebeneinander waeren verschenkter Platz.
-    auto heliRow = area.removeFromTop (knobH);
-    for (auto* k : { &heliRotorHzKnob, &heliBladeCountKnob, &propSpanKnob, &propLevelKnob })
+    // Die Regler, die diese Betriebsart braucht - nicht mehr. Mehr als
+    // knobColumns nebeneinander passen nicht in die Panelbreite, der Rest
+    // rutscht in eine zweite Zeile.
     {
-        layoutKnob (*k, heliRow.removeFromLeft (knobW));
-        heliRow.removeFromLeft (4);
+        auto active = kindKnobs();
+        int  placed = 0;
+
+        while (placed < (int) active.size())
+        {
+            auto row = area.removeFromTop (knobH);
+
+            for (int i = 0; i < knobColumns && placed < (int) active.size(); ++i, ++placed)
+            {
+                layoutKnob (*active[(size_t) placed], row.removeFromLeft (knobW));
+                row.removeFromLeft (4);
+            }
+
+            area.removeFromTop (6);
+        }
+    }
+
+    // Teiltoene samt Rauschband nur dort, wo sie zu hoeren sind.
+    if (kindUsesHarmonics())
+    {
+        // Eine Schalterzeile ueber der Teilton-Matrix: je Spalte ein "Sin",
+        // senkrecht ueber dem Teilton, zu dem er gehoert.
+        {
+            auto sineRow = area.removeFromTop (18);
+
+            for (int i = 0; i < 4; ++i)
+            {
+                harmSineButtons[(size_t) i].setBounds (sineRow.removeFromLeft (knobW));
+                sineRow.removeFromLeft (4);
+            }
+        }
+        area.removeFromTop (4);
+
+        // 4 Harmonische als Spalten, je Spalte Ratio/Detune/Track/Level
+        // untereinander (Plan 3.11: "pro Teilton" vier Werte).
+        auto harmonicsArea = area.removeFromTop (4 * knobH);
+
+        for (auto& h : harmonics)
+        {
+            auto column = harmonicsArea.removeFromLeft (knobW);
+            layoutKnob (h.ratio,  column.removeFromTop (knobH));
+            layoutKnob (h.detune, column.removeFromTop (knobH));
+            layoutKnob (h.track,  column.removeFromTop (knobH));
+            layoutKnob (h.level,  column.removeFromTop (knobH));
+            harmonicsArea.removeFromLeft (4); // Spaltenabstand
+        }
+
+        area.removeFromTop (6);
+
+        // Rauschband darunter, eine Reihe (Plan 3.10: fc/gain je Lo/Hi + Q).
+        auto noiseRow = area.removeFromTop (knobH);
+
+        for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob })
+        {
+            layoutKnob (*k, noiseRow.removeFromLeft (knobW));
+            noiseRow.removeFromLeft (4);
+        }
+
+        area.removeFromTop (6);
+    }
+
+    // Jitter zum Schluss: er verstimmt die Drehzahl selbst und wirkt damit in
+    // jeder Betriebsart.
+    auto miscRow = area.removeFromTop (knobH);
+
+    for (auto* k : { &jitterAmountKnob, &jitterRateKnob })
+    {
+        layoutKnob (*k, miscRow.removeFromLeft (knobW));
+        miscRow.removeFromLeft (4);
     }
 }

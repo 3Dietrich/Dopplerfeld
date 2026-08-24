@@ -408,7 +408,10 @@ private:
 
         std::atomic<float>* boomLimitDb     = nullptr;
         std::atomic<float>* nWaveGainDb     = nullptr;
-        std::atomic<float>* engineSine      = nullptr;
+        std::atomic<float>* harmSine[4] { nullptr, nullptr, nullptr, nullptr };
+        std::atomic<float>* engineLevelDb = nullptr;
+        std::atomic<float>* rocketShock   = nullptr;
+        std::atomic<float>* rotorSlap     = nullptr;
         std::atomic<float>* reverseGainDb   = nullptr;
         std::atomic<float>* shockDuckAmount = nullptr;
         std::atomic<float>* jumpEdge        = nullptr;

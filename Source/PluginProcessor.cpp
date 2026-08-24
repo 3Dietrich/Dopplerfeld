@@ -268,7 +268,12 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.boomLimitDb     = raw (Params::boomLimitDb);
     pp.nWaveGainDb     = raw (Params::nWaveGainDb);
-    pp.engineSine      = raw (Params::engineSine);
+    for (int i = 0; i < 4; ++i)
+        pp.harmSine[i] = raw (Params::harmSine[i]);
+
+    pp.engineLevelDb  = raw (Params::engineLevelDb);
+    pp.rocketShock    = raw (Params::rocketShock);
+    pp.rotorSlap      = raw (Params::rotorSlap);
     pp.reverseGainDb   = raw (Params::reverseGainDb);
     pp.shockDuckAmount = raw (Params::shockDuckAmount);
     pp.jumpEdge        = raw (Params::jumpEdge);
@@ -699,7 +704,12 @@ void DopplerfeldProcessor::applyParameters()
 
     // --- Motor ---
     engineGenerator.setRpm (pp.rpm->load());
-    engineGenerator.setSineMode (pp.engineSine->load() > 0.5f);
+    engineGenerator.setKindLevelDb (pp.engineLevelDb->load());
+    engineGenerator.setRocketShock (pp.rocketShock->load());
+    engineGenerator.setRotorSlap (pp.rotorSlap->load());
+
+    for (int i = 0; i < 4; ++i)
+        engineGenerator.setSineMode (i, pp.harmSine[i]->load() > 0.5f);
 
     for (int i = 0; i < 4; ++i)
         engineGenerator.setHarmonic (i,
@@ -1459,6 +1469,13 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         {
             const Vec3   step     = smoothedSourcePos - prevSourcePos;
             const double stepLen  = step.length();
+
+            // Fahrtwind fuer den Motorgenerator: derselbe Schritt, nur als
+            // Betrag. Je schneller die Quelle fliegt, desto lauter rauscht
+            // sie von sich aus (@dpa 20260824: "Die Luftwiderstandsgeraeusche
+            // haben alle, vielleicht unterschiedlich, aber je schneller um so
+            // lauter").
+            engineGenerator.setAirspeed ((float) (stepLen / tickDt));
 
             if (stepLen > 1.0e-9)
             {
