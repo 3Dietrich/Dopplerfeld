@@ -111,6 +111,20 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (playSpeedKnob,   apvts, Params::playSpeed,   "Play Speed", Tooltips::Key::PlaySpeed);
     setupKnob (globalMaxSpeedKnob, apvts, Params::globalMaxSpeed, "Max Speed", Tooltips::Key::GlobalMaxSpeed);
 
+    // Der Tempo-Deckel ist kein Regler unter vielen: er begrenzt JEDE
+    // Bewegung, die Maus wie die Automation wie den Vorbeiflug, und er ist
+    // die haeufigste Erklaerung dafuer, dass eine Bewegung nicht so schnell
+    // wird wie eingestellt (@dpa 20260824: "unter Bewegung muss der 'Maximal
+    // Speed' wichtig erscheinen. derzeit ist es das nicht: als letztes,
+    // kleiner, Abgeschnitten, hinzugequetscht").
+    //
+    // Deshalb steht er jetzt als ERSTES in der gemeinsamen Zeile (siehe
+    // resized()), bekommt mehr Breite als die uebrigen und eine fette
+    // Beschriftung.
+    globalMaxSpeedKnob.label.setFont (juce::Font (juce::FontOptions()
+                                                     .withHeight (15.0f)
+                                                     .withStyle ("Bold")));
+
     setupKnob (srcJitterAmountKnob, apvts, Params::srcJitterAmount, "Jitter", Tooltips::Key::SrcJitterAmount);
     setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik", Tooltips::Key::SrcJitterRate);
 
@@ -481,10 +495,21 @@ void MotionPanel::resized()
     // klaffte eine Luecke in der Zeile).
     const bool rotor = srcJitterRotorButton.getToggleState();
 
+    // Der Tempo-Deckel zuerst, breiter als die uebrigen und mit einer Luecke
+    // dahinter abgesetzt. Vorher stand er am ENDE der Zeile - und weil hier
+    // von links weggenommen wird, war er der erste, dem bei knapper
+    // Panelbreite die Haelfte fehlte (@dpa 20260824: "als letztes, kleiner,
+    // Abgeschnitten, hinzugequetscht"). Ganz vorn kann ihm das nicht mehr
+    // passieren, und die Luecke zeigt, dass er nicht zum Jitter gehoert,
+    // sondern ueber beiden Reitern steht.
+    constexpr int maxSpeedW = 128;
+
+    layoutKnob (globalMaxSpeedKnob, sharedRow.removeFromLeft (maxSpeedW));
+    sharedRow.removeFromLeft (20);
+
     for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob,
                      rotor ? &srcJitterRandomKnob : nullptr,
-                     rotor ? &srcJitterZKnob      : nullptr,
-                     &globalMaxSpeedKnob })
+                     rotor ? &srcJitterZKnob      : nullptr })
     {
         if (k == nullptr)
             continue;
