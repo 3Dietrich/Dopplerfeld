@@ -86,6 +86,7 @@ namespace Tooltips
         SrcJitterSpeed,
         SrcJitterRandom,
         SrcJitterZ,
+        SrcJitterMaxSpeed,
         MasterOn,
         GroundGain,
         GroundDamp,
@@ -201,14 +202,14 @@ namespace Tooltips
                 case Key::FieldPerspectiveHelp:
                     return lang == Language::De
                         ? " In der Perspektive: Klick auf den gelben Marker (auch am Bildrand "
-                          "oder unten, wenn M gerade außerhalb des Blickfelds ist) holt die "
+                          "oder unten, wenn die Quelle M gerade außerhalb des Blickfelds ist) holt sie "
                           "Quelle an diese Stelle. 2 Finger senkrecht oder Pinch zoomt, 2 Finger "
                           "waagerecht verschiebt den Horizont (mehr oder weniger Boden im Bild) - "
                           "Umschalt+Mausrad geht ebenfalls. '0' setzt Zoom und Horizont zurück. "
                           "'L' oder Doppelklick wechselt zwischen Kamera hinter dem Hörer und "
                           "Kamera aus Hörer-Sicht (Blick entlang seiner Nase)."
                         : " In perspective view: clicking the yellow marker (including at the "
-                          "screen edge or at the bottom, when M is currently outside the field of "
+                          "screen edge or at the bottom, when source M is currently outside the field of "
                           "view) moves the source there. Two fingers vertically or a pinch zooms, "
                           "two fingers horizontally shifts the horizon (more or less ground in "
                           "frame) - shift+wheel also works. '0' resets zoom and horizon. 'L' or a "
@@ -241,10 +242,10 @@ namespace Tooltips
                           "simulates the firing cycle of a four-stroke engine. 0 = off.";
                 case Key::EngineMotorGate:
                     return lang == Language::De
-                        ? "Motor klingt nur, während/nachdem M gegriffen ist: Start beim "
+                        ? "Motor klingt nur, während/nachdem die Quelle M gegriffen ist: Start beim "
                           "Greifen, nach dem Loslassen erst zur Ruhe kommen (Nachlauf), "
                           "dann in Ruhe ausfaden (~2,5s). Wirkt nur bei Quelle 'Motor'."
-                        : "Engine only sounds while/after M is grabbed: starts on grab, "
+                        : "Engine only sounds while/after source M is grabbed: starts on grab, "
                           "settles after release (coasting), then fades out quietly "
                           "(~2.5s). Only applies to source 'Motor'.";
 
@@ -678,7 +679,7 @@ namespace Tooltips
                           "listener makes the ground reflection audible.";
                 case Key::SrcJitterAmount:
                     return lang == Language::De
-                        ? "Auslenkung einer langsamen, ständigen Mikrobewegung der Quelle M in "
+                        ? "Auslenkung einer langsamen, ständigen Mikrobewegung der Schallquelle M in "
                           "Metern, 0 bis 1000 - 0 = aus (Default). Kennlinie stark exponentiell: "
                           "der untere, dezente Arbeitsbereich (Bruchteile bis wenige Meter) ist "
                           "fein aufgelöst, die großen Ausschläge liegen erst ganz am Ende des "
@@ -876,6 +877,32 @@ namespace Tooltips
                           "circle at constant rate, high values = strong speed fluctuations "
                           "(similar to wobble mode's Hektik). The radius stays untouched, only "
                           "the orbital rate breathes.";
+                case Key::SrcJitterMaxSpeed:
+                    return lang == Language::De
+                        ? "Tempogrenze des Wacklers allein, in m/s. Bremst NICHT den "
+                          "Ausschlag, sondern die Geschwindigkeit: die Bewegung behält ihre "
+                          "Größe und läuft langsamer ab, statt an einer Kante abgeschnitten "
+                          "zu werden.\n\n"
+                          "Voreingestellt sind 340 m/s, knapp unter der Schallgeschwindigkeit. "
+                          "Damit löst der Wackler von sich aus keine Überschallknalle mehr "
+                          "aus, auch bei großem Ausschlag und hoher Hektik. 0 schaltet die "
+                          "Grenze ganz ab - wer Überschall aus dem Wackeln will, bekommt ihn.\n\n"
+                          "Das ist ein EIGENER Regler und nicht mehr der Tempo-Deckel der "
+                          "Bahn: der begrenzt, wie schnell die Quelle durchs Feld fliegt, "
+                          "dieser hier nur, wie schnell sie dabei zappelt. Beides an einem "
+                          "Regler hiess, dass eine langsame Bahn den Wackler mit abgewürgt hat."
+                        : "Speed limit for the jitter alone, in m/s. It does NOT reduce the "
+                          "excursion, it slows the motion down: the movement keeps its size "
+                          "and simply takes longer, instead of being clipped at an edge.\n\n"
+                          "The default is 340 m/s, just below the speed of sound. That way the "
+                          "jitter no longer sets off sonic booms by itself, even at large "
+                          "excursion and high rate. 0 disables the limit entirely - if you "
+                          "want supersonic jitter, you get it.\n\n"
+                          "This is its OWN control, no longer the path speed limit: that one "
+                          "caps how fast the source flies across the field, this one only how "
+                          "fast it wobbles while doing so. Sharing one control meant a slow "
+                          "path silently strangled the jitter.";
+
                 case Key::SrcJitterZ:
                     return lang == Language::De
                         ? "Nur im Rotoren-Modus: Neigung der Kreisebene. 0 = flach liegend, der "
@@ -890,7 +917,7 @@ namespace Tooltips
                           "same.";
                 case Key::SrcJitterOn:
                     return lang == Language::De
-                        ? "Schaltet das Wackeln der Quelle M und aller Klone komplett ab. Die "
+                        ? "Schaltet das Wackeln der Schallquelle M und aller Klone komplett ab. Die "
                           "Regler Jitter/Hektik behalten dabei ihren Wert - beim Wiedereinschalten "
                           "wackelt es sofort mit dem alten Ausschlag weiter, statt bei null neu "
                           "anzufangen."
@@ -1385,9 +1412,9 @@ namespace Tooltips
                           "input (live, provided the host/format offers one).";
                 case Key::FieldDrag:
                     return lang == Language::De
-                        ? "Ziehen an M verschiebt die Schallquelle. Ziehen am Kopf verschiebt "
+                        ? "Ziehen an M - dem Marker der Schallquelle - verschiebt sie. Ziehen am Kopf verschiebt "
                           "den Hörer, Ziehen an der Nase dreht ihn."
-                        : "Drag M to move the sound source. Drag the head to move the "
+                        : "Drag M - the sound source marker - to move it. Drag the head to move the "
                           "listener, drag the nose to turn it.";
                 case Key::ViewToggle:
                     return lang == Language::De

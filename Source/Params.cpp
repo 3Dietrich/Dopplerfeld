@@ -135,7 +135,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // schwingt erst auf dem letzten Stueck des Wegs in die grossen
         // Ausschlaege hoch.
         auto range = juce::NormalisableRange<float> (0.0f, 1000.0f);
-        range.setSkewForCentre (1.0f);
+        range.setSkewForCentre (20.0f);
         layout.add (floatParam (srcJitterAmount, "Source Jitter Amount", range, 0.0f, "m"));
     }
     {
@@ -147,7 +147,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // bekommt den Grossteil des Reglerwegs, "hektisch" bis 20 Hz bleibt
         // am oberen Ende erreichbar.
         auto range = juce::NormalisableRange<float> (0.001f, 20.0f);
-        range.setSkewForCentre (0.1f);
+        range.setSkewForCentre (1.0f);
         layout.add (floatParam (srcJitterRateHz, "Source Jitter Rate", range, 0.2f, "Hz"));
     }
     // Default an: der Ausschlag steht ohnehin auf 0, das Wackeln beginnt also
@@ -160,6 +160,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (boolParam (srcJitterRotor, "Source Jitter Rotor", false));
     layout.add (floatParam (srcJitterRandom, "Source Jitter Randomize", unitRange(), 0.0f));
     layout.add (floatParam (srcJitterZ, "Source Jitter Z", unitRange(), 0.0f));
+
+    // Eigener Tempo-Deckel des Wacklers, siehe Params.h. Skew auf 340 m/s,
+    // damit die Voreinstellung in der Mitte des Reglerwegs steht und der
+    // interessante Bereich darunter fein bedienbar bleibt.
+    {
+        auto range = juce::NormalisableRange<float> (0.0f, 100000.0f);
+        range.setSkewForCentre (340.0f);
+        layout.add (floatParam (srcJitterMaxSpeed, "Source Jitter Max Speed", range, 340.0f, "m/s"));
+    }
     layout.add (boolParam (masterOn, "On", true));
 
     // --- Motor ---
@@ -262,7 +271,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // verschiedene Groessen, die sich nicht verlustfrei zu einem Regler
         // verschmelzen lassen).
         auto range = juce::NormalisableRange<float> (1.0f, 100000.0f);
-        range.setSkewForCentre (300.0f);
+        range.setSkewForCentre (100.0f);
         layout.add (floatParam (globalMaxSpeed, "Max Speed", range, 100000.0f, "m/s"));
     }
 

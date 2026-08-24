@@ -130,6 +130,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (srcJitterRandomKnob, apvts, Params::srcJitterRandom, "Randomize", Tooltips::Key::SrcJitterRandom);
     setupKnob (srcJitterZKnob,      apvts, Params::srcJitterZ,      "Z-Jit",     Tooltips::Key::SrcJitterZ);
+    setupKnob (srcJitterMaxSpeedKnob, apvts, Params::srcJitterMaxSpeed, "Jit Max",  Tooltips::Key::SrcJitterMaxSpeed);
 
     srcJitterRotorButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterRotor));
     addAndMakeVisible (srcJitterRotorButton);
@@ -281,6 +282,11 @@ void MotionPanel::updateJitterEnabledState()
         k->label.setEnabled (jitterOn);
     }
 
+    // Der Tempo-Deckel des Wacklers gilt in BEIDEN Betriebsarten - er bremst
+    // die Bahngeschwindigkeit, und die gibt es beim Wackeln wie beim Rotor.
+    srcJitterMaxSpeedKnob.slider.setEnabled (jitterOn);
+    srcJitterMaxSpeedKnob.label.setEnabled (jitterOn);
+
     // Die Reglerzeile ist je nach Betriebsart drei oder fuenf Knoepfe breit.
     resized();
 }
@@ -351,7 +357,7 @@ void MotionPanel::refreshTooltips()
 {
     for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob,
                       &globalMaxSpeedKnob, &srcJitterAmountKnob, &srcJitterRateKnob,
-                      &srcJitterRandomKnob, &srcJitterZKnob,
+                      &srcJitterRandomKnob, &srcJitterZKnob, &srcJitterMaxSpeedKnob,
                       &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
@@ -507,7 +513,7 @@ void MotionPanel::resized()
     layoutKnob (globalMaxSpeedKnob, sharedRow.removeFromLeft (maxSpeedW));
     sharedRow.removeFromLeft (20);
 
-    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob,
+    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &srcJitterMaxSpeedKnob,
                      rotor ? &srcJitterRandomKnob : nullptr,
                      rotor ? &srcJitterZKnob      : nullptr })
     {

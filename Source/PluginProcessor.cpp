@@ -208,6 +208,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.srcJitterRotor  = raw (Params::srcJitterRotor);
     pp.srcJitterRandom = raw (Params::srcJitterRandom);
     pp.srcJitterZ      = raw (Params::srcJitterZ);
+    pp.srcJitterMaxSpeed = raw (Params::srcJitterMaxSpeed);
     pp.masterOn        = raw (Params::masterOn);
 
     pp.rpm = raw (Params::rpm);
@@ -624,12 +625,18 @@ void DopplerfeldProcessor::applyParameters()
     const double jitterAmount = jitterOn ? (double) pp.srcJitterAmount->load() : 0.0;
     const double jitterRate   = (double) pp.srcJitterRateHz->load();
 
-    // Tempogrenze aus demselben Regler, der auch die Bahn deckelt. Der Wackler
-    // laeuft weiterhin NICHT durch den harten Schrittdeckel in advanceMotion -
-    // dort wuerde er zerhackt. Hier wird stattdessen seine Frequenz gestreckt:
-    // die Bewegung behaelt ihre Groesse und wird langsamer, was bei grossen
-    // Ausschlaegen erst brauchbar macht, was sonst Ueberschall waere.
-    const double jitterMaxSpeed = (double) pp.globalMaxSpeed->load();
+    // EIGENE Tempogrenze des Wacklers, nicht mehr die der Bahn (@dpa
+    // 20260824). Der Wackler laeuft weiterhin NICHT durch den harten
+    // Schrittdeckel in advanceMotion - dort wuerde er zerhackt. Hier wird
+    // stattdessen seine Frequenz gestreckt: die Bewegung behaelt ihre Groesse
+    // und wird langsamer.
+    //
+    // Vorher stand hier globalMaxSpeed, der Deckel der BAHN. Damit hat jeder,
+    // der die Bahn langsam haben wollte, unbemerkt auch den Wackler
+    // abgewuergt: 69 m Ausschlag bei 3,3 Hz gegen einen Bahndeckel von
+    // 27 m/s ergaben 1,9 % Tempo, also einen Umlauf in 16 Sekunden. Von aussen
+    // sah das aus, als taete der Wackler gar nichts.
+    const double jitterMaxSpeed = (double) pp.srcJitterMaxSpeed->load();
 
     // Rotoren-Modus (@dpa 20260821): dieselben beiden Hauptregler, andere
     // Bedeutung - Ausschlag wird zum Radius, "Hektik" zur

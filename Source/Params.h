@@ -54,6 +54,23 @@ namespace Params
     // 90 Grad gekippt (der Rotor dreht sich voll durch den z-Bereich).
     constexpr const char* srcJitterZ = "srcJitterZ";
 
+    // EIGENER Tempo-Deckel des Wacklers, in m/s (@dpa 20260824: "jitter
+    // bewegung ist ungeglättet und verursacht deswegen ständig Überschall
+    // N-waves. bitte irgendwie glätten (z.B. im max speed des Jitters?)").
+    //
+    // Vorher hing der Wackler an globalMaxSpeed, dem Deckel der BAHN - und
+    // das sind zwei verschiedene Dinge. Wer die Bahn langsam haben will, hat
+    // damit unabsichtlich auch den Wackler abgewuergt: bei 69 m Ausschlag und
+    // 3,3 Hz gegen einen Bahndeckel von 27 m/s blieben 1,9 % Tempo uebrig,
+    // also ein Umlauf in 16 Sekunden ("jitter tut nichts").
+    //
+    // Default 340 m/s, knapp unter der Schallgeschwindigkeit bei
+    // Normalbedingungen: der Wackler allein loest damit von sich aus keine
+    // N-Wellen mehr aus. Nach oben bis 100000 offen (keine versteckten
+    // Limits), 0 schaltet die Grenze ganz ab - wer Ueberschall aus dem
+    // Wackler will, bekommt ihn.
+    constexpr const char* srcJitterMaxSpeed = "srcJitterMaxSpeed";
+
     // Hauptschalter. Aus heisst: sanft ausgeblendet, danach Stille und keine
     // Rechenlast mehr (@dpa 20260821: "Ich brauche unbedingt einen
     // Ausschalter. irgendwie huebsch ausgefadet und dann ist stille (und 0

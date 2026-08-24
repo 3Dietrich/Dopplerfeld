@@ -141,26 +141,39 @@ Vec3 PositionJitter::tick (double dt)
     Vec3 freqNow, freqVel;
     freqSmoother.tick (freqNow, freqVel);
 
-    // Tempogrenze: die Bahngeschwindigkeit ist amount * 2pi * f je Achse, im
-    // ungünstigsten Fall stehen alle drei Achsen gleichzeitig auf ihrem
-    // Maximum. Ueberschreitet das die Grenze, werden ALLE drei Frequenzen mit
-    // demselben Faktor gestreckt - so bleibt das Bewegungsmuster erhalten und
-    // laeuft nur langsamer ab, statt dass eine Achse gegen eine Kante faehrt.
-    // Im Rotoren-Modus ist die Bahngeschwindigkeit exakt amount * 2pi * f
-    // (Kreisbahn, unabhaengig von der Neigung der Ebene).
+    // Tempogrenze: die Bahngeschwindigkeit ist amount * 2pi * f. Ueberschreitet
+    // sie die Grenze, werden alle Frequenzen mit demselben Faktor gestreckt -
+    // so bleibt das Bewegungsmuster erhalten und laeuft nur langsamer ab,
+    // statt dass eine Achse gegen eine Kante faehrt.
+    //
+    // Der Bremsfaktor kommt aus den REGLERWERTEN, nicht aus der gerade
+    // gewuerfelten Frequenz, und das ist der springende Punkt. Aus freqNow
+    // gerechnet waere die Bremse ein Normierer: sie zoege jede Schwankung
+    // exakt wieder auf die Grenze zurueck, und die Kreisbahn liefe mit
+    // konstantem Tempo - der Randomize-Regler haette dann buchstaeblich keine
+    // Wirkung mehr, sobald die Grenze ueberhaupt greift (@dpa 20260824:
+    // "randomize tut nichts").
+    //
+    // Bezugsgroesse ist deshalb das SCHNELLSTMOEGLICHE, das der Wuerfel bei
+    // den aktuellen Reglerwerten hergibt. Der Faktor ist damit ueber die Zeit
+    // konstant, die relative Schwankung bleibt vollstaendig erhalten, und die
+    // Grenze wird trotzdem nie ueberschritten.
     double slow = 1.0;
 
     if (maxSpeed > 0.0 && amount > 0.0)
     {
-        const double fMagnitude = rotorMode
-                                ? std::abs (freqNow.x)
-                                : std::sqrt (freqNow.x * freqNow.x
-                                           + freqNow.y * freqNow.y
-                                           + freqNow.z * freqNow.z);
-        const double vMax       = amount * kTwoPi * fMagnitude;
+        // Rotor: der Wuerfel in pickFreqTargetHz() reicht bis zum Vierfachen,
+        // gewichtet mit randomize - bei randomize = 0 also genau rateHz.
+        // Wackeln: je Achse bis zum Doppelten, und im ungünstigsten Fall
+        // stehen alle drei gleichzeitig dort.
+        const double peakFactor = rotorMode
+                                ? 1.0 + 3.0 * randomize
+                                : 2.0 * std::sqrt (3.0);
 
-        if (vMax > maxSpeed)
-            slow = maxSpeed / vMax;
+        const double vPeak = amount * kTwoPi * rateHz * peakFactor;
+
+        if (vPeak > maxSpeed)
+            slow = maxSpeed / vPeak;
     }
 
     // std::abs, weil eine negativ driftende "Frequenz" sonst die Phase
