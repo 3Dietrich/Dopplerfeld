@@ -447,31 +447,161 @@ enthält. Gilt damit für alle Regler auf einmal.
 
 ### Offen aus @dpas Durchgang vom 24.08. 15:52
 
-Noch nicht angefasst, in dieser Reihenfolge sinnvoll:
+Vier der fünf Punkte sind gebaut und gemessen (siehe "Stand 2026-08-24
+(Sprungnaht, Sprungknall, Knall-Trigger)" weiter unten) - **gehört hat @dpa
+sie noch nicht.** Offen bleibt:
 
-- **Scope-Trigger mit Haltezeit.** Der vorhandene Sync richtet an einem
-  Nulldurchgang aus - für periodische Signale sinnvoll, für Knalle nutzlos,
-  deshalb sieht @dpa nichts. Gewünscht: auf einen Pegel-ANSTIEG triggern
-  (schneller gegen langsamen Hüllkurvenfolger), Bild einfrieren, Haltezeit
-  laufen lassen, dann selbst wieder scharf schalten. Ereignis zentriert ins
-  Bild, nicht an den rechten Rand. Manueller Freeze behält Vorrang.
-- **Loop-Übergang als Schnitt.** @dpa: "ich wollte einen Übergang im Sinne von
-  'cutten': Ende erreicht, leise, umbau, laut, start." Derzeit läuft das Ende
-  per Modulo in den Anfang, was der Löser als echte Bewegung sieht: hohe Last
-  und N-Wellen am Loop-Punkt.
-- **CPU-Spitze beim Laden eines States und bei "Engine Reset".** @dpa nennt es
-  einen Bug. Vermutlich derselbe Mechanismus wie beim Loop-Sprung: eine
-  Positionsänderung, die als Bewegung durchschlägt.
-- **Knall bei Bewegung/Startvariante.** Soll wie der Raketen-Stoß hörbar sein,
-  ist es aber nicht. @dpa: "Falls es zwischen Knall und Überschallspeed einen
-  Unterschied gibt, dann das entsprechend einbauen. evtl mit Regler."
 - **Klon jittert nicht bei Klone = 1** (@dpa mit Fragezeichen). Wahrscheinlich
   dieselbe Deckel-Ursache wie oben und mit dem eigenen Wackler-Deckel erledigt
   - nachzuhören, bevor daran gesucht wird.
 
+Zum Nachhören aus dem Umbau vom 24.08.:
+
+- Preset-Wechsel: kommt der neue Ort sofort und ohne Anflug? Der Schnitt ist
+  12 ms lang, danach klingt der neue Ort ohne Wartezeit.
+- Der automatische Engine-Restart nach einem State-Load ist entfallen (dafür
+  der Schnitt). Der Knopf "Audiomotor neu anlassen" bleibt von Hand da. Falls
+  der Restart doch gebraucht wird, ist es eine Zeile in
+  `setStateInformation()`.
+- Rundenwechsel einer Bewegungswiedergabe: leise, Umbau, laut.
+- Startvariante "Knall-Start": Sprungknall steht jetzt auf 0,5 statt 0 und
+  sitzt in der Vorbeiflug-Gruppe. Ob 0,5 die richtige Lautstärke ist,
+  entscheidet das Ohr.
+- Scope-Knopf "Knall" plus Haltezeit.
+
 Entschieden und **nicht** zu bauen: die Raketen-Druckstöße lösen KEINE
 zusätzlichen N-Wellen in der Ausbreitung aus (@dpa: "Das wäre ja dann doppelt?
 Nee. So wie es jetzt ist, ist es gut.").
+
+## Stand 2026-08-24 (Sprungnaht, Sprungknall, Knall-Trigger)
+
+Vier Punkte aus @dpas Durchgang von 15:52. Gemessen ist alles, **gehört hat
+@dpa es noch nicht.**
+
+### Die Sprungnaht: eine Positionsänderung, die keine Bewegung ist
+
+@dpas Vermutung, dass CPU-Spitze beim State-Laden und Loop-Übergang dieselbe
+Naht sind, war richtig - nur nicht als gemeinsamer Codepfad, sondern als
+gemeinsame Fehlerklasse:
+
+> Eine Positionsänderung, die keine Bewegung ist, läuft durch die
+> Bewegungsglättung und steht damit als echte Bewegung in der Bahn.
+
+Bei 1400 m und tau 0,145 s sind das einige tausend m/s. Der Löser sieht dort
+Überschall, spaltet die Wurzel auf und rechnet ein Vielfaches - und zwar nicht
+als kurze Spitze, sondern so lange, wie die schnelle Stelle in der
+Vorgeschichte der Bahn steht (Pufferlänge, mehrere Sekunden).
+
+Neu ist deshalb der **Schnitt** (@dpa: "Ende erreicht, leise, umbau, laut,
+start"):
+
+1. Ausblenden über `cutFadeSeconds` (12 ms), Quelle steht dabei still.
+2. Bei Pegel null: `DopplerEngine::cutTo()` setzt **beide** Geometriesätze an
+   der neuen Stelle mit ruhender Vorgeschichte auf, die Glätter dazu. Nichts
+   läuft doppelt, nichts wird überblendet - der Unterschied zu
+   `jumpSourceTo()`, bei dem zwei komplette Lösersätze gegeneinander laufen.
+3. Einblenden.
+
+Der Signalpuffer bleibt dabei stehen. Weil die Vorgeschichte der Bahn an der
+neuen Stelle vollständig gefüllt wird, klingt der neue Ort sofort statt erst
+nach der Laufzeit.
+
+Die Zustandsmaschine (`CutState` in `PluginProcessor.h`) läuft im Audiothread;
+Schritt 2 passiert am Anfang des Blocks nach dem Ende der Ausblende, also
+sicher im stillen Fenster. Ausgelöst wird sie von drei Stellen:
+`setStateInformation()`, dem Rundenende der Wiedergabe und dem Start einer
+Wiedergabe.
+
+Die Wiedergabe wickelt am Rundenende **nicht mehr selbst um**: sie bleibt auf
+dem letzten Frame stehen und meldet es (`MotionPlayer::atLoopEdge()`), der
+Processor schneidet und ruft `restartRound()`. Der Überhang über den letzten
+Frame geht dabei nicht verloren.
+
+**Der automatische Engine-Restart nach einem State-Load ist entfallen.** Er
+war der bisherige Weg, die Quelle ohne Anflug an die geladene Stelle zu
+bekommen (@dpa: "bei/nach jedem State-load Engine Restart triggern"), kostet
+aber zweierlei: er hält den Audiothread über `prepareToPlay()` an (gemessen
+3,7 bis 7,1 ms bei 10,7 ms Blockbudget) und leert dabei den Signalpuffer -
+danach ist es still, bis der Schall die neue Strecke einmal zurückgelegt hat,
+bei 1000 m gut drei Sekunden. Beides fiel bei jedem Preset-Wechsel an. Der
+Knopf "Audiomotor neu anlassen" bleibt unverändert von Hand erreichbar; er ist
+weiterhin das Mittel gegen den ungeklärten Ton-Ausfall.
+
+Gemessen wird das im neuen `load_check`-Abschnitt **"Sprungnaht"**, Maß ist
+der teuerste Block in Löser-Auswertungen gegen dieselbe Lage ohne Eingriff:
+
+| Eingriff | vorher | nachher |
+|---|---|---|
+| Zustand geladen | 15782 gegen 216 (247 x) | 444 gegen 368 (1,2 x) |
+| Rundenwechsel | 29558, \|M_r\| 16,1 | 446, \|M_r\| 0,33 |
+| Motor neu anlassen | 387 gegen 311 (1,2 x) | unverändert |
+
+Die dritte Zeile ist die Gegenprobe zur Vermutung: "Engine Reset" hatte auf
+der Löserseite nie eine Spitze - er macht schon immer genau das Richtige
+(Zeitachse zurücksetzen statt hinfliegen). Was er kostet, ist die
+Zwangspause oben, und die taucht in keiner Blockzeit auf.
+
+Der Abschnitt misst außerdem eine Kontrolllage, die nie angeflogen wurde
+("Ruhe fern"). Sie kostet 368 Auswertungen - die weite Lage allein ist also
+nicht teuer, nur der Anflug dorthin war es.
+
+### Sprungknall: die Schicht war da, nur aus
+
+@dpa: der Knall der Startvariante "Knall-Start" soll wie der Raketen-Stoß
+hörbar sein, ist es aber nicht.
+
+Die Schicht dafür gibt es seit `480fe09` und sie wirkt messbar - im
+`load_check`-Abschnitt "Knall-Start" hebt die Druckwelle die Spitze im
+Ankunftsfenster von 0,0179 auf 0,1697, also um Faktor 9,5. Zu hören war sie
+trotzdem nicht:
+
+- **Sprungknall stand auf 0.** Wer "Knall-Start" wählt, meint den Knall. Der
+  Default steht jetzt auf 0,5.
+- **Die Regler saßen im falschen Panel:** Feld/Physik/Ausgang, drei Panels
+  entfernt von der Startvariante, die sie auslöst. "Sprungknall" und
+  "Sprungkante" stehen jetzt in der Vorbeiflug-Gruppe, direkt bei Bahn und
+  Startvariante.
+
+Zu @dpas Frage, ob es zwischen Knall und Überschall einen Unterschied gibt:
+ja, und er ist schon gebaut. Beide nutzen dieselbe N-Wellen-Form, aber
+getrennte Auslöser und getrennte Regler - der Überschallknall hängt an
+`M_r = 1` und am Schalter "N-Wave", der Sprungknall an der Sprungmarke und an
+"Sprungknall". Der Sprungknall braucht "N-Wave" ausdrücklich **nicht**: ein
+unterschalliger Start soll knallen dürfen.
+
+### Scope: Knall-Trigger statt Nulldurchgang
+
+Der vorhandene Sync richtet an einem steigenden Nulldurchgang aus. Ein Knall
+hat keine Periode, an der man ausrichten könnte, sondern einen Einsatz - der
+neue Trigger sucht genau den: ein schneller Hüllkurvenfolger (2 ms) gegen
+einen langsamen (150 ms), ausgelöst bei 12 dB Abstand und über einer
+Pegelschwelle, damit in der Stille nicht jedes Rauschen feuert.
+
+Das Ereignis landet **mittig** im Bild: gesucht wird nur dort, wo hinter dem
+Fund noch ein halbes Anzeigefenster an Nachlauf im Rohfenster steht. Danach
+steht das Bild für die eingestellte Haltezeit (0,5/1/2/5 s) und schaltet sich
+selbst wieder scharf; zwischen zwei Einsätzen bleibt das letzte Bild stehen,
+statt zu wackeln. Unten rechts steht "scharf" oder "gehalten". Der manuelle
+Freeze behält Vorrang.
+
+Damit derselbe Knall nicht mehrfach auslöst - die Rohfenster überlappen bei
+30 Hz Anzeigetakt stark -, vergleicht der Trigger die absolute Position im
+Ringpuffer (neu: `ScopeRingBuffer::writePosition()`, durchgereicht an
+`ScopeComponent::feed()`).
+
+Geprüft wird das im `load_check` ohne Fenster und ohne Audio: ein gebautes
+Rohfenster mit einem Einsatz bei Sample 6000 von 9600 steht im Bild bei 2398
+von 4800, also 2 Samples neben der Mitte; ein anschließend gefüttertes leeres
+Fenster lässt das Bild unverändert stehen. Ausgelesen wird über
+`exportVisibleWindow()` - den sichtbaren Ausschnitt gibt es sonst nicht von
+außen zu sehen.
+
+### Gegenprobe
+
+Von den 45 bestehenden `load_check`-Szenarien bleiben 43 bitgleich. Die zwei
+Ausnahmen sind gewollt und beide vom neuen Sprungknall-Default:
+"Vorbeiflug Knall, Start" (Spitze 0,0301 -> 0,0874) und "Vorbeiflug Knall,
+Rest".
 
 ## Stand 2026-08-24 (Klangformung, Stoßwellen, Umlaute)
 
