@@ -473,6 +473,49 @@ Entschieden und **nicht** zu bauen: die Raketen-Druckstöße lösen KEINE
 zusätzlichen N-Wellen in der Ausbreitung aus (@dpa: "Das wäre ja dann doppelt?
 Nee. So wie es jetzt ist, ist es gut.").
 
+## Stand 2026-08-24 nachts (Entfernung, Z-Anteil, Quant, Klappen)
+
+Vier Punkte aus @dpas Durchgang 23:11. Gemessen, **gehört hat @dpa es noch
+nicht.**
+
+- **Abstand L..M ist immer sichtbar**, links oben, in derselben Machart wie
+  die Tempo-Anzeige rechts: gleiche Farbe, gleiche Schrift, pixelfest in
+  Monospace, eine Spalte in Metern unter der Beschriftung "Entfernung" /
+  "Distance". In beiden Ansichten (`FieldComponent::drawDistanceReadout`).
+- **Der Wackler hat wieder einen Z-Regler**, diesmal als ANTEIL: 1 = die Höhe
+  wackelt genauso weit wie x und y, 0 = gar nicht. So bleibt "Jitter" der eine
+  Regler für die Größe der Bewegung, und dieser sagt nur, ob sie flach liegt
+  oder den Raum füllt. Eigener Parametername `srcJitterZAmount`: der alte
+  `srcJitterZ` gehörte zur Rotoren-Betriebsart und meinte die Neigung der
+  Kreisebene - ein Preset von damals würde mit seinem Wert (meist 0) die Höhe
+  stilllegen, ohne dass jemand daran gedreht hätte. Default 1.
+- **Schalter "Quant"** beim Hubschrauber: rastet die Rotordrehzahl auf das
+  nächste ganzzahlige Verhältnis zur Motorgrundfrequenz (RPM/60). Das ist die
+  Antwort auf @dpas Beobachtung, die Unwucht klinge wirksam und der Rotor
+  nicht - die Unwucht sitzt seit jeher auf `f_base/2 * 2^Oktave`, also fest am
+  Motor, der Rotor lief frei dagegen. **Default aus:** die Schwebung zwischen
+  beiden ist ausdrücklich erwünscht ("die zwei leicht unterschiedlichen Tempi
+  ... führen zu interessanten härte und weichheits verläufen").
+- **Die Klappen-Überschriften** folgen jetzt auch dem Sprachumschalter. Der
+  Beschriftungstest hatte sie übersehen, weil sie einen Pfeil vor dem Titel
+  tragen und der exakte Vergleich daran scheiterte; er schneidet führende
+  Zierzeichen jetzt ab.
+
+Gemessen (`load_check`):
+
+| | Wert |
+|---|---|
+| Z-Anteil, Ausschlag Ebene/Höhe voll | 50,0 / 50,0 |
+| halb | 50,0 / 25,0 |
+| aus | 50,0 / 0,0 |
+| Quant aus, Blattschläge/s (RPM 434, Rotor 3,0 Hz) | 11,99 (Soll 12,00) |
+| Quant an | 14,44 (Soll 14,47 = zweimal die Grundfrequenz) |
+
+@dpas Preset `presets/Hubschrauber2` (Imb Octave 2, RPM 434, Rotor Hz 3,63,
+Blade Len 22,6) bleibt unberührt - beide neuen Defaults sind der bisherige
+Zustand. Er beschreibt es als den Stand, dem er gerne akustisch folgt; bei
+Änderungen am Rotor ist das der Bezugspunkt, gegen den zu hören ist.
+
 ## Stand 2026-08-24 spät (Schnitt beim Vorbeiflug, Rotor-Fahrt, Sync, Sprachen)
 
 Vier Punkte aus @dpas Durchgang 19:22. Alles gemessen, **gehört hat @dpa es
