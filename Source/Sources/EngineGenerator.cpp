@@ -275,6 +275,28 @@ void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
     slapFilter.prepare (spec);
     slapFilter.setType (juce::dsp::StateVariableTPTFilterType::bandpass);
 
+    // Verzoegerungsleitungen der Blaetter. Bemessen nach der groessten
+    // moeglichen Laufzeitschwankung (2r/c beim groessten Radius), plus zwei
+    // Samples Reserve fuer die Interpolation. Hier ist der einzige Ort, an
+    // dem sie Speicher bekommen - im Renderpfad wird nichts allokiert.
+    {
+        const int ringLength = 4 + (int) std::ceil (2.0 * maxRotorRadiusM / 300.0 * sampleRate);
+
+        for (size_t i = 0; i < blades.size(); ++i)
+        {
+            auto& blade = blades[i];
+
+            blade.ring.assign ((size_t) ringLength, 0.0f);
+            blade.writePos  = 0;
+            blade.slapEnv   = 0.0;
+            blade.prevPhase = 0.0;
+
+            // Deutlich gestreute Startwerte, nicht nur ein anderes letztes
+            // Byte: die Blaetter sollen wirklich unabhaengig rauschen.
+            blade.random.setSeed ((juce::int64) (0x9e3779b97f4a7c15ull * (std::uint64_t) (i + 1)) | 1);
+        }
+    }
+
     // Zeitkonstante der Betriebsart-Blende: kindFade legt in kindFadeSeconds
     // die volle Strecke zurück, deshalb ein Schritt je Sample statt eines
     // Ein-Pols - eine Blende soll wirklich ankommen, nicht asymptotisch
@@ -311,6 +333,16 @@ void EngineGenerator::reset()
     rocketVoicing.reset();
     rotorFilter.reset();
     slapFilter.reset();
+
+    rotorRevPhase = 0.0;
+
+    for (auto& blade : blades)
+    {
+        std::fill (blade.ring.begin(), blade.ring.end(), 0.0f);
+        blade.writePos  = 0;
+        blade.slapEnv   = 0.0;
+        blade.prevPhase = 0.0;
+    }
 
     // Feste Startwerte statt der Uhrzeit-Aussaat, die juce::Random von sich
     // aus mitbringt. Zwei Läufe mit denselben Einstellungen liefern damit
@@ -373,6 +405,21 @@ void EngineGenerator::setRocketShockShape (float sizeMetres, float rateHz)
 {
     rocketShockSizeM.store (juce::jmax (0.001f, sizeMetres));
     rocketShockRateHz.store (juce::jmax (0.01f, rateHz));
+}
+
+void EngineGenerator::setRotorDoppler (bool shouldUseDoppler)
+{
+    rotorDoppler.store (shouldUseDoppler);
+}
+
+void EngineGenerator::setRotorRadius (float metres)
+{
+    rotorRadiusM.store (juce::jlimit (0.1f, (float) maxRotorRadiusM, metres));
+}
+
+void EngineGenerator::setRotorInPlane (float factor01)
+{
+    rotorInPlane.store (juce::jlimit (0.0f, 1.0f, factor01));
 }
 
 void EngineGenerator::setRotorSlap (float amount01)
@@ -494,6 +541,70 @@ void EngineGenerator::renderMono (float* out, int numSamples)
 
     const double slapAmount = (double) rotorSlap.load();
     const double slapDecay  = std::exp (-1.0 / std::max (1.0, slapDecayMs * 0.001 * currentSampleRate));
+
+    // Rotor-Doppler (siehe setRotorDoppler): Umdrehungsphase statt Blattfolge,
+    // und die groesste Laufzeit, die ein Blatt auf seinem Kreis erreichen kann.
+    const bool   dopplerRotor  = rotorDoppler.load();
+    const int    bladeSlots    = juce::jlimit (1, maxRotorBlades, (int) std::lround (bladeCount));
+    const double revPhaseInc   = juce::jlimit (0.0, 0.45, rotorRps / currentSampleRate);
+
+    // Schallgeschwindigkeit als Modellkonstante: der Generator sitzt VOR der
+    // Ausbreitung und kennt weder Temperatur noch Hoehe. Der Unterschied
+    // zwischen 331 und 350 m/s verschiebt die Laufzeitschwankung um wenige
+    // Prozent - hoerbar ist daran nichts, und eine zweite Zahl durch alle
+    // Schichten zu reichen waere der Preis dafuer.
+    constexpr double rotorSoundSpeed = 343.0;
+
+    const double rotorInPlaneNow = (double) rotorInPlane.load();
+    const double rotorRadiusNow  = (double) rotorRadiusM.load();
+
+    const double maxBladeDelaySamples = rotorRadiusNow * 2.0
+                                      / rotorSoundSpeed * currentSampleRate
+                                      * rotorInPlaneNow;
+
+    // Konvektionsverstaerkung der Blattspitze. Die Laufzeit allein macht das
+    // Knattern noch nicht: sie verschiebt die Schlaege im Takt, aendert aber
+    // kaum ihre Lautstaerke, und bei je eigenem Rauschen je Blatt entsteht
+    // auch keine Interferenz. Was man wirklich hoert, ist die Richtwirkung -
+    // eine Quelle, die sich auf einen zubewegt, strahlt um 1/(1-M_r)^2
+    // staerker ab.
+    //
+    // Und die ist am Rotor gewaltig: bei 6 m Blatt und 5 Umdrehungen/s laeuft
+    // die Spitze mit 188 m/s, also M = 0,55. Das vorlaufende Blatt kommt
+    // dadurch rund 25-mal lauter an als das ruecklaufende - genau das ist das
+    // WOP-WOP, und genau das verschwindet, wenn der Hubschrauber senkrecht
+    // ueber einem steht (rotorInPlane geht auf 0, mit ihm M_r).
+    const double tipMach = juce::jlimit (0.0, 0.95,
+                                         juce::MathConstants<double>::twoPi * rotorRadiusNow
+                                             * rotorRps / rotorSoundSpeed);
+
+    auto convectiveGain = [tipMach, rotorInPlaneNow] (double angle)
+    {
+        const double machRadial = tipMach * rotorInPlaneNow * std::sin (angle);
+        const double denom      = std::max (0.05, 1.0 - machRadial);
+
+        return 1.0 / (denom * denom);
+    };
+
+    // Auf gleichen Gesamtpegel normieren, sonst wuerde der Rotor mit
+    // steigender Drehzahl einfach lauter statt knackiger. Der Effektivwert
+    // ueber einen Umlauf, einmal je Block aus 64 Stuetzstellen - im
+    // Samplepfad steht davon nur noch eine Division.
+    double rotorGainNorm = 1.0;
+
+    {
+        constexpr int steps = 64;
+        double sumSq = 0.0;
+
+        for (int i = 0; i < steps; ++i)
+        {
+            const double g = convectiveGain (juce::MathConstants<double>::twoPi
+                                             * (double) i / (double) steps);
+            sumSq += g * g;
+        }
+
+        rotorGainNorm = std::max (1.0e-6, std::sqrt (sumSq / (double) steps));
+    }
 
     // Jitter: Tiefpass 3-15 Hz aus jitterRateHz, Tiefe j = j0 * u.
     const double jitterCutoff = juce::jlimit (0.5, currentSampleRate * 0.49, (double) jitterRateHz.load());
@@ -752,34 +863,131 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                 // Blattfolge atmet - genau das, was aus der Entfernung wie ein
                 // im Kreis laufendes Rauschen klingt. Der Schlag darüber ist
                 // das Knattern.
-                const double bladeWave = 0.5 + 0.5 * std::cos (juce::MathConstants<double>::twoPi * rotorPhase);
-                const double swishGain = 1.0 - rotorSwishDepth * (1.0 - bladeWave);
-
-                const double swish = (double) rotorFilter.processSample (0, (float) whiteNoise (rotorRandom))
-                                   * swishGain * rotorSwishLevel;
-
-                const double prevPhase = rotorPhase;
-                rotorPhase += rotorPhaseInc;
-
-                // Ein Blatt ist vorbei: harter Rauschstoß. Ausgelöst am
-                // Phasenumlauf, nicht an einer Schwelle im Wert - so kommt
-                // genau ein Schlag je Blatt, unabhängig von der Drehzahl.
-                if (rotorPhase >= 1.0)
-                {
-                    rotorPhase -= 1.0;
-                    slapEnv = 1.0;
-                }
-                else if (prevPhase == 0.0)
-                {
-                    slapEnv = 1.0;
-                }
-
-                const double slapNoise = (double) slapFilter.processSample (0, (float) whiteNoise (slapRandom));
-
                 // Am Propeller ist der Schlag deutlich weicher als am Rotor
                 // eines Hubschraubers - dort schlagen die Blattspitzen in die
                 // eigene Wirbelschleppe.
                 const double slapScale = (activeKind == KindHeli) ? 1.0 : 0.45;
+
+                double swish     = 0.0;
+                double slapMixed = 0.0;
+
+                if (dopplerRotor)
+                {
+                    // Jedes Blatt ist eine eigene Quelle auf der Kreisbahn
+                    // (siehe setRotorDoppler). Sein Rauschen - Schwirren plus
+                    // sein eigener Schlag - geht in seine eigene Leitung und
+                    // wird mit der Laufzeit gelesen, die zu seiner Stellung
+                    // auf dem Kreis gehoert. Die Modulation entsteht dadurch,
+                    // sie wird nicht aufgepraegt.
+                    //
+                    // Verzoegerung: cos ist +1, wenn das Blatt am naechsten
+                    // steht, -1 am fernsten. (1 - cos)/2 macht daraus 0..1,
+                    // also eine Leitung, die nie negativ wird.
+                    const double twoPi = juce::MathConstants<double>::twoPi;
+
+                    double sum = 0.0;
+
+                    for (int k = 0; k < bladeSlots; ++k)
+                    {
+                        auto& blade = blades[(size_t) k];
+
+                        const double bladePhase = rotorRevPhase + (double) k / (double) bladeSlots;
+                        const double angle      = twoPi * bladePhase;
+
+                        // Eigener Schlag je Blatt, und zwar genau dort, wo das
+                        // Blatt am schnellsten auf den Hoerer zulaeuft
+                        // (Viertelumlauf, sin = 1). Das ist keine Feinheit,
+                        // sondern der ganze Effekt: am Umlaufpunkt selbst ist
+                        // die Radialgeschwindigkeit null, dort bekaeme der
+                        // Schlag gar keine Richtwirkung ab und das Knattern
+                        // bliebe in jeder Lage gleich. Zusammen ergeben die N
+                        // Blaetter dieselbe Schlagrate wie zuvor.
+                        const double slapPhase   = bladePhase - 0.25;
+                        const double slapWrapped = slapPhase - std::floor (slapPhase);
+
+                        if (slapWrapped < blade.prevPhase)
+                            blade.slapEnv = 1.0;
+
+                        blade.prevPhase = slapWrapped;
+
+                        const double bladeNoise = whiteNoise (blade.random);
+
+                        // Richtwirkung dieses Blattes in seiner aktuellen
+                        // Stellung (siehe convectiveGain oben).
+                        const double directivity = convectiveGain (angle) / rotorGainNorm;
+
+                        const float input = (float) (directivity
+                                                     * (bladeNoise * rotorSwishLevel
+                                                        + bladeNoise * blade.slapEnv * slapAmount
+                                                              * rotorSlapLevel * slapScale));
+
+                        blade.slapEnv *= slapDecay;
+
+                        const int ringLength = (int) blade.ring.size();
+
+                        blade.ring[(size_t) blade.writePos] = input;
+
+                        const double delaySamples =
+                            juce::jlimit (0.0, (double) (ringLength - 3),
+                                          maxBladeDelaySamples * 0.5 * (1.0 - std::cos (angle)));
+
+                        const double readPos = (double) blade.writePos - delaySamples;
+                        const int    i0      = (int) std::floor (readPos);
+                        const double frac    = readPos - (double) i0;
+
+                        const int a = ((i0 % ringLength) + ringLength) % ringLength;
+                        const int b = (a + 1) % ringLength;
+
+                        sum += (double) blade.ring[(size_t) a] * (1.0 - frac)
+                             + (double) blade.ring[(size_t) b] * frac;
+
+                        blade.writePos = (blade.writePos + 1) % ringLength;
+                    }
+
+                    // Auf gleiche Lautstaerke wie der gefakte Weg bringen: N
+                    // unkorrelierte Quellen summieren sich mit sqrt(N).
+                    sum /= std::sqrt ((double) bladeSlots);
+
+                    // Gefiltert wird die Summe, nicht jedes Blatt einzeln -
+                    // ein Bandpass je Blatt klaenge gleich und kostete das
+                    // Achtfache.
+                    swish = (double) rotorFilter.processSample (0, (float) sum);
+
+                    rotorRevPhase += revPhaseInc;
+
+                    if (rotorRevPhase >= 1.0)
+                        rotorRevPhase -= 1.0;
+                }
+                else
+                {
+                    const double bladeWave = 0.5 + 0.5 * std::cos (juce::MathConstants<double>::twoPi * rotorPhase);
+                    const double swishGain = 1.0 - rotorSwishDepth * (1.0 - bladeWave);
+
+                    swish = (double) rotorFilter.processSample (0, (float) whiteNoise (rotorRandom))
+                          * swishGain * rotorSwishLevel;
+
+                    const double prevPhase = rotorPhase;
+                    rotorPhase += rotorPhaseInc;
+
+                    // Ein Blatt ist vorbei: harter Rauschstoß. Ausgelöst am
+                    // Phasenumlauf, nicht an einer Schwelle im Wert - so kommt
+                    // genau ein Schlag je Blatt, unabhängig von der Drehzahl.
+                    if (rotorPhase >= 1.0)
+                    {
+                        rotorPhase -= 1.0;
+                        slapEnv = 1.0;
+                    }
+                    else if (prevPhase == 0.0)
+                    {
+                        slapEnv = 1.0;
+                    }
+
+                    const double slapNoise = (double) slapFilter.processSample (0, (float) whiteNoise (slapRandom));
+
+                    slapMixed = slapNoise * slapEnv * slapAmount * rotorSlapLevel * slapScale;
+
+                    slapEnv *= slapDecay;
+                }
 
                 double tone = 0.0;
 
@@ -802,16 +1010,13 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                     tone *= propToneLevel;
                 }
 
-                kindSample = swish
-                           + slapNoise * slapEnv * slapAmount * rotorSlapLevel * slapScale
-                           + tone;
+                kindSample = swish + slapMixed + tone;
 
                 // Der Verbrennermotor des Hubschraubers sind die vier Teiltöne
                 // (oben schon gerechnet) plus sein Rauschband.
                 if (activeKind == KindHeli)
                     kindSample += harmonicSum + noiseFiltered * noiseGain;
 
-                slapEnv *= slapDecay;
                 break;
             }
 

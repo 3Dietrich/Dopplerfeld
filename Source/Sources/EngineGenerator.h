@@ -4,6 +4,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include <array>
 #include <atomic>
+#include <vector>
 
 // Motorgenerator (Plan 3.10): vier PolyBLEP-Sägezahn-Teiltöne mit RPM-Tracking,
 // ein RPM-abhängiges Rauschband und langsamer Jitter auf der Grundfrequenz.
@@ -140,6 +141,39 @@ public:
     // Wirbelschleppe - das ist das laute Knattern (@dpa: "beim fliegen
     // überschlagen sie sich ... lautes Knattern").
     void setRotorSlap (float amount01);
+
+    //------------------------------------------------------------------
+    // Echter Rotor-Doppler (@dpa 20260824: "das knattern.. ist mir noch nicht
+    // echt genug. es muss sich beim Ueberflug veraendern. Also: Knattern soll
+    // Umschaltbar auf Doppler() sein - aus: wie derzeit: gefaket - an: die
+    // noises werden im 'original' Kreis gedreht und ergeben daher den
+    // (hoffentlich echteren) Sound").
+    //
+    // Aus: das Schwirren atmet mit der Blattfolge, der Schlag kommt je Blatt.
+    // Eine nachgebaute Modulation, die von der Blickrichtung nichts weiss und
+    // sich beim Ueberflug deshalb auch nicht aendert.
+    //
+    // An: jedes Blatt ist eine eigene Quelle auf der Kreisbahn. Sein Rauschen
+    // laeuft durch eine eigene Verzoegerungsleitung, deren Laenge sich mit
+    // seiner Stellung auf dem Kreis aendert - das IST der Doppler, samt der
+    // Kammstruktur zwischen den Blaettern. Nichts wird nachgebaut, und weil
+    // die Laufzeit an der Geometrie haengt, aendert sich das Knattern beim
+    // Ueberflug von selbst.
+    void setRotorDoppler (bool shouldUseDoppler);
+
+    // Blattlaenge in Metern. Sie bestimmt, wie weit die Laufzeit je Umlauf
+    // schwankt (2r/c bei flacher Sicht) und damit die Tiefe des Effekts.
+    void setRotorRadius (float metres);
+
+    // Wie stark die Sichtlinie zum Hoerer IN der Rotorebene liegt: 1 = von der
+    // Seite (die Blaetter kommen abwechselnd auf einen zu und laufen weg,
+    // volle Laufzeitschwankung), 0 = senkrecht von unten oder oben (alle
+    // Blaetter gleich weit weg, keine Schwankung mehr). Genau daran aendert
+    // sich das Knattern beim Ueberflug.
+    //
+    // Gerechnet wird das im Processor, der als Einziger beide Positionen
+    // kennt; der Generator bekommt nur die fertige Zahl.
+    void setRotorInPlane (float factor01);
 
 private:
     // Ein Sägezahn-Teilton: Reglerwerte atomar, Phase ist reiner Audio-Thread-
@@ -345,6 +379,42 @@ private:
     juce::Random rotorRandom;
     juce::dsp::StateVariableTPTFilter<float> slapFilter;
     juce::Random slapRandom;
+
+    //------------------------------------------------------------------
+    // Rotor-Doppler, siehe setRotorDoppler().
+    std::atomic<bool>  rotorDoppler { false };
+    std::atomic<float> rotorRadiusM { 5.0f };
+    std::atomic<float> rotorInPlane { 1.0f };
+
+    // Obergrenze der Blattzahl, siehe Params::heliBladeCount (2..8).
+    static constexpr int maxRotorBlades = 8;
+
+    // Umdrehungsphase (0..1 je UMDREHUNG), nicht Blattfolge: der Kreis, auf
+    // dem die Blaetter sitzen, dreht sich einmal je Umdrehung.
+    double rotorRevPhase = 0.0;
+
+    // Je Blatt eine eigene Verzoegerungsleitung und eine eigene Rauschquelle.
+    // Eigene Quellen sind Pflicht, keine Sparsamkeit: dieselbe Folge N-mal
+    // verzoegert waere ein Kammfilter auf EINEM Rauschen, kein Rotor aus N
+    // Blaettern - und genau danach klingt es dann auch (@dpa 20260824:
+    // "achte bitte bei ab 2 unterschiedlichen Noises (z.B. Propeller) darauf,
+    // dass sie unterschiedlich sind").
+    struct Blade
+    {
+        std::vector<float> ring;
+        int                writePos = 0;
+        double             slapEnv  = 0.0;
+        double             prevPhase = 0.0;
+        juce::Random       random;
+    };
+
+    std::array<Blade, (size_t) maxRotorBlades> blades;
+
+    // Laenge der Leitungen: die groesste Laufzeitschwankung, die vorkommen
+    // kann, ist 2r/c bei flacher Sicht. Bemessen wird nach dem groessten
+    // einstellbaren Radius, damit prepare() der einzige Ort mit einer
+    // Allokation bleibt.
+    static constexpr double maxRotorRadiusM = 40.0;
 
     static constexpr double rotorSwishLevel = 0.55;
     static constexpr double rotorSlapLevel  = 1.60;

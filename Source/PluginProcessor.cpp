@@ -237,6 +237,8 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.propLevelDb    = raw (Params::propLevelDb);
     pp.heliRotorHz    = raw (Params::heliRotorHz);
     pp.heliBladeCount = raw (Params::heliBladeCount);
+    pp.heliDoppler     = raw (Params::heliDoppler);
+    pp.heliRotorRadius = raw (Params::heliRotorRadius);
 
     pp.sampleGain  = raw (Params::sampleGain);
     pp.samplePitch = raw (Params::samplePitch);
@@ -751,6 +753,25 @@ void DopplerfeldProcessor::applyParameters()
     dopplerEngine.setPropellers ((int) pp.engineKind->load() == 4,
                                  juce::Decibels::decibelsToGain ((double) pp.propLevelDb->load()));
     engineGenerator.setHeliRotor (pp.heliRotorHz->load(), pp.heliBladeCount->load());
+    engineGenerator.setRotorDoppler (pp.heliDoppler->load() > 0.5f);
+    engineGenerator.setRotorRadius (pp.heliRotorRadius->load());
+
+    // Wie stark die Sichtlinie zum Hoerer in der Rotorebene liegt (siehe
+    // EngineGenerator::setRotorInPlane). Der Rotor liegt waagerecht, seine
+    // Ebene ist also xy - der Anteil ist damit der waagerechte Abstand,
+    // geteilt durch den vollen. Von der Seite gesehen 1, direkt darueber 0.
+    //
+    // Gerechnet aus den ZIELpositionen, nicht aus den geglaetteten: dieser
+    // Wert steuert eine Klangfarbe, keine Laufzeit, und er wandert ohnehin nur
+    // so schnell wie der Ueberflug selbst.
+    {
+        const Vec3   toListener = listenerTargetMetres - sourceTargetMetres;
+        const double flat       = std::sqrt (toListener.x * toListener.x
+                                             + toListener.y * toListener.y);
+        const double full       = toListener.length();
+
+        engineGenerator.setRotorInPlane (full > 1.0e-6 ? (float) (flat / full) : 1.0f);
+    }
 
     // --- Sample ---
     sampleSource.setGainDb (pp.sampleGain->load());

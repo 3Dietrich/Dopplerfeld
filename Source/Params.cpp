@@ -500,6 +500,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     }
     layout.add (floatParam (heliBladeCount, "Heli Blades", { 2.0f, 8.0f, 1.0f }, 4.0f));
 
+    // Default aus: "aus: wie derzeit: gefaket" (@dpa). Der echte Weg ist der
+    // neue, und ob er besser klingt, entscheidet das Ohr - deshalb nicht
+    // stillschweigend vorbelegt.
+    layout.add (boolParam (heliDoppler, "Heli Doppler", false));
+    {
+        // Blattlaenge: ein Modellhubschrauber hat einen halben Meter, eine
+        // Chinook acht, und wer den Effekt uebertreiben will, dreht weiter.
+        // Obergrenze wie in EngineGenerator::maxRotorRadiusM.
+        auto range = juce::NormalisableRange<float> (0.1f, 40.0f);
+        range.setSkewForCentre (6.0f);
+        layout.add (floatParam (heliRotorRadius, "Heli Rotor Radius", range, 6.0f, "m"));
+    }
+
     // Fluegelspanne und Pegel des Propellerpaars. Die Spanne ist grosszuegig
     // nach oben offen: ein Modellflugzeug hat einen Meter, eine Transportmaschine
     // vierzig, und wer den Effekt uebertreiben will, dreht weiter.

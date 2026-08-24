@@ -4134,6 +4134,184 @@ int main()
         }
     }
 
+
+    //==================================================================
+    // Rotor-Doppler (@dpa 20260824: "das knattern.. ist mir noch nicht echt
+    // genug. es muss sich beim Ueberflug veraendern").
+    //
+    // Gemessen wird die Modulationstiefe des Rotorklangs: wie stark die
+    // Huellkurve mit der Blattfolge atmet. Mit echtem Doppler haengt sie an
+    // der Blickrichtung - von der Seite laufen die Blaetter abwechselnd auf
+    // den Hoerer zu und von ihm weg (volle Laufzeitschwankung), von direkt
+    // darunter stehen alle gleich weit weg und es bleibt ein gleichmaessiges
+    // Rauschen. Genau dieser Unterschied ist das, was beim Ueberflug passiert.
+    {
+        auto rotorModulationDepth = [] (double rate, bool doppler, float inPlane)
+        {
+            constexpr int block  = 512;
+            constexpr int blocks = 120;
+
+            EngineGenerator gen;
+            gen.prepare (rate, block);
+
+            gen.setEngineKind (3);            // Hubschrauber
+            gen.setKindLevelDb (0.0f);
+            gen.setRpm (2000.0f);
+            gen.setHeliRotor (5.0f, 4.0f);
+            gen.setRotorSlap (1.0f);
+            gen.setRotorDoppler (doppler);
+            gen.setRotorRadius (6.0f);
+            gen.setRotorInPlane (inPlane);
+
+            // Der Verbrennermotor wuerde die Messung zudecken - hier geht es
+            // nur um den Rotor.
+            for (int i = 0; i < 4; ++i)
+                gen.setHarmonic (i, 1.0f, 0.0f, 1.0f, -96.0f);
+
+            gen.setNoiseParams (400.0f, 3000.0f, -96.0f, -96.0f, 1.2f);
+
+            std::vector<float> buffer ((size_t) block);
+
+            // Huellkurve mit einer Zeitkonstante deutlich unter der
+            // Blattfolge (5 Hz * 4 Blaetter = 20 Hz, also 50 ms Periode):
+            // 3 ms folgt jedem Blatt, mittelt aber das Rauschen darunter weg.
+            const double coeff = 1.0 - std::exp (-1.0 / (0.003 * rate));
+
+            double env = 0.0;
+            double sum = 0.0, sumSq = 0.0;
+            long long n = 0;
+
+            for (int b = 0; b < blocks; ++b)
+            {
+                gen.renderMono (buffer.data(), block);
+
+                if (b < 20)
+                    continue;                  // Betriebsart-Blende und Einschwingen
+
+                for (int i = 0; i < block; ++i)
+                {
+                    env += coeff * (std::abs ((double) buffer[(size_t) i]) - env);
+
+                    sum   += env;
+                    sumSq += env * env;
+                    ++n;
+                }
+            }
+
+            if (n == 0)
+                return 0.0;
+
+            const double mean = sum / (double) n;
+            const double var  = std::max (0.0, sumSq / (double) n - mean * mean);
+
+            // Variationskoeffizient: Schwankung relativ zum Pegel, damit ein
+            // lauterer Lauf nicht automatisch als staerker moduliert gilt.
+            return mean > 1.0e-9 ? std::sqrt (var) / mean : 0.0;
+        };
+
+        const double fakeSide  = rotorModulationDepth (sampleRate, false, 1.0f);
+        const double fakeAbove = rotorModulationDepth (sampleRate, false, 0.0f);
+        const double realSide  = rotorModulationDepth (sampleRate, true,  1.0f);
+        const double realAbove = rotorModulationDepth (sampleRate, true,  0.0f);
+
+        std::printf ("%-22s Modulationstiefe: gefaket von der Seite %.3f / von unten %.3f | "
+                     "Doppler von der Seite %.3f / von unten %.3f\n",
+                     "Rotor-Knattern", fakeSide, fakeAbove, realSide, realAbove);
+
+        // Der gefakte Weg kennt die Blickrichtung nicht - er MUSS in beiden
+        // Lagen dasselbe liefern, sonst misst dieser Test etwas anderes als
+        // gedacht.
+        if (std::abs (fakeSide - fakeAbove) > 0.02)
+        {
+            std::printf ("  FEHLER: der gefakte Rotor aendert sich mit der Blickrichtung "
+                         "(%.3f gegen %.3f) - das kann er gar nicht.\n", fakeSide, fakeAbove);
+            failed = true;
+        }
+
+        // Und der Kern: mit Doppler muss die Seitenansicht deutlich staerker
+        // moduliert sein als der Blick von unten.
+        if (realSide <= realAbove * 1.3)
+        {
+            std::printf ("  FEHLER: der Rotor-Doppler aendert sich beim Ueberflug nicht "
+                         "(von der Seite %.3f, von unten %.3f) - die Laufzeit der "
+                         "Blaetter kommt nicht an.\n", realSide, realAbove);
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // Getrennte Rauschquellen (@dpa 20260824: "achte bitte bei ab 2
+    // unterschiedlichen Noises (z.B. Propeller) darauf, dass sie
+    // unterschiedlich sind").
+    //
+    // Zwei Rauschstroeme, die im Plugin nebeneinander laufen, muessen
+    // unkorreliert sein. Waeren sie es nicht, addierten sie sich nur lauter
+    // statt breiter - und beim Rotor waeren N Blaetter dann ein einziges.
+    {
+        auto correlation = [] (juce::int64 seedA, juce::int64 seedB)
+        {
+            juce::Random a, b;
+
+            a.setSeed (seedA);
+            b.setSeed (seedB);
+
+            constexpr int count = 200000;
+
+            double sumAB = 0.0, sumAA = 0.0, sumBB = 0.0;
+
+            for (int i = 0; i < count; ++i)
+            {
+                const double x = 2.0 * a.nextDouble() - 1.0;
+                const double y = 2.0 * b.nextDouble() - 1.0;
+
+                sumAB += x * y;
+                sumAA += x * x;
+                sumBB += y * y;
+            }
+
+            const double denom = std::sqrt (sumAA * sumBB);
+
+            return denom > 0.0 ? std::abs (sumAB / denom) : 1.0;
+        };
+
+        // Die Startwerte des Rotors, genau wie in EngineGenerator::prepare().
+        double worst = 0.0;
+        int    worstA = 0, worstB = 0;
+
+        for (int i = 1; i <= 8; ++i)
+        {
+            for (int j = i + 1; j <= 8; ++j)
+            {
+                const auto seedOf = [] (int k)
+                {
+                    return (juce::int64) ((0x9e3779b97f4a7c15ull * (std::uint64_t) k) | 1ull);
+                };
+
+                const double corr = correlation (seedOf (i), seedOf (j));
+
+                if (corr > worst)
+                {
+                    worst  = corr;
+                    worstA = i;
+                    worstB = j;
+                }
+            }
+        }
+
+        std::printf ("%-22s hoechste Kreuzkorrelation zweier Blattquellen: %.4f "
+                     "(Blatt %d gegen %d, 200000 Samples)\n",
+                     "Rauschquellen", worst, worstA, worstB);
+
+        // Bei 200000 unabhaengigen Samples liegt der Zufallswert um 1/sqrt(n),
+        // also gut 0,002. Alles unter 0,02 ist zweifelsfrei unkorreliert.
+        if (worst > 0.02)
+        {
+            std::printf ("  FEHLER: zwei Blattquellen laufen im Gleichschritt - "
+                         "N Blaetter waeren dann klanglich ein einziges.\n");
+            failed = true;
+        }
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }

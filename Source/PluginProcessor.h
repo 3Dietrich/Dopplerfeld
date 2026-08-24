@@ -384,6 +384,8 @@ private:
         std::atomic<float>* propLevelDb   = nullptr;
         std::atomic<float>* heliRotorHz    = nullptr;
         std::atomic<float>* heliBladeCount = nullptr;
+        std::atomic<float>* heliDoppler     = nullptr;
+        std::atomic<float>* heliRotorRadius = nullptr;
 
         std::atomic<float>* sampleGain  = nullptr;
         std::atomic<float>* samplePitch = nullptr;

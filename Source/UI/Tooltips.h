@@ -49,6 +49,8 @@ namespace Tooltips
         EngineKind,
         HeliRotorHz,
         HeliBladeCount,
+        HeliDoppler,
+        HeliRotorRadius,
         EngineLevel,
         RocketShock,
         RocketShockSize,
@@ -573,6 +575,33 @@ namespace Tooltips
                           "(helicopter) mode.";
 
                 // --- FieldPanel ---
+                case Key::HeliDoppler:
+                    return lang == Language::De
+                        ? "Knattern über echten Doppler statt nachgebauter Modulation. "
+                          "Aus: das Schwirren atmet mit der Blattfolge, der Schlag kommt "
+                          "je Blatt - eine Modulation, die von der Blickrichtung nichts "
+                          "weiß. An: jedes Blatt ist eine eigene Quelle auf der "
+                          "Kreisbahn, sein Rauschen läuft durch eine Verzögerung, die "
+                          "sich mit seiner Stellung ändert. Dadurch ändert sich das "
+                          "Knattern beim Überflug von selbst: von der Seite hart, von "
+                          "direkt darunter gleichmäßig."
+                        : "Blade slap through real Doppler instead of a modelled "
+                          "modulation. Off: the swish breathes with the blade rate and "
+                          "the slap comes per blade - a modulation that knows nothing "
+                          "about the viewing direction. On: every blade is its own "
+                          "source on the circle, its noise runs through a delay that "
+                          "changes with its position. The slap then changes during a "
+                          "flyover by itself: hard from the side, even from directly "
+                          "below.";
+                case Key::HeliRotorRadius:
+                    return lang == Language::De
+                        ? "Blattlänge. Sie bestimmt, wie weit die Laufzeit eines Blattes "
+                          "je Umlauf schwankt (2r/c bei flacher Sicht) und damit, wie "
+                          "tief der Doppler-Effekt geht. Wirkt nur bei eingeschaltetem "
+                          "Doppler."
+                        : "Blade length. It sets how far a blade's travel time varies "
+                          "per revolution (2r/c seen edge-on) and therefore how deep the "
+                          "Doppler effect goes. Only takes effect with Doppler on.";
                 case Key::FieldSize:
                     return lang == Language::De
                         ? "Breite der Feldfläche in Metern (1-10000) - der Maßstab des 700x400px-"

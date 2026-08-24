@@ -352,6 +352,13 @@ namespace Params
     constexpr const char* heliRotorHz    = "heliRotorHz";
     constexpr const char* heliBladeCount = "heliBladeCount";
 
+    // Echter Rotor-Doppler statt nachgebauter Modulation (@dpa 20260824:
+    // "Knattern soll Umschaltbar auf Doppler() sein"). Siehe
+    // EngineGenerator::setRotorDoppler(). heliRotorRadius ist die Blattlaenge
+    // und bestimmt, wie tief die Laufzeit je Umlauf schwankt.
+    constexpr const char* heliDoppler     = "heliDoppler";
+    constexpr const char* heliRotorRadius = "heliRotorRadius";
+
     // Nur in Betriebsart "Propeller" wirksam: die beiden Propeller sitzen an
     // den Fluegeln, also propSpan Meter auseinander und quer zur Flugrichtung
     // (@dpa 20260823: "(2) Propeller an Fluegeln (die in n meter auseinander,

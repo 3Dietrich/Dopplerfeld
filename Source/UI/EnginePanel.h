@@ -101,7 +101,12 @@ private:
     // bleiben in den anderen Betriebsarten sichtbar, aber ausgegraut statt zu
     // verschwinden (Muster: MotionPanel::updateJitterEnabledState()), damit
     // die Panelhoehe unabhaengig von der Betriebsart konstant bleibt.
-    Knob heliRotorHzKnob, heliBladeCountKnob;
+    Knob heliRotorHzKnob, heliBladeCountKnob, heliRotorRadiusKnob;
+
+    // Echter Rotor-Doppler statt nachgebauter Modulation. Nur bei
+    // Hubschrauber und Propeller sichtbar, siehe kindKnobs().
+    juce::ToggleButton heliDopplerButton { "Doppler" };
+    std::unique_ptr<ButtonAttachment> heliDopplerAttachment;
 
     // Nur in Betriebsart "Propeller" wirksam: Fluegelspanne und Pegel des
     // Propellerpaars. Sie stehen hier bei den anderen Betriebsart-Reglern,

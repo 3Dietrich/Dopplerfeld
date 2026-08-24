@@ -130,6 +130,11 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (heliRotorHzKnob,    apvts, Params::heliRotorHz,    "Rotor Hz",  Tooltips::Key::HeliRotorHz);
     setupKnob (heliBladeCountKnob, apvts, Params::heliBladeCount, Text::utf8 ("Blätter"), Tooltips::Key::HeliBladeCount);
+    setupKnob (heliRotorRadiusKnob, apvts, Params::heliRotorRadius, Text::utf8 ("Blattlänge"), Tooltips::Key::HeliRotorRadius);
+
+    heliDopplerButton.setTooltip (Tooltips::text (Tooltips::Key::HeliDoppler));
+    addAndMakeVisible (heliDopplerButton);
+    heliDopplerAttachment = std::make_unique<ButtonAttachment> (apvts, Params::heliDoppler, heliDopplerButton);
 
     // Anfangszustand passend zur tatsaechlich geladenen Betriebsart setzen -
     // sonst stuenden die Rotor-Regler nach dem Oeffnen des Editors aktiv,
@@ -164,9 +169,10 @@ std::vector<const EnginePanel::Knob*> EnginePanel::kindKnobs() const
         case 1:  return { &kindLevelKnob, &jetToneKnob };
         case 2:  return { &kindLevelKnob, &rocketToneKnob, &rocketShockKnob,
                           &rocketShockSizeKnob, &rocketShockRateKnob };
-        case 3:  return { &kindLevelKnob, &rotorSlapKnob, &heliRotorHzKnob, &heliBladeCountKnob };
+        case 3:  return { &kindLevelKnob, &rotorSlapKnob, &heliRotorHzKnob, &heliBladeCountKnob,
+                          &heliRotorRadiusKnob };
         case 4:  return { &kindLevelKnob, &rotorSlapKnob, &heliRotorHzKnob, &heliBladeCountKnob,
-                          &propSpanKnob, &propLevelKnob };
+                          &heliRotorRadiusKnob, &propSpanKnob, &propLevelKnob };
         default: return {};   // Frei: die vier Teiltöne machen den Klang
     }
 }
@@ -232,7 +238,7 @@ void EnginePanel::updateHeliControlsEnabled()
     const auto active = kindKnobs();
 
     for (auto* k : { &kindLevelKnob, &rocketShockKnob, &rotorSlapKnob,
-                      &heliRotorHzKnob, &heliBladeCountKnob,
+                      &heliRotorHzKnob, &heliBladeCountKnob, &heliRotorRadiusKnob,
                       &propSpanKnob, &propLevelKnob,
                       &jetToneKnob, &rocketToneKnob,
                       &rocketShockSizeKnob, &rocketShockRateKnob })
@@ -242,6 +248,11 @@ void EnginePanel::updateHeliControlsEnabled()
         k->slider.setVisible (visible);
         k->label.setVisible (visible);
     }
+
+    // Der Doppler-Schalter gehoert zum Rotor: er steht nur dort, wo es einen
+    // gibt (Hubschrauber und Propeller).
+    heliDopplerButton.setVisible (std::find (active.begin(), active.end(), &heliRotorHzKnob)
+                                      != active.end());
 
     // Dasselbe fuer die Vorlagenliste: nur die der gewaehlten Betriebsart
     // steht da, die andere verschwindet ganz (nicht ausgegraut) - genau wie
@@ -319,7 +330,8 @@ void EnginePanel::refreshTooltips()
     }
 
     for (auto* k : { &noiseFcLoKnob, &noiseFcHiKnob, &noiseGainLoKnob, &noiseGainHiKnob, &noiseQKnob,
-                      &jitterAmountKnob, &jitterRateKnob, &heliRotorHzKnob, &heliBladeCountKnob })
+                      &jitterAmountKnob, &jitterRateKnob, &heliRotorHzKnob, &heliBladeCountKnob,
+                      &heliRotorRadiusKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -328,6 +340,7 @@ void EnginePanel::refreshTooltips()
 
     engineKindLabel.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
     engineKindCombo.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
+    heliDopplerButton.setTooltip (Tooltips::text (Tooltips::Key::HeliDoppler));
 
     for (auto* c : { &jetVoiceChoice, &rocketVoiceChoice })
     {
@@ -366,6 +379,15 @@ void EnginePanel::resized()
         auto choiceArea = kindRow.removeFromLeft (juce::jmin (200, kindRow.getWidth()));
         choice->label.setBounds (choiceArea.removeFromTop (18));
         choice->combo.setBounds (choiceArea);
+    }
+
+    // Der Doppler-Schalter passt in den Rest derselben Zeile - Hubschrauber
+    // und Propeller haben dort keine Vorlagenliste, der Platz steht leer.
+    if (heliDopplerButton.isVisible())
+    {
+        kindRow.removeFromLeft (12);
+        heliDopplerButton.setBounds (kindRow.removeFromLeft (juce::jmin (110, kindRow.getWidth()))
+                                            .withTrimmedTop (18));
     }
 
     area.removeFromTop (6);
