@@ -148,7 +148,35 @@ private:
     // Sucht in [searchLo, searchHi) den steigenden Nulldurchgang von left,
     // der `target` am naechsten liegt. Liefert -1, wenn keiner gefunden
     // wurde (z.B. Stille oder reiner Gleichanteil).
-    static int findTriggerIndexNear (const float* left, int searchLo, int searchHi, int target);
+    //
+    // Zweistufig (@dpa 20260824: "Scope Sync springt noch sehr zwischen den
+    // schwingungen. kannst Du einen Lopass einbauen, der dann den (ungenauen)
+    // Sync angibt, woraus Du dann den korrekten Sync errechnen kannst?"):
+    //
+    //   1. Das Fenster wird tiefpassgefiltert. Uebrig bleibt die Grundwelle,
+    //      und die hat je Periode genau EINEN steigenden Nulldurchgang. Im
+    //      Rohsignal sind es so viele, wie das Signal Obertoene hat - deshalb
+    //      sprang das Bild zwischen ihnen hin und her.
+    //   2. Der grobe Fund wird im ROHSIGNAL nachgezogen: der steigende
+    //      Nulldurchgang, der ihm am naechsten liegt. Damit steht das Bild auf
+    //      der Flanke, die man wirklich sieht, aber immer auf derselben.
+    //
+    // Gefiltert wird vorwaerts UND rueckwaerts. Ein einfacher Durchlauf
+    // verschoebe die Grundwelle um seine eigene Gruppenlaufzeit, und genau um
+    // die laege der grobe Fund daneben - bei tiefen Grenzfrequenzen um mehr
+    // als eine halbe Periode, womit Stufe 2 wieder auf der falschen Flanke
+    // landete. Zwei Durchlaeufe in entgegengesetzter Richtung heben die
+    // Phasendrehung exakt auf; das geht hier, weil das ganze Fenster schon
+    // vorliegt.
+    int findTriggerIndexNear (const float* left, int searchLo, int searchHi, int target) const;
+
+    // Wie oben, aber ohne Tiefpass - der zweite Schritt fuer sich.
+    static int nearestRisingZero (const float* left, int searchLo, int searchHi, int target);
+
+    // Fuellt syncScratch mit dem nullphasig tiefpassgefilterten Fenster.
+    // Grenzfrequenz aus der Nulldurchgangsrate des Fensters selbst, siehe
+    // Kommentar in der .cpp.
+    void buildSyncLowpass (const float* left, int length) const;
 
     // Sucht im Rohfenster den ersten Pegelanstieg in [searchLo, searchHi).
     // Beide Huellkurvenfolger laufen ab Index 0 an, damit der langsame beim
@@ -231,6 +259,10 @@ private:
     double sampleRateHint = 48000.0;
 
     std::vector<float> shownLeft, shownRight;   // Live-Anzeige
+
+    // Arbeitsspeicher des Sync-Tiefpasses (siehe findTriggerIndexNear).
+    // mutable, weil die Suche selbst nichts am sichtbaren Zustand aendert.
+    mutable std::vector<float> syncScratch;
 
     // History-Modus (s. Klassenkommentar) - komplette Ringpuffer-Kopie zum
     // Freeze-Zeitpunkt plus Scroll-Position darin.

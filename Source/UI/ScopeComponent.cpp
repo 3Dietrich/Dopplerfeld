@@ -12,7 +12,7 @@ ScopeComponent::ScopeComponent()
     shownRight.resize ((size_t) displaySamples, 0.0f);
 }
 
-int ScopeComponent::findTriggerIndexNear (const float* left, int searchLo, int searchHi, int target)
+int ScopeComponent::nearestRisingZero (const float* left, int searchLo, int searchHi, int target)
 {
     const int maxRadius = juce::jmax (searchHi - target, target - searchLo);
 
@@ -31,6 +31,81 @@ int ScopeComponent::findTriggerIndexNear (const float* left, int searchLo, int s
     }
 
     return -1;
+}
+
+void ScopeComponent::buildSyncLowpass (const float* left, int length) const
+{
+    syncScratch.resize ((size_t) length);
+
+    if (length <= 0)
+        return;
+
+    // Grenzfrequenz aus dem Signal selbst. Die Nulldurchgangsrate ist eine
+    // grobe Frequenzschaetzung, die von den Obertoenen nach oben gezogen wird:
+    // ein reiner Sinus hat 2 Durchgaenge je Periode, ein obertonreicher Klang
+    // ein Vielfaches davon. Ein Viertel dieser Schaetzung liegt deshalb
+    // zuverlaessig unter der Grundwelle - und genau die soll uebrig bleiben.
+    //
+    // Ohne diese Kopplung braeuchte es eine feste Zahl, und die waere fuer
+    // jedes zweite Signal falsch: 250 Hz loeschen einen Klang mit 1 kHz
+    // Grundton vollstaendig aus, 2 kHz lassen bei einem Bass alle Obertoene
+    // stehen.
+    int crossings = 0;
+
+    for (int n = 1; n < length; ++n)
+        if ((left[n - 1] <= 0.0f) != (left[n] <= 0.0f))
+            ++crossings;
+
+    const double sr       = sampleRateHint > 0.0 ? sampleRateHint : 48000.0;
+    const double zeroRate = 0.5 * (double) crossings * sr / (double) length;
+    const double cutoff   = juce::jlimit (10.0, 0.125 * sr, 0.25 * zeroRate);
+
+    const double coeff = 1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * cutoff / sr);
+
+    // Vorwaerts ...
+    double y = (double) left[0];
+
+    for (int n = 0; n < length; ++n)
+    {
+        y += coeff * ((double) left[n] - y);
+        syncScratch[(size_t) n] = (float) y;
+    }
+
+    // ... und rueckwaerts, damit keine Phase uebrig bleibt (siehe Header).
+    y = (double) syncScratch[(size_t) (length - 1)];
+
+    for (int n = length - 1; n >= 0; --n)
+    {
+        y += coeff * ((double) syncScratch[(size_t) n] - y);
+        syncScratch[(size_t) n] = (float) y;
+    }
+}
+
+int ScopeComponent::findTriggerIndexNear (const float* left, int searchLo, int searchHi, int target) const
+{
+    if (searchHi <= searchLo)
+        return -1;
+
+    buildSyncLowpass (left, searchHi);
+
+    // Stufe 1: die Grundwelle. Sie hat je Periode genau einen steigenden
+    // Nulldurchgang, das Bild kann also nicht mehr zwischen Obertoenen
+    // springen.
+    const int coarse = nearestRisingZero (syncScratch.data(), searchLo, searchHi, target);
+
+    if (coarse < 0)
+    {
+        // Nichts uebrig geblieben (Stille, oder ein Signal ganz ohne tiefen
+        // Anteil): dann eben direkt im Rohsignal, wie zuvor.
+        return nearestRisingZero (left, searchLo, searchHi, target);
+    }
+
+    // Stufe 2: die Flanke, die man wirklich sieht - die naechste des
+    // Rohsignals. Findet sich dort keine, bleibt der grobe Fund stehen; er
+    // ist immer noch besser als gar keine Ausrichtung.
+    const int fine = nearestRisingZero (left, searchLo, searchHi, coarse);
+
+    return fine >= 0 ? fine : coarse;
 }
 
 void ScopeComponent::setEventTriggerEnabled (bool shouldTrigger)

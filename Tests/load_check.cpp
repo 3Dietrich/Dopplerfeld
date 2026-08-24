@@ -4408,6 +4408,146 @@ int main()
         }
     }
 
+
+    //==================================================================
+    // Scope-Sync (@dpa 20260824: "Scope Sync springt noch sehr zwischen den
+    // schwingungen").
+    //
+    // Gemessen wird genau das: mehrere aufeinanderfolgende Anzeigefenster
+    // eines periodischen, obertonreichen Signals - so, wie der Editor sie im
+    // Betrieb liefert, also jedes um ein Stueck weitergerueckt. Steht der Sync,
+    // zeigen sie alle dasselbe Bild. Springt er zwischen zwei Nulldurchgaengen
+    // hin und her, sinkt die Aehnlichkeit sofort.
+    {
+        auto readWindow = [] (const ScopeComponent& scope, std::vector<float>& into)
+        {
+            const juce::File out = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                       .getChildFile ("dopplerfeld_scope_sync.wav");
+            out.deleteFile();
+
+            into.clear();
+
+            if (! scope.exportVisibleWindow (out))
+                return false;
+
+            juce::AudioFormatManager formats;
+            formats.registerBasicFormats();
+
+            std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (out));
+
+            if (reader == nullptr)
+            {
+                out.deleteFile();
+                return false;
+            }
+
+            juce::AudioBuffer<float> shown ((int) reader->numChannels, (int) reader->lengthInSamples);
+            reader->read (&shown, 0, (int) reader->lengthInSamples, 0, true, true);
+
+            into.assign (shown.getReadPointer (0),
+                         shown.getReadPointer (0) + shown.getNumSamples());
+
+            out.deleteFile();
+            return true;
+        };
+
+        auto meanSimilarity = [&] (bool useSync)
+        {
+            ScopeComponent scope;
+
+            scope.setSampleRateHint (sampleRate);
+            scope.setMaxDisplaySampleCount (1 << 20);
+            scope.setDisplaySeconds (0.02, sampleRate);     // 960 Samples
+            scope.setSyncEnabled (useSync);
+
+            const int display    = scope.displaySampleCount();
+            const int captureLen = scope.captureWindowSampleCount();
+
+            // Grundton 220 Hz plus ein kraeftiger siebter Teilton: dadurch hat
+            // eine Grundperiode mehrere steigende Nulldurchgaenge, und genau
+            // zwischen denen sprang die Anzeige.
+            const double f0 = 220.0;
+
+            auto sample = [f0] (double t)
+            {
+                const double twoPi = juce::MathConstants<double>::twoPi;
+
+                return 0.5 * std::sin (twoPi * f0 * t)
+                     + 0.45 * std::sin (twoPi * 7.0 * f0 * t + 0.7);
+            };
+
+            std::vector<float> rawL ((size_t) captureLen), rawR ((size_t) captureLen);
+            std::vector<float> previous, current;
+
+            double sum = 0.0;
+            int    pairs = 0;
+
+            // Sechs Bilder, jedes um 401 Samples weiter - eine Zahl, die zu
+            // keiner der beiden Perioden passt, damit sich nichts zufaellig
+            // von selbst ausrichtet.
+            for (int frame = 0; frame < 6; ++frame)
+            {
+                const int offset = frame * 401;
+
+                for (int n = 0; n < captureLen; ++n)
+                {
+                    const double t = (double) (offset + n) / sampleRate;
+
+                    rawL[(size_t) n] = (float) sample (t);
+                    rawR[(size_t) n] = rawL[(size_t) n];
+                }
+
+                scope.feed (rawL.data(), rawR.data(), (std::uint32_t) (offset + captureLen));
+
+                if (! readWindow (scope, current))
+                    return -1.0;
+
+                if (! previous.empty() && previous.size() == current.size())
+                {
+                    double ab = 0.0, aa = 0.0, bb = 0.0;
+
+                    for (size_t i = 0; i < current.size(); ++i)
+                    {
+                        ab += (double) previous[i] * (double) current[i];
+                        aa += (double) previous[i] * (double) previous[i];
+                        bb += (double) current[i]  * (double) current[i];
+                    }
+
+                    const double denom = std::sqrt (aa * bb);
+
+                    sum += denom > 0.0 ? ab / denom : 0.0;
+                    ++pairs;
+                }
+
+                previous = current;
+            }
+
+            juce::ignoreUnused (display);
+
+            return pairs > 0 ? sum / (double) pairs : -1.0;
+        };
+
+        const double withoutSync = meanSimilarity (false);
+        const double withSync    = meanSimilarity (true);
+
+        std::printf ("%-22s Aehnlichkeit aufeinanderfolgender Bilder: ohne Sync %.3f | "
+                     "mit Sync %.3f\n",
+                     "Scope-Sync", withoutSync, withSync);
+
+        if (withSync < 0.0 || withoutSync < 0.0)
+        {
+            std::printf ("  FEHLER: der sichtbare Ausschnitt liess sich nicht auslesen.\n");
+            failed = true;
+        }
+        else if (withSync < 0.95)
+        {
+            std::printf ("  FEHLER: der Sync steht nicht - aufeinanderfolgende Bilder "
+                         "aehneln sich nur zu %.3f. Er springt zwischen den "
+                         "Nulldurchgaengen.\n", withSync);
+            failed = true;
+        }
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }
