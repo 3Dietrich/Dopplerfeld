@@ -153,8 +153,6 @@ private:
     // ausloest. Hier steht es neben seiner Ursache.
     Knob flyJumpBoomKnob;
 
-    juce::ToggleButton flyJumpEdgeButton { "Sprungkante" };
-    std::unique_ptr<ButtonAttachment> flyJumpEdgeAttachment;
 
     juce::TextButton flyButton { "Vorbeiflug" };
 

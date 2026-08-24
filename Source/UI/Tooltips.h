@@ -82,7 +82,6 @@ namespace Tooltips
         ReverseGain,
         ShockDuck,
         ShockDuckRange,
-        JumpEdge,
         JumpBoom,
         ShadowTail,
         SrcJitterMaxSpeed,
@@ -813,28 +812,6 @@ namespace Tooltips
                           "decayed, and what arrives is a rumble along with everything "
                           "around it. At exactly this distance the ducking is at half "
                           "depth. 0 = applies everywhere equally.";
-                case Key::JumpEdge:
-                    return lang == Language::De
-                        ? "Lässt die KANTE eines Bewegungssprungs durch, statt sie zu "
-                          "verschmieren. Springt die Quelle in der Geschwindigkeit - "
-                          "Knall-Start, ein Sprung in der abgespielten Bahn -, dann springen "
-                          "beim Hörer Lautstärke und Tonhöhe, sobald die Kante ankommt. "
-                          "Normalerweise wird dieser Sprung über die Länge eines "
-                          "Solver-Segments (des kleinsten Zeitschritts, in dem der "
-                          "Ausbreitungs-Löser rechnet, 1,33 ms) interpoliert und damit zur "
-                          "weichen Rampe; hier bleibt er ein Ruck. Das ist der ehrliche Rest "
-                          "dessen, was das Modell hergibt - ein Ruck, kein Knall. Für den Knall "
-                          "gibt es 'Sprungknall' daneben, beides lässt sich einzeln oder "
-                          "zusammen einschalten."
-                        : "Lets the EDGE of a movement jump through instead of smearing it. "
-                          "When the source jumps in speed - abrupt start, a jump in a played "
-                          "back path - level and pitch jump at the listener as soon as the edge "
-                          "arrives. Normally that jump is interpolated across one solver "
-                          "segment (the smallest time step the propagation solver computes in, "
-                          "1.33 ms) and becomes a soft ramp; here it stays a jolt. "
-                          "That is the honest remainder of what the model gives - a jolt, not a "
-                          "boom. For the boom there is 'Jump Boom' next to it; both can be used "
-                          "separately or together.";
                 case Key::JumpBoom:
                     return lang == Language::De
                         ? "Setzt eine DRUCKWELLE auf einen Bewegungssprung. Ein "

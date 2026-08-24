@@ -114,7 +114,11 @@ public:
     // geladener Zustand, der Rundenwechsel einer Wiedergabe. Der Aufrufer
     // muss den Ausgang um den Schnitt herum leise machen, sonst knackt es;
     // Begruendung und Abgrenzung zu jumpSourceTo() stehen in der .cpp.
-    void cutTo (Vec3 posMetres);
+    // preVelocity legt die Vorgeschichte fest, mit der der neue Ort aufgesetzt
+    // wird: ruhend (Default) oder gleichfoermig bewegt. Letzteres braucht der
+    // Vorbeiflug - eine Quelle, die schon immer geflogen ist, klingt vom
+    // ersten Sample an mit voller Fahrt, statt erst anzulaufen.
+    void cutTo (Vec3 posMetres, Vec3 preVelocity = Vec3{});
 
     void setBoomLimitDb (double dB);
     void setAirAbsorptionAmount (double amount01);
@@ -134,9 +138,6 @@ public:
     // PropagationPath::setShockDuck().
     void setShockDuck (double amount01, double rangeMetres);
 
-    // Bewegungssprung hoerbar machen, siehe PropagationPath::setJumpEdge()
-    // und setJumpBoom().
-    void setJumpEdge (bool shouldPassEdge);
     void setJumpBoom (double amount01);
 
     // Legt die Sprungmarke auf JETZT, mit der Hoehe des
@@ -519,7 +520,6 @@ private:
     double reverseGain      = 1.0;
     double shockDuckAmount = 0.0;
     double shockDuckRange  = 0.0;
-    bool   jumpEdgeOn      = false;
     double jumpBoom        = 0.0;
     double shadowTailSeconds = 1.0e-3;
 

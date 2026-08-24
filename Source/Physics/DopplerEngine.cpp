@@ -225,7 +225,6 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setReverseGain (reverseGain);
     setShockDuck (shockDuckAmount, shockDuckRange);
     setShadowTailSeconds (shadowTailSeconds);
-    setJumpEdge (jumpEdgeOn);
     setJumpBoom (jumpBoom);
 
     reset();
@@ -334,7 +333,6 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
         p.setReverseGain (reverseGain);
         p.setShockDuck (shockDuckAmount, shockDuckRange);
         p.setShadowTailSeconds (shadowTailSeconds);
-        p.setJumpEdge (jumpEdgeOn);
         p.setJumpBoom (jumpBoom);
     }
 }
@@ -359,7 +357,7 @@ void DopplerEngine::startGeometrySwitch (Vec3 newPos, Vec3 preVelocity, int fade
     geometry.beginSwitch (fadeSamples);
 }
 
-void DopplerEngine::cutTo (Vec3 posMetres)
+void DopplerEngine::cutTo (Vec3 posMetres, Vec3 preVelocity)
 {
     // Schnitt statt Ueberblendung (@dpa 20260824: "Ende erreicht, leise,
     // umbau, laut, start"). Der Unterschied zu jumpSourceTo() ist nicht die
@@ -388,11 +386,11 @@ void DopplerEngine::cutTo (Vec3 posMetres)
     // Eine laufende oder angemeldete Ueberblendung gehoert zum alten Ort.
     geometry.reset();
 
-    configureSet (geometry.active(),  posMetres, Vec3{});
-    configureSet (geometry.pending(), posMetres, Vec3{});
+    configureSet (geometry.active(),  posMetres, preVelocity);
+    configureSet (geometry.pending(), posMetres, preVelocity);
 
     queuedJumpPos = posMetres;
-    queuedJumpVel = Vec3{};
+    queuedJumpVel = preVelocity;
 }
 
 void DopplerEngine::markSourceJump (double speedStepMps)
@@ -571,14 +569,6 @@ void DopplerEngine::setShockDuck (double amount01, double rangeMetres)
             p.setShockDuck (amount01, rangeMetres);
 }
 
-void DopplerEngine::setJumpEdge (bool shouldPassEdge)
-{
-    jumpEdgeOn = shouldPassEdge;
-
-    for (auto* s : { &geometry.active(), &geometry.pending() })
-        for (auto& p : s->paths)
-            p.setJumpEdge (shouldPassEdge);
-}
 
 void DopplerEngine::setJumpBoom (double amount01)
 {

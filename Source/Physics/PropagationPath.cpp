@@ -287,10 +287,6 @@ void PropagationPath::setShadowTailSeconds (double seconds)
     shadowTailSeconds = std::max (rampSeconds, seconds);
 }
 
-void PropagationPath::setJumpEdge (bool shouldPassEdge)
-{
-    jumpEdgeOn = shouldPassEdge;
-}
 
 void PropagationPath::setJumpBoom (double amount01)
 {
@@ -950,7 +946,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 triggerNWave (b, c, tStart);
             }
 
-            // --- Bewegungssprung (siehe setJumpEdge/setJumpBoom) ---
+            // --- Bewegungssprung (siehe setJumpBoom) ---
             //
             // Erkannt wird er NICHT an einem Sprung von M_r: der aendert sich
             // an der Kaustik von sich aus um mehr als jeder Startsprung, eine
@@ -1015,30 +1011,22 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const double duck0 = shockDuckAt (tStart);
             const double duck1 = shockDuckAt (tStart + (double) len / sr);
 
-            // Kante durchlassen statt interpolieren (siehe setJumpEdge): bei
-            // einem erkannten Sprung stehen Amplitude und Leseposition vom
-            // ersten Sample des Segments an auf ihrem Zielwert. Sonst verteilt
-            // die Interpolation den Sprung ueber die Segmentlaenge und macht
-            // aus der Kante eine Rampe.
-            const bool passEdge = jumpEdgeOn && jumped;
-
             for (int i = 0; i < len; ++i)
             {
-                const double u     = (double) i / (double) len;
-                const double uEdge = passEdge ? 1.0 : u;
-                const double tH    = tStart + (double) i / sr;
+                const double u  = (double) i / (double) len;
+                const double tH = tStart + (double) i / sr;
 
                 // Kubisch nach Hermite (Plan 2.11). Linear wäre stückweise
                 // konstanter Doppler und damit an jedem Solver-Punkt ein
                 // Tonhöhensprung mit Stride-Wiederholrate.
-                const double tau = hermite (tau0, m0, tau1, m1, uEdge);
+                const double tau = hermite (tau0, m0, tau1, m1, u);
 
                 // Leseposition darf rückwärts wandern - bei M_r > 1 wird der
                 // Zweig zeitverkehrt gehört (Plan 2.8). Kein Sondercode, aber
                 // auch keine Annahme über Monotonie.
                 const double x = (double) sig.readAt (sig.timeToIndex (tH - tau));
 
-                const double amp = amp0 + (amp1 - amp0) * uEdge;
+                const double amp = amp0 + (amp1 - amp0) * u;
 
                 b.lpZ += coeff * (x * amp - b.lpZ);
 

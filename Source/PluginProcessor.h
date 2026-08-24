@@ -431,7 +431,6 @@ private:
         std::atomic<float>* reverseGainDb   = nullptr;
         std::atomic<float>* shockDuckAmount = nullptr;
         std::atomic<float>* shockDuckRange  = nullptr;
-        std::atomic<float>* jumpEdge        = nullptr;
         std::atomic<float>* jumpBoom        = nullptr;
         std::atomic<float>* shadowTailMs    = nullptr;
         std::atomic<float>* airAbsorbAmount = nullptr;
@@ -572,8 +571,23 @@ private:
     // Rundenwechsel vom Zustandsladen, die sonst denselben Weg gehen.
     bool cutRewindsPlayer = false;
 
+    // Nach dem Umbau den Vorbeiflug starten (@dpa 20260824: die Sprungkante
+    // "bitte immer ohne (Sprung-)Bewegung im Audio, demnach immer ohne
+    // N-Wave und ohne Doppler (durch den Sprung), gefadet, default fuer
+    // Vorbeiflug! ohne On/Off toggle").
+    //
+    // Ein Vorbeiflug beginnt damit, dass die Quelle an den Startpunkt der
+    // Strecke versetzt wird - und beim Rundenwechsel vom Ende zurueck an den
+    // Anfang. Beides ist Umbau, keine Bewegung: es wird geschnitten, nicht
+    // ueberblendet. Der Schnitt ruft dafuer startFlyBy() im stillen Fenster
+    // auf, wo Glaetter und Geometrie ohne Zuhoerer gesetzt werden koennen.
+    bool cutStartsFlyBy = false;
+
     // Meldet einen Schnitt an. Nur aus dem Audiothread aufzurufen.
-    void beginCut (Vec3 targetMetres, bool rewindPlayer);
+    //
+    // Das Ziel darf beim Vorbeiflug offenbleiben (startFlyBy setzt es
+    // selbst); dann zaehlt nur die Stille drumherum.
+    void beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy = false);
 
     // Additive Mikrobewegung der Quelle M, vor sourceSmoothers eingehakt
     // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.
@@ -683,7 +697,6 @@ private:
     double lastReverseGainDb   = 0.0;
     double lastShockDuckRange  = -1.0;
     double lastShockDuckAmount = 1.0;
-    bool   lastJumpEdge        = false;
     double lastJumpBoom        = 0.0;
     double lastShadowTailMs    = 1.0;
 

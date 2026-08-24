@@ -221,7 +221,6 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     flyStartLabel.setText ("Startvariante", juce::dontSendNotification);
     flyStartLabel.setJustificationType (juce::Justification::centredLeft);
     flyStartLabel.setTooltip (Tooltips::text (Tooltips::Key::FlyStart));
-    flyJumpEdgeButton.setTooltip (Tooltips::text (Tooltips::Key::JumpEdge));
     addAndMakeVisible (flyStartLabel);
     populateChoices (flyStartCombo, apvts, Params::flyStart);
     addAndMakeVisible (flyStartCombo);
@@ -229,9 +228,6 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (flyJumpBoomKnob, apvts, Params::jumpBoom, "Sprungknall", Tooltips::Key::JumpBoom);
 
-    flyJumpEdgeButton.setTooltip (Tooltips::text (Tooltips::Key::JumpEdge));
-    addAndMakeVisible (flyJumpEdgeButton);
-    flyJumpEdgeAttachment = std::make_unique<ButtonAttachment> (apvts, Params::jumpEdge, flyJumpEdgeButton);
 
     setupKnob (flyDistanceKnob, apvts, Params::flyDistance, "Fly Dist", Tooltips::Key::FlyDistance);
     setupKnob (flyApproachKnob, apvts, Params::flyApproach, "Fly Approach", Tooltips::Key::FlyApproach);
@@ -280,7 +276,6 @@ void MotionPanel::updateTabVisibility()
 
     for (auto* c : { (juce::Component*) &flyKindLabel, (juce::Component*) &flyKindCombo,
                       (juce::Component*) &flyStartLabel, (juce::Component*) &flyStartCombo,
-                      (juce::Component*) &flyJumpEdgeButton,
                       (juce::Component*) &flyJumpBoomKnob.slider,
                       (juce::Component*) &flyJumpBoomKnob.label,
                       (juce::Component*) &flyButton,
@@ -450,12 +445,6 @@ void MotionPanel::resized()
         flyButton.setBounds (flyRow.removeFromLeft (140));
         flyRow.removeFromLeft (10);
         flyLoopButton.setBounds (flyRow.removeFromLeft (juce::jmin (80, flyRow.getWidth())));
-        flyRow.removeFromLeft (10);
-
-        // Die Sprungkante gehoert zur Startvariante darunter und passt in
-        // diese Zeile: die Reglerzeile ist mit vier Knoepfen voll, dort bliebe
-        // fuer die Beschriftung kein Platz.
-        flyJumpEdgeButton.setBounds (flyRow.removeFromLeft (juce::jmin (110, flyRow.getWidth())));
 
         a.removeFromTop (6);
 

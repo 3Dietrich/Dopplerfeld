@@ -284,7 +284,6 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.reverseGainDb   = raw (Params::reverseGainDb);
     pp.shockDuckAmount = raw (Params::shockDuckAmount);
     pp.shockDuckRange  = raw (Params::shockDuckRange);
-    pp.jumpEdge        = raw (Params::jumpEdge);
     pp.jumpBoom        = raw (Params::jumpBoom);
     pp.shadowTailMs    = raw (Params::shadowTailMs);
     pp.airAbsorbAmount = raw (Params::airAbsorbAmount);
@@ -513,6 +512,7 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     cutGain           = 1.0;
     cutExecutePending = false;
     cutRewindsPlayer  = false;
+    cutStartsFlyBy    = false;
     cutTargetMetres   = smoothedSourcePos;
     cutHoldMetres     = smoothedSourcePos;
 }
@@ -836,7 +836,6 @@ void DopplerfeldProcessor::applyParameters()
     const double shockDuckAmount = (double) pp.shockDuckAmount->load();
     const double shockDuckRange  = (double) pp.shockDuckRange->load();
     const double shadowTailMs    = (double) pp.shadowTailMs->load();
-    const bool   jumpEdge        = pp.jumpEdge->load() > 0.5f;
     const double jumpBoom        = (double) pp.jumpBoom->load();
 
     if (std::abs (reverseGainDb - lastReverseGainDb) > 1.0e-9)
@@ -853,11 +852,6 @@ void DopplerfeldProcessor::applyParameters()
         dopplerEngine.setShockDuck (shockDuckAmount, shockDuckRange);
     }
 
-    if (jumpEdge != lastJumpEdge)
-    {
-        lastJumpEdge = jumpEdge;
-        dopplerEngine.setJumpEdge (jumpEdge);
-    }
 
     if (std::abs (jumpBoom - lastJumpBoom) > 1.0e-9)
     {
@@ -964,7 +958,7 @@ void DopplerfeldProcessor::applyCloneParameters()
     activeRealClones.store (effectiveRealClones);
 }
 
-void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer)
+void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy)
 {
     // Ein bereits laufender Schnitt wird nicht neu angestossen, sondern nur
     // umgelenkt: sein Ziel ist immer das zuletzt angemeldete. Sonst kaskadieren
@@ -972,6 +966,7 @@ void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer)
     // Rundenwechsels) zu einer Kette halber Blenden.
     cutTargetMetres  = targetMetres;
     cutRewindsPlayer = cutRewindsPlayer || rewindPlayer;
+    cutStartsFlyBy   = cutStartsFlyBy   || startsFlyBy;
 
     if (cutState == CutState::FadingOut)
         return;
@@ -996,15 +991,27 @@ void DopplerfeldProcessor::handlePendingRequests()
 
         cutRewindsPlayer = false;
 
-        // Glaetter UND Geometrie an der neuen Stelle neu aufsetzen. Beides
-        // gehoert zusammen: ein Glaetter, der noch am alten Ort steht, schriebe
-        // im naechsten Tick den Weg dorthin zurueck.
-        smoothedSourcePos = cutTargetMetres;
-        sourceSmoothers.reset (cutTargetMetres);
-        wasMotionSlewGuardActive = false;
+        if (cutStartsFlyBy)
+        {
+            cutStartsFlyBy = false;
 
-        dopplerEngine.setSourceTarget (cutTargetMetres);
-        dopplerEngine.cutTo (cutTargetMetres);
+            // startFlyBy() setzt Glaetter, Bahn-Vorgeschichte und Geometrie
+            // selbst - hier im stillen Fenster, also ohne dass irgendetwas
+            // davon zu hoeren waere.
+            startFlyBy();
+        }
+        else
+        {
+            // Glaetter UND Geometrie an der neuen Stelle neu aufsetzen. Beides
+            // gehoert zusammen: ein Glaetter, der noch am alten Ort steht, schriebe
+            // im naechsten Tick den Weg dorthin zurueck.
+            smoothedSourcePos = cutTargetMetres;
+            sourceSmoothers.reset (cutTargetMetres);
+            wasMotionSlewGuardActive = false;
+
+            dopplerEngine.setSourceTarget (cutTargetMetres);
+            dopplerEngine.cutTo (cutTargetMetres);
+        }
 
         cutState = CutState::FadingIn;
     }
@@ -1135,7 +1142,12 @@ void DopplerfeldProcessor::handlePendingRequests()
     }
 
     if (flyTriggerRequest.exchange (false))
-        startFlyBy();
+    {
+        // Der Sprung an den Startpunkt der Strecke ist Umbau, keine Bewegung
+        // (siehe cutStartsFlyBy). Das Ziel bleibt offen - startFlyBy() setzt
+        // es selbst, sobald der Schnitt es aufruft.
+        beginCut (smoothedSourcePos, false, true);
+    }
 
     if (playTriggerRequest.exchange (false))
     {
@@ -1255,13 +1267,18 @@ void DopplerfeldProcessor::startFlyBy()
     // Startpunkt: der Glätter hat im eingeschwungenen Zustand einen festen
     // Nachlauf, und die Vorgeschichte muss zu dem passen, was gleich
     // weitergeschrieben wird.
+    // Geschnitten, nicht ueberblendet: startFlyBy() laeuft ausschliesslich im
+    // stillen Fenster eines Schnitts (siehe cutStartsFlyBy). Ein
+    // Geometrie-Crossfade waere hier zweierlei zu viel - er liesse den alten
+    // Satz waehrenddessen weiterfliegen (also den Sprung als Bewegung hoeren)
+    // und rechnete dafuer auch noch zwei komplette Loesersaetze.
     if (start == FlyByGenerator::Start::Continuous)
     {
-        dopplerEngine.startLinearMotion (smoothedSourcePos, direction * speed);
+        dopplerEngine.cutTo (smoothedSourcePos, direction * speed);
     }
     else
     {
-        dopplerEngine.jumpSourceTo (smoothedSourcePos);
+        dopplerEngine.cutTo (smoothedSourcePos);
 
         // Der Knall-Start setzt eine ruhende Quelle schlagartig auf volle
         // Fahrt. Genau das ist die Kante, die spaeter beim Hoerer ankommt -
@@ -1290,8 +1307,11 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
     {
         flyLoopRestartPending = false;
 
+        // Vom Ende der Strecke zurueck an ihren Anfang ist derselbe Umbau wie
+        // beim ersten Start - geschnitten, nicht geflogen (@dpa: "weil das
+        // andere ist voellig sinnlos: von ende auf anfang springen??").
         if (pp.flyLoop->load() > 0.5f)
-            startFlyBy();
+            beginCut (smoothedSourcePos, false, true);
     }
 
     // Der Glätter tickt auf der Trajektorienrate, nicht auf der Blockrate

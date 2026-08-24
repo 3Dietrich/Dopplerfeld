@@ -225,19 +225,13 @@ public:
     // stumm, und der Sprung selbst wird ueber die Laenge eines Solver-Segments
     // interpoliert, wird also zur weichen Rampe statt zur Kante.
     //
-    // Zwei getrennte Wege, beide ueber ihren eigenen Regler, beide aus per
-    // Default:
+    // Der Weg dorthin ist die Druckwelle, ueber ihren eigenen Regler:
     //
-    //   edgeOn   - die Kante durchlassen statt sie zu interpolieren. Amplitude
-    //              und Leseposition springen dann am Segmentanfang auf ihren
-    //              Zielwert. Das ist der ehrliche Rest dessen, was das Modell
-    //              hergibt: ein Ruck, kein Knall.
     //   jumpBoom - eine Druckwelle darauf. Ein Geschwindigkeitssprung ist
     //              formal unendliche Beschleunigung, und die strahlt
     //              physikalisch eine Druckwelle ab. Nutzt dieselbe N-Wellen-
     //              Schicht wie der Ueberschallknall, mit einer Amplitude, die
     //              mit der Sprunghoehe waechst.
-    void setJumpEdge (bool shouldPassEdge);
     void setJumpBoom (double amount01);
 
     // Zeitpunkt (in Quellzeit), an dem die Bahn umgeschrieben wurde, und die
@@ -734,8 +728,7 @@ private:
     // Siehe setShadowTailSeconds(). Default 1 ms = bisheriges Verhalten.
     double shadowTailSeconds = 1.0e-3;
 
-    // Siehe setJumpEdge() / setJumpBoom(). Beide aus per Default.
-    bool   jumpEdgeOn = false;
+    // Siehe setJumpBoom().
     double jumpBoom   = 0.0;
 
     // Siehe setJumpMarker(). Der Anfangswert liegt so weit in der

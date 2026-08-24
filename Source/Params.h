@@ -294,10 +294,9 @@ namespace Params
 
     // Bewegungssprung hoerbar machen (@dpa 20260823: "der Vorbeiflug
     // 'Knall-Start' muesste ja mindestens subsonic zu hoeren sein ... Bisher
-    // ist noch nicht zu hoeren!"). Zwei Wege nebeneinander: jumpEdge laesst
-    // die Kante durch, statt sie ueber ein Solver-Segment zu interpolieren
-    // (ein Ruck), jumpBoom setzt eine Druckwelle darauf (ein Knall).
-    constexpr const char* jumpEdge = "jumpEdge";
+    // ist noch nicht zu hoeren!"). Der Sprung selbst bleibt lautlos - er wird
+    // geschnitten, nicht geflogen (siehe CutState in PluginProcessor.h) -,
+    // jumpBoom setzt die Druckwelle darauf, die dabei entsteht.
     constexpr const char* jumpBoom = "jumpBoom";
 
     // Mindestdauer des Ausklangs, wenn ein Hoerweg an der Kaustik

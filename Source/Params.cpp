@@ -544,7 +544,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     }
 
     // Bewegungssprung: Kante durchlassen (aus) und Druckwelle darauf (0).
-    layout.add (boolParam (jumpEdge, "Jump Edge", false));
     // Default nicht mehr 0 (@dpa 20260824: "Knall bei Bewegung/Startvariante
     // ... soll wie der Raketen-Stoss hoerbar sein, ist es aber nicht"). Wer die
     // Startvariante "Knall-Start" waehlt, meint den Knall - der musste bisher

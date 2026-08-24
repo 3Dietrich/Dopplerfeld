@@ -1337,19 +1337,31 @@ int main()
 
             proc.prepareToPlay (sampleRate, blockSize);
 
-            // Kurz laufen lassen, damit die Quelle klingt, dann starten.
+            // Laufen lassen, damit die Quelle klingt UND der Signalpuffer
+            // weit genug zurueckreicht: der Vorbeiflug beginnt 243 m entfernt,
+            // der Schall von dort ist 0,7 s unterwegs. Der Schnitt setzt die
+            // Bahn mit vollstaendiger Vorgeschichte auf, aber gelesen wird
+            // trotzdem aus dem Signalpuffer - was es dort noch nicht gibt,
+            // kann auch nicht klingen. Im Betrieb laeuft der Puffer laengst
+            // mit, hier muss er erst gefuellt werden.
             Stats settle;
-            render (proc, buffer, 0.5, settle, [] (double) {});
+            render (proc, buffer, 1.5, settle, [] (double) {});
 
             proc.triggerFlyBy();
 
-            // Der Einsatz bekommt ein eigenes, sehr kurzes Fenster. Im ersten
-            // Block blendet die vorher stehende Quelle aus, die direkt beim
-            // Hörer stand - das ist die lauteste Stelle des ganzen Anflugs
-            // (gemessen 0,0508 im ersten Block gegen 0,0301 bei der Passage)
-            // und als Vergleichsmassstab fuer "war da ein Vorbeiflug?"
-            // unbrauchbar. Fuer das Anlauftempo ist genau dieser Moment aber
-            // der interessante, deshalb wird er gemessen statt uebersprungen.
+            // Der Schnitt zuerst: der Sprung an den Startpunkt der Strecke ist
+            // Umbau, keine Bewegung, und laeuft deshalb zwischen Aus- und
+            // Einblende (@dpa 20260824, siehe CutState). Waehrend der Ausblende
+            // steht die Quelle noch - erst danach faengt der Flug an, und erst
+            // dort ist ein Tempo zu messen. 40 ms decken die 12 ms Blende samt
+            // Blockraster sicher ab.
+            Stats cutWindow;
+            render (proc, buffer, 0.04, cutWindow, [] (double) {});
+
+            // Der Einsatz bekommt ein eigenes, sehr kurzes Fenster. Fuer das
+            // Anlauftempo ist genau dieser Moment der interessante: die Quelle
+            // muss vom ersten Bahnpunkt an mit voller Fahrt fliegen, statt
+            // anzulaufen.
             render (proc, buffer, 0.05, onsetStats, [] (double) {});
 
             // Erstes halbes Sekundenfenster: die Quelle ist noch weit weg, der
@@ -1493,7 +1505,7 @@ int main()
     //      die Quelle steht beim Start rund 243 m weit weg, das sind gut
     //      0,7 s Laufzeit.
     {
-        auto jumpStart = [&] (bool edgeOn, double boom, Stats& arrivalStats)
+        auto jumpStart = [&] (double boom, Stats& arrivalStats)
         {
             DopplerfeldProcessor proc;
 
@@ -1517,13 +1529,14 @@ int main()
 
             // Der Knall soll unterschallig ankommen - genau darum geht es.
             setParam (proc, Params::nWaveOn,  1.0f);
-            setParam (proc, Params::jumpEdge, edgeOn ? 1.0f : 0.0f);
             setParam (proc, Params::jumpBoom, (float) boom);
 
             proc.prepareToPlay (sampleRate, blockSize);
 
+            // Vorlauf wie beim Anlauf-Szenario: der Start liegt 243 m weit
+            // weg, der Signalpuffer muss so weit zurueckreichen.
             Stats settle;
-            render (proc, buffer, 0.5, settle, [] (double) {});
+            render (proc, buffer, 1.5, settle, [] (double) {});
 
             proc.triggerFlyBy();
 
@@ -1535,14 +1548,12 @@ int main()
             render (proc, buffer, 0.40, arrivalStats,  [] (double) {});
         };
 
-        Stats plain, withEdge, withBoom;
+        Stats plain, withBoom;
 
-        jumpStart (false, 0.0, plain);
-        jumpStart (true,  0.0, withEdge);
-        jumpStart (false, 1.0, withBoom);
+        jumpStart (0.0, plain);
+        jumpStart (1.0, withBoom);
 
-        plain.report    ("Knall-Start, wie bisher");
-        withEdge.report ("Knall-Start + Kante");
+        plain.report   ("Knall-Start ohne Welle");
         withBoom.report ("Knall-Start + Druckwelle");
 
         auto rmsOf = [] (const Stats& st)
@@ -1550,8 +1561,8 @@ int main()
             return std::sqrt (st.sumSquares[0] / std::max (1.0, (double) st.samples * 0.5));
         };
 
-        std::printf ("%-22s Ankunft: Spitze ohne %.4f | Kante %.4f | Druckwelle %.4f\n",
-                     "", plain.peak, withEdge.peak, withBoom.peak);
+        std::printf ("%-22s Ankunft: Spitze ohne %.4f | mit Druckwelle %.4f\n",
+                     "", plain.peak, withBoom.peak);
 
         // @dpa 20260824: "Durch die Regel 'waehrend N-Wave nicht ausser N' ist
         // das wie eine kurze Unterbrechung." Der Sprungknall senkt den uebrigen
@@ -1578,26 +1589,8 @@ int main()
             failed = true;
         }
 
-        // Die Kante ist der leise Weg: sie darf den Pegel kaum aendern, muss
-        // aber die Flanke steiler machen. Sonst ist sie wirkungslos.
-        // Die Kante ist der leise Weg, und sie ist es MESSBAR: der Marker wird
-        // erkannt (sonst knallte die Druckwelle darueber nicht), und Amplitude
-        // wie Leseposition stehen im betroffenen Segment sofort auf ihrem
-        // Zielwert. Am Ausgang aendert das trotzdem so gut wie nichts -
-        // gemessen bleiben Spitze (0,0179) und groesster Samplesprung
-        // (0,00909) gleich.
-        //
-        // Der Grund steht in den Zahlen des Segments, in dem die Kante
-        // ankommt: die Amplitude springt dort von 0,00404 auf 0,00986, also
-        // auf einem sehr leisen Zweig - die Quelle ist beim Start noch 243 m
-        // weit weg. Was als Kante durchkommt, liegt unter dem, was der Rest
-        // des Fensters ohnehin an Flanken hat.
-        //
-        // Deshalb steht hier KEINE Pruefung auf einen Unterschied: es gaebe
-        // keinen zu pruefen. Der Weg, der wirkt, ist die Druckwelle darueber.
-        std::printf ("%-22s Ankunft: groesster Samplesprung ohne %.5f | Kante %.5f | "
-                     "Druckwelle %.5f\n",
-                     "", plain.maxSampleStep, withEdge.maxSampleStep, withBoom.maxSampleStep);
+        std::printf ("%-22s Ankunft: groesster Samplesprung ohne %.5f | mit Druckwelle %.5f\n",
+                     "", plain.maxSampleStep, withBoom.maxSampleStep);
     }
 
     //==================================================================
@@ -3799,6 +3792,34 @@ int main()
             render (player, buffer, 8.5, loopRun, [] (double) {});
         }
 
+        // --- d) Rundenwechsel des Vorbeifluges -------------------------
+        // @dpa 20260824: "default fuer Vorbeiflug! ohne On/Off toggle (weil
+        // das andere ist voellig sinnlos: von ende auf anfang springen??)".
+        // Vom Ende der Strecke zurueck an ihren Anfang ist Umbau, keine
+        // Bewegung - geschnitten, nicht ueberblendet.
+        Stats flyLoopRun;
+
+        {
+            DopplerfeldProcessor flier;
+            prepareProcessor (flier);
+
+            setParam (flier, Params::flyKind,     0.0f);
+            setParam (flier, Params::flyStart,    0.0f);
+            setParam (flier, Params::flyDistance, 200.0f);
+            setParam (flier, Params::flyApproach, 400.0f);
+            setParam (flier, Params::flySpeed,    150.0f);
+            setParam (flier, Params::flyLoop,     1.0f);
+
+            Stats warm;
+            render (flier, buffer, 1.0, warm, [] (double) {});
+
+            flier.triggerFlyBy();
+
+            // Die Strecke ist rund 5,3 s lang - zwei Runden decken den
+            // Uebergang sicher ab.
+            render (flier, buffer, 12.0, flyLoopRun, [] (double) {});
+        }
+
         loadCtl.report    ("Sprungnaht, Ruhe nah");
         farRest.report    ("Sprungnaht, Ruhe fern");
         loadJump.report   ("Sprungnaht, Zustand geladen");
@@ -3822,6 +3843,21 @@ int main()
         std::printf ("%-22s Motor neu anlassen haelt den Audiothread %.1f ms an "
                      "(Budget je Block %.1f ms)\n",
                      "", restartMillis, 1000.0 * (double) blockSize / sampleRate);
+
+        std::printf ("%-22s Vorbeiflug-Runde: teuerster Block %.0f, |M_r| max %.2f, "
+                     "laengste Stille %.3f s\n",
+                     "", worstOf (flyLoopRun), flyLoopRun.maxMach,
+                     flyLoopRun.worstSilenceSeconds);
+
+        // Der Rundenwechsel darf keine Bewegung sein. Der Flug selbst laeuft
+        // mit 150 m/s, also |M_r| deutlich unter 1 - ein Sprung ueber die
+        // ganze Strecke waere dagegen sofort Ueberschall.
+        if (flyLoopRun.maxMach > 1.0)
+        {
+            std::printf ("  FEHLER: der Rundenwechsel des Vorbeifluges treibt |M_r| auf "
+                         "%.2f - er wird geflogen statt geschnitten.\n", flyLoopRun.maxMach);
+            failed = true;
+        }
 
         std::printf ("%-22s dieselbe weite Lage, nie hingeflogen: %.0f - "
                      "hingeflogen und ausgeschwungen: %.0f (%.1f x)\n",
