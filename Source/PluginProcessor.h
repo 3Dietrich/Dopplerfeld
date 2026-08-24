@@ -412,6 +412,15 @@ private:
         std::atomic<float>* engineLevelDb = nullptr;
         std::atomic<float>* rocketShock   = nullptr;
         std::atomic<float>* rotorSlap     = nullptr;
+
+        // Klangformung und Stossform der beiden Rausch-Betriebsarten,
+        // siehe Params::jetVoice und die vier daneben.
+        std::atomic<float>* jetVoice        = nullptr;
+        std::atomic<float>* jetTone         = nullptr;
+        std::atomic<float>* rocketVoice     = nullptr;
+        std::atomic<float>* rocketTone      = nullptr;
+        std::atomic<float>* rocketShockSize = nullptr;
+        std::atomic<float>* rocketShockRate = nullptr;
         std::atomic<float>* reverseGainDb   = nullptr;
         std::atomic<float>* shockDuckAmount = nullptr;
         std::atomic<float>* jumpEdge        = nullptr;

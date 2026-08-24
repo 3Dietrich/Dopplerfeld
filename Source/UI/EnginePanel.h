@@ -114,6 +114,42 @@ private:
     // Druckstoesse aus der Raketenduese und des Blattknallens am Rotor.
     Knob kindLevelKnob, rocketShockKnob, rotorSlapKnob;
 
+    // Klangformung der beiden Rausch-Betriebsarten (@dpa 20260824: Duese und
+    // Rakete brauchen "einen Klangveraenderungsknob und/oder eine Auswahl an
+    // vorgefertigten (multiband?) Filtern (am besten beides)").
+    //
+    // Beides also: je Betriebsart eine Vorlagenliste (Choice) und ein
+    // stufenloser Regler darueber. Getrennte Listen, weil ein Duesenstrahl
+    // und ein Raketenbruellen nicht dieselben Klangfarben haben.
+    Knob jetToneKnob, rocketToneKnob;
+
+    // Form der Druckstoesse aus der Raketenduese: Laenge einer Stosswelle und
+    // ihre Folge. Erst mit diesen beiden ist der Stoss einstellbar - vorher
+    // steckten beide Groessen als Festwerte im Generator.
+    Knob rocketShockSizeKnob, rocketShockRateKnob;
+
+    // Beschriftete Auswahlliste, gebuendelt wie Knob - dieselbe Begruendung:
+    // die Lebensdauer des Attachments haengt so an der der ComboBox.
+    struct Choice
+    {
+        juce::Label label;
+        juce::ComboBox combo;
+        std::unique_ptr<ComboBoxAttachment> attachment;
+        Tooltips::Key tooltipKey = Tooltips::Key::JetVoice;
+    };
+
+    void setupChoice (Choice& choice, juce::AudioProcessorValueTreeState& apvts,
+                       const juce::String& paramID, const juce::String& labelText,
+                       Tooltips::Key tooltipKey);
+
+    Choice jetVoiceChoice, rocketVoiceChoice;
+
+    // Welche Vorlagenliste die gewaehlte Betriebsart hat - oder nullptr, wenn
+    // sie keine hat. Wie kindKnobs() die EINE Quelle fuer Sichtbarkeit und
+    // Layout, damit die beiden nicht auseinanderlaufen.
+    Choice* kindChoice();
+    const Choice* kindChoice() const;
+
     // Welche Modus-Regler die gewaehlte Betriebsart ueberhaupt braucht, in
     // Anzeigereihenfolge. EINE Quelle fuer Sichtbarkeit, Layout und
     // Panelhoehe - drei getrennte Listen liefen sonst auseinander.

@@ -243,6 +243,35 @@ namespace Params
     constexpr const char* rocketShock = "rocketShock";
     constexpr const char* rotorSlap   = "rotorSlap";
 
+    // Klangformung der beiden Rausch-Betriebsarten (@dpa 20260824:
+    // "Duesenantrieb hat einfach nur weises Rauschen? Das braucht einen
+    // Klangveraenderungsknob und/oder eine Auswahl an vorgefertigten
+    // (multiband?) Filtern (am besten beides)"). Es ist beides geworden:
+    //
+    //   ...Voice - fertige Dreiband-Formung, je Betriebsart eine eigene Liste.
+    //              Duese und Rakete klingen verschieden, also haben sie
+    //              verschiedene Vorlagen und nicht eine gemeinsame.
+    //   ...Tone  - stufenlos darueber, 0 dunkel bis 1 hell, 0,5 = die Vorlage
+    //              unveraendert. Kippt Baenderpegel UND Eckfrequenzen, sonst
+    //              waere der Regler kaum zu hoeren.
+    constexpr const char* jetVoice    = "jetVoice";
+    constexpr const char* jetTone     = "jetTone";
+    constexpr const char* rocketVoice = "rocketVoice";
+    constexpr const char* rocketTone  = "rocketTone";
+
+    // Form der Druckstoesse aus der Raketenduese (@dpa 20260824: "Die
+    // Druckstoesse sind Ueberschall, also donnernde N-Waves"). Seitdem sind es
+    // echte N-Wellen und keine Rauschstoesse mehr, und dafuer brauchen sie
+    // dieselben zwei Groessen wie jede andere Stosswelle:
+    //
+    //   Size - Ausdehnung der Stosszelle in Metern. Daraus wird die Dauer der
+    //          Welle (T = 2*Size/c), genau wie bei Params::nWaveSize. Klein =
+    //          Peitschenknall, gross = Donnern.
+    //   Rate - mittlere Folge der Stoesse in Hz. Einzelne Schlaege unten,
+    //          zusammenhaengendes Grollen oben.
+    constexpr const char* rocketShockSize = "rocketShockSize";
+    constexpr const char* rocketShockRate = "rocketShockRate";
+
     constexpr const char* reverseGainDb = "reverseGainDb";
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber den

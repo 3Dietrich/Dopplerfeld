@@ -22,6 +22,61 @@ namespace
     }
 }
 
+// --- Klangvorlagen der beiden Rausch-Betriebsarten ---
+//
+// Reihenfolge bindend, sie ist die von Params::jetVoice bzw.
+// Params::rocketVoice. Wer dort umsortiert, muss hier mitziehen.
+//
+// Die Zahlen sind keine Messwerte, sondern Klangbilder: gesucht war je
+// Eintrag ein Triebwerk, das man wiedererkennt, nicht eine Kennlinie. Was
+// sie unterscheidet, ist die VERTEILUNG der Energie auf die drei Bänder -
+// genau das, was ein einzelner Hochpass nicht konnte.
+const std::array<EngineVoicePreset, 5> jetVoiceTable
+{{
+    // Turbofan: der moderne Verkehrsjet. Der Bypass-Mantelstrom macht den
+    // Klang, und der ist tief und breit - das satte Rauschen beim Start,
+    // nicht das Kreischen.
+    { 220.0,  700.0, 0.70, 3000.0,   1.00, 0.85, 0.35,      0.0, 1.0, 0.00 },
+
+    // Turbojet: die ältere, schmalere Bauart. Weniger Mantelstrom, mehr
+    // Schärfe, und über allem der singende Verdichter - das Kreischen, das
+    // man von startenden Militärmaschinen kennt.
+    { 150.0, 1400.0, 0.90, 4500.0,   0.50, 1.00, 0.75,   2800.0, 9.0, 0.20 },
+
+    // Nachbrenner: rohe Verbrennung hinter der Turbine. Alles wandert nach
+    // unten, der Klang wird ein Brüllen statt eines Zischens.
+    {  90.0,  400.0, 0.55, 2200.0,   1.45, 0.90, 0.45,      0.0, 1.0, 0.00 },
+
+    // Ferne: dasselbe Triebwerk, nur weit weg. Die Höhen hat die Luft
+    // unterwegs geschluckt, übrig bleibt das Grundrauschen.
+    { 160.0,  500.0, 0.60, 1800.0,   1.10, 0.50, 0.06,      0.0, 1.0, 0.00 },
+
+    // Breit: keine Kennzeichnung, alle drei Bänder gleich laut - der
+    // neutrale Ausgangspunkt zum Selberdrehen.
+    { 250.0, 1000.0, 0.55, 2500.0,   0.85, 0.85, 0.85,      0.0, 1.0, 0.00 }
+}};
+
+const std::array<EngineVoicePreset, 5> rocketVoiceTable
+{{
+    // Vollschub: ein Flüssigkeitstriebwerk unter Last. Fast alles sitzt
+    // unten, das ist das Wummern, das man im Bauch spürt.
+    {  70.0,  260.0, 0.50, 1200.0,   1.55, 0.80, 0.28,      0.0, 1.0, 0.00 },
+
+    // Feststoff: rauer und körniger als flüssig, mit deutlich mehr Mitten -
+    // ein Feststoffbooster prasselt, er wummert nicht nur.
+    { 110.0,  600.0, 0.85, 2200.0,   1.00, 1.25, 0.55,      0.0, 1.0, 0.00 },
+
+    // Zündung: der Augenblick, in dem der Strahl aufreißt. Breiter als der
+    // eingeschwungene Vollschub, mit deutlich mehr Obenrum.
+    {  90.0,  450.0, 0.65, 3200.0,   1.20, 1.00, 0.80,      0.0, 1.0, 0.00 },
+
+    // Ferne: nur noch Grollen, die Luft hat den Rest geschluckt.
+    {  60.0,  200.0, 0.50,  900.0,   1.60, 0.45, 0.04,      0.0, 1.0, 0.00 },
+
+    // Breit: neutraler Ausgangspunkt.
+    { 120.0,  500.0, 0.55, 2000.0,   1.00, 1.00, 1.00,      0.0, 1.0, 0.00 }
+}};
+
 EngineGenerator::EngineGenerator()
 {
     // Default-Verhältnisse bewusst leicht schief (Plan 3.10): exakt
@@ -39,6 +94,150 @@ EngineGenerator::EngineGenerator()
     harmonics[3].levelDb = -18.0f;
 }
 
+void EngineGenerator::BandVoicing::prepare (const juce::dsp::ProcessSpec& spec)
+{
+    low.prepare (spec);
+    low.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
+
+    mid.prepare (spec);
+    mid.setType (juce::dsp::StateVariableTPTFilterType::bandpass);
+
+    // Das Hochband ist ein breiter BANDPASS, kein Hochpass. Ein Hochpass
+    // laesst alles bis zur Nyquistgrenze durch, und weisses Rauschen hinter
+    // einem Hochpass ist immer noch weisses Rauschen - genau das, was an der
+    // Duese zu hoeren war (@dpa: "hat einfach nur weises Rauschen?"). Erst
+    // ein oben begrenztes Band macht aus der Zerlegung eine Klangfarbe.
+    high.prepare (spec);
+    high.setType (juce::dsp::StateVariableTPTFilterType::bandpass);
+
+    narrow.prepare (spec);
+    narrow.setType (juce::dsp::StateVariableTPTFilterType::bandpass);
+}
+
+void EngineGenerator::BandVoicing::reset()
+{
+    low.reset();
+    mid.reset();
+    high.reset();
+    narrow.reset();
+}
+
+EngineGenerator::VoiceGains EngineGenerator::applyVoicing (BandVoicing& v,
+                                                            const EngineVoicePreset& preset,
+                                                            double tone01, double u)
+{
+    // Klangfarbe als Kippung um die Mitte: -1 ganz dunkel, 0 die Vorlage
+    // unveraendert, +1 ganz hell.
+    const double tilt = juce::jlimit (-1.0, 1.0, (tone01 - 0.5) * 2.0);
+
+    // Der Regler zieht BEIDES mit, Baenderpegel und Eckfrequenzen. Nur die
+    // Pegel zu kippen klaenge nach einer Hoehenblende; erst die wandernden
+    // Frequenzen machen daraus einen anderen Klang statt eines lauteren
+    // Bandes. Eine gute Oktave Weg nach oben wie nach unten.
+    const double fScale = std::pow (2.0, tilt * 1.1);
+
+    // Gas hebt die Baender ebenfalls an - ein Triebwerk unter Last klingt
+    // nicht nur lauter, sondern hoeher.
+    const double uScale = 1.0 + 0.8 * u;
+
+    const double nyquist = currentSampleRate * 0.49;
+    const double halfRate = currentSampleRate * 0.5;
+
+    // Ausgleich der Bandbreite.
+    //
+    // Ohne ihn bedeuten die Pegel in der Vorlage nicht das, was sie sagen: ein
+    // Tiefpass bei 220 Hz laesst aus weissem Rauschen ein Zweihundertstel der
+    // Energie durch, ein breites Band bei 3 kHz ein Viertel. Das Tiefband
+    // waere gegen das Hochband chancenlos, egal wie die Pegel dastehen - der
+    // Turbofan klaenge dann so hell wie der Turbojet.
+    //
+    // Weisses Rauschen durch ein Filter behaelt die Wurzel des Verhaeltnisses
+    // der Bandbreiten. Also wird jedes Band mit dem Kehrwert davon
+    // hochgezogen, und erst dann heisst "lowGain 1,0" wirklich "dieses Band
+    // in voller Lautstaerke".
+    auto place = [&] (juce::dsp::StateVariableTPTFilter<float>& f, double fc, double q, double bandwidth)
+    {
+        const double placed = juce::jlimit (20.0, nyquist, fc * fScale * uScale);
+
+        f.setCutoffFrequency ((float) placed);
+        f.setResonance ((float) juce::jmax (0.05, q));
+
+        // bandwidth ist die wirksame Rauschbandbreite als Vielfaches der
+        // Eckfrequenz (Tiefpass) bzw. der Bandbreite fc/Q (Bandpass).
+        const double effective = juce::jmax (1.0, placed * bandwidth);
+
+        return std::sqrt (halfRate / effective);
+    };
+
+    // Tiefpass zweiter Ordnung: wirksame Bandbreite rund 1,1 x Eckfrequenz.
+    const double lowComp  = place (v.low,  preset.lowFc,  0.6, 1.11);
+
+    // Bandpaesse: die -3-dB-Breite ist fc/Q, die wirksame Rauschbandbreite
+    // etwa pi/2 davon.
+    const double midComp  = place (v.mid,  preset.midFc,  preset.midQ, 1.571 / juce::jmax (0.05, preset.midQ));
+    const double highComp = place (v.high, preset.highFc, 0.7,         1.571 / 0.7);
+
+    // Der singende Ton bleibt schmal und folgt nur dem Gas, nicht der
+    // Klangfarbe: er ist eine Eigenschaft der Maschine (Schaufelzahl mal
+    // Drehzahl), nicht der Filterung.
+    if (preset.narrowGain > 0.0)
+    {
+        v.narrow.setCutoffFrequency ((float) juce::jlimit (20.0, nyquist, preset.narrowFc * uScale));
+        v.narrow.setResonance ((float) juce::jmax (0.05, preset.narrowQ));
+    }
+
+    // Pegel gegenlaeufig kippen: hell nimmt unten weg und gibt oben dazu.
+    const double gainTilt = std::pow (2.0, tilt * 1.4);
+
+    return { preset.lowGain  / gainTilt * lowComp,
+             preset.midGain            * midComp,
+             preset.highGain * gainTilt * highComp,
+             preset.narrowGain };
+}
+
+double EngineGenerator::voiceSample (BandVoicing& v, const VoiceGains& g, double in, double narrowIn)
+{
+    // Alle drei Baender bekommen DASSELBE Rauschsample - sie sind eine
+    // Zerlegung einer Quelle, keine drei Rauschgeneratoren. Drei getrennte
+    // Quellen klaengen breiter und leerer zugleich, weil sich nichts mehr
+    // ueberlagert.
+    double outSample = (double) v.low.processSample  (0, (float) in) * g.low
+                     + (double) v.mid.processSample  (0, (float) in) * g.mid
+                     + (double) v.high.processSample (0, (float) in) * g.high;
+
+    // Der singende Ton kommt aus EIGENEM Rauschen: er soll neben dem Strahl
+    // stehen, nicht aus ihm herausgefiltert sein - sonst waere er nur ein
+    // schmaler Ausschnitt dessen, was ohnehin schon da ist.
+    if (g.narrow > 0.0)
+        outSample += (double) v.narrow.processSample (0, (float) narrowIn) * g.narrow;
+
+    return outSample;
+}
+
+double EngineGenerator::nWaveShape (double t, double duration, double rise)
+{
+    // Dieselbe Form wie PropagationPath::nWaveAt(), nur ohne die Groessen der
+    // Ausbreitung: senkrecht auf +1, lineare Gerade durch null, senkrecht von
+    // -1 zurueck. Zwei Stossfronten mit einer Geraden dazwischen - das ist
+    // eine Stosswelle, und nicht dasselbe wie ein abklingender Rauschstoss.
+    if (t < 0.0 || t > duration || duration <= 0.0)
+        return 0.0;
+
+    const double r = std::max (1.0e-9, std::min (rise, 0.4 * duration));
+
+    double shape = 1.0 - 2.0 * t / duration;
+
+    // Vordere Front: aus der Ruhe auf +1 hochziehen.
+    if (t < r)
+        shape *= t / r;
+
+    // Hintere Front: von -1 zurueck auf Ruhe.
+    if (t > duration - r)
+        shape *= (duration - t) / r;
+
+    return shape;
+}
+
 void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
 {
     currentSampleRate = sampleRate;
@@ -54,20 +253,20 @@ void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
     jitterFilter.prepare (spec);
     jitterFilter.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
 
-    rocketNoiseFilter.prepare (spec);
-    rocketNoiseFilter.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
-
     // Fahrtwind: Hochpass, denn Wind an Kanten ist ein Zischen, kein Wummern.
     windFilter.prepare (spec);
     windFilter.setType (juce::dsp::StateVariableTPTFilterType::highpass);
 
-    // Strahlrauschen der Düse: breites Band, Schwerpunkt in den oberen Mitten.
-    jetNoiseFilter.prepare (spec);
-    jetNoiseFilter.setType (juce::dsp::StateVariableTPTFilterType::highpass);
-
-    // Druckstöße der Rakete: Bandpass, damit sie knallen und nicht nur pumpen.
-    shockFilter.prepare (spec);
-    shockFilter.setType (juce::dsp::StateVariableTPTFilterType::bandpass);
+    // Strahlrauschen der Düse und Brüllen der Rakete: beide bekommen dieselbe
+    // Dreiband-Formung, aber je eine eigene Vorlagenliste (siehe
+    // jetVoiceTable/rocketVoiceTable oben).
+    //
+    // Die Druckstöße der Rakete brauchen KEIN Filter mehr: sie sind seit
+    // @dpa 20260824 echte N-Wellen, und deren Form IST ihr Klang - ein
+    // Bandpass darüber würde genau die senkrechten Fronten abrunden, um die
+    // es geht.
+    jetVoicing.prepare (spec);
+    rocketVoicing.prepare (spec);
 
     // Rotor: das Schwirren sitzt in den Mitten, der Blattknall darüber.
     rotorFilter.prepare (spec);
@@ -95,8 +294,8 @@ void EngineGenerator::reset()
     propTonePhase = 0.0;
     rotorPhase = 0.0;
 
-    shockEnv       = 0.0;
     shockCountdown = 0.0;
+    shocks.fill ({});
     slapEnv        = 0.0;
 
     activeKind = engineKind.load();
@@ -107,10 +306,9 @@ void EngineGenerator::reset()
 
     noiseFilter.reset();
     jitterFilter.reset();
-    rocketNoiseFilter.reset();
     windFilter.reset();
-    jetNoiseFilter.reset();
-    shockFilter.reset();
+    jetVoicing.reset();
+    rocketVoicing.reset();
     rotorFilter.reset();
     slapFilter.reset();
 
@@ -132,6 +330,8 @@ void EngineGenerator::reset()
     windRandom.setSeed (0x5eed2468);
     jetRandom.setSeed (0x5eed1357);
     shockRandom.setSeed (0x5eedabcd);
+    jetNarrowRandom.setSeed (0x5eedc0de);
+    rocketNarrowRandom.setSeed (0x5eeddead);
     rotorRandom.setSeed (0x5eedbeef);
     slapRandom.setSeed (0x5eedf00d);
 }
@@ -155,6 +355,24 @@ void EngineGenerator::setAirspeed (float metresPerSecond)
 void EngineGenerator::setRocketShock (float amount01)
 {
     rocketShock = juce::jlimit (0.0f, 1.0f, amount01);
+}
+
+void EngineGenerator::setJetVoice (int voiceIndex, float tone01)
+{
+    jetVoiceIndex.store (juce::jlimit (0, (int) jetVoiceTable.size() - 1, voiceIndex));
+    jetTone.store (juce::jlimit (0.0f, 1.0f, tone01));
+}
+
+void EngineGenerator::setRocketVoice (int voiceIndex, float tone01)
+{
+    rocketVoiceIndex.store (juce::jlimit (0, (int) rocketVoiceTable.size() - 1, voiceIndex));
+    rocketTone.store (juce::jlimit (0.0f, 1.0f, tone01));
+}
+
+void EngineGenerator::setRocketShockShape (float sizeMetres, float rateHz)
+{
+    rocketShockSizeM.store (juce::jmax (0.001f, sizeMetres));
+    rocketShockRateHz.store (juce::jmax (0.01f, rateHz));
 }
 
 void EngineGenerator::setRotorSlap (float amount01)
@@ -227,26 +445,35 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     windFilter.setCutoffFrequency ((float) windFc);
     windFilter.setResonance (1.0f / (float) std::sqrt (2.0));
 
-    // Duese: Strahlrauschen als Hochpass, Eckfrequenz mit dem Gas steigend.
-    const double jetFc = juce::jlimit (20.0, currentSampleRate * 0.49, 250.0 + 2500.0 * u);
-    jetNoiseFilter.setCutoffFrequency ((float) jetFc);
-    jetNoiseFilter.setResonance (0.9f);
+    // Duese und Rakete: gewaehlte Klangvorlage, verbogen um den
+    // Klangfarbe-Regler und mitgezogen vom Gas. Einmal je Block gesetzt, wie
+    // alle uebrigen Filter hier auch.
+    const auto jetGains = applyVoicing (jetVoicing,
+                                        jetVoiceTable[(size_t) jetVoiceIndex.load()],
+                                        (double) jetTone.load(), u);
 
-    // Rakete: eigenes Breitbandrauschen, Eckfrequenz oeffnet sich leicht mit
-    // u ("Gas geben"), bleibt aber immer tief-breitbandig - keine rotierenden
-    // Teile, die einen Ton geben koennten.
-    const double rocketFc = juce::jlimit (20.0, currentSampleRate * 0.49, 120.0 + 700.0 * u);
-    rocketNoiseFilter.setCutoffFrequency ((float) rocketFc);
-    rocketNoiseFilter.setResonance (1.2f);
+    const auto rocketGains = applyVoicing (rocketVoicing,
+                                           rocketVoiceTable[(size_t) rocketVoiceIndex.load()],
+                                           (double) rocketTone.load(), u);
 
-    // Druckstoesse im Raketenstrahl: Bandpass in den unteren Mitten, damit sie
-    // schlagen statt zu pumpen.
+    // Druckstoesse im Raketenstrahl: Dauer aus der Ausdehnung der Stosszelle
+    // (wie Params::nWaveSize: Hin- und Rueckweg des Schalls durch die Zelle),
+    // Folge aus dem Rate-Regler.
     const double shockAmount = (double) rocketShock.load();
-    shockFilter.setCutoffFrequency ((float) juce::jlimit (20.0, currentSampleRate * 0.49, 180.0 + 300.0 * u));
-    shockFilter.setResonance (1.6f);
 
-    const double shockMeanSamples = currentSampleRate / std::max (0.1, shockRateHz);
-    const double shockDecay = std::exp (-1.0 / std::max (1.0, shockDecayMs * 0.001 * currentSampleRate));
+    const double shockDurationSeconds = 2.0 * (double) rocketShockSizeM.load() / shockSpeedOfSound;
+
+    // Anstiegszeit der beiden Fronten: ein fester Bruchteil der Wellendauer,
+    // nach unten aber nie kuerzer als zwei Samples - darunter waere die Front
+    // nicht mehr darstellbar und faltete als Aliasing zurueck.
+    const double shockRise = std::max (shockDurationSeconds * shockRiseFraction,
+                                       2.0 / currentSampleRate);
+
+    const double shockMeanSamples = currentSampleRate
+                                  / std::max (0.01, (double) rocketShockRateHz.load());
+
+    // Zeitschritt je Sample, fuer die Phase der laufenden Stosswellen.
+    const double sampleSeconds = 1.0 / currentSampleRate;
 
     // Rotor: Blattfolgefrequenz = Rotordrehzahl * Blattzahl, beides eigene
     // Regler, unabhaengig von der Motor-RPM (@dpa: "Motor, und Rotoren mit
@@ -420,7 +647,13 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                 while (jetTonePhase >= 1.0)
                     jetTonePhase -= 1.0;
 
-                const double jetNoise = (double) jetNoiseFilter.processSample (0, (float) whiteNoise (jetRandom));
+                // Das Strahlrauschen durch die gewaehlte Dreiband-Formung
+                // (@dpa 20260824: "Duesenantrieb hat einfach nur weises
+                // Rauschen?"). Vorher war es genau das: weisses Rauschen
+                // hinter einem einzelnen Hochpass.
+                const double jetNoise = voiceSample (jetVoicing, jetGains,
+                                                     whiteNoise (jetRandom),
+                                                     whiteNoise (jetNarrowRandom));
 
                 kindSample = tone * jetToneLevel * u + jetNoise * jetNoiseLevel * (0.25 + 0.75 * u);
                 break;
@@ -432,26 +665,80 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                 // des Strahls, die es auch dann gibt, wenn die Rakete selbst
                 // noch langsamer als der Schall fliegt: überschallschnell ist
                 // hier der Abgasstrahl, nicht die Rakete.
-                const double roar = (double) rocketNoiseFilter.processSample (0, (float) whiteNoise (rocketNoiseRandom));
+                //
+                // Die Stöße sind echte N-Wellen (@dpa 20260824: "Die
+                // Druckstöße sind Überschall, also donnernde N-Waves"), keine
+                // Rauschstöße mit Hüllkurve. Der Unterschied ist nicht
+                // kosmetisch: eine Stoßwelle hat zwei senkrechte Fronten mit
+                // einer Geraden dazwischen, und diese Fronten sind der Knall.
+                // Ein abklingender Rauschburst hat sie nicht, er hat nur einen
+                // Anfang.
+                const double roar = voiceSample (rocketVoicing, rocketGains,
+                                                 whiteNoise (rocketNoiseRandom),
+                                                 whiteNoise (rocketNarrowRandom));
 
                 shockCountdown -= 1.0;
 
-                if (shockCountdown <= 0.0)
+                if (shockCountdown <= 0.0 && shockAmount > 0.0)
                 {
                     // Unregelmäßiger Abstand, nicht im Takt: Stoßzellen sind
                     // keine Maschine mit fester Drehzahl. Der nächste Stoß
                     // liegt zwischen dem halben und dem anderthalbfachen
                     // mittleren Abstand.
                     shockCountdown = shockMeanSamples * (0.5 + (double) shockRandom.nextFloat());
-                    shockEnv       = 1.0;
+
+                    // Auf einen FREIEN Platz legen. Einen noch laufenden
+                    // Stoß zu überschreiben hiesse, ihn mitten in seiner
+                    // Flanke abzuschneiden - ein Sprung im Signal, also ein
+                    // Knacken. Ist gerade keiner frei (sehr lange Wellen bei
+                    // sehr hoher Folge), fällt dieser eine Stoß aus. Das ist
+                    // an dieser Stelle nicht zu hören: es laufen dann bereits
+                    // zweiunddreissig übereinander.
+                    Shock* free = nullptr;
+
+                    for (auto& candidate : shocks)
+                    {
+                        if (candidate.duration <= 0.0 || candidate.phase > candidate.duration)
+                        {
+                            free = &candidate;
+                            break;
+                        }
+                    }
+
+                    if (free != nullptr)
+                    {
+                        // Streuung der Dauer: Stoßzellen sind nicht alle
+                        // gleich groß, und lauter identische N-Wellen klängen
+                        // nach einem Maschinengewehr statt nach einem Strahl.
+                        free->duration = shockDurationSeconds * (0.6 + 0.8 * (double) shockRandom.nextFloat());
+                        free->rise     = shockRise;
+
+                        // Amplitude streut, das Vorzeichen NICHT: eine
+                        // Stoßwelle beginnt immer mit Überdruck. Ein
+                        // zufälliges Vorzeichen machte aus der N-Welle wieder
+                        // ein Rauschen.
+                        free->amp   = 0.6 + 0.4 * (double) shockRandom.nextFloat();
+                        free->phase = 0.0;
+                    }
                 }
 
-                const double shockNoise = (double) shockFilter.processSample (0, (float) whiteNoise (shockRandom));
+                // Alle laufenden Stoßwellen aufsummieren. Bei hoher Folge
+                // überlappen sie sich - dieses Übereinander ist das Knattern
+                // ("crackle"), das eine Rakete von einem Rauschgenerator
+                // unterscheidet.
+                double shockSum = 0.0;
+
+                for (auto& sh : shocks)
+                {
+                    if (sh.duration <= 0.0 || sh.phase > sh.duration)
+                        continue;
+
+                    shockSum += sh.amp * nWaveShape (sh.phase, sh.duration, sh.rise);
+                    sh.phase += sampleSeconds;
+                }
 
                 kindSample = roar * rocketNoiseLevel * (0.3 + 0.7 * u)
-                           + shockNoise * shockEnv * shockAmount * rocketShockLevel;
-
-                shockEnv *= shockDecay;
+                           + shockSum * shockAmount * rocketShockLevel;
                 break;
             }
 

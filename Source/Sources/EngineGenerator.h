@@ -14,7 +14,8 @@
 // Aufbau und eigenen Pegeln:
 //
 //   Düsenantrieb   - EIN Verdichterton, darüber ein lautes Strahlrauschen.
-//   Raketenantrieb - kein Ton, nur Brüllen, dazu Druckstöße aus der Düse.
+//   Raketenantrieb - kein Ton, nur Brüllen, dazu Druckstöße aus der Düse:
+//                    echte N-Wellen, keine Rauschstöße.
 //   Hubschrauber   - Verbrennermotor (die vier Teiltöne) UND ein Rotor, der
 //                    aus der Nähe schwirrt und dessen Blätter knallen.
 //   Propeller      - ein leiser Ton plus Blattschlag.
@@ -34,6 +35,19 @@
 // Setter je einen atomaren Wert pro Parameter; der Audio-Thread liest sie
 // lock-frei. Die Werte hängen nicht zusammen (kein gemeinsam-atomarer
 // Snapshot nötig), darum reichen einzelne std::atomic<float>.
+// Eine Klangvorlage für die Dreiband-Formung (siehe EngineGenerator::BandVoicing):
+// wo die drei Bänder sitzen und wie laut sie sind. Frequenzen in Hz, Pegel linear.
+//
+// Steht ausserhalb der Klasse, weil die Vorlagentabellen (jetVoiceTable und
+// rocketVoiceTable in der .cpp) Dateikonstanten sind und an einen privaten
+// Typ innerhalb der Klasse nicht herankaemen.
+struct EngineVoicePreset
+{
+    double lowFc, midFc, midQ, highFc;
+    double lowGain, midGain, highGain;
+    double narrowFc, narrowQ, narrowGain;   // singender Ton im Rauschen, 0 = keiner
+};
+
 class EngineGenerator : public SoundSource
 {
 public:
@@ -95,12 +109,31 @@ public:
     // einstellbar sein, andererseits müssen diese noisy N-Waves zu hören sein
     // (auch wenn die Rakete noch um subsonic ist)").
     //
+    // Es sind echte N-Wellen, siehe nWaveShape() und setRocketShockShape().
+    // Ihre Länge und Folge regeln die beiden dortigen Größen.
+    //
     // Das sind NICHT die N-Wellen der Ausbreitung (die entstehen in
     // PropagationPath und hängen an M_r, der auf den Hörer bezogenen
     // Mach-Zahl). Das hier sitzt im Quellsignal selbst: der Abgasstrahl einer
     // Rakete ist selbst überschallschnell, seine Stoßzellen knallen, ganz
     // unabhängig davon, wie schnell die Rakete durch die Luft fliegt.
     void setRocketShock (float amount01);
+
+    // Klangformung des Strahlrauschens bzw. des Raketenbruellens (@dpa
+    // 20260824: "Das braucht einen Klangveraenderungsknob und/oder eine
+    // Auswahl an vorgefertigten (multiband?) Filtern (am besten beides)").
+    //
+    // voiceIndex zeigt in die jeweilige Vorlagentabelle (jetVoiceTable /
+    // rocketVoiceTable in der .cpp, Reihenfolge = Params::jetVoice bzw.
+    // Params::rocketVoice). tone01 schiebt stufenlos darueber: 0 dunkel,
+    // 0,5 die Vorlage unveraendert, 1 hell.
+    void setJetVoice (int voiceIndex, float tone01);
+    void setRocketVoice (int voiceIndex, float tone01);
+
+    // Form der Druckstoesse aus der Raketenduese. sizeMetres ist die
+    // Ausdehnung einer Stosszelle, daraus wird die Dauer der N-Welle
+    // (T = 2*size/c); rateHz die mittlere Folge der Stoesse.
+    void setRocketShockShape (float sizeMetres, float rateHz);
 
     // Stärke des Blattknallens am Rotor, 0..1. Die Blattspitzen laufen
     // schneller als der Rumpf und schlagen bei jedem Umlauf in die eigene
@@ -130,6 +163,47 @@ private:
     // Standard-PolyBLEP-Korrektur an den Sägezahn-Flanken, damit die
     // Unstetigkeit nicht als Alias-Rauschen ins Spektrum faltet.
     static double polyBlep (double phase, double phaseInc);
+
+    // --- Dreiband-Formung eines Rauschens ---
+    //
+    // Drei parallele Filter über derselben Rauschquelle - ein Tiefband, ein
+    // Mittenband, ein Hochband - mit je eigenem Pegel, dazu ein schmaler
+    // vierter Zweig für einen singenden Ton im Rauschen (das Kreischen eines
+    // Verdichters; bei den meisten Vorlagen steht sein Pegel auf null).
+    //
+    // Warum drei Bänder und nicht ein durchstimmbares Filter: ein einzelner
+    // Hochpass, wie das Strahlrauschen ihn bisher hatte, kann nur heller oder
+    // dunkler werden. Ein Turbofan klingt aber nicht wie ein leiserer
+    // Nachbrenner, sondern anders VERTEILT - viel Bypass-Rauschen unten, wenig
+    // Schärfe oben. Das lässt sich nur über getrennt regelbare Bänder sagen.
+    struct BandVoicing
+    {
+        juce::dsp::StateVariableTPTFilter<float> low, mid, high, narrow;
+
+        void prepare (const juce::dsp::ProcessSpec& spec);
+        void reset();
+    };
+
+    // Setzt die Filter einer Formung auf `preset`, verbogen um `tone01`
+    // (0 dunkel .. 0,5 neutral .. 1 hell) und mitgezogen vom Gas `u`.
+    // Liefert die drei Bandpegel zurück, die process() dann braucht.
+    struct VoiceGains { double low, mid, high, narrow; };
+
+    VoiceGains applyVoicing (BandVoicing& v, const EngineVoicePreset& preset,
+                             double tone01, double u);
+
+    // Ein Rauschsample durch die drei Bänder, mit den Pegeln aus applyVoicing().
+    static double voiceSample (BandVoicing& v, const VoiceGains& g, double in, double narrowIn);
+
+    // Die klassische N-Welle als reine Form, in [-1, +1]: senkrechter Sprung
+    // auf +1, lineare Gerade durch null, senkrechter Rücksprung von -1.
+    //
+    // Bewusst eine EIGENE Kopie und nicht PropagationPath::nWaveAt(): die dort
+    // hängt an der auf den Hörer bezogenen Mach-Zahl und bleibt stumm, solange
+    // die Quelle langsamer als der Schall fliegt. Hier ist aber nicht die
+    // Rakete überschallschnell, sondern ihr Abgasstrahl - die Stoßzellen
+    // knallen auch im Stand (@dpa: "auch wenn die Rakete noch um subsonic ist").
+    static double nWaveShape (double t, double duration, double rise);
 
     static constexpr int numHarmonics = 4;
 
@@ -174,8 +248,13 @@ private:
     // Ton ist die Blattfolgefrequenz des Fans, also ein Vielfaches der
     // Wellendrehzahl - er sitzt hoch und ist deutlich leiser als der Strahl.
     double jetTonePhase = 0.0;
-    juce::dsp::StateVariableTPTFilter<float> jetNoiseFilter;
+    BandVoicing jetVoicing;
     juce::Random jetRandom;
+    juce::Random jetNarrowRandom;
+
+    // Vorlage und Klangfarbe des Strahlrauschens, siehe setJetVoice().
+    std::atomic<int>   jetVoiceIndex { 0 };
+    std::atomic<float> jetTone { 0.5f };
 
     static constexpr double jetToneRatio = 8.0;    // Fanblätter je Umdrehung
     static constexpr double jetToneLevel = 0.10;   // gegen das Strahlrauschen
@@ -186,19 +265,65 @@ private:
     // Kein Ton, nur Brüllen: tiefes Breitbandrauschen. Dazu die Druckstöße
     // der Stoßzellen im Strahl, siehe setRocketShock() - kurze, harte
     // Rauschstöße in unregelmäßigem Abstand, nicht ein sauberer Puls.
-    juce::dsp::StateVariableTPTFilter<float> rocketNoiseFilter;
+    BandVoicing rocketVoicing;
     juce::Random rocketNoiseRandom;
+    juce::Random rocketNarrowRandom;
 
-    juce::dsp::StateVariableTPTFilter<float> shockFilter;
+    std::atomic<int>   rocketVoiceIndex { 0 };
+    std::atomic<float> rocketTone { 0.5f };
+
+    // Eine laufende Stoßwelle aus dem Strahl. Mehrere davon gleichzeitig,
+    // weil Stoßzellen sich nicht abwarten: bei hoher Folge überlappen sie,
+    // und genau diese Überlagerung ist das Knattern einer Rakete. Ein
+    // einzelner Platz würde stattdessen jeden noch laufenden Stoß abschneiden.
+    struct Shock
+    {
+        double phase    = 0.0;   // Sekunden seit Auslösung
+        double duration = 0.0;   // T der N-Welle, 0 = Platz frei
+        double rise     = 0.0;   // Anstiegszeit der beiden Fronten
+        double amp      = 0.0;
+    };
+
+    // Wieviele Stöße gleichzeitig laufen dürfen. Grosszügig bemessen: bei
+    // langen Wellen und hoher Folge überlappen viele, und ein zu kleiner
+    // Vorrat hiesse, laufende Stöße mittendrin abzuschneiden - das wäre ein
+    // Sprung im Signal, also ein Knacken.
+    static constexpr int maxShocks = 32;
+
+    std::array<Shock, maxShocks> shocks {};
+
     juce::Random shockRandom;
-    double shockEnv       = 0.0;   // Hüllkurve des laufenden Stoßes
     double shockCountdown = 0.0;   // Samples bis zum nächsten Stoß
     std::atomic<float> rocketShock { 0.0f };
 
+    // Form der Stöße, siehe setRocketShockShape().
+    std::atomic<float> rocketShockSizeM { 0.5f };
+    std::atomic<float> rocketShockRateHz { 18.0f };
+
     static constexpr double rocketNoiseLevel = 1.10;
-    static constexpr double rocketShockLevel = 2.20;
-    static constexpr double shockRateHz      = 18.0;   // mittlerer Abstand der Stöße
-    static constexpr double shockDecayMs     = 12.0;
+
+    // Pegel einer einzelnen N-Welle. Deutlich über dem Brüllen darunter, und
+    // das ist Absicht: ein Druckstoß, der nicht aus dem Rauschen herausragt,
+    // ist kein Stoß mehr (@dpa 20260824: "donnernde N-Waves"). Bei voll
+    // aufgedrehtem Regler darf das übersteuern - dafür gibt es den sichtbaren
+    // Begrenzer, und ein stiller Deckel wäre hier genau das Falsche.
+    static constexpr double rocketShockLevel = 4.00;
+
+    // Schallgeschwindigkeit für die Umrechnung Stoßzellen-Größe -> Wellendauer.
+    // Fester Wert, kein Wetter: hier geht es um die Verhältnisse IM Strahl,
+    // nicht um den Weg durch die Umgebungsluft (das rechnet die Ausbreitung).
+    static constexpr double shockSpeedOfSound = 343.0;
+
+    // Anteil der Wellendauer, den die beiden Fronten zum Ansteigen brauchen.
+    // Klein heißt steil heißt knallig; ganz senkrecht ginge nicht, das wäre
+    // pures Aliasing.
+    //
+    // Ein halbes Prozent: die Quelle steht hier direkt an der Düse, und dort
+    // ist eine Stoßfront noch nicht durch den Weg durch die Luft verbreitert.
+    // Bei den kurzen Wellen greift ohnehin die Untergrenze von zwei Samples,
+    // bei den langen (Donnern) bleibt sie mit ein paar zehntel Millisekunden
+    // trotzdem knackig.
+    static constexpr double shockRiseFraction = 0.005;
 
     // --- Rotor (Hubschrauber und Propeller) ---
     //

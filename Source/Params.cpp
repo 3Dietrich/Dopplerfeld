@@ -1,5 +1,7 @@
 #include "Params.h"
 
+#include "Util/Utf8.h"
+
 #include <cmath>
 
 namespace
@@ -118,7 +120,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (lisY, "Listener Y", unitRange(), 0.5f));
     // Default 1,75 m: Ohrhöhe eines stehenden Hörers.
     layout.add (floatParam (lisZ, "Listener Z", heightRange(), 1.75f, "m"));
-    layout.add (floatParam (lisYaw, "Listener Yaw", { -180.0f, 180.0f }, 0.0f, "°"));
+    layout.add (floatParam (lisYaw, "Listener Yaw", { -180.0f, 180.0f }, 0.0f, Text::utf8 ("°")));
     layout.add (floatParam (earSpacing, "Ear Spacing", { 0.10f, 0.25f, 0.001f }, 0.17f, "m"));
 
     // Position-Jitter der Quelle M. Default 0m/aus, damit bestehende Presets
@@ -242,7 +244,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
         auto amax = juce::NormalisableRange<float> (0.1f, 5000.0f);
         amax.setSkewForCentre (200.0f);
-        layout.add (floatParam (slewAmax, "Slew Amax", amax, 200.0f, "m/s²"));
+        layout.add (floatParam (slewAmax, "Slew Amax", amax, 200.0f, Text::utf8 ("m/s²")));
     }
     layout.add (floatParam (playSpeed, "Play Speed", { 0.25f, 4.0f, 0.0f }, 1.0f, "x"));
     // Catmull-Rom ist der Default, weil der Pfad damit C1-stetig ist und ohne
@@ -310,7 +312,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Stratosphaeren-Kaelte in Flughoehe ab, +60°C Extremhitze. Default 20°C
     // bleibt exakt der bisherige feste Wert aus MediumState, damit sich am
     // Klang bestehender Presets nichts aendert.
-    layout.add (floatParam (airTempC, "Air Temperature", { -60.0f, 60.0f, 0.1f }, 20.0f, "°C"));
+    layout.add (floatParam (airTempC, "Air Temperature", { -60.0f, 60.0f, 0.1f }, 20.0f, Text::utf8 ("°C")));
 
     // Hoehe ueber NN (Params::airAltitude) - wirkt NICHT auf airTempC (siehe
     // dort), sondern ueber die barometrische Hoehenformel auf die Luftdichte
@@ -359,16 +361,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (boolParam  (wall1On,    "Wall 1", false));
     layout.add (floatParam (wall1X,     "Wall 1 X",     unitRange(), 0.5f));
     layout.add (floatParam (wall1Y,     "Wall 1 Y",     unitRange(), 0.95f));
-    layout.add (floatParam (wall1Angle, "Wall 1 Angle", { -180.0f, 180.0f, 0.1f }, 0.0f, "°"));
-    layout.add (floatParam (wall1Tilt,  "Wall 1 Tilt",  { -90.0f, 90.0f, 0.1f }, 0.0f, "°"));
+    layout.add (floatParam (wall1Angle, "Wall 1 Angle", { -180.0f, 180.0f, 0.1f }, 0.0f, Text::utf8 ("°")));
+    layout.add (floatParam (wall1Tilt,  "Wall 1 Tilt",  { -90.0f, 90.0f, 0.1f }, 0.0f, Text::utf8 ("°")));
     layout.add (floatParam (wall1Damp,  "Wall 1 Damp",  unitRange(), 0.3f));
     layout.add (floatParam (wall1Gain,  "Wall 1 Gain",  { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
 
     layout.add (boolParam  (wall2On,    "Wall 2", false));
     layout.add (floatParam (wall2X,     "Wall 2 X",     unitRange(), 0.5f));
     layout.add (floatParam (wall2Y,     "Wall 2 Y",     unitRange(), 0.05f));
-    layout.add (floatParam (wall2Angle, "Wall 2 Angle", { -180.0f, 180.0f, 0.1f }, 0.0f, "°"));
-    layout.add (floatParam (wall2Tilt,  "Wall 2 Tilt",  { -90.0f, 90.0f, 0.1f }, 0.0f, "°"));
+    layout.add (floatParam (wall2Angle, "Wall 2 Angle", { -180.0f, 180.0f, 0.1f }, 0.0f, Text::utf8 ("°")));
+    layout.add (floatParam (wall2Tilt,  "Wall 2 Tilt",  { -90.0f, 90.0f, 0.1f }, 0.0f, Text::utf8 ("°")));
     layout.add (floatParam (wall2Damp,  "Wall 2 Damp",  unitRange(), 0.3f));
     layout.add (floatParam (wall2Gain,  "Wall 2 Gain",  { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
 
@@ -424,12 +426,66 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (rocketShock, "Rocket Shock", unitRange(), 0.6f));
     layout.add (floatParam (rotorSlap,   "Rotor Slap",   unitRange(), 0.7f));
 
+    // --- Klangformung der beiden Rausch-Betriebsarten ---
+    //
+    // Zwei getrennte Vorlagenlisten statt einer gemeinsamen: ein Duesenstrahl
+    // und ein Raketenbruellen haben nicht dieselben Klangfarben, und eine
+    // Liste, in der die Haelfte der Eintraege nicht zur gewaehlten
+    // Betriebsart passt, waere eine Liste zum Wegsortieren.
+    //
+    // Reihenfolge ist bindend fuer die Tabellen in EngineGenerator.cpp
+    // (jetVoiceTable / rocketVoiceTable) - wer hier umsortiert, muss dort
+    // mitziehen.
+    layout.add (choiceParam (jetVoice, "Jet Voice",
+                              juce::StringArray { "Turbofan",
+                                                  "Turbojet",
+                                                  "Nachbrenner",
+                                                  "Ferne",
+                                                  "Breit" }, 0));
+
+    layout.add (choiceParam (rocketVoice, "Rocket Voice",
+                              juce::StringArray { "Vollschub",
+                                                  "Feststoff",
+                                                  Text::utf8 ("Zündung"),
+                                                  "Ferne",
+                                                  "Breit" }, 0));
+
+    // 0,5 = die Vorlage unveraendert, darum genau die Mitte des Reglerwegs.
+    layout.add (floatParam (jetTone,    "Jet Tone",    unitRange(), 0.5f));
+    layout.add (floatParam (rocketTone, "Rocket Tone", unitRange(), 0.5f));
+
+    // Ausdehnung einer Stosszelle im Raketenstrahl. Nach oben offen wie
+    // nWaveSize (keine versteckten Limits): unten steht der Peitschenknall
+    // einer Modellrakete, oben das Donnern einer Traegerrakete. Skew auf
+    // einen halben Meter, weil dort der interessante Bereich liegt - das
+    // sind knapp 3 ms Wellendauer.
+    {
+        auto range = juce::NormalisableRange<float> (0.02f, 60.0f);
+        range.setSkewForCentre (0.5f);
+        layout.add (floatParam (rocketShockSize, "Rocket Shock Size", range, 0.5f, "m"));
+    }
+
+    // Mittlere Folge der Stoesse. Unten einzelne Schlaege, oben ein
+    // zusammenhaengender Teppich - das Knattern echter Raketen ("crackle")
+    // sitzt bei einigen zehn bis hundert Stoessen je Sekunde. Skew auf den
+    // bisherigen Festwert 18 Hz, damit die Voreinstellung dort steht, wo sie
+    // vorher fest verdrahtet war.
+    {
+        auto range = juce::NormalisableRange<float> (0.2f, 800.0f);
+        range.setSkewForCentre (18.0f);
+        layout.add (floatParam (rocketShockRate, "Rocket Shock Rate", range, 18.0f, "Hz"));
+    }
+
     // Betriebsart des Motors (@dpa 20260824). Reihenfolge ist bindend fuer
     // EngineGenerator::kindWeightTable - nicht umsortieren, ohne dort
     // mitzuziehen. Default "Frei" (Index 0) = bisheriges Verhalten, damit
     // bestehende Presets bitgleich klingen.
     layout.add (choiceParam (engineKind, "Engine Kind",
-                              { "Frei", "Düsenantrieb", "Raketenantrieb", "Hubschrauber", "Propeller" }, 0));
+                              juce::StringArray { "Frei",
+                                                  Text::utf8 ("Düsenantrieb"),
+                                                  "Raketenantrieb",
+                                                  "Hubschrauber",
+                                                  "Propeller" }, 0));
 
     // Rotordrehzahl/Blattzahl des Hubschrauber-Rotors, nur in dieser
     // Betriebsart wirksam. Grosszuegiger Bereich statt eines realistischen

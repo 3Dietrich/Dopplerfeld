@@ -274,6 +274,13 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.engineLevelDb  = raw (Params::engineLevelDb);
     pp.rocketShock    = raw (Params::rocketShock);
     pp.rotorSlap      = raw (Params::rotorSlap);
+
+    pp.jetVoice        = raw (Params::jetVoice);
+    pp.jetTone         = raw (Params::jetTone);
+    pp.rocketVoice     = raw (Params::rocketVoice);
+    pp.rocketTone      = raw (Params::rocketTone);
+    pp.rocketShockSize = raw (Params::rocketShockSize);
+    pp.rocketShockRate = raw (Params::rocketShockRate);
     pp.reverseGainDb   = raw (Params::reverseGainDb);
     pp.shockDuckAmount = raw (Params::shockDuckAmount);
     pp.jumpEdge        = raw (Params::jumpEdge);
@@ -707,6 +714,14 @@ void DopplerfeldProcessor::applyParameters()
     engineGenerator.setKindLevelDb (pp.engineLevelDb->load());
     engineGenerator.setRocketShock (pp.rocketShock->load());
     engineGenerator.setRotorSlap (pp.rotorSlap->load());
+
+    // Klangvorlage + Klangfarbe je Rausch-Betriebsart, dazu die Form der
+    // Druckstoesse. Beides wirkt nur in der jeweiligen Betriebsart, wird aber
+    // wie alle uebrigen Werte hier bedingungslos durchgereicht - der
+    // Generator entscheidet, was er davon braucht.
+    engineGenerator.setJetVoice ((int) pp.jetVoice->load(), pp.jetTone->load());
+    engineGenerator.setRocketVoice ((int) pp.rocketVoice->load(), pp.rocketTone->load());
+    engineGenerator.setRocketShockShape (pp.rocketShockSize->load(), pp.rocketShockRate->load());
 
     for (int i = 0; i < 4; ++i)
         engineGenerator.setSineMode (i, pp.harmSine[i]->load() > 0.5f);

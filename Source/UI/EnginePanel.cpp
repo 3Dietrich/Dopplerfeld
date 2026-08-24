@@ -1,5 +1,7 @@
 #include "EnginePanel.h"
 
+#include "../Util/Utf8.h"
+
 #include <algorithm>
 
 void EnginePanel::setupKnob (Knob& knob, juce::AudioProcessorValueTreeState& apvts,
@@ -29,6 +31,25 @@ void EnginePanel::layoutKnob (Knob& knob, juce::Rectangle<int> cell)
 {
     knob.label.setBounds (cell.removeFromTop (18));
     knob.slider.setBounds (cell);
+}
+
+void EnginePanel::setupChoice (Choice& choice, juce::AudioProcessorValueTreeState& apvts,
+                                const juce::String& paramID, const juce::String& labelText,
+                                Tooltips::Key tooltipKey)
+{
+    choice.tooltipKey = tooltipKey;
+    const auto tooltip = Tooltips::text (tooltipKey);
+
+    choice.label.setText (labelText, juce::dontSendNotification);
+    choice.label.setJustificationType (juce::Justification::centredLeft);
+    choice.label.setTooltip (tooltip);
+    addAndMakeVisible (choice.label);
+
+    populateChoices (choice.combo, apvts, paramID);
+    choice.combo.setTooltip (tooltip);
+    addAndMakeVisible (choice.combo);
+
+    choice.attachment = std::make_unique<ComboBoxAttachment> (apvts, paramID, choice.combo);
 }
 
 void EnginePanel::populateChoices (juce::ComboBox& combo, juce::AudioProcessorValueTreeState& apvts, const juce::String& paramID)
@@ -90,19 +111,48 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
     engineKindCombo.onChange = [this] { updateHeliControlsEnabled(); };
 
     setupKnob (kindLevelKnob,   apvts, Params::engineLevelDb, "Pegel",     Tooltips::Key::EngineLevel);
-    setupKnob (rocketShockKnob, apvts, Params::rocketShock,   "Druckstoss", Tooltips::Key::RocketShock);
+    setupKnob (rocketShockKnob, apvts, Params::rocketShock,   Text::utf8 ("Druckstoß"), Tooltips::Key::RocketShock);
     setupKnob (rotorSlapKnob,   apvts, Params::rotorSlap,     "Knattern",   Tooltips::Key::RotorSlap);
+
+    // Klangformung von Duese und Rakete: je eine Vorlagenliste und ein
+    // stufenloser Regler darueber (@dpa 20260824: "am besten beides").
+    setupChoice (jetVoiceChoice,    apvts, Params::jetVoice,    "Strahlklang",            Tooltips::Key::JetVoice);
+    setupChoice (rocketVoiceChoice, apvts, Params::rocketVoice, Text::utf8 ("Brüllen"),   Tooltips::Key::RocketVoice);
+
+    setupKnob (jetToneKnob,    apvts, Params::jetTone,    "Klangfarbe", Tooltips::Key::JetTone);
+    setupKnob (rocketToneKnob, apvts, Params::rocketTone, "Klangfarbe", Tooltips::Key::RocketTone);
+
+    setupKnob (rocketShockSizeKnob, apvts, Params::rocketShockSize, Text::utf8 ("Stoßlänge"), Tooltips::Key::RocketShockSize);
+    setupKnob (rocketShockRateKnob, apvts, Params::rocketShockRate, Text::utf8 ("Stoßfolge"), Tooltips::Key::RocketShockRate);
 
     setupKnob (propSpanKnob,  apvts, Params::propSpan,    "Spannweite", Tooltips::Key::PropSpan);
     setupKnob (propLevelKnob, apvts, Params::propLevelDb, "Prop Pegel", Tooltips::Key::PropLevel);
 
     setupKnob (heliRotorHzKnob,    apvts, Params::heliRotorHz,    "Rotor Hz",  Tooltips::Key::HeliRotorHz);
-    setupKnob (heliBladeCountKnob, apvts, Params::heliBladeCount, "Blaetter",  Tooltips::Key::HeliBladeCount);
+    setupKnob (heliBladeCountKnob, apvts, Params::heliBladeCount, Text::utf8 ("Blätter"), Tooltips::Key::HeliBladeCount);
 
     // Anfangszustand passend zur tatsaechlich geladenen Betriebsart setzen -
     // sonst stuenden die Rotor-Regler nach dem Oeffnen des Editors aktiv,
     // obwohl der geladene Zustand z.B. "Duesenantrieb" waehlt.
     updateHeliControlsEnabled();
+}
+
+const EnginePanel::Choice* EnginePanel::kindChoice() const
+{
+    // Nur die beiden Rausch-Betriebsarten haben eine Vorlagenliste. Bei
+    // Hubschrauber und Propeller macht der Rotor den Klang, nicht ein Filter;
+    // bei "Frei" machen ihn die vier Teiltoene.
+    switch (engineKindCombo.getSelectedItemIndex())
+    {
+        case 1:  return &jetVoiceChoice;
+        case 2:  return &rocketVoiceChoice;
+        default: return nullptr;
+    }
+}
+
+EnginePanel::Choice* EnginePanel::kindChoice()
+{
+    return const_cast<Choice*> (const_cast<const EnginePanel*> (this)->kindChoice());
 }
 
 std::vector<const EnginePanel::Knob*> EnginePanel::kindKnobs() const
@@ -111,8 +161,9 @@ std::vector<const EnginePanel::Knob*> EnginePanel::kindKnobs() const
     // 0=Frei, 1=Düsenantrieb, 2=Raketenantrieb, 3=Hubschrauber, 4=Propeller.
     switch (engineKindCombo.getSelectedItemIndex())
     {
-        case 1:  return { &kindLevelKnob };
-        case 2:  return { &kindLevelKnob, &rocketShockKnob };
+        case 1:  return { &kindLevelKnob, &jetToneKnob };
+        case 2:  return { &kindLevelKnob, &rocketToneKnob, &rocketShockKnob,
+                          &rocketShockSizeKnob, &rocketShockRateKnob };
         case 3:  return { &kindLevelKnob, &rotorSlapKnob, &heliRotorHzKnob, &heliBladeCountKnob };
         case 4:  return { &kindLevelKnob, &rotorSlapKnob, &heliRotorHzKnob, &heliBladeCountKnob,
                           &propSpanKnob, &propLevelKnob };
@@ -181,12 +232,27 @@ void EnginePanel::updateHeliControlsEnabled()
 
     for (auto* k : { &kindLevelKnob, &rocketShockKnob, &rotorSlapKnob,
                       &heliRotorHzKnob, &heliBladeCountKnob,
-                      &propSpanKnob, &propLevelKnob })
+                      &propSpanKnob, &propLevelKnob,
+                      &jetToneKnob, &rocketToneKnob,
+                      &rocketShockSizeKnob, &rocketShockRateKnob })
     {
         const bool visible = std::find (active.begin(), active.end(), k) != active.end();
 
         k->slider.setVisible (visible);
         k->label.setVisible (visible);
+    }
+
+    // Dasselbe fuer die Vorlagenliste: nur die der gewaehlten Betriebsart
+    // steht da, die andere verschwindet ganz (nicht ausgegraut) - genau wie
+    // bei den Reglern.
+    const auto* wantedChoice = kindChoice();
+
+    for (auto* c : { &jetVoiceChoice, &rocketVoiceChoice })
+    {
+        const bool visible = (c == wantedChoice);
+
+        c->combo.setVisible (visible);
+        c->label.setVisible (visible);
     }
 
     const bool harmonicsAudible = kindUsesHarmonics();
@@ -229,7 +295,9 @@ void EnginePanel::refreshTooltips()
         b.setTooltip (Tooltips::text (Tooltips::Key::EngineSine));
 
     for (auto* k : { &propSpanKnob, &propLevelKnob,
-                      &kindLevelKnob, &rocketShockKnob, &rotorSlapKnob })
+                      &kindLevelKnob, &rocketShockKnob, &rotorSlapKnob,
+                      &jetToneKnob, &rocketToneKnob,
+                      &rocketShockSizeKnob, &rocketShockRateKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -246,6 +314,13 @@ void EnginePanel::refreshTooltips()
 
     engineKindLabel.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
     engineKindCombo.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
+
+    for (auto* c : { &jetVoiceChoice, &rocketVoiceChoice })
+    {
+        const auto tooltip = Tooltips::text (c->tooltipKey);
+        c->label.setTooltip (tooltip);
+        c->combo.setTooltip (tooltip);
+    }
 }
 
 void EnginePanel::resized()
@@ -267,6 +342,18 @@ void EnginePanel::resized()
     auto kindArea = kindRow.removeFromLeft (juce::jmin (200, kindRow.getWidth()));
     engineKindLabel.setBounds (kindArea.removeFromTop (18));
     engineKindCombo.setBounds (kindArea);
+
+    // Die Vorlagenliste der Betriebsart steht DANEBEN, nicht darunter: in
+    // dieser Zeile ist rechts ohnehin Platz, und so kostet die zweite Liste
+    // keine einzige Zeile Panelhoehe.
+    if (auto* choice = kindChoice())
+    {
+        kindRow.removeFromLeft (12);
+        auto choiceArea = kindRow.removeFromLeft (juce::jmin (200, kindRow.getWidth()));
+        choice->label.setBounds (choiceArea.removeFromTop (18));
+        choice->combo.setBounds (choiceArea);
+    }
+
     area.removeFromTop (6);
 
     // Die Regler, die diese Betriebsart braucht - nicht mehr. Mehr als
