@@ -407,6 +407,61 @@ Vorgeschichte am gewuenschten Punkt" explizit behandeln statt still auf 0 zu
 lesen. Empfehlung: hoher Denkaufwand (Opus), weil physikalisch-numerisch
 kritischer Code mit bestehender `solver_check`-Abdeckung, kein Schnellschuss.
 
+## Stand 2026-08-24 (Betriebsarten sind eigene Klangerzeuger)
+
+Der erste Versuch hat die Betriebsarten als GEWICHTUNG derselben Bausteine
+gebaut. Das war zu wenig, und @dpa hat es sofort gehört: "Bei Düsenantrieb
+höre ich nur einen 5. Osc, sine, was hast Du dir dabei gedacht?" - denn genau
+das war es, ein zusätzlicher Sinus über dem unveränderten Motorklang. Die
+Ansage dazu: "jeder Betriebsmode ist ein eigener Generator!"
+
+Jetzt hat jede Betriebsart ihren eigenen Aufbau, und gerechnet wird nur, was
+sie braucht:
+
+- **Frei** - der Motor wie immer: vier Teiltöne, Rauschband, Jitter, Unwucht.
+  Hier liegen die alten Snapshots, und hier ändert sich nichts.
+- **Düsenantrieb** - EIN Verdichterton (Sägezahn an der Fanblattfolge, hoch
+  und leise), darüber das Strahlrauschen, das den Klang trägt. Keine vier
+  Teiltöne: "braucht es höchstens 1 Oscillator".
+- **Raketenantrieb** - kein Ton, nur Brüllen, dazu die Druckstöße der
+  Stoßzellen im Abgasstrahl. Unregelmäßig getaktet (halber bis
+  anderthalbfacher mittlerer Abstand - Stoßzellen sind keine Maschine mit
+  fester Drehzahl) und hörbar auch unterschallig: überschallschnell ist der
+  STRAHL, nicht die Rakete.
+- **Hubschrauber** - die vier Teiltöne bleiben als Verbrennermotor, dazu der
+  Rotor: bandpassgefiltertes Schwirren, dessen Pegel mit jedem Blatt atmet,
+  plus ein kurzer harter Rauschstoß je Blatt. Der frühere DC-Impuls
+  (Kosinus hoch 24) war fast immer null - deshalb war "von Hubschrauber nichts
+  zu hören".
+- **Propeller** - ein einzelner leiser Ton plus derselbe Blattschlag, weicher,
+  dazu das Propellerpaar in der Geometrie (siehe voriger Abschnitt).
+
+**Fahrtwind** in allen Betriebsarten außer "Frei": hochpassgefiltertes
+Rauschen, das mit der Geschwindigkeit lauter wird und dessen Zischen mit ihr
+höher rückt. Nicht in "Frei", weil dort die alten Snapshots liegen.
+
+**Pegel**: eigener Regler je Betriebsart, Default +12 dB. Ihre Lautstärke
+kommt aus der Sache und nicht aus vier einzeln gedrehten Teiltönen - ein
+Hubschrauber in drei Metern ist ohrenbetäubend.
+
+**Sinus je Oszillator** statt eines gemeinsamen Schalters, aus derselben Phase
+wie der Sägezahn.
+
+**Das Panel ist je Betriebsart schmal** (@dpa: "nur das nötigste"). Nicht
+gebrauchte Regler werden nicht ausgegraut, sondern ausgeblendet - bei Düse und
+Rakete verschwindet die ganze Teilton-Matrix samt Rauschband. Damit hängt die
+Panelhöhe an der Betriebsart: `EnginePanel::preferredContentHeight()` führt
+sie, der Editor fragt sie ab, statt eine Konstante zu halten. Sichtbarkeit,
+Layout und Höhe kommen aus EINER Liste (`kindKnobs()`), sonst liefen sie
+auseinander.
+
+**Beschriftungen**: In allem, was der Benutzer sieht, stehen echte Umlaute
+("Düsenantrieb"). Fachabkürzungen in den Hilfetexten sind erklärt, allen voran
+M_r als die auf den Hörer bezogene Mach-Zahl - die Geschwindigkeitskomponente
+GENAU IN RICHTUNG des Hörers, geteilt durch die Schallgeschwindigkeit. Eine
+Quelle kann mit Mach 3 fliegen und ein M_r nahe null haben, wenn sie quer
+vorbeizieht.
+
 ## Stand 2026-08-24 (Motor-Betriebsarten und Propellerpaar)
 
 @dpa wollte im Motor "mehrere umschaltbar": Duesenantrieb, Raketenantrieb,
