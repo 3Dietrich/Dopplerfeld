@@ -407,6 +407,72 @@ Vorgeschichte am gewuenschten Punkt" explizit behandeln statt still auf 0 zu
 lesen. Empfehlung: hoher Denkaufwand (Opus), weil physikalisch-numerisch
 kritischer Code mit bestehender `solver_check`-Abdeckung, kein Schnellschuss.
 
+## Stand 2026-08-24 (Wackler-Deckel, Pfeiltasten)
+
+### Der Wackler hatte keinen eigenen Tempo-Deckel
+
+Drei Beobachtungen von @dpa mit EINER Ursache: "jitter tut nichts",
+"randomize tut nichts", "jitter verursacht ständig Überschall N-waves".
+
+`PositionJitter` hing an `globalMaxSpeed`, dem Deckel der **Bahn**. Wer die
+Bahn langsam wollte, hat damit unbemerkt den Wackler gebremst - in @dpas State
+auf 1,9 %, also ein Umlauf in 16 Sekunden bei 69 m Radius. Das sieht von außen
+aus wie "tut nichts", ist aber kein Zustandsfehler und darum auch durch keinen
+Reset zu beheben. Seine eigene Beobachtung passt exakt: bei kleinem Ausschlag
+greift die Bremse nicht, deshalb "funktionierte" es nach dem Hochdrehen von 0.
+
+`srcJitterMaxSpeed` ist jetzt ein eigener Regler, Default 340 m/s (knapp unter
+Schallgeschwindigkeit), 0 schaltet ihn ab.
+
+**Zweiter Fehler in derselben Funktion:** der Bremsfaktor wurde aus der gerade
+gewürfelten Frequenz gerechnet und war damit ein *Normierer* - er zog jede
+Schwankung exakt auf die Grenze zurück. Sobald die Grenze überhaupt griff,
+hatte `randomize` deshalb buchstäblich keine Wirkung mehr. Der Faktor kommt
+jetzt aus den **Reglerwerten** (Bezug: das schnellstmögliche, das der Würfel
+bei dieser Einstellung hergibt). Er ist damit über die Zeit konstant, die
+relative Schwankung bleibt erhalten, die Grenze wird nie überschritten.
+
+Merksatz für Folge-Sessions: eine Geschwindigkeitsbremse, die aus der
+Momentangeschwindigkeit gerechnet wird, ist immer ein Normierer und macht jede
+Modulation dieser Geschwindigkeit platt.
+
+### Pfeiltasten am Regler
+
+JUCE nimmt für die Tastatur das Parameter-Intervall, sonst ein Hundertstel des
+Wertebereichs - bei Max Speed (bis 100000 m/s) also 1000 m/s je Druck, bei
+einem 0..1-Regler dagegen viel zu fein. Das Maß war falsch, nicht der Wert.
+`RoundedSlider::keyPressed()` bewegt jetzt ein halbes Prozent des **Reglerwegs**
+(mit Umschalt ein Zehntel davon), weil der Weg Bereich und Kennlinie schon
+enthält. Gilt damit für alle Regler auf einmal.
+
+### Offen aus @dpas Durchgang vom 24.08. 15:52
+
+Noch nicht angefasst, in dieser Reihenfolge sinnvoll:
+
+- **Scope-Trigger mit Haltezeit.** Der vorhandene Sync richtet an einem
+  Nulldurchgang aus - für periodische Signale sinnvoll, für Knalle nutzlos,
+  deshalb sieht @dpa nichts. Gewünscht: auf einen Pegel-ANSTIEG triggern
+  (schneller gegen langsamen Hüllkurvenfolger), Bild einfrieren, Haltezeit
+  laufen lassen, dann selbst wieder scharf schalten. Ereignis zentriert ins
+  Bild, nicht an den rechten Rand. Manueller Freeze behält Vorrang.
+- **Loop-Übergang als Schnitt.** @dpa: "ich wollte einen Übergang im Sinne von
+  'cutten': Ende erreicht, leise, umbau, laut, start." Derzeit läuft das Ende
+  per Modulo in den Anfang, was der Löser als echte Bewegung sieht: hohe Last
+  und N-Wellen am Loop-Punkt.
+- **CPU-Spitze beim Laden eines States und bei "Engine Reset".** @dpa nennt es
+  einen Bug. Vermutlich derselbe Mechanismus wie beim Loop-Sprung: eine
+  Positionsänderung, die als Bewegung durchschlägt.
+- **Knall bei Bewegung/Startvariante.** Soll wie der Raketen-Stoß hörbar sein,
+  ist es aber nicht. @dpa: "Falls es zwischen Knall und Überschallspeed einen
+  Unterschied gibt, dann das entsprechend einbauen. evtl mit Regler."
+- **Klon jittert nicht bei Klone = 1** (@dpa mit Fragezeichen). Wahrscheinlich
+  dieselbe Deckel-Ursache wie oben und mit dem eigenen Wackler-Deckel erledigt
+  - nachzuhören, bevor daran gesucht wird.
+
+Entschieden und **nicht** zu bauen: die Raketen-Druckstöße lösen KEINE
+zusätzlichen N-Wellen in der Ausbreitung aus (@dpa: "Das wäre ja dann doppelt?
+Nee. So wie es jetzt ist, ist es gut.").
+
 ## Stand 2026-08-24 (Klangformung, Stoßwellen, Umlaute)
 
 Vier Punkte aus @dpas Durchgang. Drei davon waren echte Fehler, keine
