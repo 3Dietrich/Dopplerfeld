@@ -473,6 +473,114 @@ Entschieden und **nicht** zu bauen: die Raketen-Druckstöße lösen KEINE
 zusätzlichen N-Wellen in der Ausbreitung aus (@dpa: "Das wäre ja dann doppelt?
 Nee. So wie es jetzt ist, ist es gut.").
 
+## Stand 2026-08-24 abends (Wackler, Stossfront-Modell, Rotor-Doppler)
+
+Zwei Durchgänge von @dpa (16:20 Bewegung, 17:53 Motor/Physik). Alles
+gemessen, **gehört hat @dpa es noch nicht.**
+
+### Der Wackler ist wieder ein Dreiachser
+
+Die Rotoren-Betriebsart des Positions-Wacklers ist entfallen (@dpa: "nicht
+mehr nur auf der XY Ebene und nicht nur im Kreis (wir haben Hubschrauber ja
+extra)"). Eine umlaufende Bewegung gehört zum Motor, nicht zur Mikrobewegung
+der Position. Mit ihr sind "Randomize" und "Z-Jit" weg - beide wirkten nur
+dort. Alte Presets laden unverändert, die drei Parameter werden ignoriert.
+
+**Ausschlag und Hektik werden angefahren, nicht gesetzt.** Ein Ruck am
+Ausschlag-Regler war ein Positionssprung: 0 auf 200 m innerhalb eines Ticks
+sind 200000 m/s, für den Löser Überschall samt Kegelankunft und N-Welle -
+genau das, was @dpa als "sehr laut beim Verstellen" gehört hat. Angefahren
+wird über einen kurzen Ein-Pol, dessen Schrittweite unter dem eigenen
+Tempo-Deckel des Wacklers liegt. Gemessen im `load_check`-Abschnitt
+"Wackler", bei Jit Max 100 m/s:
+
+| | vorher | nachher |
+|---|---|---|
+| \|M_r\| max | 1,04 | 0,40 |
+| Ausgangsspitze | 0,9900 | 0,0142 |
+
+Das ist zugleich der wahrscheinlichste Grund für @dpas Front-Duck-Bild
+("bei 1 ist nichts mehr (außer Knalle)"): ein Wackler, der über Mach 1
+springt, löst fortwährend Stoßfronten aus und hält die Absenkung damit
+dauerhaft offen.
+
+"Jit Max" folgt jetzt der eingestellten Tempo-Einheit, wie die anderen drei
+Tempo-Regler.
+
+### Stoßfront, Druckbeule und die Reichweite der Absenkung
+
+@dpas Analyse war die Vorlage: eine unterschallige Beschleunigung schiebt eine
+einseitige Verdichtung vor sich her, erst Überschall bringt das N mit seinen
+zwei Fronten, und mit der Entfernung zerfällt beides zu Grollen "samt allem
+drumherum".
+
+Drei Änderungen daraus:
+
+- **Der Sprungknall senkt den übrigen Schall nicht mehr ab.** Er löste bisher
+  dieselbe Absenkung aus wie eine echte Stoßfront und schaltete damit für
+  seine eigene Dauer alles andere stumm - man hörte Motor weg, Knall, Motor
+  zurück ("das ist wie eine kurze Unterbrechung"). Eine Beschleunigungswelle
+  ist keine Stoßfront, hinter der nichts herkommt; sie läuft MIT dem übrigen
+  Schall. Gemessen im Ankunftsfenster: Umfeld-RMS 0,00636 → 0,05880.
+- **Unter Mach 1 ist der Sprungknall eine einseitige Druckbeule**
+  (`Branch::nSingleSided`, halbe Sinuskuppe statt Rampe durch null). Die
+  Umschaltung hängt an der Sprunghöhe, die die Engine ohnehin mitgibt.
+- **Neuer Regler "Duck-Reichw."** (@dpa: "wir müssen also bestimmen ab welcher
+  entfernung die N-Wave noch 'echt' ist"). Die Absenkung fällt mit
+  `range/(range+R)`, bei genau dieser Entfernung also auf die Hälfte.
+  Default 300 m.
+
+Was @dpa an Luftübertragung noch ansprach - Tiefpass mit der Entfernung,
+Verbreiterung der Front zum Grollen hin - ist beides schon da: die
+Luftdämpfung sitzt als One-Pole je Zweig (`airAbsorbAmount`), und `nRise`
+wächst mit `2e-6 * R`, also 0,2 ms auf 100 m gegen 6 ms auf 3 km. Was gefehlt
+hat, war nicht das Grollen, sondern dass die Absenkung das Drumherum
+weggeschnitten hat.
+
+### Rotor: Knattern über echten Doppler
+
+Neuer Schalter "Doppler" bei Hubschrauber und Propeller, dazu "Blattlänge".
+Aus bleibt alles wie bisher (nachgebaute Modulation). An ist jedes Blatt eine
+eigene Quelle auf der Kreisbahn: eigenes Rauschen, eigene
+Verzögerungsleitung, eigener Schlag.
+
+Zwei Dinge waren dabei entscheidend, beide erst durch Messung sichtbar:
+
+- **Die Laufzeit allein trägt den Effekt nicht.** Sie verschiebt die Schläge
+  im Takt, ändert aber kaum ihre Lautstärke, und bei je eigenem Rauschen je
+  Blatt entsteht auch keine Interferenz. Was man hört, ist die Richtwirkung:
+  eine Quelle, die auf einen zuläuft, strahlt um `1/(1-M_r)²` stärker ab. Am
+  Rotor ist das gewaltig - bei 6 m Blatt und 5 Umdrehungen/s läuft die Spitze
+  mit Mach 0,55.
+- **Der Schlag muss am Viertelumlauf feuern**, wo das Blatt am schnellsten auf
+  den Hörer zuläuft. Am Umlaufpunkt selbst ist die Radialgeschwindigkeit null;
+  dort bekommt der Schlag keine Richtwirkung ab und das Knattern bleibt in
+  jeder Lage gleich - genau das war beim ersten Versuch gemessen worden.
+
+Der Überflug kommt daher, dass der Processor durchreicht, wie stark die
+Sichtlinie in der Rotorebene liegt (`setRotorInPlane`): von der Seite 1,
+senkrecht darunter 0. Mit ihr geht M_r auf null.
+
+Gemessen (`load_check`, "Rotor-Knattern", Modulationstiefe der Hüllkurve):
+
+| | von der Seite | von unten |
+|---|---|---|
+| gefaket | 0,881 | 0,881 |
+| Doppler | 0,392 | 0,228 |
+
+Die acht Blattquellen bekommen gestreute Startwerte statt benachbarter
+(@dpa: "achte bitte bei ab 2 unterschiedlichen Noises darauf, dass sie
+unterschiedlich sind"). Der Abschnitt "Rauschquellen" misst die
+Kreuzkorrelation nach - höchster Wert 0,0054. Ohne das wären N Blätter
+klanglich ein einziges.
+
+### Gegenprobe
+
+Von 45 bestehenden `load_check`-Szenarien ändern sich vier, alle gewollt: die
+drei mit Knall-Start (lauter, weil der Knall sich kein Loch mehr schneidet)
+und "Vorbeiflug Mach 1,04" (die Absenkung greift dort jetzt
+entfernungsabhängig).
+
 ## Stand 2026-08-24 (Sprungnaht, Sprungknall, Knall-Trigger)
 
 Vier Punkte aus @dpas Durchgang von 15:52. Gemessen ist alles, **gehört hat
