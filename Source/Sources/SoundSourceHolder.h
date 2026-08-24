@@ -47,12 +47,6 @@ public:
 
     bool isFading() const { return xfade.isFading(); }
 
-    // Globaler Umschalter aus Plan 3.11 (fadeAuto/fadeManualMs). Wirkt auf
-    // den nächsten Wechsel, nicht auf einen laufenden.
-    // TODO H13: aus der APVTS speisen und switchTo() an das Kommando
-    // "Quelle gewechselt" aus der SPSC-Queue hängen (Plan 3.12).
-    void setManualFade (bool shouldUseManual, double seconds);
-
 private:
     // Renderer-Seite des Doppelpfads: ein Zeiger, sonst nichts. Genau deshalb
     // ist dieser Fade billig - er verdoppelt die Quellstufe, nicht die Physik.
@@ -81,7 +75,4 @@ private:
 
     double sr             = 48000.0;
     int    preparedBlock  = 0;
-
-    bool   useManualFade  = false;
-    double manualSeconds  = 0.05;
 };

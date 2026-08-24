@@ -20,19 +20,22 @@ enum class FadeReason
     SourcePosition,   // Quelle springt an eine neue Stelle
     SourceTimbre,     // Generator <-> Sample
     FieldSize,        // Feldmaßstab geändert
-    MediumChange,     // Phase 2: Temperatur/Schallgeschwindigkeit
-    Manual            // Aufrufer gibt die Dauer selbst vor
+    MediumChange      // Phase 2: Temperatur/Schallgeschwindigkeit
 };
 
+// Die Dauer ergibt sich ausschliesslich aus dem Anlass. Einen Handregler
+// dafuer gibt es nicht mehr (@dpa 20260825: "es gibt 'Fade Auto' schalter und
+// 'Fade Manual' Regler. ich habe das gefuehl, wir brauchen beide nicht. Auto
+// Fade immer an reicht. beide weg."): jede der Formeln unten steht fuer eine
+// physikalische oder wahrnehmungsbezogene Groesse, und ein Handwert daneben
+// war nur eine zweite, schlechter informierte Meinung darueber.
 struct FadeContext
 {
-    FadeReason reason = FadeReason::Manual;
+    FadeReason reason = FadeReason::SourcePosition;
     double     sampleRate = 48000.0;
     double     positionDeltaMetres = 0.0;   // für SourcePosition
     double     baseFrequencyHz     = 0.0;   // für SourceTimbre
     double     smootherTauSeconds  = 0.0;
-    double     manualSeconds       = 0.05;
-    bool       useManual           = false;
 };
 
 // Natürliche Fadedauer in Samples, freie Funktion, keine Allokation.

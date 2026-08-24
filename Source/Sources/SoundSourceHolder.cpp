@@ -57,8 +57,6 @@ int SoundSourceHolder::fadeSamplesFor (const SoundSource* newSource) const
     ctx.reason          = FadeReason::SourceTimbre;
     ctx.sampleRate      = sr;
     ctx.baseFrequencyHz = newSource != nullptr ? newSource->dominantFrequencyHz() : 0.0;
-    ctx.manualSeconds   = manualSeconds;
-    ctx.useManual       = useManualFade;
 
     return computeFadeSamples (ctx);
 }
@@ -84,12 +82,6 @@ void SoundSourceHolder::switchTo (SoundSource* newSource)
 
     xfade.pending().src = newSource;
     xfade.beginSwitch (fadeSamples);
-}
-
-void SoundSourceHolder::setManualFade (bool shouldUseManual, double seconds)
-{
-    useManualFade = shouldUseManual;
-    manualSeconds = seconds;
 }
 
 double SoundSourceHolder::dominantFrequencyHz() const

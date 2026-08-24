@@ -34,7 +34,6 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (fieldMetresKnob, apvts, Params::fieldMetres,     "Field Size",    Tooltips::Key::FieldSize);
     setupKnob (boomLimitKnob,   apvts, Params::boomLimitDb,     "Boom Limit",    Tooltips::Key::BoomLimit);
     setupKnob (airAbsorbKnob,   apvts, Params::airAbsorbAmount, "Air Absorb",    Tooltips::Key::AirAbsorb);
-    setupKnob (fadeManualKnob,  apvts, Params::fadeManualMs,    "Fade Manual",   Tooltips::Key::FadeManual);
     setupKnob (outputGainKnob,  apvts, Params::outputGain,      "Output Gain",   Tooltips::Key::OutputGain);
 
     setupKnob (srcZKnob,        apvts, Params::srcZ,            "Source Z",      Tooltips::Key::SourceZ);
@@ -63,10 +62,6 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     addAndMakeVisible (nWaveButton);
     nWaveAttachment = std::make_unique<ButtonAttachment> (apvts, Params::nWaveOn, nWaveButton);
 
-    fadeAutoButton.setTooltip (Tooltips::text (Tooltips::Key::FadeAuto));
-    addAndMakeVisible (fadeAutoButton);
-    fadeAutoAttachment = std::make_unique<ButtonAttachment> (apvts, Params::fadeAuto, fadeAutoButton);
-
     limiterOnButton.setTooltip (Tooltips::text (Tooltips::Key::LimiterOn));
     addAndMakeVisible (limiterOnButton);
     limiterOnAttachment = std::make_unique<ButtonAttachment> (apvts, Params::limiterOn, limiterOnButton);
@@ -82,7 +77,7 @@ void FieldPanel::refreshTooltips()
     groundReflectionButton.setButtonText (Labels::text ("Bodenreflexion"));
     nWaveButton.setButtonText (Labels::text ("N-Welle"));
 
-    for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &fadeManualKnob, &outputGainKnob,
+    for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &outputGainKnob,
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
                       &airTempKnob, &airAltitudeKnob,
@@ -100,7 +95,6 @@ void FieldPanel::refreshTooltips()
 
     groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
-    fadeAutoButton.setTooltip (Tooltips::text (Tooltips::Key::FadeAuto));
     limiterOnButton.setTooltip (Tooltips::text (Tooltips::Key::LimiterOn));
     levelMeter.setTooltip (Tooltips::text (Tooltips::Key::LevelMeter));
 }
@@ -120,8 +114,6 @@ void FieldPanel::resized()
     auto area = getLocalBounds().reduced (8);
 
     auto toggleRow = area.removeFromTop (26);
-    fadeAutoButton.setBounds (toggleRow.removeFromLeft (120));
-    toggleRow.removeFromLeft (8);
     limiterOnButton.setBounds (toggleRow.removeFromLeft (100));
     toggleRow.removeFromLeft (8);
     groundReflectionButton.setBounds (toggleRow.removeFromLeft (140));
@@ -130,7 +122,7 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto knobRow = area.removeFromTop (knobH);
-    for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &fadeManualKnob, &outputGainKnob })
+    for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &outputGainKnob })
     {
         layoutKnob (*k, knobRow.removeFromLeft (knobW));
         knobRow.removeFromLeft (4);

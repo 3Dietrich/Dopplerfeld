@@ -284,11 +284,6 @@ public:
     // Alles außer dem Direktschall aus - die minimale sichere Konfiguration.
     void disableAllReflections();
 
-    // Globaler Umschalter aus Plan 3.11 (fadeAuto/fadeManualMs), wirkt auf
-    // den nächsten Geometriewechsel. Denselben Setter hat der
-    // SoundSourceHolder - beide hängen am selben Parameterpaar.
-    void setManualFade (bool shouldUseManual, double seconds);
-
     // Der Mono-Strom der Quelle kommt von außen herein (im Plugin aus dem
     // SoundSourceHolder des Processors); die Engine rendert bewusst keine
     // Quelle selbst, damit der geteilte Signalpuffer genau einen Schreiber
@@ -542,9 +537,6 @@ private:
     };
 
     WallGeometry wallGeometry[maxWalls];
-
-    bool   useManualFade = false;
-    double manualFadeSeconds = 0.05;
 
     double sr       = 0.0;
     int    maxBlock = 0;

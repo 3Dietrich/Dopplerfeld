@@ -260,16 +260,8 @@ int DopplerEngine::fadeSamplesFor (FadeReason reason, double positionDeltaMetres
     ctx.reason              = reason;
     ctx.sampleRate          = sr > 0.0 ? sr : 48000.0;
     ctx.positionDeltaMetres = positionDeltaMetres;
-    ctx.manualSeconds       = manualFadeSeconds;
-    ctx.useManual           = useManualFade;
 
     return computeFadeSamples (ctx);
-}
-
-void DopplerEngine::setManualFade (bool shouldUseManual, double seconds)
-{
-    useManualFade     = shouldUseManual;
-    manualFadeSeconds = seconds;
 }
 
 void DopplerEngine::configurePendingSet (Vec3 newPos, Vec3 preVelocity)

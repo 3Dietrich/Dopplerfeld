@@ -57,7 +57,7 @@ private:
                      Tooltips::Key tooltipKey);
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
-    Knob fieldMetresKnob, boomLimitKnob, airAbsorbKnob, fadeManualKnob, outputGainKnob;
+    Knob fieldMetresKnob, boomLimitKnob, airAbsorbKnob, outputGainKnob;
 
     // Höhe über dem Boden. x/y stellt man mit der Maus im Feld ein, für z gibt
     // es dort keine Achse - deshalb sind das die einzigen Positionsregler.
@@ -111,12 +111,10 @@ private:
     // Neben Output Gain: -6dB-Marke, Clip-Anzeige mit 500ms-Halt (@dpa).
     LevelMeter levelMeter;
 
-    juce::ToggleButton fadeAutoButton   { "Fade Auto" };
     juce::ToggleButton limiterOnButton  { "Limiter" };
     juce::ToggleButton groundReflectionButton { "Bodenreflexion" };
     juce::ToggleButton nWaveButton { "N-Welle" };
 
-    std::unique_ptr<ButtonAttachment> fadeAutoAttachment;
     std::unique_ptr<ButtonAttachment> limiterOnAttachment;
     std::unique_ptr<ButtonAttachment> groundReflectionAttachment;
     std::unique_ptr<ButtonAttachment> nWaveAttachment;
