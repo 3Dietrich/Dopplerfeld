@@ -154,13 +154,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // erst, wenn jemand ihn aufdreht - bestehende Presets klingen unveraendert.
     layout.add (boolParam (srcJitterOn, "Source Jitter On", true));
 
-    // Rotoren-Modus und seine beiden eigenen Regler. Default aus bzw. 0:
-    // bestehende Presets kennen die Parameter nicht und laden damit exakt das
-    // bisherige Wackeln.
-    layout.add (boolParam (srcJitterRotor, "Source Jitter Rotor", false));
-    layout.add (floatParam (srcJitterRandom, "Source Jitter Randomize", unitRange(), 0.0f));
-    layout.add (floatParam (srcJitterZ, "Source Jitter Z", unitRange(), 0.0f));
-
     // Eigener Tempo-Deckel des Wacklers, siehe Params.h. Skew auf 340 m/s,
     // damit die Voreinstellung in der Mitte des Reglerwegs steht und der
     // interessante Bereich darunter fein bedienbar bleibt.

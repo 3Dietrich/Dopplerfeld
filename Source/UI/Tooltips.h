@@ -82,10 +82,6 @@ namespace Tooltips
         JumpEdge,
         JumpBoom,
         ShadowTail,
-        SrcJitterRotor,
-        SrcJitterSpeed,
-        SrcJitterRandom,
-        SrcJitterZ,
         SrcJitterMaxSpeed,
         MasterOn,
         GroundGain,
@@ -842,43 +838,6 @@ namespace Tooltips
                           "shadow zone that diffracted sound keeps travelling into; how long "
                           "depends on geometry and frequency - hence a control instead of an "
                           "invented constant. 1 ms = previous behaviour.";
-                case Key::SrcJitterRotor:
-                    return lang == Language::De
-                        ? "Zweite Betriebsart des Wacklers: statt drei unabhängig wackelnder "
-                          "Achsen fährt die Quelle (und jeder Klon) eine gleichmäßige "
-                          "Kreisbahn. Der Jitter-Regler ist dann der RADIUS des Kreises, "
-                          "'Hektik' heißt 'Speed' und ist die Umlaufgeschwindigkeit. Dazu "
-                          "kommen Randomize (Temposchwankung) und Z-Jit (Neigung der "
-                          "Kreisebene). Beim Umschalten wird kurz überblendet, damit der "
-                          "Formelwechsel kein Sprung wird."
-                        : "Second mode of the wobbler: instead of three independently wobbling "
-                          "axes the source (and every clone) travels a steady circular orbit. "
-                          "The Jitter control then is the RADIUS of that circle, 'Hektik' "
-                          "becomes 'Speed', the orbital rate. Randomize (tempo variation) and "
-                          "Z-Jit (tilt of the orbit plane) come with it. Switching modes "
-                          "crossfades briefly so the change of formula is not a jump.";
-                case Key::SrcJitterSpeed:
-                    return lang == Language::De
-                        ? "Umlaufgeschwindigkeit der Rotoren-Kreisbahn in Hz, also Umdrehungen "
-                          "pro Sekunde. Derselbe Regler wie 'Hektik' im Wackel-Modus, nur mit "
-                          "anderer Bedeutung. Die Bahngeschwindigkeit ergibt sich aus Radius "
-                          "mal Speed und wird - wie im Wackel-Modus - vom Max-Speed-Deckel "
-                          "rund begrenzt: der Kreis wird dann langsamer statt kleiner."
-                        : "Orbital rate of the rotor circle in Hz, i.e. revolutions per second. "
-                          "The same control as 'Hektik' in wobble mode, with a different "
-                          "meaning. Path speed follows from radius times speed and - as in "
-                          "wobble mode - is smoothly capped by Max Speed: the circle slows "
-                          "down instead of shrinking.";
-                case Key::SrcJitterRandom:
-                    return lang == Language::De
-                        ? "Nur im Rotoren-Modus: Temposchwankung auf der Kreisbahn. 0 = sauberer "
-                          "Kreis mit konstantem Tempo, hohe Werte = starke Speedschwankungen "
-                          "(ähnlich der Hektik des Wackel-Modus). Der Radius bleibt dabei "
-                          "unverändert, nur die Umlaufgeschwindigkeit atmet."
-                        : "Rotor mode only: tempo variation along the circular orbit. 0 = clean "
-                          "circle at constant rate, high values = strong speed fluctuations "
-                          "(similar to wobble mode's Hektik). The radius stays untouched, only "
-                          "the orbital rate breathes.";
                 case Key::SrcJitterMaxSpeed:
                     return lang == Language::De
                         ? "Tempogrenze des Wacklers allein, in m/s. Bremst NICHT den "
@@ -905,18 +864,6 @@ namespace Tooltips
                           "fast it wobbles while doing so. Sharing one control meant a slow "
                           "path silently strangled the jitter.";
 
-                case Key::SrcJitterZ:
-                    return lang == Language::De
-                        ? "Nur im Rotoren-Modus: Neigung der Kreisebene. 0 = flach liegend, der "
-                          "Rotor dreht nur in xy. 1 = um 90 Grad gekippt, die Bahn steht "
-                          "senkrecht und der Rotor dreht sich voll durch den z-Bereich (Höhe). "
-                          "Dazwischen wandert der Anteil stetig von der Waagerechten in die "
-                          "Senkrechte, der Radius bleibt gleich."
-                        : "Rotor mode only: tilt of the orbit plane. 0 = flat, the rotor turns "
-                          "in xy only. 1 = tilted by 90 degrees, the orbit stands upright and "
-                          "the rotor sweeps the full z range (height). In between the share "
-                          "moves steadily from horizontal to vertical, the radius stays the "
-                          "same.";
                 case Key::SrcJitterOn:
                     return lang == Language::De
                         ? "Schaltet das Wackeln der Schallquelle M und aller Klone komplett ab. Die "

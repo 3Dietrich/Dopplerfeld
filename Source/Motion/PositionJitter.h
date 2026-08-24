@@ -9,6 +9,15 @@
 // deren Momentanfrequenz über einen OnePoleSmoother langsam zwischen
 // zufällig gewürfelten Zielfrequenzen driftet, statt zu springen.
 //
+// Bewusst KEINE Kreisbahn und keine bevorzugte Ebene (@dpa 20260824: "nicht
+// mehr nur auf der XY Ebene und nicht nur im Kreis (wir haben Hubschrauber ja
+// extra). Bitte den Jitter wieder gleichmäßig auf x, y und z."). Die
+// Rotoren-Betriebsart, die es hier von 20260821 bis 20260824 gab, ist damit
+// entfallen - eine umlaufende Bewegung gehört zum Motor (EngineGenerator,
+// Betriebsart Hubschrauber), nicht zur Mikrobewegung der Position. Alle drei
+// Achsen bekommen denselben Ausschlag und je eine eigene, unabhängig
+// gewürfelte Frequenz.
+//
 // Der Trick gegen Klicks: Position = amount * sin(phase), phase' =
 // 2π·freq(t). Weil freq(t) durch den One-Pole immer C0-stetig ist, ist auch
 // d(position)/dt = amount·cos(phase)·2π·freq(t) stetig - ein Knick beim
@@ -47,26 +56,8 @@ public:
     // Auslenkung der Wackelbewegung in Metern, 0 = aus (Default).
     void setAmount (double metres);
 
-    // "Hektik": wie schnell/chaotisch sich die Bewegung ändert, in Hz. Im
-    // Rotoren-Modus ist derselbe Wert die Umlaufgeschwindigkeit ("Speed"),
-    // also die Zahl der Umdrehungen pro Sekunde.
+    // "Hektik": wie schnell/chaotisch sich die Bewegung ändert, in Hz.
     void setRate (double hektikHz);
-
-    // Zweite Betriebsart (@dpa 20260821: "statt Jitter Rotoren"): keine drei
-    // unabhaengig wackelnden Achsen, sondern EINE gleichmaessige Kreisbahn.
-    // Der Ausschlag (setAmount) ist dann der Radius.
-    void setRotor (bool shouldRotate);
-
-    // Nur im Rotoren-Modus: 0 = sauberer Kreis mit konstantem Tempo,
-    // 1 = starke Temposchwankungen auf der Bahn (aehnlich der Hektik des
-    // Wackel-Modus). Der Radius bleibt davon unberuehrt, nur die
-    // Umlaufgeschwindigkeit atmet.
-    void setRandomize (double amount01);
-
-    // Nur im Rotoren-Modus: Neigung der Kreisebene. 0 = flach in xy,
-    // 1 = um 90 Grad gekippt, der Kreis steht dann senkrecht und der Rotor
-    // dreht sich voll durch den z-Bereich.
-    void setZJitter (double amount01);
 
     // Obergrenze für die Bahngeschwindigkeit des Wacklers, in m/s. 0 oder
     // negativ heißt "keine Grenze".
@@ -90,13 +81,24 @@ private:
     Vec3 pickFreqTargetHz();
     static float nextRandom01 (std::uint32_t& state);
 
-    double amount = 0.0;
-    double rateHz = 0.2;
-    double maxSpeed = 0.0;   // 0 = keine Grenze
+    // Ausschlag und Hektik werden ANGEFAHREN, nicht gesetzt (@dpa 20260824:
+    // "Jitter ist noch immer sehr laut beim Verstellen"). Ein Reglerruck von
+    // 0 auf 200 m ist sonst ein Positionssprung um bis zu 200 m innerhalb
+    // eines Ticks - fuer den Loeser formal Ueberschall, also genau die
+    // Kegelankunft samt N-Welle, die man beim Verstellen hoert.
+    //
+    // Angefahren wird ueber einen kurzen Ein-Pol (amountGlideSeconds), dessen
+    // Schrittweite zusaetzlich unter dem EIGENEN Tempo-Deckel des Wacklers
+    // liegt. Kein verstecktes Limit: das Ziel wird vollstaendig erreicht, es
+    // dauert nur einen Wimpernschlag laenger, und schneller als "Jit Max"
+    // erlaubt bewegt sich der Wackler ohnehin nirgends.
+    double amount       = 0.0;
+    double amountTarget = 0.0;
+    double rateHz       = 0.2;
+    double rateTarget   = 0.2;
+    double maxSpeed     = 0.0;   // 0 = keine Grenze
 
-    bool   rotorMode = false;
-    double randomize = 0.0;   // 0..1, Temposchwankung der Kreisbahn
-    double zJitter   = 0.0;   // 0..1, Neigung der Kreisebene
+    static constexpr double amountGlideSeconds = 0.02;
 
     // Zweckentfremdet: glättet das Frequenztripel (fx,fy,fz), nicht eine
     // Position - siehe Klassenkommentar.
@@ -104,16 +106,6 @@ private:
     double          retargetTimer = 0.0;
 
     double phase[3] { 0.0, 0.0, 0.0 };
-
-    // Umschalten zwischen Wackeln und Rotor ist ein Formelwechsel und damit
-    // ein Positionssprung - fuer den Loeser waere das formal Ueberschall
-    // (Knacksen bzw. eine falsche Kegelankunft). Deshalb wird nach jedem
-    // Moduswechsel vom zuletzt ausgegebenen Versatz aus kurz ueberblendet.
-    Vec3   lastOut { 0.0, 0.0, 0.0 };
-    Vec3   blendFrom { 0.0, 0.0, 0.0 };
-    double blend = 1.0;   // 1 = fertig, keine Ueberblendung aktiv
-
-    static constexpr double blendSeconds = 0.2;
 
     // Fester Startwert statt Uhrzeit-Aussaat (wie EngineGenerator::prepare) -
     // derselbe Regelweg muss zweimal dasselbe ergeben.

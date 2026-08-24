@@ -6,7 +6,6 @@
 namespace
 {
     constexpr double kTwoPi = 6.283185307179586;
-    constexpr double kPi    = 3.141592653589793;
 }
 
 float PositionJitter::nextRandom01 (std::uint32_t& state)
@@ -23,24 +22,6 @@ float PositionJitter::nextRandom01 (std::uint32_t& state)
 
 Vec3 PositionJitter::pickFreqTargetHz()
 {
-    if (rotorMode)
-    {
-        // Rotor: EINE Umlaufgeschwindigkeit statt dreier Achsfrequenzen, in
-        // alle drei Komponenten geschrieben, damit derselbe Glaetter beide
-        // Betriebsarten tragen kann.
-        //
-        // Der Wuerfel sitzt multiplikativ um 1 herum (Faktor 1/4 bis 4,
-        // gleichmaessig im Logarithmus - halb so schnell und doppelt so
-        // schnell sind gleich wahrscheinlich). randomize blendet zwischen
-        // "gar nicht" und "voll gewuerfelt": bei 0 kommt exakt rateHz heraus,
-        // also ein sauberer Kreis mit konstantem Tempo.
-        const double u      = 2.0 * (double) nextRandom01 (rngState) - 1.0;
-        const double factor = std::exp (u * std::log (4.0));
-        const double f      = rateHz * (1.0 + randomize * (factor - 1.0));
-
-        return { f, f, f };
-    }
-
     // Je Achse unabhaengig im Bereich [0.5, 2.0] * rateHz gewuerfelt - keine
     // synchronen Achsen, sonst entstuende auf Dauer ein hoerbar periodisches
     // Lissajous-Muster statt eines unregelmaessigen Wackelns.
@@ -60,63 +41,31 @@ void PositionJitter::prepare (double tickRateHz)
 void PositionJitter::reset()
 {
     // Startphasen aus dem eigenen Zufallsgenerator, nicht alle bei null: sonst
-    // stuenden im Rotoren-Modus saemtliche Klone im selben Punkt ihrer
-    // Kreisbahn und drehten sichtbar wie ein einziger Koerper. Der Generator
-    // ist ueber setSeed je Klon verschieden und trotzdem deterministisch.
+    // stuenden saemtliche Klone im selben Punkt ihrer Bahn und wackelten
+    // sichtbar wie ein einziger Koerper. Der Generator ist ueber setSeed je
+    // Klon verschieden und trotzdem deterministisch.
     for (auto& p : phase)
         p = kTwoPi * (double) nextRandom01 (rngState);
 
     freqSmoother.reset (pickFreqTargetHz());
     retargetTimer = 0.0;
 
-    lastOut   = { 0.0, 0.0, 0.0 };
-    blendFrom = { 0.0, 0.0, 0.0 };
-    blend     = 1.0;
+    // Kein Anfahren aus dem Nichts: nach einem reset() steht der Wackler
+    // sofort auf seinem eingestellten Ausschlag, sonst faehre er nach jedem
+    // Neuanlassen erst wieder hoch.
+    amount = amountTarget;
+    rateHz = rateTarget;
 }
 
 void PositionJitter::setAmount (double metres)
 {
-    amount = std::max (0.0, metres);
+    // Nur das ZIEL setzen - angefahren wird es in tick(), siehe Header.
+    amountTarget = std::max (0.0, metres);
 }
 
 void PositionJitter::setRate (double hektikHz)
 {
-    rateHz = std::max (0.001, hektikHz);
-
-    // Zeitkonstante der Frequenzdrift an die Hektik gekoppelt: hohe Hektik
-    // wuerfelt schneller neu und driftet schneller dorthin, niedrige Hektik
-    // bleibt traege.
-    freqSmoother.setTau (1.0 / (2.0 * rateHz));
-}
-
-void PositionJitter::setRotor (bool shouldRotate)
-{
-    if (shouldRotate == rotorMode)
-        return;
-
-    rotorMode = shouldRotate;
-
-    // Der geglaettete Frequenzwert bedeutet in beiden Betriebsarten etwas
-    // anderes (drei Achsfrequenzen gegen eine Umlaufgeschwindigkeit) - beim
-    // Wechsel wird deshalb sofort neu gezielt statt den alten Wert
-    // weiterzudriften.
-    freqSmoother.setTarget (pickFreqTargetHz());
-    retargetTimer = 2.0 / rateHz;
-
-    // Die Formel wechselt, die Position darf es nicht: von hier aus wird
-    // ueberblendet (siehe blendSeconds im Header).
-    blendFrom = lastOut;
-    blend     = 0.0;
-}
-
-void PositionJitter::setRandomize (double amount01)
-{
-    randomize = std::clamp (amount01, 0.0, 1.0);
-}
-
-void PositionJitter::setZJitter (double amount01)
-{
-    zJitter = std::clamp (amount01, 0.0, 1.0);
+    rateTarget = std::max (0.001, hektikHz);
 }
 
 void PositionJitter::setMaxSpeed (double metresPerSecond)
@@ -126,6 +75,30 @@ void PositionJitter::setMaxSpeed (double metresPerSecond)
 
 Vec3 PositionJitter::tick (double dt)
 {
+    // Ausschlag und Hektik an ihre Ziele heranfahren (siehe Header). Der
+    // Ein-Pol formt die Bewegung, der Deckel begrenzt ihr Tempo - beim
+    // Ausschlag, weil eine Aenderung dort eine echte Strecke ist, bei der
+    // Hektik nicht, denn die ist keine Strecke.
+    {
+        const double coeff = 1.0 - std::exp (-dt / amountGlideSeconds);
+
+        double delta = (amountTarget - amount) * coeff;
+
+        if (maxSpeed > 0.0)
+        {
+            const double maxStep = maxSpeed * dt;
+            delta = std::clamp (delta, -maxStep, maxStep);
+        }
+
+        amount += delta;
+        rateHz += (rateTarget - rateHz) * coeff;
+    }
+
+    // Zeitkonstante der Frequenzdrift an die Hektik gekoppelt: hohe Hektik
+    // wuerfelt schneller neu und driftet schneller dorthin, niedrige Hektik
+    // bleibt traege.
+    freqSmoother.setTau (1.0 / (2.0 * std::max (0.001, rateHz)));
+
     retargetTimer -= dt;
 
     if (retargetTimer <= 0.0)
@@ -149,10 +122,9 @@ Vec3 PositionJitter::tick (double dt)
     // Der Bremsfaktor kommt aus den REGLERWERTEN, nicht aus der gerade
     // gewuerfelten Frequenz, und das ist der springende Punkt. Aus freqNow
     // gerechnet waere die Bremse ein Normierer: sie zoege jede Schwankung
-    // exakt wieder auf die Grenze zurueck, und die Kreisbahn liefe mit
-    // konstantem Tempo - der Randomize-Regler haette dann buchstaeblich keine
-    // Wirkung mehr, sobald die Grenze ueberhaupt greift (@dpa 20260824:
-    // "randomize tut nichts").
+    // exakt wieder auf die Grenze zurueck, und das Wackeln liefe mit
+    // konstantem Tempo - die Unregelmaessigkeit, die "Hektik" ausmacht, waere
+    // weg, sobald die Grenze ueberhaupt greift.
     //
     // Bezugsgroesse ist deshalb das SCHNELLSTMOEGLICHE, das der Wuerfel bei
     // den aktuellen Reglerwerten hergibt. Der Faktor ist damit ueber die Zeit
@@ -162,13 +134,9 @@ Vec3 PositionJitter::tick (double dt)
 
     if (maxSpeed > 0.0 && amount > 0.0)
     {
-        // Rotor: der Wuerfel in pickFreqTargetHz() reicht bis zum Vierfachen,
-        // gewichtet mit randomize - bei randomize = 0 also genau rateHz.
-        // Wackeln: je Achse bis zum Doppelten, und im ungünstigsten Fall
-        // stehen alle drei gleichzeitig dort.
-        const double peakFactor = rotorMode
-                                ? 1.0 + 3.0 * randomize
-                                : 2.0 * std::sqrt (3.0);
+        // Je Achse reicht der Wuerfel bis zum Doppelten, und im unguenstigsten
+        // Fall stehen alle drei gleichzeitig dort.
+        const double peakFactor = 2.0 * std::sqrt (3.0);
 
         const double vPeak = amount * kTwoPi * rateHz * peakFactor;
 
@@ -187,43 +155,9 @@ Vec3 PositionJitter::tick (double dt)
         if (p > kTwoPi)
             p = std::fmod (p, kTwoPi);
 
-    Vec3 out;
-
-    if (rotorMode)
-    {
-        // Kreisbahn mit dem Radius amount, gefahren von EINER Phase - damit
-        // ist der Abstand zum Mittelpunkt konstant und die Bahn wirklich rund,
-        // anders als bei drei unabhaengigen Sinussen.
-        //
-        // Die Kreisebene kippt um die x-Achse: bei zJitter = 0 liegt sie flach
-        // in xy, bei 1 steht sie senkrecht (90 Grad), der Rotor dreht sich
-        // dann voll durch den z-Bereich. Dazwischen wandert der Anteil stetig
-        // von y nach z, der Radius bleibt dabei gleich.
-        const double tilt = zJitter * (0.5 * kPi);
-        const double c    = std::cos (phase[0]);
-        const double sn   = std::sin (phase[0]);
-
-        out = { amount * c,
-                amount * sn * std::cos (tilt),
-                amount * sn * std::sin (tilt) };
-    }
-    else
-    {
-        out = { amount * std::sin (phase[0]),
-                amount * std::sin (phase[1]),
-                amount * std::sin (phase[2]) };
-    }
-
-    // Ueberblendung nach einem Moduswechsel: die Position laeuft vom zuletzt
-    // ausgegebenen Punkt aus stetig in die neue Formel hinein, statt zu
-    // springen.
-    if (blend < 1.0)
-    {
-        blend = std::min (1.0, blend + dt / blendSeconds);
-        out   = blendFrom + (out - blendFrom) * blend;
-    }
-
-    lastOut = out;
-
-    return out;
+    // Alle drei Achsen gleichberechtigt: derselbe Ausschlag, je eine eigene
+    // Frequenz. Keine bevorzugte Ebene, keine Kreisbahn (siehe Header).
+    return { amount * std::sin (phase[0]),
+             amount * std::sin (phase[1]),
+             amount * std::sin (phase[2]) };
 }

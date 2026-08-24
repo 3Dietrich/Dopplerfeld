@@ -205,9 +205,6 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.srcJitterAmount = raw (Params::srcJitterAmount);
     pp.srcJitterRateHz = raw (Params::srcJitterRateHz);
     pp.srcJitterOn     = raw (Params::srcJitterOn);
-    pp.srcJitterRotor  = raw (Params::srcJitterRotor);
-    pp.srcJitterRandom = raw (Params::srcJitterRandom);
-    pp.srcJitterZ      = raw (Params::srcJitterZ);
     pp.srcJitterMaxSpeed = raw (Params::srcJitterMaxSpeed);
     pp.masterOn        = raw (Params::masterOn);
 
@@ -648,16 +645,6 @@ void DopplerfeldProcessor::applyParameters()
     // sah das aus, als taete der Wackler gar nichts.
     const double jitterMaxSpeed = (double) pp.srcJitterMaxSpeed->load();
 
-    // Rotoren-Modus (@dpa 20260821): dieselben beiden Hauptregler, andere
-    // Bedeutung - Ausschlag wird zum Radius, "Hektik" zur
-    // Umlaufgeschwindigkeit. Randomize und Z-Jit wirken nur dort.
-    const bool   jitterRotor  = pp.srcJitterRotor->load() > 0.5f;
-    const double jitterRandom = (double) pp.srcJitterRandom->load();
-    const double jitterZ      = (double) pp.srcJitterZ->load();
-
-    sourceJitter.setRandomize (jitterRandom);
-    sourceJitter.setZJitter   (jitterZ);
-    sourceJitter.setRotor     (jitterRotor);
     sourceJitter.setAmount    (jitterAmount);
     sourceJitter.setRate      (jitterRate);
     sourceJitter.setMaxSpeed  (jitterMaxSpeed);
@@ -667,9 +654,6 @@ void DopplerfeldProcessor::applyParameters()
     // Satz Regler.
     for (auto& j : cloneJitter)
     {
-        j.setRandomize (jitterRandom);
-        j.setZJitter   (jitterZ);
-        j.setRotor     (jitterRotor);
         j.setAmount    (jitterAmount);
         j.setRate      (jitterRate);
         j.setMaxSpeed  (jitterMaxSpeed);

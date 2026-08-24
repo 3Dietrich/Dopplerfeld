@@ -107,15 +107,12 @@ private:
     // heisst dann "Speed". Nur diese beiden Regler kommen hinzu und sind
     // ausschliesslich im Rotoren-Modus sichtbar (Kompaktheit: im
     // Wackel-Modus stuenden sie ohne Wirkung herum).
-    Knob srcJitterRandomKnob, srcJitterZKnob;
 
     // Eigener Tempo-Deckel des Wacklers. Steht bei den Jitter-Reglern und
     // nicht beim Bahn-Deckel daneben, weil er zum Wackler gehoert - das war
     // vorher ein Regler fuer beides und hat den Wackler still abgewuergt.
     Knob srcJitterMaxSpeedKnob;
 
-    juce::ToggleButton srcJitterRotorButton { "Rotoren" };
-    std::unique_ptr<ButtonAttachment> srcJitterRotorAttachment;
 
     // Ganz-Aus fuer den Jitter, ohne die Regler Jitter/Hektik zurueckzusetzen
     // - deren Wert bleibt erhalten, siehe updateJitterEnabledState().

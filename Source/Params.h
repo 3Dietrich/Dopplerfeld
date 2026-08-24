@@ -40,19 +40,8 @@ namespace Params
     // ohne den Regler neu zu suchen.
     constexpr const char* srcJitterOn = "srcJitterOn";
 
-    // Zweite Betriebsart des Wacklers (@dpa 20260821: "statt Jitter
-    // Rotoren"): eine gleichmaessige Kreisbahn statt dreier unabhaengig
-    // wackelnder Achsen. srcJitterAmount ist dann der Radius, srcJitterRateHz
-    // die Umlaufgeschwindigkeit ("Speed" statt "Hektik").
-    constexpr const char* srcJitterRotor = "srcJitterRotor";
 
-    // Nur im Rotoren-Modus: 0 = sauberer Kreis mit konstantem Tempo, 1 =
-    // starke Temposchwankungen auf der Bahn.
-    constexpr const char* srcJitterRandom = "srcJitterRandom";
 
-    // Nur im Rotoren-Modus: Neigung der Kreisebene, 0 = flach in xy, 1 = um
-    // 90 Grad gekippt (der Rotor dreht sich voll durch den z-Bereich).
-    constexpr const char* srcJitterZ = "srcJitterZ";
 
     // EIGENER Tempo-Deckel des Wacklers, in m/s (@dpa 20260824: "jitter
     // bewegung ist ungeglättet und verursacht deswegen ständig Überschall

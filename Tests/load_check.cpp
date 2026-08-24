@@ -3957,6 +3957,65 @@ int main()
         }
     }
 
+
+    //==================================================================
+    // Wackler verstellen (@dpa 20260824: "Jitter ist noch immer sehr laut
+    // beim Verstellen (N-Waves?)").
+    //
+    // Ein Ruck am Ausschlag-Regler war ein Positionssprung: von 0 auf 200 m
+    // innerhalb eines Ticks sind 200000 m/s, fuer den Loeser Ueberschall samt
+    // Kegelankunft und N-Welle. Der Wackler faehrt seinen Ausschlag deshalb
+    // an, und zwar unter seinem EIGENEN Tempo-Deckel "Jit Max" (siehe
+    // PositionJitter).
+    //
+    // Kriterium: bei Jit Max = 100 m/s darf ein voller Reglerruck |M_r| nicht
+    // ueber die Haelfte von Mach 1 treiben - schneller als der Deckel darf
+    // sich nichts bewegen, auch nicht der Regler selbst.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres, 500.0f);
+        setParam (proc, Params::lisX, 0.5f);
+        setParam (proc, Params::lisY, 0.5f);
+        setParam (proc, Params::srcX, 0.5f);
+        setParam (proc, Params::srcY, 0.2f);
+        setParam (proc, Params::srcZ, 0.0f);
+
+        setParam (proc, Params::nWaveOn, 1.0f);
+        setParam (proc, Params::srcJitterOn, 1.0f);
+        setParam (proc, Params::srcJitterRateHz, 2.0f);
+        setParam (proc, Params::srcJitterMaxSpeed, 100.0f);
+        setParam (proc, Params::srcJitterAmount, 0.0f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        Stats before;
+        render (proc, buffer, 1.0, before, [] (double) {});
+
+        // Der Ruck: ganz von unten nach ziemlich weit oben, in einem Zug.
+        setParam (proc, Params::srcJitterAmount, 200.0f);
+
+        Stats jerk;
+        render (proc, buffer, 1.0, jerk, [] (double) {});
+
+        before.report ("Wackler, vor dem Ruck");
+        jerk.report   ("Wackler, Reglerruck");
+
+        std::printf ("%-22s Reglerruck 0 -> 200 m bei Jit Max 100 m/s: |M_r| max %.2f, "
+                     "Spitze %.4f gegen %.4f davor\n",
+                     "", jerk.maxMach, jerk.peak, before.peak);
+
+        if (jerk.maxMach > 0.5)
+        {
+            std::printf ("  FEHLER: der Reglerruck treibt die Quelle auf |M_r| %.2f - "
+                         "schneller als 'Jit Max' erlaubt, also ein Sprung statt einer "
+                         "Fahrt.\n", jerk.maxMach);
+            failed = true;
+        }
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }
