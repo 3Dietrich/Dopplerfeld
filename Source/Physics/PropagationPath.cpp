@@ -143,6 +143,23 @@ double PropagationPath::nWaveAt (const Branch& b)
     const double T    = b.nDuration;
     const double rise = std::min (b.nRise, 0.4 * T);
 
+    if (b.nSingleSided)
+    {
+        // Unterschallige Druckbeule: eine einzelne Verdichtung, kein N
+        // (siehe Branch::nSingleSided). Halbe Sinuskuppe statt Rampe durch
+        // null - sie hat keine hintere Stossfront, weil es nichts gibt, was
+        // dort schlagartig zurueckspringen wuerde, und ihr Mittelwert bleibt
+        // trotzdem endlich. Die Anstiegszeit der Front wirkt hier als
+        // Verrundung des Einsatzes, genau wie beim N.
+        const double u    = t / T;
+        double       bump = std::sin (u * 3.141592653589793);
+
+        if (t < rise)
+            bump *= t / rise;
+
+        return b.nAmp * bump;
+    }
+
     // Linearer Rumpf von +1 nach -1 über die volle Dauer.
     double shape = 1.0 - 2.0 * t / T;
 
@@ -157,8 +174,11 @@ double PropagationPath::nWaveAt (const Branch& b)
     return b.nAmp * shape;
 }
 
-void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale)
+void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale,
+                                    bool ducksOthers, bool singleSided)
 {
+    b.nSingleSided = singleSided;
+
     // Pulsdauer aus der Ausdehnung des Körpers: die Zeit, die der Schall
     // braucht, um ihn der Länge nach zu durchlaufen, mal zwei (Bug- und
     // Heckstoß liegen nicht am selben Punkt). Damit heißt größer wirklich
@@ -220,11 +240,24 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
 
     b.nPhase = 0.0;
 
+    if (! ducksOthers)
+        return;
+
     // Fenster fuer die Absenkung des uebrigen Schalls: solange die Stossfront
     // ueber diesen Weg laeuft, kommt nichts anderes durch (siehe
     // setShockDuck). Es wird nur verlaengert, nie verkuerzt - eine zweite,
     // kuerzere Front darf ein noch laufendes Fenster nicht abschneiden.
     shockEndTime = std::max (shockEndTime, listenerTimeNow + b.nDuration);
+
+    // Tiefe aus der Entfernung: nah ist die Front eine echte Diskontinuitaet
+    // und nimmt alles mit, weit weg ist sie zerfallen und laesst das
+    // Drumherum stehen (siehe setShockDuck). Wie beim Fenster gilt der
+    // staerkere Wert, damit eine ferne Front eine nahe nicht aufweicht.
+    const double reach = shockDuckRange > 0.0
+                       ? shockDuckRange / (shockDuckRange + std::max (0.0, b.R))
+                       : 1.0;
+
+    shockDuckStrength = std::max (shockDuckStrength, reach);
 }
 
 double PropagationPath::shockDuckAt (double listenerTime) const
@@ -239,7 +272,7 @@ double PropagationPath::shockDuckAt (double listenerTime) const
     const double g = since <= 0.0 ? 1.0
                                   : std::exp (-since / std::max (1.0e-4, shockDuckRelease));
 
-    return 1.0 - shockDuckAmount * g;
+    return 1.0 - shockDuckAmount * shockDuckStrength * g;
 }
 
 void PropagationPath::setReverseGain (double gainLinear)
@@ -270,9 +303,10 @@ void PropagationPath::setJumpMarker (double emissionTime, double speedStepMps)
     jumpMarkerStrength = std::max (0.0, speedStepMps);
 }
 
-void PropagationPath::setShockDuck (double amount01)
+void PropagationPath::setShockDuck (double amount01, double rangeMetres)
 {
     shockDuckAmount = std::min (1.0, std::max (0.0, amount01));
+    shockDuckRange  = std::max (0.0, rangeMetres);
 }
 
 void PropagationPath::setDiscoveryIntervalSeconds (double seconds)
@@ -946,8 +980,28 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // Start aus dem Stand auf volle Fahrt. Bezugspunkt ist ein
                 // Sprung um eine Schallgeschwindigkeit - bei Regler ganz oben
                 // ist der dann so laut wie ein Ueberschallknall.
+                //
+                // Zwei Unterschiede zum Ueberschallknall (@dpa 20260824):
+                //
+                //   - Er senkt den uebrigen Schall NICHT ab. "Der Startknall
+                //     ist hoerbar aber zu leise. Durch die Regel 'waehrend
+                //     N-Wave nicht ausser N' ist das wie eine kurze
+                //     Unterbrechung" - genau so war es: der Knall schaltete
+                //     den Motor fuer seine eigene Dauer stumm und stand dann
+                //     allein in einem Loch, statt obendrauf zu liegen. Eine
+                //     Beschleunigungswelle ist keine Stossfront, hinter der
+                //     nichts herkommt; sie laeuft MIT dem uebrigen Schall.
+                //   - Unter Mach 1 ist sie eine einseitige Druckbeule statt
+                //     eines N ("wenn der Knall subsonic ist, dann ist es ja
+                //     tatsaechlich eine einfache Beule ... aber 'einseitig'
+                //     (nur /Druck\\)"). Erst ein Sprung ueber die
+                //     Schallgeschwindigkeit hinaus bringt die zweite
+                //     Stossfront mit.
+                const bool subsonicJump = jumpMarkerStrength < c;
+
                 triggerNWave (b, c, tStart,
-                              jumpBoom * std::min (1.0, jumpMarkerStrength / std::max (1.0, c)));
+                              jumpBoom * std::min (1.0, jumpMarkerStrength / std::max (1.0, c)),
+                              false, subsonicJump);
             }
 
             b.prevMach = machNow;

@@ -79,6 +79,7 @@ namespace Tooltips
         EngineSine,
         ReverseGain,
         ShockDuck,
+        ShockDuckRange,
         JumpEdge,
         JumpBoom,
         ShadowTail,
@@ -769,6 +770,20 @@ namespace Tooltips
                           "tail shock. Afterwards the sound returns within about ten "
                           "milliseconds; that time is fixed and not a control, it only takes "
                           "the edge off. The boom itself is not ducked.";
+                case Key::ShockDuckRange:
+                    return lang == Language::De
+                        ? "Ab welcher Entfernung die Absenkung nachlässt. Nah an der "
+                          "Quelle ist die Stoßfront eine echte Unstetigkeit und nimmt "
+                          "alles andere mit; weiter weg ist sie längst zerfallen, und "
+                          "was ankommt, ist Grollen samt allem drumherum. Bei genau "
+                          "dieser Entfernung wirkt die Absenkung noch halb. 0 = gilt "
+                          "überall gleich."
+                        : "The distance at which the ducking starts to fade. Close to "
+                          "the source the shock front is a real discontinuity and takes "
+                          "everything else with it; further away it has long since "
+                          "decayed, and what arrives is a rumble along with everything "
+                          "around it. At exactly this distance the ducking is at half "
+                          "depth. 0 = applies everywhere equally.";
                 case Key::JumpEdge:
                     return lang == Language::De
                         ? "Lässt die KANTE eines Bewegungssprungs durch, statt sie zu "

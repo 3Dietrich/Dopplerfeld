@@ -287,6 +287,11 @@ namespace Params
     // soll weg". Deshalb voll aufgedreht als Voreinstellung.
     constexpr const char* shockDuckAmount = "shockDuckAmount";
 
+    // Entfernung, ab der die Absenkung nachlaesst (@dpa 20260824: "wir muessen
+    // also bestimmen ab welcher entfernung die N-Wave noch 'echt' ist").
+    // Siehe PropagationPath::setShockDuck().
+    constexpr const char* shockDuckRange = "shockDuckRange";
+
     // Bewegungssprung hoerbar machen (@dpa 20260823: "der Vorbeiflug
     // 'Knall-Start' muesste ja mindestens subsonic zu hoeren sein ... Bisher
     // ist noch nicht zu hoeren!"). Zwei Wege nebeneinander: jumpEdge laesst

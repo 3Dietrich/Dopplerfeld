@@ -428,6 +428,7 @@ private:
         std::atomic<float>* rocketShockRate = nullptr;
         std::atomic<float>* reverseGainDb   = nullptr;
         std::atomic<float>* shockDuckAmount = nullptr;
+        std::atomic<float>* shockDuckRange  = nullptr;
         std::atomic<float>* jumpEdge        = nullptr;
         std::atomic<float>* jumpBoom        = nullptr;
         std::atomic<float>* shadowTailMs    = nullptr;
@@ -678,6 +679,7 @@ private:
     // alle Pfade beider Geometriesaetze und werden darum nur bei einer echten
     // Aenderung angestossen.
     double lastReverseGainDb   = 0.0;
+    double lastShockDuckRange  = -1.0;
     double lastShockDuckAmount = 1.0;
     bool   lastJumpEdge        = false;
     double lastJumpBoom        = 0.0;

@@ -185,7 +185,15 @@ public:
     // immer was zu hoeren zwischen den zwei knallen.. das soll weg"). Danach
     // kommt der Ton ueber shockDuckRelease zurueck, kurz genug, dass es kein
     // Nachklappen gibt, und lang genug, dass es nicht knackt.
-    void setShockDuck (double amount01);
+    //
+    // rangeMetres ist die Entfernung, ab der die Absenkung nachlaesst
+    // (@dpa 20260824: "wir muessen also bestimmen ab welcher entfernung die
+    // N-Wave noch 'echt' ist"). Nah an der Quelle ist die Stossfront eine
+    // echte Diskontinuitaet und nimmt alles andere mit; weiter weg ist sie
+    // laengst zerfallen, und was ankommt, ist Grollen SAMT allem drumherum.
+    // Der Faktor faellt stetig mit range / (range + R), bei R = range also auf
+    // die Haelfte. 0 heisst "gilt ueberall gleich".
+    void setShockDuck (double amount01, double rangeMetres);
 
     // Mindestdauer des Ausklangs, wenn ein Zweig AN DER KAUSTIK verschwindet,
     // in Sekunden.
@@ -455,6 +463,15 @@ private:
         double nDuration = 0.0;
         double nRise     = 0.0;
         double nAmp      = 0.0;
+
+        // Einseitige Druckbeule statt N-Welle (@dpa 20260824: "wenn der Knall
+        // subsonic ist, dann ist es ja tatsaechlich eine einfache Beule, je
+        // nach Groesse und Speed des Erzeugers laenger oder kuerzer, aber
+        // 'einseitig' (nur /Druck\\)"). Das N mit seinen zwei Stossfronten
+        // entsteht erst, wenn die Quelle die Schallgeschwindigkeit
+        // ueberschreitet - eine unterschallige Beschleunigung schiebt nur eine
+        // Verdichtung vor sich her.
+        bool   nSingleSided = false;
     };
 
     // Wert der N-Welle zum Phasenzeitpunkt: steiler Anstieg auf +A, linearer
@@ -489,7 +506,16 @@ private:
     // levelScale skaliert die Pulsamplitude. 1 = der volle Ueberschallknall;
     // der Sprung-Knall kommt mit einem kleineren Wert herein, der mit der
     // Sprunghoehe waechst.
-    void triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale = 1.0);
+    // ducksOthers sagt, ob dieser Puls den uebrigen Schall absenkt (siehe
+    // setShockDuck). Nur eine echte Stossfront tut das - sie ist die
+    // Diskontinuitaet selbst, hinter der fuer die Dauer des Pulses nichts
+    // anderes herkommt. Eine unterschallige Druckbeule ist keine: sie laeuft
+    // MIT dem uebrigen Schall, nicht statt seiner.
+    //
+    // singleSided macht aus der N-Welle die einseitige Beule, siehe
+    // Branch::nSingleSided.
+    void triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale = 1.0,
+                       bool ducksOthers = true, bool singleSided = false);
 
     // Absenkungsfaktor durch die Stossfront zur Hoererzeit t, 1 = unberuehrt.
     double shockDuckAt (double listenerTime) const;
@@ -688,6 +714,11 @@ private:
     // Siehe setShockDuck(). Default 0 = aus, damit bestehende Presets
     // unveraendert klingen.
     double shockDuckAmount = 0.0;
+    double shockDuckRange  = 0.0;   // 0 = entfernungsunabhaengig
+
+    // Tiefe der gerade laufenden Absenkung, beim Ausloesen aus der Entfernung
+    // gerechnet (siehe setShockDuck).
+    double shockDuckStrength = 0.0;
 
     // Rueckkehrzeit nach der Stossfront. Feste Groesse statt Regler: sie soll
     // nur die Kante entschaerfen, nicht gestaltet werden.

@@ -132,7 +132,7 @@ public:
 
     // Absenkung des uebrigen Schalls waehrend einer Stossfront, siehe
     // PropagationPath::setShockDuck().
-    void setShockDuck (double amount01);
+    void setShockDuck (double amount01, double rangeMetres);
 
     // Bewegungssprung hoerbar machen, siehe PropagationPath::setJumpEdge()
     // und setJumpBoom().
@@ -518,6 +518,7 @@ private:
     // Siehe setReverseGain() / setShockDuck().
     double reverseGain      = 1.0;
     double shockDuckAmount = 0.0;
+    double shockDuckRange  = 0.0;
     bool   jumpEdgeOn      = false;
     double jumpBoom        = 0.0;
     double shadowTailSeconds = 1.0e-3;

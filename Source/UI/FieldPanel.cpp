@@ -55,6 +55,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (reverseGainKnob, apvts, Params::reverseGainDb,   Text::utf8 ("Rückwärts"), Tooltips::Key::ReverseGain);
     setupKnob (shockDuckKnob,   apvts, Params::shockDuckAmount, "Front-Duck",  Tooltips::Key::ShockDuck);
+    setupKnob (shockDuckRangeKnob, apvts, Params::shockDuckRange, "Duck-Reichw.", Tooltips::Key::ShockDuckRange);
     setupKnob (shadowTailKnob,  apvts, Params::shadowTailMs,    "Schatten",    Tooltips::Key::ShadowTail);
 
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
@@ -79,7 +80,7 @@ void FieldPanel::refreshTooltips()
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
                       &airTempKnob, &airAltitudeKnob,
-                      &reverseGainKnob, &shockDuckKnob, &shadowTailKnob })
+                      &reverseGainKnob, &shockDuckKnob, &shockDuckRangeKnob, &shadowTailKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -163,7 +164,7 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto boomRow = area.removeFromTop (knobH);
-    for (auto* k : { &reverseGainKnob, &shockDuckKnob, &shadowTailKnob })
+    for (auto* k : { &reverseGainKnob, &shockDuckKnob, &shockDuckRangeKnob, &shadowTailKnob })
     {
         layoutKnob (*k, boomRow.removeFromLeft (knobW));
         boomRow.removeFromLeft (4);

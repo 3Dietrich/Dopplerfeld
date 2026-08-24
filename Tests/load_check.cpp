@@ -1545,8 +1545,28 @@ int main()
         withEdge.report ("Knall-Start + Kante");
         withBoom.report ("Knall-Start + Druckwelle");
 
+        auto rmsOf = [] (const Stats& st)
+        {
+            return std::sqrt (st.sumSquares[0] / std::max (1.0, (double) st.samples * 0.5));
+        };
+
         std::printf ("%-22s Ankunft: Spitze ohne %.4f | Kante %.4f | Druckwelle %.4f\n",
                      "", plain.peak, withEdge.peak, withBoom.peak);
+
+        // @dpa 20260824: "Durch die Regel 'waehrend N-Wave nicht ausser N' ist
+        // das wie eine kurze Unterbrechung." Der Sprungknall senkt den uebrigen
+        // Schall deshalb nicht mehr ab - der Motorton muss im Ankunftsfenster
+        // also mindestens so laut bleiben wie ohne Knall, nicht leiser werden.
+        std::printf ("%-22s Umfeld im Ankunftsfenster: RMS ohne %.5f | mit Druckwelle %.5f\n",
+                     "", rmsOf (plain), rmsOf (withBoom));
+
+        if (rmsOf (withBoom) < rmsOf (plain))
+        {
+            std::printf ("  FEHLER: die Druckwelle macht das Ankunftsfenster LEISER "
+                         "(%.5f gegen %.5f) - sie schneidet sich ihr eigenes Loch.\n",
+                         rmsOf (withBoom), rmsOf (plain));
+            failed = true;
+        }
 
         // Die Druckwelle ist der laute Weg: sie muss die Spitze im
         // Ankunftsfenster deutlich anheben, sonst wirkt der Regler nicht.
@@ -4012,6 +4032,104 @@ int main()
             std::printf ("  FEHLER: der Reglerruck treibt die Quelle auf |M_r| %.2f - "
                          "schneller als 'Jit Max' erlaubt, also ein Sprung statt einer "
                          "Fahrt.\n", jerk.maxMach);
+            failed = true;
+        }
+    }
+
+
+    //==================================================================
+    // Front-Duck (@dpa 20260824: "Front-Duck ist falsch/buggy: es regelt die
+    // Motorlautstaerke, bei 1 ist nichts mehr (ausser Knalle). Irgendwie kam
+    // Minuten spaeter die Lautstaerke zurueck.").
+    //
+    // Gemessen wird derselbe Ueberschallflug dreimal, nur die Duck-Tiefe
+    // unterscheidet sich, dazu die Zahl der ausgeloesten Stossfronten und wie
+    // lange sie zusammen decken.
+    {
+        auto duckRun = [&] (float amount, Stats& stats, float jitterMetres = 0.0f)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 4000.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::srcZ, 200.0f);
+            setParam (proc, Params::srcX, 0.05f);
+            setParam (proc, Params::srcY, 0.6f);
+
+            setParam (proc, Params::nWaveOn, 1.0f);
+            setParam (proc, Params::shockDuckAmount, amount);
+
+            // Der Wackler war der eigentliche Verdaechtige hinter "bei 1 ist
+            // nichts mehr": sprang er ueber Mach 1, loeste er fortwaehrend
+            // Stossfronten aus und hielt die Absenkung damit dauerhaft offen.
+            setParam (proc, Params::srcJitterOn, jitterMetres > 0.0f ? 1.0f : 0.0f);
+            setParam (proc, Params::srcJitterAmount, jitterMetres);
+            setParam (proc, Params::srcJitterRateHz, 4.0f);
+
+            setParam (proc, Params::flyKind,     0.0f);
+            setParam (proc, Params::flyStart,    0.0f);
+            setParam (proc, Params::flyDistance, 400.0f);
+            setParam (proc, Params::flyApproach, 1500.0f);
+            setParam (proc, Params::flySpeed,    700.0f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            Stats settle;
+            render (proc, buffer, 0.5, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            render (proc, buffer, 8.0, stats, [] (double) {});
+        };
+
+        Stats duckOff, duckHalf, duckFull, duckJitterOff, duckJitterFull;
+
+        duckRun (0.0f, duckOff);
+        duckRun (0.5f, duckHalf);
+        duckRun (1.0f, duckFull);
+        duckRun (0.0f, duckJitterOff,  60.0f);
+        duckRun (1.0f, duckJitterFull, 60.0f);
+
+        duckOff.report  ("Front-Duck 0");
+        duckHalf.report ("Front-Duck 0,5");
+        duckFull.report ("Front-Duck 1");
+        duckJitterFull.report ("Front-Duck 1 + Wackler");
+
+        const double rmsOff  = std::sqrt (duckOff.sumSquares[0]  / std::max (1.0, (double) duckOff.samples  * 0.5));
+        const double rmsHalf = std::sqrt (duckHalf.sumSquares[0] / std::max (1.0, (double) duckHalf.samples * 0.5));
+        const double rmsFull = std::sqrt (duckFull.sumSquares[0] / std::max (1.0, (double) duckFull.samples * 0.5));
+
+        std::printf ("%-22s RMS L: aus %.5f | halb %.5f (%.0f %%) | voll %.5f (%.0f %%) | "
+                     "laengste Stille voll %.3f s\n",
+                     "", rmsOff, rmsHalf, 100.0 * rmsHalf / std::max (1.0e-12, rmsOff),
+                     rmsFull, 100.0 * rmsFull / std::max (1.0e-12, rmsOff),
+                     duckFull.worstSilenceSeconds);
+
+        const double rmsJitOff  = std::sqrt (duckJitterOff.sumSquares[0]
+                                             / std::max (1.0, (double) duckJitterOff.samples * 0.5));
+        const double rmsJitFull = std::sqrt (duckJitterFull.sumSquares[0]
+                                             / std::max (1.0, (double) duckJitterFull.samples * 0.5));
+
+        const double keptPercent = 100.0 * rmsJitFull / std::max (1.0e-12, rmsJitOff);
+
+        std::printf ("%-22s mit Wackler (60 m, 4 Hz): RMS aus %.5f | voll %.5f (%.0f %%), "
+                     "|M_r| max %.2f\n",
+                     "", rmsJitOff, rmsJitFull, keptPercent, duckJitterFull.maxMach);
+
+        // Der Kern von @dpas Fehlerbild: bei voller Absenkung darf der
+        // Motorton nicht dauerhaft verschwinden. Ein Einbruch auf unter die
+        // Haelfte waere genau das, was er beschrieben hat ("bei 1 ist nichts
+        // mehr (ausser Knalle)").
+        if (keptPercent < 50.0)
+        {
+            std::printf ("  FEHLER: die volle Absenkung nimmt dauerhaft %.0f %% des "
+                         "Pegels weg - das ist kein Ducken mehr, das ist ein Aus.\n",
+                         100.0 - keptPercent);
             failed = true;
         }
     }

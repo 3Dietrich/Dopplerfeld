@@ -281,6 +281,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.rocketShockRate = raw (Params::rocketShockRate);
     pp.reverseGainDb   = raw (Params::reverseGainDb);
     pp.shockDuckAmount = raw (Params::shockDuckAmount);
+    pp.shockDuckRange  = raw (Params::shockDuckRange);
     pp.jumpEdge        = raw (Params::jumpEdge);
     pp.jumpBoom        = raw (Params::jumpBoom);
     pp.shadowTailMs    = raw (Params::shadowTailMs);
@@ -812,6 +813,7 @@ void DopplerfeldProcessor::applyParameters()
     // alle Pfade beider Geometriesaetze.
     const double reverseGainDb   = (double) pp.reverseGainDb->load();
     const double shockDuckAmount = (double) pp.shockDuckAmount->load();
+    const double shockDuckRange  = (double) pp.shockDuckRange->load();
     const double shadowTailMs    = (double) pp.shadowTailMs->load();
     const bool   jumpEdge        = pp.jumpEdge->load() > 0.5f;
     const double jumpBoom        = (double) pp.jumpBoom->load();
@@ -822,10 +824,12 @@ void DopplerfeldProcessor::applyParameters()
         dopplerEngine.setReverseGain (juce::Decibels::decibelsToGain (reverseGainDb));
     }
 
-    if (std::abs (shockDuckAmount - lastShockDuckAmount) > 1.0e-9)
+    if (std::abs (shockDuckAmount - lastShockDuckAmount) > 1.0e-9
+        || std::abs (shockDuckRange - lastShockDuckRange) > 1.0e-9)
     {
+        lastShockDuckRange = shockDuckRange;
         lastShockDuckAmount = shockDuckAmount;
-        dopplerEngine.setShockDuck (shockDuckAmount);
+        dopplerEngine.setShockDuck (shockDuckAmount, shockDuckRange);
     }
 
     if (jumpEdge != lastJumpEdge)

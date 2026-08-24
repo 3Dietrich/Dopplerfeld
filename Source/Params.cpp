@@ -519,6 +519,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Heckstoss (@dpa 20260823).
     layout.add (floatParam (reverseGainDb, "Reverse Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
     layout.add (floatParam (shockDuckAmount, "Shock Duck", unitRange(), 1.0f));
+    {
+        // Reichweite der Absenkung, siehe Params.h. Skew auf 300 m, damit der
+        // nahe Bereich - in dem die Stossfront wirklich noch eine ist - den
+        // Grossteil des Reglerwegs bekommt. Bis 20 km offen, damit "gilt
+        // ueberall" als Reglerstellung erreichbar bleibt und kein Deckel
+        // erfunden werden muss.
+        auto range = juce::NormalisableRange<float> (0.0f, 20000.0f);
+        range.setSkewForCentre (300.0f);
+        layout.add (floatParam (shockDuckRange, "Shock Duck Range", range, 300.0f, "m"));
+    }
 
     // Bewegungssprung: Kante durchlassen (aus) und Druckwelle darauf (0).
     layout.add (boolParam (jumpEdge, "Jump Edge", false));

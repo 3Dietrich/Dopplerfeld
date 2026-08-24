@@ -81,7 +81,7 @@ private:
     // gehoerten Anteils, die Absenkung des uebrigen Schalls waehrend der
     // Stossfront samt ihrer Rueckkehrzeit, und wie weich ein Hoerweg an der
     // Kaustik ausklingt.
-    Knob reverseGainKnob, shockDuckKnob, shadowTailKnob;
+    Knob reverseGainKnob, shockDuckKnob, shockDuckRangeKnob, shadowTailKnob;
 
     // Kante eines Bewegungssprungs durchlassen statt interpolieren - der
 

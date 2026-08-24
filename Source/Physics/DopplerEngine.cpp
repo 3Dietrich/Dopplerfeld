@@ -223,7 +223,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setDistanceCurve (distanceCurve);
     setNWave (nWaveOn, nWaveSizeM, nWaveGain);
     setReverseGain (reverseGain);
-    setShockDuck (shockDuckAmount);
+    setShockDuck (shockDuckAmount, shockDuckRange);
     setShadowTailSeconds (shadowTailSeconds);
     setJumpEdge (jumpEdgeOn);
     setJumpBoom (jumpBoom);
@@ -332,7 +332,7 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
         p.setDistanceCurve (distanceCurve);
         p.setNWave (nWaveOn, nWaveSizeM, nWaveGain);
         p.setReverseGain (reverseGain);
-        p.setShockDuck (shockDuckAmount);
+        p.setShockDuck (shockDuckAmount, shockDuckRange);
         p.setShadowTailSeconds (shadowTailSeconds);
         p.setJumpEdge (jumpEdgeOn);
         p.setJumpBoom (jumpBoom);
@@ -561,13 +561,14 @@ void DopplerEngine::setReverseGain (double gainLinear)
             p.setReverseGain (gainLinear);
 }
 
-void DopplerEngine::setShockDuck (double amount01)
+void DopplerEngine::setShockDuck (double amount01, double rangeMetres)
 {
     shockDuckAmount = amount01;
+    shockDuckRange  = rangeMetres;
 
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
-            p.setShockDuck (amount01);
+            p.setShockDuck (amount01, rangeMetres);
 }
 
 void DopplerEngine::setJumpEdge (bool shouldPassEdge)
