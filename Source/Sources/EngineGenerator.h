@@ -161,6 +161,27 @@ public:
     // Ueberflug von selbst.
     void setRotorDoppler (bool shouldUseDoppler);
 
+    // Rotordrehzahl in das Frequenzraster des Motors rasten (@dpa 20260824:
+    // ein Schalter "Quant" fuer "in Obertoene quantisieren").
+    //
+    // Die Unwucht sitzt seit jeher auf f_base/2 mal einer ganzen Oktave, ist
+    // also mit dem Motor verkoppelt - und genau deshalb klingt sie wirksam.
+    // Der Rotor lief frei dagegen: seine Blattfolge und der Motortakt gingen
+    // aneinander vorbei, und was man hoerte, war eine wandernde Schwebung
+    // statt eines Klanges.
+    //
+    // Eingerastet wird auf das naechste GANZZAHLIGE Verhaeltnis zur
+    // Grundfrequenz, nach oben wie nach unten (f_base * k oder f_base / k).
+    // Ein Hauptrotor dreht viel langsamer als der Motor, der uebliche Fall ist
+    // also der Teiler - bei 434 RPM und 3,63 Hz liegt der Rotor auf f_base/2.
+    //
+    // Der Regler behaelt seinen Wert; gerastet wird, was der Generator daraus
+    // macht. Aus bleibt es beim frei laufenden Rotor - die Schwebungen, die
+    // dabei entstehen, sind ausdruecklich erwuenscht (@dpa: "die zwei leicht
+    // unterschiedlichen Tempi ... fuehren zu interessanten haerte und
+    // weichheits verlaeufen").
+    void setRotorQuantise (bool shouldQuantise);
+
     // Blattlaenge in Metern. Sie bestimmt, wie weit die Laufzeit je Umlauf
     // schwankt (2r/c bei flacher Sicht) und damit die Tiefe des Effekts.
     void setRotorRadius (float metres);
@@ -400,6 +421,7 @@ private:
     //------------------------------------------------------------------
     // Rotor-Doppler, siehe setRotorDoppler().
     std::atomic<bool>  rotorDoppler { false };
+    std::atomic<bool>  rotorQuantise { false };
     std::atomic<float> rotorRadiusM { 5.0f };
     std::atomic<float> rotorInPlane { 1.0f };
     std::atomic<float> rotorFlightSpeed { 0.0f };

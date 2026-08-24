@@ -142,8 +142,13 @@ EnginePanel::EnginePanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (heliRotorRadiusKnob, apvts, Params::heliRotorRadius, "Blattlänge", Tooltips::Key::HeliRotorRadius);
 
     heliDopplerButton.setTooltip (Tooltips::text (Tooltips::Key::HeliDoppler));
+    heliQuantiseButton.setTooltip (Tooltips::text (Tooltips::Key::HeliQuantise));
     addAndMakeVisible (heliDopplerButton);
     heliDopplerAttachment = std::make_unique<ButtonAttachment> (apvts, Params::heliDoppler, heliDopplerButton);
+
+    heliQuantiseButton.setTooltip (Tooltips::text (Tooltips::Key::HeliQuantise));
+    addAndMakeVisible (heliQuantiseButton);
+    heliQuantiseAttachment = std::make_unique<ButtonAttachment> (apvts, Params::heliQuantise, heliQuantiseButton);
 
     // Anfangszustand passend zur tatsaechlich geladenen Betriebsart setzen -
     // sonst stuenden die Rotor-Regler nach dem Oeffnen des Editors aktiv,
@@ -260,8 +265,11 @@ void EnginePanel::updateHeliControlsEnabled()
 
     // Der Doppler-Schalter gehoert zum Rotor: er steht nur dort, wo es einen
     // gibt (Hubschrauber und Propeller).
-    heliDopplerButton.setVisible (std::find (active.begin(), active.end(), &heliRotorHzKnob)
-                                      != active.end());
+    const bool hasRotor = std::find (active.begin(), active.end(), &heliRotorHzKnob)
+                              != active.end();
+
+    heliDopplerButton.setVisible (hasRotor);
+    heliQuantiseButton.setVisible (hasRotor);
 
     // Dasselbe fuer die Vorlagenliste: nur die der gewaehlten Betriebsart
     // steht da, die andere verschwindet ganz (nicht ausgegraut) - genau wie
@@ -396,6 +404,7 @@ void EnginePanel::refreshTooltips()
     engineKindLabel.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
     engineKindCombo.setTooltip (Tooltips::text (Tooltips::Key::EngineKind));
     heliDopplerButton.setTooltip (Tooltips::text (Tooltips::Key::HeliDoppler));
+    heliQuantiseButton.setTooltip (Tooltips::text (Tooltips::Key::HeliQuantise));
 
     for (auto* c : { &jetVoiceChoice, &rocketVoiceChoice })
     {
@@ -441,8 +450,11 @@ void EnginePanel::resized()
     if (heliDopplerButton.isVisible())
     {
         kindRow.removeFromLeft (12);
-        heliDopplerButton.setBounds (kindRow.removeFromLeft (juce::jmin (110, kindRow.getWidth()))
+        heliDopplerButton.setBounds (kindRow.removeFromLeft (juce::jmin (90, kindRow.getWidth()))
                                             .withTrimmedTop (18));
+        kindRow.removeFromLeft (6);
+        heliQuantiseButton.setBounds (kindRow.removeFromLeft (juce::jmin (80, kindRow.getWidth()))
+                                             .withTrimmedTop (18));
     }
 
     area.removeFromTop (6);

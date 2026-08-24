@@ -277,6 +277,13 @@ private:
     // hat.
     void drawSpeedReadout (juce::Graphics& g) const;
 
+    // Abstand Hoerer - Quelle, immer sichtbar (@dpa 20260824: "der Abstand
+    // L .. M muss immer sichtbar sein. Ich schlage vor, wie die gelben speed
+    // anzeigen, bloss links in ~meter"). Gleiche Machart wie die
+    // Tempo-Anzeige, gleiche Farbe, nur eine Spalte und auf der anderen
+    // Seite - so liest sich beides als ein Instrument, nicht als zwei.
+    void drawDistanceReadout (juce::Graphics& g) const;
+
     // Screen-Blickwinkel des Hoerers: aus zwei mit worldToScreen projizierten
     // Punkten (Kopf, Kopf+Nasenrichtung) statt eines zweiten, redundanten
     // Vorzeichenwechsels - siehe Klassenkommentar oben.

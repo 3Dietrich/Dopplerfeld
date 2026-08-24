@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Labels.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 
 // Schlanke Klapp-Komponente fuer die Motor-/Sample-/Bewegungs-/Feld-Panels
@@ -23,7 +24,14 @@ public:
     // im eingeklappten Zustand benoetigt.
     static constexpr int headerHeight = 24;
 
-    explicit CollapsiblePanel (const juce::String& title);
+    // Der Titel steht als DEUTSCHER Quelltext hier drin und wird ueber
+    // Labels::text() angezeigt - genau wie jede andere Beschriftung.
+    // Gemerkt wird er, damit refreshTitle() ihn beim Sprachwechsel neu
+    // setzen kann.
+    explicit CollapsiblePanel (const char* title);
+
+    // Nach einem Sprachwechsel aufzurufen (siehe PluginEditor).
+    void refreshTitle() { updateHeaderText(); }
     ~CollapsiblePanel() override = default;
 
     // Setzt den Inhalt des Panels. Die Komponente wird NICHT uebernommen
@@ -45,7 +53,7 @@ public:
 private:
     void updateHeaderText();
 
-    juce::String panelTitle;
+    const char* panelTitle = nullptr;
     juce::TextButton headerButton;
     juce::Component* contentComponent = nullptr;
 

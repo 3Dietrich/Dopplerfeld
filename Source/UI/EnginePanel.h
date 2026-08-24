@@ -128,6 +128,11 @@ private:
     juce::ToggleButton heliDopplerButton { "Doppler" };
     std::unique_ptr<ButtonAttachment> heliDopplerAttachment;
 
+    // Rotordrehzahl ins Frequenzraster des Motors rasten, siehe
+    // EngineGenerator::setRotorQuantise().
+    juce::ToggleButton heliQuantiseButton { "Quant" };
+    std::unique_ptr<ButtonAttachment> heliQuantiseAttachment;
+
     // Nur in Betriebsart "Propeller" wirksam: Fluegelspanne und Pegel des
     // Propellerpaars. Sie stehen hier bei den anderen Betriebsart-Reglern,
     // obwohl sie in der Geometrie umgesetzt sind und nicht im Generator -

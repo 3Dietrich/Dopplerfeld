@@ -414,6 +414,11 @@ void EngineGenerator::setRotorDoppler (bool shouldUseDoppler)
     rotorDoppler.store (shouldUseDoppler);
 }
 
+void EngineGenerator::setRotorQuantise (bool shouldQuantise)
+{
+    rotorQuantise.store (shouldQuantise);
+}
+
 void EngineGenerator::setRotorRadius (float metres)
 {
     rotorRadiusM.store (juce::jlimit (0.1f, (float) maxRotorRadiusM, metres));
@@ -532,7 +537,20 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     // Rotor: Blattfolgefrequenz = Rotordrehzahl * Blattzahl, beides eigene
     // Regler, unabhaengig von der Motor-RPM (@dpa: "Motor, und Rotoren mit
     // Geschwindigkeit extra").
-    const double rotorRps = juce::jmax (0.01, (double) heliRotorHz.load());
+    double rotorRps = juce::jmax (0.01, (double) heliRotorHz.load());
+
+    if (rotorQuantise.load())
+    {
+        // Auf das naechste ganzzahlige Verhaeltnis zur Motorgrundfrequenz
+        // rasten (siehe setRotorQuantise). Der Rotor ist fast immer der
+        // langsamere von beiden, deshalb steht der Teiler zuerst.
+        const double base  = juce::jmax (0.01, (double) rpm.load() / 60.0);
+        const double ratio = rotorRps / base;
+
+        rotorRps = ratio >= 1.0
+                 ? base * std::max (1.0, std::round (ratio))
+                 : base / std::max (1.0, std::round (1.0 / ratio));
+    }
     const double bladeCount = juce::jmax (1.0, (double) heliBladeCount.load());
     const double rotorBpf = rotorRps * bladeCount;
     const double rotorPhaseInc = juce::jlimit (0.0, 0.45, rotorBpf / currentSampleRate);

@@ -1,4 +1,5 @@
 #include "FieldComponent.h"
+#include "Labels.h"
 #include "Tooltips.h"
 #include "HeadSymbol.h"
 
@@ -202,6 +203,7 @@ void FieldComponent::paint (juce::Graphics& g)
     {
         drawPerspective (g);
         drawSpeedReadout (g);
+        drawDistanceReadout (g);
         return;
     }
 
@@ -215,6 +217,7 @@ void FieldComponent::paint (juce::Graphics& g)
     drawSource (g);
     drawListener (g);
     drawSpeedReadout (g);
+    drawDistanceReadout (g);
 }
 
 void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
@@ -315,6 +318,66 @@ void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
 
         x += columnWidths[i] + columnGap;
     }
+}
+
+void FieldComponent::drawDistanceReadout (juce::Graphics& g) const
+{
+    // Derselbe Aufbau wie drawSpeedReadout, nur eine Spalte und links statt
+    // rechts. Bewusst dieselbe Farbe und dieselbe Schrift: Tempo und
+    // Entfernung gehoeren zusammen, das eine ist die Ableitung des anderen.
+    //
+    // Pixelfest wie dort: feste Zeichenzahl in Monospace, damit sich beim
+    // Zaehlen nichts verschiebt. Sechs Vorkommastellen decken die Diagonale
+    // des groessten Feldes (10000 m Kantenlaenge) mit Luft ab.
+    const double distance = (snapshot.sourcePos - snapshot.listener.head).length();
+
+    constexpr int intDigits = 6;
+    constexpr int decimals  = 1;
+
+    const juce::Font numberFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 30.0f, juce::Font::bold));
+    const juce::Font unitFont   (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 13.0f, juce::Font::plain));
+
+    const float digitWidth = juce::GlyphArrangement::getStringWidth (numberFont, "0");
+
+    constexpr int sidePad = 3;
+    constexpr int topPad  = 2;
+    constexpr int numberRowHeight = 38;
+    constexpr int unitRowHeight   = 17;
+
+    // Die Beschriftung ist laenger als die Zahl - die Box richtet sich nach
+    // dem breiteren von beiden, sonst schnitte JUCE den Text ab, und zwar
+    // ohne Auslassungszeichen, also unbemerkt.
+    const juce::String label = Labels::text ("Entfernung");
+
+    const int numberWidth = (int) std::ceil (digitWidth * (float) (intDigits + 1 + decimals + 2));
+    const int labelWidth  = (int) std::ceil (juce::GlyphArrangement::getStringWidth (unitFont, label)) + 6;
+
+    const int contentWidth = juce::jmax (numberWidth, labelWidth);
+
+    const int w = sidePad * 2 + contentWidth;
+    const int h = topPad * 2 + numberRowHeight + unitRowHeight;
+    const juce::Rectangle<int> box (10, 10, w, h);
+
+    const juce::Colour hudYellow (0xffffff00);
+
+    g.setColour (hudYellow.withAlpha (0.06f));
+    g.fillRoundedRectangle (box.toFloat(), 4.0f);
+
+    const juce::String fmt = "%" + juce::String (intDigits + 1 + decimals)
+                                 + "." + juce::String (decimals) + "f m";
+
+    g.setColour (hudYellow.withAlpha (0x55 / 255.0f));
+    g.setFont (numberFont);
+    g.drawText (juce::String::formatted (fmt.toRawUTF8(), distance),
+                box.getX() + sidePad, box.getY() + topPad, contentWidth, numberRowHeight,
+                juce::Justification::centred, false);
+
+    g.setColour (hudYellow.withAlpha (0x40 / 255.0f));
+    g.setFont (unitFont);
+    g.drawText (label,
+                box.getX() + sidePad, box.getY() + topPad + numberRowHeight,
+                contentWidth, unitRowHeight,
+                juce::Justification::centred, false);
 }
 
 void FieldComponent::drawWalls (juce::Graphics& g) const

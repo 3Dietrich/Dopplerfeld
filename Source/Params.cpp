@@ -154,6 +154,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // erst, wenn jemand ihn aufdreht - bestehende Presets klingen unveraendert.
     layout.add (boolParam (srcJitterOn, "Source Jitter On", true));
 
+    // Default 1: der Wackler war bisher auf allen drei Achsen gleich stark,
+    // und das soll er ohne Zutun bleiben.
+    layout.add (floatParam (srcJitterZAmount, "Source Jitter Z Amount", unitRange(), 1.0f));
+
     // Eigener Tempo-Deckel des Wacklers, siehe Params.h. Skew auf 340 m/s,
     // damit die Voreinstellung in der Mitte des Reglerwegs steht und der
     // interessante Bereich darunter fein bedienbar bleibt.
@@ -513,6 +517,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // neue, und ob er besser klingt, entscheidet das Ohr - deshalb nicht
     // stillschweigend vorbelegt.
     layout.add (boolParam (heliDoppler, "Heli Doppler", false));
+
+    // Default aus: der frei laufende Rotor erzeugt Schwebungen gegen den
+    // Motortakt, und die sind ausdruecklich erwuenscht (@dpa 20260824).
+    layout.add (boolParam (heliQuantise, "Heli Quantise", false));
     {
         // Blattlaenge: ein Modellhubschrauber hat einen halben Meter, eine
         // Chinook acht, und wer den Effekt uebertreiben will, dreht weiter.

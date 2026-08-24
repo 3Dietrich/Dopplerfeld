@@ -53,8 +53,9 @@ void PositionJitter::reset()
     // Kein Anfahren aus dem Nichts: nach einem reset() steht der Wackler
     // sofort auf seinem eingestellten Ausschlag, sonst faehre er nach jedem
     // Neuanlassen erst wieder hoch.
-    amount = amountTarget;
-    rateHz = rateTarget;
+    amount  = amountTarget;
+    rateHz  = rateTarget;
+    zFactor = zTarget;
 }
 
 void PositionJitter::setAmount (double metres)
@@ -66,6 +67,13 @@ void PositionJitter::setAmount (double metres)
 void PositionJitter::setRate (double hektikHz)
 {
     rateTarget = std::max (0.001, hektikHz);
+}
+
+void PositionJitter::setZFactor (double factor01)
+{
+    // Wie der Ausschlag ein Ziel, kein Sprung: eine Reglerbewegung hier ist
+    // eine Ortsveraenderung in z und muesste sonst genauso geflogen werden.
+    zTarget = std::clamp (factor01, 0.0, 1.0);
 }
 
 void PositionJitter::setMaxSpeed (double metresPerSecond)
@@ -92,6 +100,19 @@ Vec3 PositionJitter::tick (double dt)
 
         amount += delta;
         rateHz += (rateTarget - rateHz) * coeff;
+
+        double zDelta = (zTarget - zFactor) * coeff;
+
+        if (maxSpeed > 0.0 && amount > 1.0e-9)
+        {
+            // Der z-Anteil bewegt die Quelle um amount * dz - derselbe Deckel
+            // wie beim Ausschlag, nur auf die Strecke umgerechnet, die diese
+            // Aenderung tatsaechlich zuruecklegt.
+            const double maxZStep = maxSpeed * dt / amount;
+            zDelta = std::clamp (zDelta, -maxZStep, maxZStep);
+        }
+
+        zFactor += zDelta;
     }
 
     // Zeitkonstante der Frequenzdrift an die Hektik gekoppelt: hohe Hektik
@@ -155,9 +176,9 @@ Vec3 PositionJitter::tick (double dt)
         if (p > kTwoPi)
             p = std::fmod (p, kTwoPi);
 
-    // Alle drei Achsen gleichberechtigt: derselbe Ausschlag, je eine eigene
-    // Frequenz. Keine bevorzugte Ebene, keine Kreisbahn (siehe Header).
+    // Alle drei Achsen mit eigener Frequenz und ohne bevorzugte Ebene; die
+    // Hoehe bekommt zusaetzlich ihren Anteil (siehe setZFactor).
     return { amount * std::sin (phase[0]),
              amount * std::sin (phase[1]),
-             amount * std::sin (phase[2]) };
+             amount * zFactor * std::sin (phase[2]) };
 }

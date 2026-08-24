@@ -1,6 +1,6 @@
 #include "CollapsiblePanel.h"
 
-CollapsiblePanel::CollapsiblePanel (const juce::String& title) : panelTitle (title)
+CollapsiblePanel::CollapsiblePanel (const char* title) : panelTitle (title)
 {
     headerButton.onClick = [this] { setExpanded (! expanded); };
     addAndMakeVisible (headerButton);
@@ -60,5 +60,5 @@ void CollapsiblePanel::updateHeaderText()
     // Unicode-Pfeil statt eigenem Icon-Asset - dreht Richtung je nach Zustand.
     const juce::String arrow = expanded ? juce::String::fromUTF8 ("\xE2\x96\xBC ") // ▼
                                          : juce::String::fromUTF8 ("\xE2\x96\xB6 "); // ▶
-    headerButton.setButtonText (arrow + panelTitle);
+    headerButton.setButtonText (arrow + Labels::text (panelTitle));
 }

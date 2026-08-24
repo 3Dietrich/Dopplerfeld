@@ -115,7 +115,7 @@ private:
     // @dpa 20260818) - hierher gewandert aus dem Feld-Panel (@dpa-Feedback:
     // "Jitter, Hektik, Jitter An sollen in Bewegung"), da sie eine Bewegung
     // sind, keine Feldgeometrie. Wie globalMaxSpeedKnob immer sichtbar.
-    Knob srcJitterAmountKnob, srcJitterRateKnob;
+    Knob srcJitterAmountKnob, srcJitterRateKnob, srcJitterZKnob;
 
     // Zweite Betriebsart des Wacklers (@dpa 20260821: "statt Jitter
     // Rotoren"): gleichmaessige Kreisbahn statt Zufallswackeln. Die beiden

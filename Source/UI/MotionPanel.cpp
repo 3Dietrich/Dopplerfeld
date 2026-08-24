@@ -139,6 +139,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (srcJitterAmountKnob, apvts, Params::srcJitterAmount, "Jitter", Tooltips::Key::SrcJitterAmount);
     setupKnob (srcJitterRateKnob,   apvts, Params::srcJitterRateHz, "Hektik", Tooltips::Key::SrcJitterRate);
+    setupKnob (srcJitterZKnob,      apvts, Params::srcJitterZAmount, "Z-Anteil", Tooltips::Key::SrcJitterZAmount);
 
     setupKnob (srcJitterMaxSpeedKnob, apvts, Params::srcJitterMaxSpeed, "Jit Max",  Tooltips::Key::SrcJitterMaxSpeed);
 
@@ -267,6 +268,8 @@ void MotionPanel::updateJitterEnabledState()
     srcJitterAmountKnob.label.setEnabled (jitterOn);
     srcJitterRateKnob.slider.setEnabled (jitterOn);
     srcJitterRateKnob.label.setEnabled (jitterOn);
+    srcJitterZKnob.slider.setEnabled (jitterOn);
+    srcJitterZKnob.label.setEnabled (jitterOn);
 
     // Der Tempo-Deckel des Wacklers bremst seine Bahngeschwindigkeit.
     srcJitterMaxSpeedKnob.slider.setEnabled (jitterOn);
@@ -391,7 +394,7 @@ void MotionPanel::refreshTooltips()
 
     for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob,
                       &globalMaxSpeedKnob, &srcJitterAmountKnob, &srcJitterRateKnob,
-                      &srcJitterMaxSpeedKnob,
+                      &srcJitterZKnob, &srcJitterMaxSpeedKnob,
                       &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob, &flyJumpBoomKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
@@ -547,7 +550,8 @@ void MotionPanel::resized()
     layoutKnob (globalMaxSpeedKnob, sharedRow.removeFromLeft (maxSpeedW));
     sharedRow.removeFromLeft (20);
 
-    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &srcJitterMaxSpeedKnob })
+    for (auto* k : { &srcJitterAmountKnob, &srcJitterRateKnob, &srcJitterZKnob,
+                     &srcJitterMaxSpeedKnob })
     {
         layoutKnob (*k, sharedRow.removeFromLeft (knobW));
         sharedRow.removeFromLeft (4);

@@ -59,6 +59,15 @@ public:
     // "Hektik": wie schnell/chaotisch sich die Bewegung ändert, in Hz.
     void setRate (double hektikHz);
 
+    // Anteil der Höhe am Wackeln (@dpa 20260824: "bitte doch einen Regler für
+    // z (0-100% of jitter, 0: z=Source Z)"). 1 = z wackelt genauso weit wie x
+    // und y, 0 = gar nicht, die Quelle bleibt auf ihrer eingestellten Höhe.
+    //
+    // Ein Anteil und keine eigene Auslenkung: so bleibt "Jitter" der eine
+    // Regler für die Größe der Bewegung, und dieser hier sagt nur, ob sie
+    // flach in der Ebene liegt oder den Raum füllt.
+    void setZFactor (double factor01);
+
     // Obergrenze für die Bahngeschwindigkeit des Wacklers, in m/s. 0 oder
     // negativ heißt "keine Grenze".
     //
@@ -94,6 +103,8 @@ private:
     // erlaubt bewegt sich der Wackler ohnehin nirgends.
     double amount       = 0.0;
     double amountTarget = 0.0;
+    double zFactor      = 1.0;
+    double zTarget      = 1.0;
     double rateHz       = 0.2;
     double rateTarget   = 0.2;
     double maxSpeed     = 0.0;   // 0 = keine Grenze

@@ -204,6 +204,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.srcJitterAmount = raw (Params::srcJitterAmount);
     pp.srcJitterRateHz = raw (Params::srcJitterRateHz);
+    pp.srcJitterZAmount = raw (Params::srcJitterZAmount);
     pp.srcJitterOn     = raw (Params::srcJitterOn);
     pp.srcJitterMaxSpeed = raw (Params::srcJitterMaxSpeed);
     pp.masterOn        = raw (Params::masterOn);
@@ -238,6 +239,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.heliRotorHz    = raw (Params::heliRotorHz);
     pp.heliBladeCount = raw (Params::heliBladeCount);
     pp.heliDoppler     = raw (Params::heliDoppler);
+    pp.heliQuantise    = raw (Params::heliQuantise);
     pp.heliRotorRadius = raw (Params::heliRotorRadius);
 
     pp.sampleGain  = raw (Params::sampleGain);
@@ -648,8 +650,13 @@ void DopplerfeldProcessor::applyParameters()
     // sah das aus, als taete der Wackler gar nichts.
     const double jitterMaxSpeed = (double) pp.srcJitterMaxSpeed->load();
 
+    // Anteil der Hoehe am Wackeln (@dpa 20260824). Bei 0 bleibt die Quelle
+    // auf ihrer eingestellten Hoehe und wackelt nur in der Ebene.
+    const double jitterZAmount  = (double) pp.srcJitterZAmount->load();
+
     sourceJitter.setAmount    (jitterAmount);
     sourceJitter.setRate      (jitterRate);
+    sourceJitter.setZFactor   (jitterZAmount);
     sourceJitter.setMaxSpeed  (jitterMaxSpeed);
 
     // Dieselben Regler wie fuer die Quelle: @dpa hat den Jitter dort
@@ -659,6 +666,7 @@ void DopplerfeldProcessor::applyParameters()
     {
         j.setAmount    (jitterAmount);
         j.setRate      (jitterRate);
+        j.setZFactor   (jitterZAmount);
         j.setMaxSpeed  (jitterMaxSpeed);
     }
 
@@ -754,6 +762,7 @@ void DopplerfeldProcessor::applyParameters()
                                  juce::Decibels::decibelsToGain ((double) pp.propLevelDb->load()));
     engineGenerator.setHeliRotor (pp.heliRotorHz->load(), pp.heliBladeCount->load());
     engineGenerator.setRotorDoppler (pp.heliDoppler->load() > 0.5f);
+    engineGenerator.setRotorQuantise (pp.heliQuantise->load() > 0.5f);
     engineGenerator.setRotorRadius (pp.heliRotorRadius->load());
 
     // Wie stark die Sichtlinie zum Hoerer in der Rotorebene liegt (siehe

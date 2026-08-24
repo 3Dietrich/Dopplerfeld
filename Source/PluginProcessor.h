@@ -355,6 +355,7 @@ private:
 
         std::atomic<float>* srcJitterAmount = nullptr;
         std::atomic<float>* srcJitterRateHz = nullptr;
+        std::atomic<float>* srcJitterZAmount = nullptr;
         std::atomic<float>* srcJitterOn     = nullptr;
 
         // Eigener Tempo-Deckel des Wacklers, entkoppelt vom Bahn-Deckel
@@ -385,6 +386,7 @@ private:
         std::atomic<float>* heliRotorHz    = nullptr;
         std::atomic<float>* heliBladeCount = nullptr;
         std::atomic<float>* heliDoppler     = nullptr;
+        std::atomic<float>* heliQuantise    = nullptr;
         std::atomic<float>* heliRotorRadius = nullptr;
 
         std::atomic<float>* sampleGain  = nullptr;

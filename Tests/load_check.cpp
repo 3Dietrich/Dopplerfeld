@@ -21,6 +21,7 @@
 #include "UI/RoundedSlider.h"
 #include "UI/ScopeComponent.h"
 #include "UI/Labels.h"
+#include "Motion/PositionJitter.h"
 #include "Sources/EngineGenerator.h"
 
 #include <chrono>
@@ -4596,13 +4597,22 @@ int main()
 
         for (const auto& entry : texts)
         {
+            // Fuehrende Zierzeichen weg, bevor verglichen wird: die
+            // Ueberschriften der Klappen tragen einen Pfeil vor dem Titel
+            // ("\xe2\x96\xb6 Motor"), und ohne diesen Schnitt rutschten sie
+            // durch jede Pruefung hindurch - genau das war bei @dpas Bild vom
+            // 24.08. der Fall.
+            const juce::String bare = entry.second
+                                          .trimCharactersAtStart (juce::String::fromUTF8 ("\xe2\x96\xb6\xe2\x96\xbc "))
+                                          .trim();
+
             for (int i = 0; i < count; ++i)
             {
                 const juce::String german = Text::utf8 (entries[i].de);
 
                 // Genau vergleichen, nicht "enthaelt": "Loop" steckt in
                 // "Loop Start", und "An" in fast jedem zweiten Wort.
-                if (entry.second == german && german != Text::utf8 (entries[i].en))
+                if (bare == german && german != Text::utf8 (entries[i].en))
                 {
                     std::printf ("  FEHLER: %s steht im EN-Betrieb weiterhin deutsch: \"%s\"\n",
                                  entry.first.toRawUTF8(), entry.second.toRawUTF8());
@@ -4649,6 +4659,210 @@ int main()
 
         if (leftGerman > 0)
             failed = true;
+    }
+
+
+    //==================================================================
+    // Z-Anteil des Wacklers (@dpa 20260824: "Jitter: bitte doch einen Regler
+    // fuer z (0-100% of jitter, 0: z=Source Z)").
+    //
+    // Geprueft am Wackler selbst, ohne Audio: er wird eine Weile getickt und
+    // dabei gemessen, wie weit er in der Ebene und wie weit in der Hoehe
+    // ausschlaegt. Bei 0 darf die Hoehe sich gar nicht mehr ruehren, bei 1
+    // genauso weit wie x und y.
+    {
+        auto spreadOf = [] (float zShare)
+        {
+            PositionJitter jitter;
+
+            jitter.prepare (DopplerEngine::trajectoryRateHz);
+            jitter.setAmount (50.0);
+            jitter.setRate (3.0);
+            jitter.setMaxSpeed (0.0);            // ohne Deckel, hier zaehlt die Form
+            jitter.setZFactor ((double) zShare);
+
+            const double dt = 1.0 / DopplerEngine::trajectoryRateHz;
+
+            double flat = 0.0, high = 0.0;
+
+            const int total = (int) (10.0 * DopplerEngine::trajectoryRateHz);
+
+            // Die erste halbe Sekunde faellt raus: der Anteil wird angefahren,
+            // nicht gesetzt (sonst waere eine Reglerbewegung ein Sprung in z),
+            // und dieser Anlauf gehoert nicht zur Messung.
+            const int settle = (int) (0.5 * DopplerEngine::trajectoryRateHz);
+
+            for (int n = 0; n < total; ++n)
+            {
+                const Vec3 out = jitter.tick (dt);
+
+                if (n < settle)
+                    continue;
+
+                flat = std::max (flat, std::max (std::abs (out.x), std::abs (out.y)));
+                high = std::max (high, std::abs (out.z));
+            }
+
+            return std::make_pair (flat, high);
+        };
+
+        const auto full = spreadOf (1.0f);
+        const auto half = spreadOf (0.5f);
+        const auto none = spreadOf (0.0f);
+
+        std::printf ("%-22s Ausschlag (Ebene / Hoehe): voll %.1f / %.1f | halb %.1f / %.1f | "
+                     "aus %.1f / %.1f\n",
+                     "Wackler Z-Anteil",
+                     full.first, full.second, half.first, half.second,
+                     none.first, none.second);
+
+        if (none.second > 0.001)
+        {
+            std::printf ("  FEHLER: bei Z-Anteil 0 wackelt die Hoehe trotzdem (%.3f m).\n",
+                         none.second);
+            failed = true;
+        }
+
+        // Die Ebene darf sich davon nicht beeindrucken lassen - der Regler
+        // gilt nur der Hoehe.
+        if (std::abs (none.first - full.first) > 0.001)
+        {
+            std::printf ("  FEHLER: der Z-Anteil aendert auch den Ausschlag in der Ebene "
+                         "(%.3f gegen %.3f).\n", none.first, full.first);
+            failed = true;
+        }
+
+        // Und bei halbem Anteil muss die Hoehe ungefaehr halb so weit gehen.
+        if (full.second < 1.0e-6 || std::abs (half.second / full.second - 0.5) > 0.05)
+        {
+            std::printf ("  FEHLER: halber Z-Anteil ergibt nicht den halben Ausschlag "
+                         "(%.3f gegen %.3f).\n", half.second, full.second);
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // Rotor-Quantisierung (@dpa 20260824: ein Schalter "Quant" fuer "in
+    // Obertoene quantisieren").
+    //
+    // Geprueft an @dpas eigenem Fall: RPM 434 ergibt eine Grundfrequenz von
+    // 7,23 Hz, seine Rotordrehzahl steht auf 3,63 Hz - also fast genau die
+    // Haelfte. Eingerastet muss daraus exakt die Haelfte werden, und die
+    // Blattfolge damit ein ganzzahliges Vielfaches der Grundfrequenz.
+    //
+    // Gemessen wird am Klang, nicht an einer internen Zahl: die
+    // Blattschlagrate steht als Spitzenabstand im Signal.
+    {
+        auto slapRate = [] (double rate, bool quantise)
+        {
+            constexpr int block  = 512;
+            constexpr int blocks = 200;
+
+            EngineGenerator gen;
+            gen.prepare (rate, block);
+
+            gen.setEngineKind (3);
+            gen.setKindLevelDb (0.0f);
+            gen.setRpm (434.0f);
+            // Bewusst NICHT @dpas eigener Wert: seine 3,63 Hz liegen ohnehin
+            // schon fast auf dem Raster, frei und eingerastet waeren kaum zu
+            // unterscheiden. 3,0 Hz liegt deutlich daneben.
+            gen.setHeliRotor (3.0f, 4.0f);
+            gen.setRotorSlap (1.0f);
+            gen.setRotorQuantise (quantise);
+
+            // Nur der Rotor, kein Verbrennermotor darueber.
+            for (int i = 0; i < 4; ++i)
+                gen.setHarmonic (i, 1.0f, 0.0f, 1.0f, -96.0f);
+
+            gen.setNoiseParams (400.0f, 3000.0f, -96.0f, -96.0f, 1.2f);
+
+            std::vector<float> buffer ((size_t) block);
+            std::vector<float> collected;
+
+            for (int b = 0; b < blocks; ++b)
+            {
+                gen.renderMono (buffer.data(), block);
+
+                if (b >= 20)
+                    collected.insert (collected.end(), buffer.begin(), buffer.end());
+            }
+
+            // Huellkurve, dann Schlaege ueber einer Schwelle zaehlen. Der
+            // Abstand zwischen zwei Schlaegen ist die Blattfolgeperiode.
+            const double coeff = 1.0 - std::exp (-1.0 / (0.002 * rate));
+
+            double env = 0.0, peak = 0.0;
+            std::vector<double> envelope ((size_t) collected.size());
+
+            for (size_t i = 0; i < collected.size(); ++i)
+            {
+                env += coeff * (std::abs ((double) collected[i]) - env);
+                envelope[i] = env;
+                peak = std::max (peak, env);
+            }
+
+            const double threshold = 0.4 * peak;
+            const int    minGap    = (int) (0.02 * rate);
+
+            // Abstaende sammeln und den Median nehmen, nicht Treffer je
+            // Sekunde zaehlen: ein Schlag, der die Schwelle knapp verfehlt,
+            // macht daraus sonst eine zu niedrige Rate. Ein fehlender Schlag
+            // verdoppelt dagegen nur EINEN Abstand, und der Median sieht das
+            // gar nicht.
+            std::vector<int> gaps;
+            int lastHit = -1;
+
+            for (int i = 0; i < (int) envelope.size(); ++i)
+            {
+                if (envelope[(size_t) i] > threshold && (lastHit < 0 || i - lastHit >= minGap))
+                {
+                    if (lastHit >= 0)
+                        gaps.push_back (i - lastHit);
+
+                    lastHit = i;
+                }
+            }
+
+            if (gaps.empty())
+                return 0.0;
+
+            std::sort (gaps.begin(), gaps.end());
+
+            return rate / (double) gaps[gaps.size() / 2];
+        };
+
+        const double baseHz = 434.0 / 60.0;
+
+        const double freeRate    = slapRate (sampleRate, false);
+        const double snappedRate = slapRate (sampleRate, true);
+
+        // Frei: 3,0 * 4 Blaetter = 12,0 Schlaege/s.
+        // Eingerastet: 1/0,4147 = 2,41 -> gerundet 2, also (7,233/2) * 4
+        // = 14,47 Schlaege/s und damit ein glattes Doppeltes der
+        // Grundfrequenz.
+        const double expectedFree    = 3.0 * 4.0;
+        const double expectedSnapped = baseHz / 2.0 * 4.0;
+
+        std::printf ("%-22s Blattschlaege/s: frei %.2f (Soll %.2f) | eingerastet %.2f "
+                     "(Soll %.2f, Grundfrequenz %.2f Hz)\n",
+                     "Rotor Quant", freeRate, expectedFree, snappedRate, expectedSnapped, baseHz);
+
+        if (std::abs (snappedRate - expectedSnapped) > 0.5)
+        {
+            std::printf ("  FEHLER: die Quantisierung trifft das Raster des Motors nicht "
+                         "(%.2f statt %.2f).\n", snappedRate, expectedSnapped);
+            failed = true;
+        }
+
+        // Und ohne Schalter darf sie NICHT greifen - die Schwebung dagegen ist
+        // gewollt.
+        if (std::abs (freeRate - expectedFree) > 0.5)
+        {
+            std::printf ("  FEHLER: der Rotor rastet auch ohne Schalter ein "
+                         "(%.2f statt %.2f).\n", freeRate, expectedFree);
+            failed = true;
+        }
     }
 
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");

@@ -40,6 +40,13 @@ namespace Params
     // ohne den Regler neu zu suchen.
     constexpr const char* srcJitterOn = "srcJitterOn";
 
+    // Anteil der Hoehe am Wackeln, siehe PositionJitter::setZFactor().
+    // Eigener Name statt des frueheren srcJitterZ: der gehoerte zur
+    // Rotoren-Betriebsart und meinte die Neigung der Kreisebene. Ein Preset
+    // von damals wuerde mit seinem alten Wert (meist 0) die Hoehe hier
+    // stillegen, ohne dass jemand daran gedreht haette.
+    constexpr const char* srcJitterZAmount = "srcJitterZAmount";
+
 
 
 
@@ -356,6 +363,10 @@ namespace Params
     // EngineGenerator::setRotorDoppler(). heliRotorRadius ist die Blattlaenge
     // und bestimmt, wie tief die Laufzeit je Umlauf schwankt.
     constexpr const char* heliDoppler     = "heliDoppler";
+
+    // Rotordrehzahl ins Frequenzraster des Motors rasten, siehe
+    // EngineGenerator::setRotorQuantise().
+    constexpr const char* heliQuantise    = "heliQuantise";
     constexpr const char* heliRotorRadius = "heliRotorRadius";
 
     // Nur in Betriebsart "Propeller" wirksam: die beiden Propeller sitzen an

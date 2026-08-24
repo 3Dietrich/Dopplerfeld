@@ -81,6 +81,7 @@ namespace Labels
 
             // --- Bewegung ---
             { "Hektik",         "Agitation"   },
+            { "Z-Anteil",       "Z Share"     },
             { "Startvariante",  "Start Mode"  },
             { "Vorbeiflug-Bahn", "Fly-By Path" },
             { "Vorbeiflug",     "Fly-By"      },
@@ -108,6 +109,16 @@ namespace Labels
             { "Mehrfachreflexion", "Multi Reflection" },
             { "Klone",          "Clones"      },
             { "Streuung",       "Spread"      },
+
+            // --- Ueberschriften der Klappen ---
+            { "Motorsteuerung",           "Engine Control"        },
+            { "Motor",                    "Engine"                },
+            { "Bewegung",                 "Motion"                },
+            { "Feld / Physik / Ausgang",  "Field / Physics / Out" },
+            { "Reflexionen / Waende",     "Reflections / Walls"   },
+            { "Schwarm / Klone",          "Swarm / Clones"        },
+
+            { "Entfernung",     "Distance"    },
 
             // --- Kopfzeile, Sample, Scope ---
             { "An",             "On"          },

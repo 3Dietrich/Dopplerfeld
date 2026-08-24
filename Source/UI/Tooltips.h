@@ -50,6 +50,7 @@ namespace Tooltips
         HeliRotorHz,
         HeliBladeCount,
         HeliDoppler,
+        HeliQuantise,
         HeliRotorRadius,
         EngineLevel,
         RocketShock,
@@ -85,6 +86,7 @@ namespace Tooltips
         JumpBoom,
         ShadowTail,
         SrcJitterMaxSpeed,
+        SrcJitterZAmount,
         MasterOn,
         GroundGain,
         GroundDamp,
@@ -592,6 +594,29 @@ namespace Tooltips
                           "changes with its position. The slap then changes during a "
                           "flyover by itself: hard from the side, even from directly "
                           "below.";
+                case Key::HeliQuantise:
+                    return lang == Language::De
+                        ? "Quant: rastet die Rotordrehzahl in das Frequenzraster des "
+                          "Motors ein - auf das nächste ganzzahlige Verhältnis zur "
+                          "Grundfrequenz (RPM/60), nach oben wie nach unten.\n\n"
+                          "Die Unwucht sitzt seit jeher auf einem festen Verhältnis zur "
+                          "Grundfrequenz und klingt deshalb wirksam. Der Rotor lief frei "
+                          "dagegen: Blattfolge und Motortakt gingen aneinander vorbei, "
+                          "und was man hörte, war eine wandernde Schwebung.\n\n"
+                          "Aus bleibt genau diese Schwebung erhalten - zwei leicht "
+                          "verschiedene Tempi ergeben Verläufe zwischen hart und weich, "
+                          "die es eingerastet nicht gibt. Der Regler behält seinen Wert; "
+                          "gerastet wird nur, was daraus wird."
+                        : "Quant: locks the rotor speed into the engine's frequency "
+                          "grid - to the nearest whole-number ratio of the fundamental "
+                          "(RPM/60), upwards as well as downwards.\n\n"
+                          "The imbalance has always sat at a fixed ratio to the "
+                          "fundamental, which is why it sounds effective. The rotor ran "
+                          "freely against it: blade rate and engine cycle passed each "
+                          "other by, and what you heard was a drifting beat.\n\n"
+                          "Off keeps exactly that beat - two slightly different tempos "
+                          "give shifts between hard and soft that locking removes. The "
+                          "control keeps its value; only what comes of it is snapped.";
                 case Key::HeliRotorRadius:
                     return lang == Language::De
                         ? "Blattlänge. Sie bestimmt, wie weit die Laufzeit eines Blattes "
@@ -885,6 +910,22 @@ namespace Tooltips
                           "fast it wobbles while doing so. Sharing one control meant a slow "
                           "path silently strangled the jitter.";
 
+                case Key::SrcJitterZAmount:
+                    return lang == Language::De
+                        ? "Wie weit die Höhe mitwackelt, als Anteil am eingestellten "
+                          "Ausschlag. 1 = z wackelt genauso weit wie x und y, 0 = gar "
+                          "nicht, die Quelle bleibt auf ihrer eingestellten Höhe und "
+                          "wackelt nur in der Ebene.\n\n"
+                          "Ein Anteil statt einer eigenen Auslenkung: \"Jitter\" bleibt "
+                          "der eine Regler für die Größe der Bewegung, dieser hier sagt "
+                          "nur, ob sie flach liegt oder den Raum füllt."
+                        : "How far the height joins the wobble, as a share of the set "
+                          "amount. 1 = z wobbles as far as x and y, 0 = not at all, the "
+                          "source stays at its set height and wobbles only in the "
+                          "plane.\n\n"
+                          "A share rather than its own amount: \"Jitter\" stays the one "
+                          "control for the size of the movement, this one only says "
+                          "whether it lies flat or fills the space.";
                 case Key::SrcJitterOn:
                     return lang == Language::De
                         ? "Schaltet das Wackeln der Schallquelle M und aller Klone komplett ab. Die "

@@ -394,6 +394,12 @@ void DopplerfeldEditor::refreshAllTooltips()
     // (@dpa 20260824). Die Knoepfe, deren Text den Zustand zeigt, bekommen
     // den passenden Zustandstext - sonst stuende nach dem Sprachwechsel
     // "Freeze" ueber einem eingefrorenen Bild.
+    // Die Ueberschriften der Klappen gehoeren dazu (@dpa 20260824: "die
+    // Klappen sind noch deutsch geblieben").
+    for (auto* box : { &engineControlPanelBox, &enginePanelBox, &samplePanelBox,
+                        &motionPanelBox, &fieldPanelBox, &wallPanelBox, &swarmPanelBox })
+        box->refreshTitle();
+
     masterOnButton.setButtonText (Labels::text ("An"));
     tooltipsButton.setButtonText (Labels::text ("Hilfehinweise"));
     scopeSaveButton.setButtonText (Labels::text ("Speichern"));
