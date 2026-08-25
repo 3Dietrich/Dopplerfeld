@@ -354,13 +354,10 @@ private:
         std::atomic<float>* earSpacing = nullptr;
 
         std::atomic<float>* srcJitterAmount = nullptr;
-        std::atomic<float>* srcJitterRateHz = nullptr;
+        std::atomic<float>* srcJitterSpeed = nullptr;
         std::atomic<float>* srcJitterZAmount = nullptr;
         std::atomic<float>* srcJitterOn     = nullptr;
 
-        // Eigener Tempo-Deckel des Wacklers, entkoppelt vom Bahn-Deckel
-        // globalMaxSpeed - siehe Params::srcJitterMaxSpeed.
-        std::atomic<float>* srcJitterMaxSpeed = nullptr;
         std::atomic<float>* masterOn        = nullptr;
 
         std::atomic<float>* rpm = nullptr;

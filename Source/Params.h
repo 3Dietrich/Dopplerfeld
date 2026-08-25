@@ -32,7 +32,26 @@ namespace Params
     // ist Rauschen auf der Motortonhoehe, hier ist es echte Ortsbewegung.
     // srcJitter*-Praefix statt lis*, weil "M" die Quelle meint.
     constexpr const char* srcJitterAmount = "srcJitterAmount";
-    constexpr const char* srcJitterRateHz = "srcJitterRateHz";
+
+    // Bahngeschwindigkeit des Wacklers in m/s, siehe
+    // PositionJitter::setSpeed(). Zusammen mit dem Ausschlag sind das die
+    // ZWEI Groessen, die die Bewegung beschreiben - die Frequenz ergibt sich
+    // aus beiden und ist kein Regler mehr.
+    constexpr const char* srcJitterSpeed = "srcJitterSpeed";
+
+    // --- Abgeloest, nur noch zum Umrechnen alter Zustaende ---
+    //
+    // "Hektik" (eine Frequenz) und "Jit Max" (ein Tempo-Deckel) bildeten
+    // zusammen mit dem Ausschlag ein multiplikatives Dreieck: wer eines
+    // drehte, verschob die Wirkung der beiden anderen (@dpa 20260825: "ist
+    // das mit der Hektik zu kompliziert das 'passende Fenster' zu finden").
+    //
+    // Sie stehen NICHT mehr in der Parameterliste. Die beiden IDs bleiben
+    // hier stehen, weil setStateInformation() sie in einem alten Zustand
+    // wiedererkennen und in das neue Tempo umrechnen muss - sonst wackelten
+    // bestehende Presets nach dem Laden anders als vorher.
+    constexpr const char* srcJitterRateLegacy     = "srcJitterRateHz";
+    constexpr const char* srcJitterMaxSpeedLegacy = "srcJitterMaxSpeed";
 
     // Ein/Aus fuer das Wackeln insgesamt - Quelle UND Klone (@dpa 20260820).
     // Ein eigener Schalter statt "Amount auf 0 drehen", weil der eingestellte
@@ -49,23 +68,6 @@ namespace Params
 
 
 
-
-    // EIGENER Tempo-Deckel des Wacklers, in m/s (@dpa 20260824: "jitter
-    // bewegung ist ungeglättet und verursacht deswegen ständig Überschall
-    // N-waves. bitte irgendwie glätten (z.B. im max speed des Jitters?)").
-    //
-    // Vorher hing der Wackler an globalMaxSpeed, dem Deckel der BAHN - und
-    // das sind zwei verschiedene Dinge. Wer die Bahn langsam haben will, hat
-    // damit unabsichtlich auch den Wackler abgewuergt: bei 69 m Ausschlag und
-    // 3,3 Hz gegen einen Bahndeckel von 27 m/s blieben 1,9 % Tempo uebrig,
-    // also ein Umlauf in 16 Sekunden ("jitter tut nichts").
-    //
-    // Default 340 m/s, knapp unter der Schallgeschwindigkeit bei
-    // Normalbedingungen: der Wackler allein loest damit von sich aus keine
-    // N-Wellen mehr aus. Nach oben bis 100000 offen (keine versteckten
-    // Limits), 0 schaltet die Grenze ganz ab - wer Ueberschall aus dem
-    // Wackler will, bekommt ihn.
-    constexpr const char* srcJitterMaxSpeed = "srcJitterMaxSpeed";
 
     // Hauptschalter. Aus heisst: sanft ausgeblendet, danach Stille und keine
     // Rechenlast mehr (@dpa 20260821: "Ich brauche unbedingt einen

@@ -77,7 +77,7 @@ namespace Tooltips
         SourceZ,
         ListenerZ,
         SrcJitterAmount,
-        SrcJitterRate,
+        SrcJitterSpeed,
         SrcJitterOn,
         EngineSine,
         EngineOscOn,
@@ -86,7 +86,6 @@ namespace Tooltips
         ShockDuckRange,
         JumpBoom,
         ShadowTail,
-        SrcJitterMaxSpeed,
         SrcJitterZAmount,
         MasterOn,
         GroundGain,
@@ -753,17 +752,40 @@ namespace Tooltips
                           "the control's travel. Always acts additively, even during normal "
                           "movement; at standstill it is the 'real chorus', during movement it "
                           "gets absorbed into the normal doppler.";
-                case Key::SrcJitterRate:
+                case Key::SrcJitterSpeed:
                     return lang == Language::De
-                        ? "Wie schnell/unruhig sich die Jitter-Bewegung ändert (Hz), 0,001 bis "
-                          "20 Hz. Kennlinie exponentiell, damit der untere Bereich trotz der "
-                          "riesigen Spanne bedienbar bleibt: kleine Werte = extrem langsames "
-                          "Driften (0,001 Hz = ein Zyklus in gut 16 Minuten), große Werte = "
-                          "nervöses Zittern."
-                        : "How fast/restless the jitter movement changes (Hz), 0.001 to 20 Hz. "
-                          "Exponential curve so the low end stays usable despite the huge span: "
-                          "small values = extremely slow drifting (0.001 Hz = one cycle in just "
-                          "over 16 minutes), large values = nervous trembling.";
+                        ? "Wie SCHNELL sich die Quelle beim Wackeln bewegt, in m/s. Zusammen "
+                          "mit dem Ausschlag daneben (wie WEIT) beschreibt das die Bewegung "
+                          "vollständig - die Frequenz ergibt sich aus beiden und ist kein "
+                          "Regler mehr.\n\n"
+                          "Vorher standen hier 'Hektik' (eine Frequenz) und 'Jit Max' (eine "
+                          "Tempogrenze). Beide hingen mit dem Ausschlag multiplikativ zusammen: "
+                          "wer einen der drei drehte, verschob die Wirkung der anderen beiden, "
+                          "und das passende Fenster war kaum zu finden. Jetzt bedeutet jeder "
+                          "Regler genau eine Sache.\n\n"
+                          "Gemeint ist die SPITZE: schneller als hier eingestellt wird die "
+                          "Quelle nie. Damit lässt sich der Wert direkt mit der "
+                          "Schallgeschwindigkeit vergleichen - über 340 m/s löst das Wackeln "
+                          "von sich aus Überschallknalle aus. Die meiste Zeit läuft die "
+                          "Bewegung langsamer, sie soll ja atmen und nicht kreiseln.\n\n"
+                          "0 friert sie ein - dann bleibt die Quelle stehen, wo sie gerade "
+                          "ist, auch wenn der Ausschlag verstellt wird."
+                        : "How FAST the source moves while jittering, in m/s. Together with "
+                          "the excursion next to it (how FAR) this describes the motion "
+                          "completely - frequency follows from the two and is no longer a "
+                          "control.\n\n"
+                          "This used to be 'Agitation' (a frequency) and 'Jit Max' (a speed "
+                          "limit). Both were multiplicatively tied to the excursion: turning "
+                          "any one of the three shifted what the other two did, and the right "
+                          "window was hard to find. Now each control means exactly one thing."
+                          "\n\n"
+                          "This is the PEAK: the source never moves faster than the value "
+                          "set here. That makes it directly comparable with the speed of "
+                          "sound - above 340 m/s the jitter sets off sonic booms by itself. "
+                          "Most of the time the motion runs slower; it is meant to breathe, "
+                          "not to spin.\n\n"
+                          "0 freezes it - the source then stays where it is, even if the "
+                          "excursion is changed.";
                 case Key::MasterOn:
                     return lang == Language::De
                         ? "Hauptschalter. Aus blendet in gut einer Zehntelsekunde aus, danach "
@@ -906,32 +928,6 @@ namespace Tooltips
                           "shadow zone that diffracted sound keeps travelling into; how long "
                           "depends on geometry and frequency - hence a control instead of an "
                           "invented constant. 1 ms = previous behaviour.";
-                case Key::SrcJitterMaxSpeed:
-                    return lang == Language::De
-                        ? "Tempogrenze des Wacklers allein, in m/s. Bremst NICHT den "
-                          "Ausschlag, sondern die Geschwindigkeit: die Bewegung behält ihre "
-                          "Größe und läuft langsamer ab, statt an einer Kante abgeschnitten "
-                          "zu werden.\n\n"
-                          "Voreingestellt sind 340 m/s, knapp unter der Schallgeschwindigkeit. "
-                          "Damit löst der Wackler von sich aus keine Überschallknalle mehr "
-                          "aus, auch bei großem Ausschlag und hoher Hektik. 0 schaltet die "
-                          "Grenze ganz ab - wer Überschall aus dem Wackeln will, bekommt ihn.\n\n"
-                          "Das ist ein EIGENER Regler und nicht mehr der Tempo-Deckel der "
-                          "Bahn: der begrenzt, wie schnell die Quelle durchs Feld fliegt, "
-                          "dieser hier nur, wie schnell sie dabei zappelt. Beides an einem "
-                          "Regler hiess, dass eine langsame Bahn den Wackler mit abgewürgt hat."
-                        : "Speed limit for the jitter alone, in m/s. It does NOT reduce the "
-                          "excursion, it slows the motion down: the movement keeps its size "
-                          "and simply takes longer, instead of being clipped at an edge.\n\n"
-                          "The default is 340 m/s, just below the speed of sound. That way the "
-                          "jitter no longer sets off sonic booms by itself, even at large "
-                          "excursion and high rate. 0 disables the limit entirely - if you "
-                          "want supersonic jitter, you get it.\n\n"
-                          "This is its OWN control, no longer the path speed limit: that one "
-                          "caps how fast the source flies across the field, this one only how "
-                          "fast it wobbles while doing so. Sharing one control meant a slow "
-                          "path silently strangled the jitter.";
-
                 case Key::SrcJitterZAmount:
                     return lang == Language::De
                         ? "Wie weit die Höhe mitwackelt, als Anteil am eingestellten "

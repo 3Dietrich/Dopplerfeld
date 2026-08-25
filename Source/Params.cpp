@@ -139,16 +139,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (srcJitterAmount, "Source Jitter Amount", range, 0.0f, "m"));
     }
     {
-        // "Hektik": Rate der Jitter-Bewegung. Untergrenze bis 0,001 Hz offen
-        // (ein Wellenberg alle 1000 s), damit auch extrem traeges Driften
-        // erreichbar bleibt - bei 0,001 bis 20 Hz waere eine lineare Kennlinie
-        // unbedienbar, deshalb Skew-Mittelpunkt bei 0,1 Hz: der untere,
-        // musikalisch relevante Bereich (Sekundenbruchteile bis wenige Hz)
-        // bekommt den Grossteil des Reglerwegs, "hektisch" bis 20 Hz bleibt
-        // am oberen Ende erreichbar.
-        auto range = juce::NormalisableRange<float> (0.001f, 20.0f);
-        range.setSkewForCentre (1.0f);
-        layout.add (floatParam (srcJitterRateHz, "Source Jitter Rate", range, 0.2f, "Hz"));
+        // Tempo des Wacklers: die zweite und letzte Groesse der Bewegung
+        // (@dpa 20260825). Sie sagt, WIE SCHNELL sich die Quelle bewegt, der
+        // Ausschlag darueber, WIE WEIT. Die Frequenz ergibt sich aus beiden
+        // und steht nirgends mehr als Regler.
+        //
+        // Der Wert ist die SPITZE der Bahngeschwindigkeit, nicht ihr Mittel -
+        // nur so laesst er sich mit der Schallgeschwindigkeit vergleichen,
+        // und genau darum geht es: ein Wackler ueber 340 m/s loest von sich
+        // aus N-Wellen aus.
+        //
+        // Nach oben derselbe Bereich, den der alte "Jit Max" hatte (keine
+        // versteckten Limits, @dpa): wer bei grossem Ausschlag hektisch
+        // wackeln will, braucht sehr wohl vierstellige Werte - 50 m Ausschlag
+        // bei 3 Hz sind rechnerisch schon 3260 m/s. Skew auf 340, damit der
+        // hoerbare Bereich darunter den Grossteil des Reglerwegs behaelt.
+        //
+        // Default 20 m/s: das ist bei ein paar Metern Ausschlag rund 0,2 Hz,
+        // also genau die Trägheit, die vorher als Default-Hektik dastand.
+        auto range = juce::NormalisableRange<float> (0.0f, 100000.0f);
+        range.setSkewForCentre (340.0f);
+        layout.add (floatParam (srcJitterSpeed, "Source Jitter Speed", range, 20.0f, "m/s"));
     }
     // Default an: der Ausschlag steht ohnehin auf 0, das Wackeln beginnt also
     // erst, wenn jemand ihn aufdreht - bestehende Presets klingen unveraendert.
@@ -158,14 +169,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // und das soll er ohne Zutun bleiben.
     layout.add (floatParam (srcJitterZAmount, "Source Jitter Z Amount", unitRange(), 1.0f));
 
-    // Eigener Tempo-Deckel des Wacklers, siehe Params.h. Skew auf 340 m/s,
-    // damit die Voreinstellung in der Mitte des Reglerwegs steht und der
-    // interessante Bereich darunter fein bedienbar bleibt.
-    {
-        auto range = juce::NormalisableRange<float> (0.0f, 100000.0f);
-        range.setSkewForCentre (340.0f);
-        layout.add (floatParam (srcJitterMaxSpeed, "Source Jitter Max Speed", range, 340.0f, "m/s"));
-    }
+    // Einen Tempo-Deckel gibt es nicht mehr: ein Tempo, das man in m/s
+    // einstellt, braucht keine Obergrenze gegen sich selbst.
     layout.add (boolParam (masterOn, "On", true));
 
     // --- Motor ---

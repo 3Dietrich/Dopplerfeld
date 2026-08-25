@@ -2407,7 +2407,11 @@ int main()
             setParam (proc, Params::cloneTotal,  10.0f);
             setParam (proc, Params::cloneSpread, 6.0f);
             setParam (proc, Params::srcJitterAmount, jitterMetres);
-            setParam (proc, Params::srcJitterRateHz, 3.0f);
+            // Tempo statt Hektik (@dpa 20260825). Umgerechnet aus dem
+            // bisherigen Paar, damit das Szenario dasselbe bleibt: 2 m
+            // Ausschlag bei 3 Hz sind als Spitze 2 * 2pi * 3 * 2*sqrt(3)
+            // = 130,6 m/s.
+            setParam (proc, Params::srcJitterSpeed, 130.6f);
 
             proc.prepareToPlay (sampleRate, blockSize);
             render (proc, buffer, 4.0, stats, [] (double) {});
@@ -2484,7 +2488,7 @@ int main()
                 setParam (p3, Params::smootherType, 1.0f);
                 setParam (p3, Params::smootherTau,  0.5f);
                 setParam (p3, Params::srcJitterAmount, 1.0f);
-                setParam (p3, Params::srcJitterRateHz, 2.0f);
+                setParam (p3, Params::srcJitterSpeed, 43.5f);   // 1 m bei 2 Hz
                 p3.prepareToPlay (sampleRate, blockSize);
 
                 juce::MidiBuffer midi3;
@@ -2663,7 +2667,7 @@ int main()
         setParam (proc, Params::cloneSpread, 6.0f);
 
         setParam (proc, Params::srcJitterAmount, 3.0f);
-        setParam (proc, Params::srcJitterRateHz, 4.0f);
+        setParam (proc, Params::srcJitterSpeed, 261.1f);   // 3 m bei 4 Hz
 
         proc.prepareToPlay (sampleRate, blockSize);
 
@@ -4136,8 +4140,9 @@ int main()
 
         setParam (proc, Params::nWaveOn, 1.0f);
         setParam (proc, Params::srcJitterOn, 1.0f);
-        setParam (proc, Params::srcJitterRateHz, 2.0f);
-        setParam (proc, Params::srcJitterMaxSpeed, 100.0f);
+        // Frueher: 2 Hz Hektik, gedeckelt auf 100 m/s. Der Deckel war das,
+        // was tatsaechlich griff - er ist jetzt direkt der eingestellte Wert.
+        setParam (proc, Params::srcJitterSpeed, 100.0f);
         setParam (proc, Params::srcJitterAmount, 0.0f);
 
         proc.prepareToPlay (sampleRate, blockSize);
@@ -4154,7 +4159,7 @@ int main()
         before.report ("Wackler, vor dem Ruck");
         jerk.report   ("Wackler, Reglerruck");
 
-        std::printf ("%-22s Reglerruck 0 -> 200 m bei Jit Max 100 m/s: |M_r| max %.2f, "
+        std::printf ("%-22s Reglerruck 0 -> 200 m bei Tempo 100 m/s: |M_r| max %.2f, "
                      "Spitze %.4f gegen %.4f davor\n",
                      "", jerk.maxMach, jerk.peak, before.peak);
 
@@ -4200,7 +4205,11 @@ int main()
             // Stossfronten aus und hielt die Absenkung damit dauerhaft offen.
             setParam (proc, Params::srcJitterOn, jitterMetres > 0.0f ? 1.0f : 0.0f);
             setParam (proc, Params::srcJitterAmount, jitterMetres);
-            setParam (proc, Params::srcJitterRateHz, 4.0f);
+            // 4 Hz umgerechnet, aber wie damals gegen den Default-Deckel von
+            // 340 m/s gehalten - sonst waere dieses Szenario ploetzlich ein
+            // anderes (60 m bei 4 Hz sind rechnerisch Mach 15).
+            setParam (proc, Params::srcJitterSpeed,
+                      std::min (jitterMetres * 87.0f, 340.0f));
 
             setParam (proc, Params::flyKind,     0.0f);
             setParam (proc, Params::flyStart,    0.0f);
@@ -4770,8 +4779,7 @@ int main()
 
             jitter.prepare (DopplerEngine::trajectoryRateHz);
             jitter.setAmount (50.0);
-            jitter.setRate (3.0);
-            jitter.setMaxSpeed (0.0);            // ohne Deckel, hier zaehlt die Form
+            jitter.setSpeed (3262.0);   // 50 m bei 3 Hz, umgerechnet (@dpa 20260825)
             jitter.setZFactor ((double) zShare);
 
             const double dt = 1.0 / DopplerEngine::trajectoryRateHz;

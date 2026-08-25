@@ -203,10 +203,9 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.earSpacing = raw (Params::earSpacing);
 
     pp.srcJitterAmount = raw (Params::srcJitterAmount);
-    pp.srcJitterRateHz = raw (Params::srcJitterRateHz);
+    pp.srcJitterSpeed  = raw (Params::srcJitterSpeed);
     pp.srcJitterZAmount = raw (Params::srcJitterZAmount);
     pp.srcJitterOn     = raw (Params::srcJitterOn);
-    pp.srcJitterMaxSpeed = raw (Params::srcJitterMaxSpeed);
     pp.masterOn        = raw (Params::masterOn);
 
     pp.rpm = raw (Params::rpm);
@@ -636,29 +635,23 @@ void DopplerfeldProcessor::applyParameters()
     // eingefrorenen Phase heraus anzuspringen.
     const bool   jitterOn     = pp.srcJitterOn->load() > 0.5f;
     const double jitterAmount = jitterOn ? (double) pp.srcJitterAmount->load() : 0.0;
-    const double jitterRate   = (double) pp.srcJitterRateHz->load();
 
-    // EIGENE Tempogrenze des Wacklers, nicht mehr die der Bahn (@dpa
-    // 20260824). Der Wackler laeuft weiterhin NICHT durch den harten
-    // Schrittdeckel in advanceMotion - dort wuerde er zerhackt. Hier wird
-    // stattdessen seine Frequenz gestreckt: die Bewegung behaelt ihre Groesse
-    // und wird langsamer.
+    // Bahngeschwindigkeit des Wacklers, in m/s. Zusammen mit dem Ausschlag
+    // beschreibt sie die Bewegung vollstaendig; die Frequenz rechnet der
+    // Wackler sich daraus selbst aus (siehe PositionJitter::setSpeed).
     //
-    // Vorher stand hier globalMaxSpeed, der Deckel der BAHN. Damit hat jeder,
-    // der die Bahn langsam haben wollte, unbemerkt auch den Wackler
-    // abgewuergt: 69 m Ausschlag bei 3,3 Hz gegen einen Bahndeckel von
-    // 27 m/s ergaben 1,9 % Tempo, also einen Umlauf in 16 Sekunden. Von aussen
-    // sah das aus, als taete der Wackler gar nichts.
-    const double jitterMaxSpeed = (double) pp.srcJitterMaxSpeed->load();
+    // Der Wackler laeuft weiterhin NICHT durch den harten Schrittdeckel in
+    // advanceMotion - dort wuerde er zerhackt. Er braucht auch keinen
+    // eigenen mehr: schneller als hier eingestellt bewegt er sich nicht.
+    const double jitterSpeed = (double) pp.srcJitterSpeed->load();
 
     // Anteil der Hoehe am Wackeln (@dpa 20260824). Bei 0 bleibt die Quelle
     // auf ihrer eingestellten Hoehe und wackelt nur in der Ebene.
     const double jitterZAmount  = (double) pp.srcJitterZAmount->load();
 
     sourceJitter.setAmount    (jitterAmount);
-    sourceJitter.setRate      (jitterRate);
+    sourceJitter.setSpeed     (jitterSpeed);
     sourceJitter.setZFactor   (jitterZAmount);
-    sourceJitter.setMaxSpeed  (jitterMaxSpeed);
 
     // Dieselben Regler wie fuer die Quelle: @dpa hat den Jitter dort
     // ausprobiert und will genau diesen auf den Klonen, nicht einen zweiten
@@ -666,9 +659,8 @@ void DopplerfeldProcessor::applyParameters()
     for (auto& j : cloneJitter)
     {
         j.setAmount    (jitterAmount);
-        j.setRate      (jitterRate);
+        j.setSpeed     (jitterSpeed);
         j.setZFactor   (jitterZAmount);
-        j.setMaxSpeed  (jitterMaxSpeed);
     }
 
     const bool fieldJustChanged = std::abs (fieldMetresValue - lastFieldMetres) > 1.0e-9;
@@ -2118,6 +2110,80 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
             // nichts mehr.
             tree.removeChild (legacyNode, nullptr);
         }
+    }
+
+    // Zustand aus einer Fassung mit "Hektik" und "Jit Max": beide sind zu
+    // einem einzigen Tempo zusammengefasst worden (@dpa 20260825, siehe
+    // PositionJitter::setSpeed). Ohne Umrechnung startete jedes bestehende
+    // Preset auf dem Default-Tempo, und der Wackler saehe dort voellig anders
+    // aus als eingestellt.
+    //
+    // Umgerechnet wird mit derselben Formel, mit der die alte Fassung ihre
+    // Spitzengeschwindigkeit bestimmt hat:
+    //     v_peak = A * 2pi * f * 2*sqrt(3),
+    // gedeckelt auf den damaligen "Jit Max". Der Faktor 2*sqrt(3) ist der
+    // unguenstigste Fall der drei gewuerfelten Achsen und stand in genau
+    // dieser Form im alten Tempo-Deckel. Heraus kommt die Zahl, die der
+    // Wackler damals tatsaechlich erreicht hat - jetzt steht sie im Regler,
+    // statt sich aus dreien zu ergeben.
+    {
+        auto findChild = [&tree] (const char* id) -> juce::ValueTree
+        {
+            for (int i = 0; i < tree.getNumChildren(); ++i)
+            {
+                const auto child = tree.getChild (i);
+
+                if (child.getProperty ("id").toString() == id)
+                    return child;
+            }
+
+            return {};
+        };
+
+        auto legacyRate  = findChild (Params::srcJitterRateLegacy);
+        auto legacyLimit = findChild (Params::srcJitterMaxSpeedLegacy);
+
+        // Nur umrechnen, wenn der alte Wert da ist UND der neue fehlt: ein
+        // Zustand, in dem jemand das Tempo schon von Hand gesetzt hat, darf
+        // nicht von einem stehengebliebenen Altwert ueberschrieben werden.
+        if (legacyRate.isValid() && ! findChild (Params::srcJitterSpeed).isValid())
+        {
+            const auto amountNode = findChild (Params::srcJitterAmount);
+
+            const double amountM = amountNode.isValid()
+                                 ? (double) amountNode.getProperty ("value")
+                                 : 0.0;
+
+            const double rateHz = (double) legacyRate.getProperty ("value");
+
+            double speed = amountM * 6.283185307179586 * rateHz * 3.4641016151377544;
+
+            if (legacyLimit.isValid())
+            {
+                const double limit = (double) legacyLimit.getProperty ("value");
+
+                if (limit > 0.0)
+                    speed = std::min (speed, limit);
+            }
+
+            if (auto* parameter = apvts.getParameter (Params::srcJitterSpeed))
+            {
+                juce::ValueTree node (tree.getChild (0).getType());
+                node.setProperty ("id", Params::srcJitterSpeed, nullptr);
+                node.setProperty ("value", parameter->getNormalisableRange()
+                                                     .snapToLegalValue ((float) speed), nullptr);
+                tree.appendChild (node, nullptr);
+            }
+        }
+
+        // Die abgeloesten Eintraege danach WEG - sonst wanderten sie beim
+        // naechsten Speichern wieder mit in die Datei und blieben dort auf
+        // Dauer als Ballast stehen.
+        if (legacyRate.isValid())
+            tree.removeChild (legacyRate, nullptr);
+
+        if (legacyLimit.isValid())
+            tree.removeChild (legacyLimit, nullptr);
     }
 
     // Bewegungsteil herausholen, aber NICHT selbst anwenden: MotionRecorder

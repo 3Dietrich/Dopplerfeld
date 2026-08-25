@@ -18,6 +18,11 @@
 // Achsen bekommen denselben Ausschlag und je eine eigene, unabhängig
 // gewürfelte Frequenz.
 //
+// Bedient wird das seit @dpa 20260825 ueber ZWEI Groessen, die sich nicht
+// gegenseitig aufheben: Ausschlag in Metern (wie weit) und Bahngeschwindigkeit
+// in m/s (wie schnell). Die Frequenz ist kein Regler mehr, sie ergibt sich -
+// siehe setSpeed().
+//
 // Der Trick gegen Klicks: Position = amount * sin(phase), phase' =
 // 2π·freq(t). Weil freq(t) durch den One-Pole immer C0-stetig ist, ist auch
 // d(position)/dt = amount·cos(phase)·2π·freq(t) stetig - ein Knick beim
@@ -56,8 +61,23 @@ public:
     // Auslenkung der Wackelbewegung in Metern, 0 = aus (Default).
     void setAmount (double metres);
 
-    // "Hektik": wie schnell/chaotisch sich die Bewegung ändert, in Hz.
-    void setRate (double hektikHz);
+    // Bahngeschwindigkeit der Wackelbewegung in Metern je Sekunde, 0 = die
+    // Bewegung steht.
+    //
+    // Das ist seit @dpa 20260825 der zweite und letzte Regler der Bewegung,
+    // und er ersetzt sowohl die alte "Hektik" (eine Frequenz) als auch den
+    // Tempo-Deckel "Jit Max". Der Grund ist Bedienbarkeit, nicht Physik:
+    // Ausschlag, Hektik und Deckel hingen multiplikativ zusammen
+    // (v_peak = A * 2pi * f * 2*sqrt(3)), wer eines drehte, verschob die
+    // Wirkung der beiden anderen. @dpa: "ist das mit der Hektik zu
+    // kompliziert das 'passende Fenster' zu finden".
+    //
+    // Jetzt bedeutet jeder Regler genau eine Sache: der Ausschlag sagt, WIE
+    // WEIT sich die Quelle bewegt, dieser hier, WIE SCHNELL. Die Frequenz
+    // ergibt sich aus beiden (f = v / (2pi*A)) und ist kein Bedienwert mehr.
+    // Ein Deckel eruebrigt sich damit von selbst: eine Geschwindigkeit, die
+    // man in m/s einstellt, kann nicht versehentlich Mach 365 werden.
+    void setSpeed (double metresPerSecond);
 
     // Anteil der Höhe am Wackeln (@dpa 20260824: "bitte doch einen Regler für
     // z (0-100% of jitter, 0: z=Source Z)"). 1 = z wackelt genauso weit wie x
@@ -68,18 +88,6 @@ public:
     // flach in der Ebene liegt oder den Raum füllt.
     void setZFactor (double factor01);
 
-    // Obergrenze für die Bahngeschwindigkeit des Wacklers, in m/s. 0 oder
-    // negativ heißt "keine Grenze".
-    //
-    // Gebremst wird ueber die Frequenz, nicht ueber den Ausschlag: die
-    // Bewegung wird langsamer und behaelt ihre Groesse, statt an einer Kante
-    // abgeschnitten zu werden (@dpa 20260820: "vielleicht kannst Du die
-    // Jitterbewegung auch zum max Speed (rund) limitieren? So kann man grosse
-    // Gebiete in unterschiedlichen Geschwindigkeiten"). Ein Ausschlag von
-    // 1000 m bei 20 Hz waeren sonst 125000 m/s, also Mach 365 - der Loeser
-    // haette dort nichts mehr zu suchen.
-    void setMaxSpeed (double metresPerSecond);
-
     // Additiver Versatz für diesen Tick, in Metern. Immer aktiv, kein
     // Ein/Aus nach Bewegungszustand (@dpa 20260818: additiv immer, geht bei
     // Bewegung im normalen Doppler unter, dominiert im Stillstand von
@@ -87,31 +95,43 @@ public:
     Vec3 tick (double dt);
 
 private:
-    Vec3 pickFreqTargetHz();
+    // Relative Achsenfaktoren, keine Frequenzen: gewuerfelt wird nur das
+    // VERHAELTNIS der drei Achsen zueinander, die absolute Hoehe kommt aus
+    // dem Tempo. Siehe tick().
+    Vec3 pickAxisFactors();
     static float nextRandom01 (std::uint32_t& state);
 
-    // Ausschlag und Hektik werden ANGEFAHREN, nicht gesetzt (@dpa 20260824:
-    // "Jitter ist noch immer sehr laut beim Verstellen"). Ein Reglerruck von
-    // 0 auf 200 m ist sonst ein Positionssprung um bis zu 200 m innerhalb
-    // eines Ticks - fuer den Loeser formal Ueberschall, also genau die
-    // Kegelankunft samt N-Welle, die man beim Verstellen hoert.
+    // Ausschlag, Tempo und Hoehenanteil werden ANGEFAHREN, nicht gesetzt
+    // (@dpa 20260824: "Jitter ist noch immer sehr laut beim Verstellen"). Ein
+    // Reglerruck von 0 auf 200 m ist sonst ein Positionssprung um bis zu
+    // 200 m innerhalb eines Ticks - fuer den Loeser formal Ueberschall, also
+    // genau die Kegelankunft samt N-Welle, die man beim Verstellen hoert.
     //
     // Angefahren wird ueber einen kurzen Ein-Pol (amountGlideSeconds), dessen
-    // Schrittweite zusaetzlich unter dem EIGENEN Tempo-Deckel des Wacklers
-    // liegt. Kein verstecktes Limit: das Ziel wird vollstaendig erreicht, es
-    // dauert nur einen Wimpernschlag laenger, und schneller als "Jit Max"
-    // erlaubt bewegt sich der Wackler ohnehin nirgends.
+    // Schrittweite beim Ausschlag zusaetzlich unter dem eingestellten TEMPO
+    // liegt - eine Aenderung des Ausschlags ist eine echte Strecke, und der
+    // Wackler legt Strecken nun einmal mit seiner Bahngeschwindigkeit
+    // zurueck. Kein verstecktes Limit: das Ziel wird vollstaendig erreicht,
+    // es dauert nur laenger, je gemaechlicher der Wackler unterwegs ist.
+    // Steht das Tempo auf null, steht auch das Anfahren - dann bewegt sich
+    // der Wackler eben gar nicht, und das ist genau, was der Regler sagt.
     double amount       = 0.0;
     double amountTarget = 0.0;
     double zFactor      = 1.0;
     double zTarget      = 1.0;
-    double rateHz       = 0.2;
-    double rateTarget   = 0.2;
-    double maxSpeed     = 0.0;   // 0 = keine Grenze
+    double speed        = 0.0;
+    double speedTarget  = 0.0;
 
     static constexpr double amountGlideSeconds = 0.02;
 
-    // Zweckentfremdet: glättet das Frequenztripel (fx,fy,fz), nicht eine
+    // Tickrate, aus prepare(). Sie ist die Darstellbarkeitsgrenze der
+    // Frequenz: schneller als zwei Ticks je Schwingung laesst sich eine
+    // Sinusbewegung auf diesem Raster nicht mehr abbilden, sie faltete als
+    // Alias zurueck. Das ist kein Bedienlimit, sondern dieselbe Grenze, die
+    // ein Sample-Raster jeder Wellenform setzt.
+    double tickRate = 1000.0;
+
+    // Zweckentfremdet: glättet das Achsenfaktoren-Tripel, nicht eine
     // Position - siehe Klassenkommentar.
     OnePoleSmoother freqSmoother { 1.0 };
     double          retargetTimer = 0.0;

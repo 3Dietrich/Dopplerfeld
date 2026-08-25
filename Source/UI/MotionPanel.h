@@ -115,22 +115,14 @@ private:
     // @dpa 20260818) - hierher gewandert aus dem Feld-Panel (@dpa-Feedback:
     // "Jitter, Hektik, Jitter An sollen in Bewegung"), da sie eine Bewegung
     // sind, keine Feldgeometrie. Wie globalMaxSpeedKnob immer sichtbar.
-    Knob srcJitterAmountKnob, srcJitterRateKnob, srcJitterZKnob;
-
-    // Zweite Betriebsart des Wacklers (@dpa 20260821: "statt Jitter
-    // Rotoren"): gleichmaessige Kreisbahn statt Zufallswackeln. Die beiden
-    // Hauptregler bleiben dieselben - der Ausschlag wird zum Radius, "Hektik"
-    // heisst dann "Speed". Nur diese beiden Regler kommen hinzu und sind
-    // ausschliesslich im Rotoren-Modus sichtbar (Kompaktheit: im
-    // Wackel-Modus stuenden sie ohne Wirkung herum).
-
-    // Eigener Tempo-Deckel des Wacklers. Steht bei den Jitter-Reglern und
-    // nicht beim Bahn-Deckel daneben, weil er zum Wackler gehoert - das war
-    // vorher ein Regler fuer beides und hat den Wackler still abgewuergt.
-    Knob srcJitterMaxSpeedKnob;
+    // Zwei Groessen, mehr nicht (@dpa 20260825): "Jitter" sagt, wie weit die
+    // Quelle wackelt, "Jit Tempo", wie schnell. "Hektik" und "Jit Max" sind
+    // dafuer entfallen - sie hingen mit dem Ausschlag multiplikativ zusammen,
+    // und wer einen der drei drehte, verschob die Wirkung der anderen beiden.
+    Knob srcJitterAmountKnob, srcJitterSpeedKnob, srcJitterZKnob;
 
 
-    // Ganz-Aus fuer den Jitter, ohne die Regler Jitter/Hektik zurueckzusetzen
+    // Ganz-Aus fuer den Jitter, ohne die Regler Jitter/Tempo zurueckzusetzen
     // - deren Wert bleibt erhalten, siehe updateJitterEnabledState().
     juce::ToggleButton srcJitterOnButton { "Jitter An" };
     std::unique_ptr<ButtonAttachment> srcJitterOnAttachment;

@@ -81,7 +81,7 @@ namespace Labels
             { "Brüllen",        "Roar"        },
 
             // --- Bewegung ---
-            { "Hektik",         "Agitation"   },
+            { "Jit Tempo",      "Jit Speed"   },
             { "Z-Anteil",       "Z Share"     },
             { "Startvariante",  "Start Mode"  },
             { "Vorbeiflug-Bahn", "Fly-By Path" },
