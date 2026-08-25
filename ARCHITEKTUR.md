@@ -160,6 +160,62 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-25 mittags (Rakete im Infraschall, Bewegung-Panel kompakt)
+
+### Die Energie der Rakete lag unter der Hörschwelle
+
+@dpa: "eine Rakete im Vollantrieb und alles was man hört ist ein kleines
+Stoßen mit hohem Zischen (wie bei einem undichten Ventil am Fahrrad mit
+3Bar!!)". Nachgemessen (neuer `load_check`-Abschnitt "Raketen-Bänder",
+Vollschub, ohne Stöße) lagen **unter 20 Hz**: 38 % am Startplatz, 70 % in
+30 m, 90 % in 300 m. Das ist nicht leise, sondern unhörbar - und es steuert
+trotzdem voll aus, treibt also den Begrenzer und drückt alles Hörbare weg.
+
+Ein spektraler Schwerpunkt allein hätte das nie gezeigt: er lag tief, und das
+sah nach Erfolg aus. Erst die Aufteilung mit einer **eigenen Spalte für alles
+unter 20 Hz** macht den Unterschied zwischen "tief" und "weg" sichtbar.
+
+Drei Ursachen, alle aus dem Umbau vom Vortag:
+
+- **Der Bandbreiten-Ausgleich in `place()`** setzt gleiche Energie gleich
+  Lautheit. Unterhalb der Hörschwelle stimmt das nicht mehr - dort fügt mehr
+  Pegel keine Lautheit hinzu, nur Auslenkung. Ein Tiefpass bei 16 Hz bekam so
+  das rund Vierzigfache an Verstärkung. Jetzt mit Untergrenze `audibleFloorHz`
+  (30 Hz). Der Regler kommt weiterhin bis an die 4 Hz.
+- **Das Tiefband war ein flacher Tiefpass** (Q 0,6) und ließ damit alles
+  unterhalb seiner Eckfrequenz durch. Für die Rakete jetzt `rocketLowQ` = 1,1:
+  die Energie sammelt sich AN der Eckfrequenz. Die Düse behält `jetLowQ` = 0,6
+  - ihr Tiefband ist ein Fundament unter den Mitten und sänge mit Resonanz;
+  ihre Vorlagen bleiben bitgleich.
+- **Die Vorlagen lagen eine Oktave zu tief** (Vollschub `lowFc` 32 Hz), jetzt
+  38 bis 75 Hz. Und **"Fern-Farbe"** stand auf 1,0 Oktave je Verdopplung, in
+  300 m also dreieinhalb Oktaven; jetzt 0,25. Bis 3 bleibt der Regler offen.
+
+Danach unter 20 Hz: 11 % am Startplatz, 14 % in 30 m, 27 % in 300 m; der Bass
+zwischen 20 und 80 Hz trägt 63 bis 71 %.
+
+**Zur Lautstärke ohne Referenzdistanz** (@dpas Frage "ist der Hörer 30m
+entfernt und hört normallaut..? ist das korrekt?"): die Rechnung stimmt. Bei
+30 m dämpft 1/R um 29,5 dB, die dünne Luft in 1472 m Höhe um weitere 1,5 dB;
++12 dB Motorpegel und +21,1 dB Ausgang ergeben in Summe +2,0 dB gegenüber der
+Quellamplitude. Der eingestellte Quellpegel gilt also bei 1 m - eine
+einstellbare Bezugsentfernung ("Pegel gilt in X Metern") gibt es nicht und
+wäre der nächste sinnvolle Schritt, wenn das Nachregeln lästig wird.
+
+### Bewegung-Panel
+
+Reglermaße 100 × 79 → 84 × 67, dieselben wie im Motor-Panel. Damit passt die
+Jitter-Zeile samt Schalter wieder in EINE Reihe: Tempo-Deckel, Lücke,
+Jitter An, Jitter, Jit Tempo, Z-Anteil = 440 Pixel bei 446 verfügbaren. Der
+Schalter steht vor den Reglern, die er schaltet - hier wird von links
+weggenommen, und wer am Ende steht, bekommt nur den Rest. Panelhöhe 415 → 306.
+
+### Gegenprobe
+
+Alle 48 Szenarien grün. Gegenüber dem Stand davor ändern sich nur
+Raketen-Zahlen (Vorlagen-Schwerpunkte, Bänder, Brüllen-RMS 0,155 → 0,163) und
+die Wanduhrmessungen. Die Düse ist bitgleich.
+
 ## Stand 2026-08-25 vormittags (Wackler-Tempo, Jitter-Schalter, Startknall)
 
 Vier Meldungen aus @dpas Durchgang. Drei waren echte Fehler, die vierte ein
