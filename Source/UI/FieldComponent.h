@@ -113,10 +113,13 @@ public:
 
     // Nachlauf nach mouseUp() (@dpa-Feedback): Quelle/Hoerer laufen mit der
     // zuletzt gezogenen Geschwindigkeit noch kurz weiter und bremsen dann ab,
-    // statt abrupt stehenzubleiben - "realer als nur STOP". Nur fuer
-    // Positions-Drags in der Draufsicht (Quelle, Hoererposition); die
-    // Perspektive und die Kopfdrehung bleiben aussen vor, siehe .cpp.
-    // Reines Bedienungsgefuehl, keine Szenenphysik - deshalb zu-/abschaltbar
+    // statt abrupt stehenzubleiben - "realer als nur STOP", und zwar in JEDER
+    // Perspektive, nicht nur der Draufsicht (@dpa: "es soll sich einfach
+    // langsam zur Ruhe bewegen... nicht auf einmal stoppen"). Nur fuer
+    // Positions-Drags (Quelle in beiden Ansichten, Hoererposition nur in der
+    // Draufsicht, weil sie nur dort ueberhaupt greifbar ist); die Kopfdrehung
+    // bleibt aussen vor, siehe .cpp. Reines Bedienungsgefuehl, keine
+    // Szenenphysik - deshalb zu-/abschaltbar
     // und kein Parameter. Der Zustand bleibt trotzdem nicht folgenlos: er
     // wird bei jedem Aufruf in einer eigenen ApplicationProperties-Datei
     // gemerkt (nicht im Host-Preset) und beim naechsten Start wieder geholt
@@ -198,6 +201,22 @@ private:
     juce::Point<float> worldToScreen (Vec3 worldMetres) const;
     Vec3 screenToWorld (juce::Point<float> screenPx) const;
     double fieldHeightMetres() const; // aus fieldMetres + Seitenverhaeltnis der Flaeche
+
+    // Umkehrung von project() bei FESTGEHALTENER Tiefe (an snapshot.sourcePos
+    // festgemacht) - die perspektivische Entsprechung von screenToWorld()
+    // oben, siehe .cpp fuer die Herleitung. EINE Stelle fuer diese Rechnung:
+    // handleDragTo() (eigentliches Ziehen) UND dragScreenToWorld() (Nachlauf-
+    // Geschwindigkeitsschaetzung) nutzen sie gemeinsam.
+    Vec3 perspectiveScreenToWorld (juce::Point<float> screenPx) const;
+
+    // Weltposition unter der Maus, wie sie die jeweils aktive Ansicht
+    // versteht - screenToWorld() in der Draufsicht, perspectiveScreenToWorld()
+    // in der Perspektive. Damit die Nachlauf-Geschwindigkeitsschaetzung
+    // (mouseDrag()/mouseDown()) exakt dieselbe Umrechnung sieht wie
+    // handleDragTo() beim eigentlichen Ziehen - sonst bekaeme sie in der
+    // Perspektive eine falsche (flache) Geschwindigkeit und der Nachlauf
+    // bliebe auf die Draufsicht beschraenkt.
+    Vec3 dragScreenToWorld (juce::Point<float> screenPx) const;
 
     // -- Zeichenteile --
     void drawGrid (juce::Graphics& g) const;

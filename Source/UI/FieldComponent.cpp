@@ -1318,6 +1318,62 @@ FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> scre
     return DragTarget::none;
 }
 
+// Umkehrung von project() bei FESTGEHALTENER Tiefe (entlang cameraForward()):
+// quer zur Blickrichtung (cameraRight()) wird die Seitenlage, senkrecht die
+// Hoehe gestellt. Die Tiefe bleibt, weil sie aus einem einzelnen Bildpunkt
+// nicht hervorgeht - eine Maus hat zwei Achsen, der Raum drei. Die Tiefe wird
+// an M selbst (snapshot.sourcePos) festgemacht, nicht an einem gerade
+// laufenden Drag - so liefert die Funktion auch fuer die Nachlauf-
+// Geschwindigkeitsschaetzung (dragScreenToWorld(), mouseDrag()) dieselbe
+// Ebene wie fuers eigentliche Ziehen (handleDragTo()), ohne die Rechnung
+// zweimal hinzuschreiben.
+Vec3 FieldComponent::perspectiveScreenToWorld (juce::Point<float> screenPx) const
+{
+    const Vec3 cam   = cameraPosition();
+    const Vec3 fwd   = cameraForward();
+    const Vec3 right = cameraRight();
+
+    // Grosszuegig nach vorn geklemmt statt bei ungueltiger Tiefe
+    // abzubrechen (@dpa: ein Klick auf den gelben Marker soll M IMMER an
+    // die geklickte Stelle holen - auch wenn M gerade hinter der Kamera
+    // steht und es dort keine echte Tiefe zum Festhalten gibt).
+    const double rawDepth = dot (snapshot.sourcePos - cam, fwd);
+    const double depth    = juce::jmax (rawDepth, nearPlaneMetres + 1.0);
+
+    const double focal = (double) focalPixels();
+
+    const double lateralOffset = ((double) screenPx.x - (double) getWidth() * 0.5) * depth / focal;
+    const double heightOffset  = ((double) horizonYPx() - (double) screenPx.y) * depth / focal;
+
+    // Absolute Weltposition aus Tiefe (entlang fwd) + Seitenlage (entlang
+    // right) - bei der festen Standardkamera (fwd = +y, right = +x)
+    // deckt sich das exakt mit den bisherigen einzelnen x/y-Formeln; aus
+    // Hoerer-Sicht (gedrehte Kamera, s. setPerspectiveFromListener())
+    // verteilt sich die Seitenlage stattdessen auf Welt-x UND Welt-y.
+    Vec3 worldPos = cam + fwd * depth + right * lateralOffset;
+    worldPos.z    = cam.z + heightOffset;
+
+    // Unter den Boden nur, solange er nichts zurueckwirft. Reflektiert er,
+    // ist er eine Flaeche, und eine Quelle darunter waere ein Zustand, den
+    // die Rechnung nicht abbildet: ihr Spiegelbild laege dann ueber ihr
+    // (@dpa: "wenn Bodenreflexion an ist, dann nur z>=0"). Dieselbe
+    // Klemmung gilt auch fuers Zeichnen (sourceDragWorldOverride) und die
+    // Nachlauf-Geschwindigkeit - sonst zeigte der gezogene bzw. nachlaufende
+    // Punkt eine Position, die so nie gemeldet wird.
+    if (snapshot.groundReflectionOn)
+        worldPos.z = juce::jmax (0.0, worldPos.z);
+
+    return worldPos;
+}
+
+// Weltposition unter der Maus, wie sie die jeweils aktive Ansicht versteht -
+// siehe Kommentar bei der Deklaration (FieldComponent.h).
+Vec3 FieldComponent::dragScreenToWorld (juce::Point<float> screenPx) const
+{
+    return viewMode == ViewMode::Perspective ? perspectiveScreenToWorld (screenPx)
+                                              : screenToWorld (screenPx);
+}
+
 void FieldComponent::handleDragTo (juce::Point<float> screenPx)
 {
     if (viewMode == ViewMode::Perspective)
@@ -1325,46 +1381,9 @@ void FieldComponent::handleDragTo (juce::Point<float> screenPx)
         if (dragTarget != DragTarget::source)
             return;
 
-        // Umkehrung von project() bei FESTGEHALTENER Tiefe (entlang
-        // cameraForward()): quer zur Blickrichtung (cameraRight()) wird die
-        // Seitenlage, senkrecht die Hoehe gestellt. Die Tiefe bleibt, weil sie
-        // aus einem einzelnen Bildpunkt nicht hervorgeht - eine Maus hat zwei
-        // Achsen, der Raum drei.
-        //
         // Damit ist diese Ansicht der einzige Weg, die Hoehe mit der Maus zu
         // setzen; in der Draufsicht gibt es dafuer keine Achse.
-        const Vec3 cam   = cameraPosition();
-        const Vec3 fwd   = cameraForward();
-        const Vec3 right = cameraRight();
-
-        // Grosszuegig nach vorn geklemmt statt bei ungueltiger Tiefe
-        // abzubrechen (@dpa: ein Klick auf den gelben Marker soll M IMMER an
-        // die geklickte Stelle holen - auch wenn M gerade hinter der Kamera
-        // steht und es dort keine echte Tiefe zum Festhalten gibt).
-        const double rawDepth = dot (snapshot.sourcePos - cam, fwd);
-        const double depth    = juce::jmax (rawDepth, nearPlaneMetres + 1.0);
-
-        const double focal = (double) focalPixels();
-
-        const double lateralOffset = ((double) screenPx.x - (double) getWidth() * 0.5) * depth / focal;
-        const double heightOffset  = ((double) horizonYPx() - (double) screenPx.y) * depth / focal;
-
-        // Absolute Weltposition aus Tiefe (entlang fwd) + Seitenlage (entlang
-        // right) - bei der festen Standardkamera (fwd = +y, right = +x)
-        // deckt sich das exakt mit den bisherigen einzelnen x/y-Formeln; aus
-        // Hoerer-Sicht (gedrehte Kamera, s. setPerspectiveFromListener())
-        // verteilt sich die Seitenlage stattdessen auf Welt-x UND Welt-y.
-        Vec3 worldPos = cam + fwd * depth + right * lateralOffset;
-        worldPos.z    = cam.z + heightOffset;
-
-        // Unter den Boden nur, solange er nichts zurueckwirft. Reflektiert er,
-        // ist er eine Flaeche, und eine Quelle darunter waere ein Zustand, den
-        // die Rechnung nicht abbildet: ihr Spiegelbild laege dann ueber ihr
-        // (@dpa: "wenn Bodenreflexion an ist, dann nur z>=0"). Dieselbe
-        // Klemmung gilt auch fuers Zeichnen (sourceDragWorldOverride) - sonst
-        // zeigte der gezogene Punkt eine Position, die so nie gemeldet wird.
-        if (snapshot.groundReflectionOn)
-            worldPos.z = juce::jmax (0.0, worldPos.z);
+        const Vec3 worldPos = perspectiveScreenToWorld (screenPx);
 
         // Zum Zeichnen benutzt, solange M gezogen wird (s. drawSource(),
         // perspectiveSourceMarker()) - folgt damit der Maus 1:1, ohne den
@@ -1456,10 +1475,13 @@ void FieldComponent::mouseDown (const juce::MouseEvent& e)
     {
         handleDragTo (e.position);
 
-        if (viewMode == ViewMode::TopDown
-            && (dragTarget == DragTarget::source || dragTarget == DragTarget::listenerHead))
+        // Startpunkt der Nachlauf-Geschwindigkeitsschaetzung (s. mouseDrag()).
+        // listenerHead ist in der Perspektive ohnehin nie das Ziel (s.
+        // dragTargetAt()), dragScreenToWorld() waehlt die richtige Umrechnung
+        // trotzdem selbst je nach viewMode.
+        if (dragTarget == DragTarget::source || dragTarget == DragTarget::listenerHead)
         {
-            lastDragWorldPos = screenToWorld (e.position);
+            lastDragWorldPos = dragScreenToWorld (e.position);
             lastDragTimeMs   = juce::Time::getMillisecondCounterHiRes();
         }
     }
@@ -1522,13 +1544,16 @@ void FieldComponent::mouseDrag (const juce::MouseEvent& e)
     }
 
     // Geschwindigkeit nur fuer die Ziele schaetzen, die der Nachlauf ueberhaupt
-    // unterstuetzt (siehe setCoastEnabled-Kommentar in FieldComponent.h) -
-    // Perspektive und Kopfdrehung bleiben aussen vor.
-    if (viewMode != ViewMode::TopDown
-        || (dragTarget != DragTarget::source && dragTarget != DragTarget::listenerHead))
+    // unterstuetzt (siehe setCoastEnabled-Kommentar in FieldComponent.h) - die
+    // Kopfdrehung bleibt aussen vor. listenerHead kommt hier ohnehin nur in
+    // der Draufsicht an (s. dragTargetAt()); dragScreenToWorld() liefert fuer
+    // die Quelle in JEDER Ansicht die zur aktiven Perspektive passende
+    // Weltposition, statt sie flach wie in der Draufsicht zu behandeln -
+    // sonst bliebe der Nachlauf auf die Draufsicht beschraenkt.
+    if (dragTarget != DragTarget::source && dragTarget != DragTarget::listenerHead)
         return;
 
-    const Vec3   pos = screenToWorld (e.position);
+    const Vec3   pos = dragScreenToWorld (e.position);
     const double now = juce::Time::getMillisecondCounterHiRes();
     const double dt  = (now - lastDragTimeMs) * 0.001;
 
