@@ -309,10 +309,7 @@ private:
     // Setzt den Vorbeiflug auf: Generator, Glätter-Vorwärmung und die zur
     // Startvariante passende Trajektorien-Vorgeschichte. Nur aus dem
     // Audiothread (handlePendingRequests).
-    // isLoopRound = dieser Start ist ein Rundenwechsel der Dauerschleife und
-    // kein von Hand ausgeloester. Dann faellt die Sprungmarke weg - siehe
-    // beginCut() und den Kommentar am Ende von startFlyBy().
-    void startFlyBy (bool isLoopRound = false);
+    void startFlyBy();
     // untilTime in Sekunden auf der Zeitachse der Engine: getickt wird,
     // solange der nächste Bahnpunkt davor liegt.
     void advanceMotion (double untilTime);
@@ -435,6 +432,7 @@ private:
         std::atomic<float>* shockDuckAmount = nullptr;
         std::atomic<float>* shockDuckRange  = nullptr;
         std::atomic<float>* jumpBoom        = nullptr;
+        std::atomic<float>* jumpBoomSize    = nullptr;
         std::atomic<float>* shadowTailMs    = nullptr;
         std::atomic<float>* airAbsorbAmount = nullptr;
         std::atomic<float>* distanceCurve   = nullptr;
@@ -552,9 +550,6 @@ private:
     static constexpr double cutFadeSeconds = 0.012;
 
     CutState cutState = CutState::Idle;
-
-    // Ob der anstehende Schnitt ein Rundenwechsel ist, siehe beginCut().
-    bool cutLoopsFlyBy = false;
     double   cutGain  = 1.0;
 
     // Wohin geschnitten wird. Wird beim Anmelden gesetzt, nicht beim
@@ -590,12 +585,7 @@ private:
     //
     // Das Ziel darf beim Vorbeiflug offenbleiben (startFlyBy setzt es
     // selbst); dann zaehlt nur die Stille drumherum.
-    // loopsFlyBy = dieser Schnitt ist ein RUNDENWECHSEL, kein von Hand
-    // ausgeloester Start. Der Unterschied ist nur einer, aber ein wichtiger:
-    // der Rundenwechsel bekommt keine Sprungmarke und damit keinen Knall
-    // (siehe startFlyBy() und @dpa 20260825).
-    void beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy = false,
-                   bool loopsFlyBy = false);
+    void beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy = false);
 
     // Geschwindigkeit der Quelle entlang der Sichtlinie zum Hoerer, positiv
     // beim Anflug. Aus dem tatsaechlichen Positionsschritt gemessen, damit sie
@@ -712,6 +702,7 @@ private:
     double lastShockDuckRange  = -1.0;
     double lastShockDuckAmount = 1.0;
     double lastJumpBoom        = 0.0;
+    double lastJumpBoomSize    = -1.0;
     double lastShadowTailMs    = 1.0;
 
     // Wie viele Klone gerade WIRKLICH mit Loeserphysik laufen - seit der
