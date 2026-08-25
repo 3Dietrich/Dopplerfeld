@@ -160,6 +160,95 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-25 vormittags (Wackler-Tempo, Jitter-Schalter, Startknall)
+
+Vier Meldungen aus @dpas Durchgang. Drei waren echte Fehler, die vierte ein
+Missverständnis, das ein falscher Name erzeugt hat.
+
+### Der Jitter-Schalter hatte null Pixel Breite
+
+"Bitte ein Schalter hinzufügen: Jitter on/off" - den gab es seit dem 20.08.
+Er stand nur am **Ende** einer Zeile in `MotionPanel::resized()`, die bereits
+breiter war als das Panel: 128 (Tempo-Deckel) + 20 (Lücke) + 3 × 104
+(Jitter-Regler) sind 460 Pixel, verfügbar sind 446. `jmin (120,
+sharedRow.getWidth())` ergab null. Mit vier Jitter-Reglern (vor dem 25.08.)
+war die Zeile noch 88 Pixel länger, also schon vorher.
+
+Der Jitter hat jetzt eine eigene Zeile, Schalter ganz vorn. Panelhöhe
+330 → 415.
+
+**Neu geprüft:** `load_check`-Abschnitt "Bedienelemente". Jeder sichtbar
+geschaltete Regler, Schalter und jedes Auswahlfeld muss mindestens 12 × 8
+Pixel innerhalb seines Elternteils haben. Geprüft werden die Panels EINZELN
+mit genau den Maßen, die ihnen der Editor gibt - über den ganzen Editor ginge
+es nicht, dort hängen sie in einem Viewport, der ohne Fenster keine Breite
+meldet. Die Panelmaße in `PluginEditor.h` sind dafür öffentlich geworden.
+
+### Das Jitter-Tempo kam nur zur Hälfte an
+
+"'Jit Tempo'=Mach3, gemessenes Tempo:max Mach 1,5" und "jitter=Mach3,
+tatsachlich1,5 aber null Knall". Beides stimmt, beides hat dieselbe Ursache.
+
+Der Umbau vom Vortag rechnete **eine feste Frequenz** aus dem ungünstigsten
+denkbaren Fall: alle drei Achsenfaktoren gleichzeitig am oberen Anschlag UND
+alle drei Kosinus gleichzeitig eins. Der tritt praktisch nie ein. Nachgemessen
+kamen 60 bis 73 Prozent der eingestellten Spitze an, 37 bis 39 Prozent im
+Effektivwert.
+
+Jetzt wird die Bahn nach **Bogenlänge** durchlaufen:
+`omega = v / sqrt(SUM (A_i · g_i · cos phi_i)²)`, jeden Tick neu aus der
+Ableitung an der aktuellen Stelle. Zwei Fallstricke, beide behandelt:
+
+- Nahe einem Umkehrpunkt ist die Ableitung fast null, `omega` wird groß, und
+  ein Euler-Schritt schießt weit über das Ziel - gemessen Spitzen vom
+  Fünffachen. Der Schritt wird deshalb am tatsächlich zurückgelegten Weg
+  nachgemessen und heruntergezogen, wenn er länger wäre als `v · dt`.
+- Zeitkonstante der Achsendrift und Takt des Neuwürfelns hängen an einer
+  groben Bezugsfrequenz aus den Reglerwerten, nicht am momentanen `omega`.
+
+Kein Kreisel: konstant ist nur der BETRAG der Geschwindigkeit, die Richtung
+wechselt weiter unregelmäßig. Für den Doppler zählt allein die Komponente
+entlang der Sichtlinie, und die schwankt nach wie vor von +v bis −v.
+
+**Neu geprüft:** "Wackler-Tempo" (eingestellt 343 bzw. 1029 m/s → Spitze und
+Effektivwert je 100 %) und "Wackler-Knall" (Regler 1029 m/s → Quelle max
+1029 m/s, |M_r| max 2,80, 18 N-Wellen; Gegenprobe bei 100 m/s: |M_r| 0,49,
+null N-Wellen). Dass |M_r| unter dem Bahntempo liegt, ist Geometrie: M_r ist
+die Komponente entlang der Sichtlinie, nicht der Betrag.
+
+### Der Rundenwechsel knallte
+
+@dpa las den Regler "Sprungknall" als Lautstärke für Positionssprünge und war
+entsprechend deutlich. Das war er nie - Sprünge sind lautlos und bleiben es
+(Schnitt/`CutState`: ausblenden, umbauen, aufblenden). Der Regler hängt allein
+an der Startvariante "Knall-Start", die er am 23.08. selbst bestellt hatte.
+
+Falsch war aber etwas anderes: bei eingeschalteter Dauerschleife rief der
+Rundenwechsel denselben `startFlyBy()` auf wie der Start von Hand, **samt
+Sprungmarke**. Es knallte also bei jeder Runde - und ein Rundenwechsel ist
+genau die Sorte Sprung, die ausgeblendet gehört. `beginCut()`/`startFlyBy()`
+kennen jetzt den Unterschied (`loopsFlyBy`/`isLoopRound`).
+
+Umbenannt: Beschriftung "Sprungknall" → "Startknall" (EN "Start Boom").
+Parameter-ID und Automationsname bleiben, damit Presets weiterlaufen. Der
+Hinweistext sagt jetzt zuerst, was der Regler NICHT tut.
+
+**Neu geprüft:** "Rundenwechsel stumm", vier Runden - vorher 3 Knälle, jetzt
+1. Gemessen als Differenz zweier sonst gleicher Läufe (mit und ohne
+Startknall), weil die Vorbeiflüge selbst ebenfalls laute Stellen sind. Zwei
+frühere Anläufe dieser Prüfung lagen daneben und meldeten fälschlich "in
+Ordnung"; die Gegenprobe mit dem alten Verhalten hat das aufgedeckt - eine
+neue Prüfung ist erst dann eine, wenn sie am alten Stand auch anschlägt.
+
+### Gegenprobe
+
+Alle 47 Szenarien grün. Gegenüber dem Stand vom Vortag ändern sich nur
+Wackler-abhängige Zahlen (die Bahn läuft jetzt mit konstantem Betrag) sowie
+die Wanduhrmessungen, die ohnehin streuen. Auffällig im Extremszenario
+"Front-Duck 1 + Wackler": |M_r| 2,05 → 2,39 und der steilste Pegelsturz
+−38 → −48 dB, weil der Wackler dort jetzt tatsächlich seine 340 m/s fährt
+statt gebremst zu werden. Harte Abbrüche bleiben 0 von 11.
+
 ## Stand 2026-08-25 (Wackler auf zwei Regler, Rakete tiefer, Fades weg)
 
 Fünf Punkte aus @dpas Durchgang. Alle 44 `load_check`-Szenarien grün; jede
