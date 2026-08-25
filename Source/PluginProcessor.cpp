@@ -1343,7 +1343,20 @@ void DopplerfeldProcessor::startFlyBy()
     // lastSourceJitter im Header).
     if (start == FlyByGenerator::Start::Continuous)
     {
-        dopplerEngine.cutTo (smoothedSourcePos + lastSourceJitter, direction * speed);
+        // Die Vorgeschichte bekommt die Geschwindigkeit, mit der das
+        // Vorwaermen tatsaechlich geendet hat - NICHT das eingestellte Tempo.
+        //
+        // Die beiden sind nicht dasselbe: die Glaetter laufen mit einem
+        // gleichfoermig wandernden Ziel ein und stehen am Ende dicht am
+        // Sollwert, aber eben nur dicht. Mit dem Sollwert gefuellt, steht an
+        // der Naht zwischen erfundener Vorgeschichte und echter Bahn ein
+        // Sprung in der Geschwindigkeit. Gemessen mit Tests/loop_peak.cpp am
+        // Preset "Vorbeiflug mit Hickser": 214,8 gegen 206,2 m/s, also vier
+        // Prozent. Zu hoeren ist das nicht am Start, sondern eine Laufzeit
+        // spaeter - bei 444 m Abstand 1,3 s, mitten in der Anfahrt, als
+        // Sprung der Tonhoehe um 120 Cent (@dpa: "immer bei der Anfahrt
+        // gibt's einen kleinen hickser. IN DER FAHRT!!").
+        dopplerEngine.cutTo (smoothedSourcePos + lastSourceJitter, primedVel);
     }
     else
     {

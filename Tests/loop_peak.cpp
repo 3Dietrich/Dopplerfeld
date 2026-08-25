@@ -123,6 +123,13 @@ int main (int argc, char** argv)
 
     double peakSample = 0.0;
 
+    // Mitschnitt, damit sich derselbe Lauf mit denselben Werkzeugen ansehen
+    // laesst wie eine Aufnahme aus dem Plugin.
+    juce::AudioBuffer<float> recorded (1, numBlocks * blockSize);
+    recorded.clear();
+
+    std::uint64_t lastTrackLost = 0, lastNewIds = 0, lastDeaths = 0;
+
     for (int block = 0; block < numBlocks; ++block)
     {
         buffer.clear();
@@ -141,6 +148,26 @@ int main (int argc, char** argv)
         FieldSnapshot snap;
         proc.fillFieldSnapshot (snap);
 
+        // Zweigereignisse mitschreiben: ein verlorener oder neu vergebener
+        // Zweig heisst, dass die Verzoegerung eines Pfades springt - genau
+        // das, was als kurzer Hickser zu hoeren waere.
+        if (snap.trackLost != lastTrackLost || snap.newIds != lastNewIds
+            || snap.branchDeaths != lastDeaths)
+        {
+            std::printf ("    [%6.3f s] Zweige: verloren %+lld, neu %+lld, tot %+lld"
+                         "  (|M_r| %.2f, Mach %.2f)\n",
+                         (double) block * blockSize / sampleRate,
+                         (long long) (snap.trackLost - lastTrackLost),
+                         (long long) (snap.newIds - lastNewIds),
+                         (long long) (snap.branchDeaths - lastDeaths),
+                         snap.paths[0].machRadial,
+                         snap.speedOfSound > 0.0 ? snap.sourceSpeed / snap.speedOfSound : 0.0);
+
+            lastTrackLost = snap.trackLost;
+            lastNewIds    = snap.newIds;
+            lastDeaths    = snap.branchDeaths;
+        }
+
         costs.push_back ({ (double) block * blockSize / sampleRate, micros,
                            proc.solverEvaluations() - evalsBefore,
                            snap.speedOfSound > 0.0 ? snap.sourceSpeed / snap.speedOfSound : 0.0 });
@@ -149,6 +176,30 @@ int main (int argc, char** argv)
 
         for (int i = 0; i < blockSize; ++i)
             peakSample = std::max (peakSample, (double) std::abs (data[i]));
+
+        recorded.copyFrom (0, block * blockSize, buffer, 0, 0, blockSize);
+    }
+
+    {
+        const auto out = juce::File (DOPPLERFELD_SOURCE_DIR).getChildFile ("build")
+                             .getChildFile ("loop_peak_mitschnitt.wav");
+        out.deleteFile();
+
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::FileOutputStream> stream (out.createOutputStream());
+
+        if (stream != nullptr)
+        {
+            std::unique_ptr<juce::AudioFormatWriter> writer (
+                wav.createWriterFor (stream.release(), sampleRate, 1, 32, {}, 0));
+
+            if (writer != nullptr)
+            {
+                writer->writeFromAudioSampleBuffer (recorded, 0, recorded.getNumSamples());
+                writer.reset();
+                std::printf ("Mitschnitt   %s\n", out.getFullPathName().toRawUTF8());
+            }
+        }
     }
 
     double sum = 0.0;
