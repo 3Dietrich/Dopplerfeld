@@ -7,3 +7,6 @@ presets/test/
 
 # User Dateien
 dd/
+
+# Zweiter Build-Ordner fuer Arbeit, die parallel zum Hauptbau laeuft.
+build-ui/

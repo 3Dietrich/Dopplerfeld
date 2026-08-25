@@ -386,6 +386,15 @@ private:
     static constexpr float headRadiusPx = 13.0f; // rein symbolische Groesse, nicht massstabsgetreu
     static constexpr float sourceRadiusPx = 6.0f;
 
+    // Oberer Randabstand eigens fuer die Randmarke der Draufsicht
+    // (topDownSourceMarker()) - deutlich mehr als der uebliche 6px-Rand
+    // (rechts/links/unten), weil oben die Tempo-/Entfernungsanzeige liegt
+    // (drawSpeedReadout()/drawDistanceReadout(), beide bis y=69 hoch,
+    // drawSource() zeichnet VOR ihnen). Ohne diesen groesseren Abstand
+    // verschwindet die Randmarke bei M noerdlich des Feldes teilweise unter
+    // der HUD-Flaeche - gefunden beim Verifizieren mit Tests/field_shot.cpp.
+    static constexpr float topDownMarkerTopMarginPx = 74.0f;
+
     // Ob der Klon-Schwarm mitgezeichnet wird, siehe setShowClones().
     bool showClones = true;
     static constexpr float dragHitRadiusPx = 16.0f;

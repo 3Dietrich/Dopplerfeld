@@ -673,11 +673,13 @@ FieldComponent::SourceMarker FieldComponent::topDownSourceMarker() const
     const auto px  = worldToScreen (pos);
 
     // 6 px Randabstand wie in der Perspektive (perspectiveSourceMarker()) -
-    // dieselbe Randmarken-Konvention in beiden Ansichten. Liegt M ohnehin im
-    // Bild, aendert die Klemmung nichts an px.
+    // dieselbe Randmarken-Konvention in beiden Ansichten. Nach oben mehr
+    // Abstand (topDownMarkerTopMarginPx), damit die Marke nicht unter der
+    // Tempo-/Entfernungsanzeige verschwindet, die oben ueber ihr liegt (s.
+    // dort). Liegt M ohnehin im Bild, aendert die Klemmung nichts an px.
     const juce::Point<float> edge {
         juce::jlimit (6.0f, (float) getWidth()  - 6.0f, px.x),
-        juce::jlimit (6.0f, (float) getHeight() - 6.0f, px.y)
+        juce::jlimit (topDownMarkerTopMarginPx, (float) getHeight() - 6.0f, px.y)
     };
     return { edge, 4.5f };
 }

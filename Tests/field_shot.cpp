@@ -66,5 +66,18 @@ int main()
     field.setSnapshot (snap);
     shoot (field, "field_topdown_outside");
 
+    // 3) M nur in x ausserhalb, y bequem in der Mitte - Randmarke am
+    // rechten Rand auf halber Hoehe, weit weg von der Tempoanzeige oben.
+    snap.sourcePos = { 400.0, 25.0, 0.0 };
+    field.setSnapshot (snap);
+    shoot (field, "field_topdown_outside_right");
+
+    // 4) M nur in y ausserhalb (weit im Norden), x mittig im Feld - prueft,
+    // ob die obere Randmarke mit der Tempoanzeige (oben rechts) oder der
+    // Entfernungsanzeige (oben links) kollidiert.
+    snap.sourcePos = { 50.0, 300.0, 0.0 };
+    field.setSnapshot (snap);
+    shoot (field, "field_topdown_outside_north");
+
     return 0;
 }

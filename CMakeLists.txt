@@ -203,6 +203,22 @@ target_compile_definitions(panel_shot PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(panel_shot PRIVATE cxx_std_20)
 
+# Draufsicht-Bilder der Feldanzeige mit M innerhalb/ausserhalb des Feldes
+# (Tests/field_shot.cpp), Verifikation der Randmarke - kein Test.
+add_executable(field_shot EXCLUDE_FROM_ALL Tests/field_shot.cpp)
+target_link_libraries(field_shot
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(field_shot PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(field_shot PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(field_shot PRIVATE cxx_std_20)
+
 enable_testing()
 add_test(NAME solver_check COMMAND solver_check)
 add_test(NAME load_check COMMAND load_check)
