@@ -160,6 +160,120 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-25 (Wackler auf zwei Regler, Rakete tiefer, Fades weg)
+
+Fünf Punkte aus @dpas Durchgang. Alle 44 `load_check`-Szenarien grün; jede
+Abweichung gegenüber dem Stand davor steht unten benannt.
+
+### Der Wackler hat nur noch zwei Regler
+
+Ursache seiner Klage ("ist das mit der Hektik zu kompliziert das passende
+Fenster zu finden"): Ausschlag, Hektik und "Jit Max" hingen multiplikativ
+zusammen, `v_peak = A · 2π · f · 2√3`, gedeckelt. Wer einen der drei drehte,
+verschob die Wirkung der anderen beiden.
+
+Jetzt beschreiben **zwei** Größen die Bewegung vollständig:
+
+- `srcJitterAmount` (m) - **wie weit**.
+- `srcJitterSpeed` (m/s) - **wie schnell**, als SPITZE der Bahngeschwindigkeit.
+
+Die Frequenz ergibt sich, `f = v / (2π·A·2·√(2+z²))`, und steht nirgends mehr
+als Regler. `srcJitterRateHz` und `srcJitterMaxSpeed` sind ersatzlos entfallen;
+ihre IDs leben in `Params.h` nur noch als `*Legacy` weiter, damit
+`setStateInformation()` alte Zustände umrechnen kann (`v = A·2π·f·2√3`,
+gedeckelt auf den damaligen "Jit Max") und die abgelösten Einträge danach
+entfernt.
+
+Warum die Spitze und nicht der Mittelwert: nur so ist der Wert mit der
+Schallgeschwindigkeit vergleichbar, und genau darum geht es - ein Wackler über
+Mach 1 löst fortwährend Stoßfronten aus. Auf den Mittelwert bezogen läge die
+Spitze beim Doppelten, 340 m/s im Regler wären in Wahrheit Mach 2. Zwischen
+den Spitzen bleibt die Bewegung ungleichmäßig: gewürfelt werden jetzt die
+VERHÄLTNISSE der drei Achsen (`pickAxisFactors()`), nicht mehr ihre Frequenzen.
+
+Reglerbereich bis 100000 m/s wie der alte "Jit Max" - 50 m Ausschlag bei 3 Hz
+sind rechnerisch schon 3260 m/s. Default 20 m/s, das entspricht bei ein paar
+Metern Ausschlag den vorherigen 0,2 Hz.
+
+Rückkehr, falls es nicht gefällt: `git revert 3eddc97` bzw.
+`git checkout vor-wackler-umbau -- Source Tests`.
+
+### Rakete: tiefer, abstandsabhängig, Poisson-Stöße
+
+- **Bis 5 Hz.** Filteruntergrenze in `applyVoicing()` von 20 auf 4 Hz; der
+  Reglerweg nach unten ist jetzt je Betriebsart verschieden (`jetDarkOctaves`
+  1,1 - unverändert; `rocketDarkOctaves` 3,2). `rocketVoiceTable` liegt rund
+  eine Oktave tiefer, "Ferne" bei `lowFc` 20 Hz. Der Druck kommt aus dem
+  Bandbreiten-Ausgleich in `place()`, nicht aus einem höheren Gesamtpegel.
+- **Abstandsnaht** `EngineGenerator::setRocketDistance()`, gefüttert vom
+  Processor wie `setRotorInPlane`. Daran hängen zwei Dinge, die die Ausbreitung
+  nicht leisten kann, weil sie erst nach dem Generator passiert:
+  - Neuer Regler "Fern-Farbe" (`rocketFarColour`): die Entfernung schiebt die
+    drei Bänder nach unten, ein Oktav je Verdopplung bei Default 1.
+  - Die Tiefe der Absenkung durch die Druckstöße.
+- **"Rauschen bei jedem Abstand gleichlaut" ist nicht der Pegel.** Neuer
+  `load_check`-Abschnitt "Raketen-Abstand" misst −19,9 und −20,0 dB je Faktor
+  zehn; 1/R greift exakt. Was fehlte, war die Klangfarbe.
+- **"Kein Unterschied zwischen den Druckreichweiten": der Regler kam nicht an.**
+  `shockDuckRange` hängt an `triggerNWave()` in `PropagationPath`, und das
+  feuert nur bei einer Kegelankunft. Die Stöße der Rakete entstehen im
+  Generator. Jetzt senken sie das Brüllen dort selbst ab, mit derselben Formel
+  `range/(range+R)` und proportional zur Stärke des einzelnen Stoßes
+  (`setRocketShockDuck()`).
+- **Stoßfolge als Poisson-Prozess.** Exponentiell verteilte Abstände statt
+  gejittertem Raster. Das Knattern entsteht nicht an den stehenden Mach-Zellen,
+  sondern an einzelnen steilen Fronten aus der turbulenten Scherschicht -
+  unabhängige Ereignisse mit mittlerer Rate. Ihr Kennzeichen ist, dass sie sich
+  ballen; ein Raster mit ±50 % Jitter kann das nicht. Zellgröße multiplikativ
+  gestreut (Faktor 0,37 bis 2,7), Amplitude exponentiell verteilt statt
+  gleichverteilt - das Kennmaß des Knatterns ist die Schiefe des Drucksignals.
+- **Regelbereiche.** Stoßlänge 0,02..60 m -> 10..600 m, Default 20 m
+  ("min. 10m sonst klingt es irgendwie unecht"). Druckstoß-Regler 0..1 -> 0..4,
+  Default 1 ("leiser machts keinen sinn"). Stoß-Vorrat 32 -> 160, denn zehn
+  Meter Zelle sind schon 58 ms Wellendauer.
+
+### OSC-Sammelschalter
+
+Neuer Parameter `oscOn` (Default an), Schalter auf Höhe der Level-Zeile rechts
+neben der Teilton-Matrix. Wirkt auf "Frei" und den Verbrennermotor des
+Hubschraubers - genau dort werden die vier Teiltöne gerechnet; Rauschband,
+Fahrtwind, Unwucht und Rotor laufen weiter. Ein Mute, kein Pegel: die vier
+Level-Regler behalten ihre Werte. Geblendet über denselben Ein-Pol wie die
+Wellenform, Phasen laufen weiter.
+
+### Fade Auto und Fade Manual entfallen
+
+Die Fadedauer kommt nur noch aus dem Anlass. `computeFadeSamples()` behält
+seine Formeln je `FadeReason`, der manuelle Zweig fällt raus - damit auch
+`FadeContext::useManual`/`manualSeconds`, `FadeReason::Manual` (von keinem
+Aufrufer je gesetzt) und beide `setManualFade()`. Alte Presets laden weiter,
+die APVTS ignoriert unbekannte Einträge.
+
+### 3D-Ansicht
+
+`perspectiveZoom` 0,3..4 -> 0,04..16, `perspectiveHorizonFraction`
+0,15..0,70 -> 0,04..0,94. An beiden Enden bleiben sechs Prozent der Bildhöhe
+stehen, der Boden verschwindet also nie ganz. Bodenraster seitlich bis 5 km
+statt bis 500 m.
+
+### Gegenprobe
+
+Alle 44 Szenarien grün. Die Abweichungen gegenüber dem Stand davor:
+
+- Raketen-Vorlagen-Schwerpunkte 1182/3264/3506/395/3920 -> 814/2629/2871/191/
+  3499 Hz, dunkelster Punkt 876 -> 447 Hz (die tiefere Tabelle).
+- Flankensprung der Stöße 5,0 -> 19,5 x, Spitze 4,96 -> 16,0 (die neue
+  Amplituden-Schiefe).
+- Last Physik 4,8 -> 5,8 % des Budgets (Stoß-Vorrat 160 statt 32).
+- Reglerruck 0 -> 200 m bei Tempo 100 m/s: |M_r| 0,40 -> 0,45, weit unter 1.
+- Jitter-Wolke Streuung 1,009 -> 1,007. Klon-Jitter-Spitze 7,0 -> 34,1 % ist
+  Phasenlage und kein Verhalten: das RMS derselben Messung ändert sich nur um
+  1,5 %.
+- Beschriftungszahlen 3579 -> 3552 und 864 -> 855 Regler: drei Regler weg
+  (Fade Manual, Hektik, Jit Max), zwei dazu (Fern-Farbe, OSC).
+- "Motor neu anlassen" 3,2 -> 5,4 ms: eine Wanduhrmessung, die auf dem Stand
+  DAVOR zwischen 3,1 und 8,0 ms streute. Kein Regress.
+
 ## Stand 2026-08-18 (Wand-Seitenerkennung, Bildquellen-Wellenfronten)
 
 Zwei weitere @dpa-Wünsche zu den Wänden, `solver_check`/`load_check` grün,
