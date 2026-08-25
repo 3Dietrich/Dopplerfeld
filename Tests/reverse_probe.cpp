@@ -13,7 +13,6 @@
 
 #include "Physics/RetardedTimeSolver.h"
 #include "Physics/SourceTrajectory.h"
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -79,15 +78,12 @@ static void run (const char* label, double cutAt, double tEnd, bool historyFlyin
         {
             if (cutLinear)
             {
-                // Der Weg mit Vorgeschwindigkeit, Zahlen wie in
-                // DopplerEngine::configureSet: die Gerade reicht nur so weit
-                // zurueck, wie der Schall von dort den Hoerer noch erreicht.
-                const double reach   = 0.9 * 331.3 * bufferSeconds;
-                const double startR  = (receiver - posAt (t_h)).length();
-                const double allowed = std::max (0.0, (reach - startR) / vFly);
-
+                // Der Weg mit Vorgeschwindigkeit, wie in
+                // DopplerEngine::configureSet: die Gerade reicht ueber den
+                // ganzen Puffer zurueck, damit in ihm kein Ruhe/Bewegungs-Knick
+                // steht.
                 traj.fillLinear (posAt (t_h), Vec3 { vFly, 0.0, 0.0 }, t_h,
-                                 std::min (bufferSeconds, allowed));
+                                 bufferSeconds);
             }
             else
             {

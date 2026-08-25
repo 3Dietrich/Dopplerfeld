@@ -285,20 +285,26 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
 
     if (preSpeed > 0.0)
     {
-        // Wie weit die Gerade zurückreichen darf: der Puffer deckt eine
-        // endliche Laufzeit ab, und der Schall vom ältesten Punkt muss den
-        // Hörer noch erreichen können. Sonst fände der Löser dort gar keine
-        // Wurzel und der neue Satz begänne stumm.
+        // Die Gerade reicht über den GANZEN Puffer zurück, ohne Deckelung.
         //
-        // Reichweite konservativ mit der langsamsten je auftretenden
-        // Schallgeschwindigkeit (0 °C) und 10 % Sicherheitsabstand gerechnet -
-        // dieselbe Zahl, nach der auch die Pufferlänge bemessen ist.
-        const double reach   = 0.9 * 331.3 * maxHistorySeconds;
-        const double startR  = (listener.head - newPos).length();
-        const double allowed = std::max (0.0, (reach - startR) / preSpeed);
-
-        s.trajectory.fillLinear (newPos, preVelocity, t,
-                                 std::min (maxHistorySeconds, allowed));
+        // Naheliegend wäre, sie nur so weit zurückzuführen, wie der Schall vom
+        // ältesten Punkt den Hörer im Pufferfenster noch erreicht. Das legt
+        // aber vor dem Anfang der Geraden eine ruhende Quelle ab, und dieser
+        // Knick liegt bei Überschall immer mitten im Puffer: eine Quelle mit
+        // Mach > 1 entfernt sich pro Sekunde Rückrechnung um mehr als eine
+        // Sekunde Laufzeit, die Deckelung greift also zwangsläufig. Am Knick
+        // springt die Geschwindigkeit von null auf volle Fahrt, und der Löser
+        // flattert daran - gemessen mit Tests/reverse_probe.cpp bei Mach 1,124:
+        // 79 Blöcke ohne jede Wurzel, je eine Millisekunde, im 62-Hz-Takt, also
+        // ein Rattern statt eines Tons.
+        //
+        // Ohne Knick findet der Löser hinter der Reichweite schlicht keine
+        // Wurzel, und das ist kein Fehler, sondern der Schattenbereich: von
+        // einer Quelle, die seit jeher mit Überschall auf den Hörer zufliegt,
+        // ist bis zur Ankunft ihres Kegels nichts zu hören. Danach steht der
+        // Zweig und lebt so lange wie bei einer Bahn, die nie geschnitten wurde
+        // (Lauf D und Lauf E im Messprogramm sind gleich).
+        s.trajectory.fillLinear (newPos, preVelocity, t, maxHistorySeconds);
     }
     else
     {

@@ -55,13 +55,18 @@ public:
     // dieselbe Gerade, auf der es weitergeht, und im Löser passiert an der Naht
     // schlicht nichts Besonderes.
     // spanSeconds begrenzt, wie weit die gleichförmige Bewegung zurückreicht;
-    // davor ruht die Quelle an dem Punkt, an dem die Gerade beginnt. Diese
-    // Begrenzung ist keine Bequemlichkeit, sondern nötig: der Puffer deckt eine
-    // endliche Laufzeit ab (bei n_max rund 42 s, also gut 14 km). Eine
-    // unbegrenzte Rückrechnung würde die Quelle bei Überschall so weit
-    // entfernen, dass ihr Schall die volle Pufferlänge nicht mehr schafft - der
-    // Löser fände dann gar keine Wurzel und das Ergebnis wäre Stille (siehe
-    // "Puffer kürzer als die Laufzeit" in RetardedTimeSolver::solve).
+    // davor ruht die Quelle an dem Punkt, an dem die Gerade beginnt. Der
+    // Normalfall ist die volle Pufferlänge, also eine Vorgeschichte ganz ohne
+    // diesen Knick (siehe DopplerEngine::configureSet): eine kürzere Spanne
+    // legt einen Ruhe/Bewegungs-Übergang mitten in den Puffer, an dem die
+    // Geschwindigkeit springt - bei Überschall flattert der Löser daran.
+    //
+    // Reicht die Gerade weiter zurück, als der Schall im Pufferfenster schaffen
+    // kann (bei Überschall unvermeidlich), findet der Löser dort keine Wurzel.
+    // Das ist kein Fehler, sondern der Schattenbereich vor der Kegelankunft -
+    // von einer Quelle, die mit Überschall zufliegt, ist bis dahin nichts zu
+    // hören (siehe "Puffer kürzer als die Laufzeit" in
+    // RetardedTimeSolver::solve).
     void fillLinear (Vec3 pos, Vec3 vel, double time, double spanSeconds);
 
     // Catmull-Rom-Interpolation zwischen den Stützstellen um t. false,
