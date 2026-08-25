@@ -160,6 +160,74 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-25 mittags-2 (Startknall: Runde, Länge, Regelweg)
+
+Berichtigung einer eigenen Fehlentscheidung von wenigen Stunden zuvor, plus
+der eigentliche Grund, warum der Startknall nie nach Knall klang.
+
+### Der Rundenwechsel bekommt seine Sprungmarke zurück
+
+Vormittags hatte ich eingebaut, dass ein Rundenwechsel keine Sprungmarke mehr
+setzt. @dpa arbeitet mit eingeschalteter Dauerschleife - damit blieb es beim
+einen Knall des allerersten Starts. Nachgestellt mit seinen Preset-Werten
+(`load_check`, "Preset Startknall"): in 20 Sekunden ein einziger Knall.
+
+Seine Klage vom Vormittag galt dem **Sprung**, also der Ortsveränderung. Die
+knallt auch weiterhin nicht - sie läuft über den Schnitt (`CutState`). Was
+danach kommt, bestimmt die Startvariante, und "Knall-Start" heißt Knall, bei
+jedem Losfliegen. Wer keinen will, wählt "Kontinuierlich"; dort wird gar keine
+Marke gesetzt.
+
+**Neu geprüft:** "Rundenwechsel lautlos" - der Startknall-Regler am Anschlag
+ändert bei "Kontinuierlich" das Signal um exakt **0.00000**, bei "Knall-Start"
+um 1.22228.
+
+### Warum es eine Beule war und kein Knall
+
+Die Länge des Startknalls hing an `nWaveSize`, der Körpergröße für den
+Überschallknall - in seinem Preset 15 m. Das sind 87 ms Wellendauer, und damit
+sitzt die Energie um **11 Hz**: Infraschall. Man spürt eine Druckbeule und
+hört keinen Knall. Mehr Pegel machte es nur spürbarer, und der
+Ausgangsbegrenzer reagierte auf eine Auslenkung, die niemand hört - vom
+Reglerweg zwischen 1 und 4 kamen nur 1,6× an statt 4×.
+
+Der Startknall bildet aber keinen Körper ab, sondern eine **Beschleunigung**.
+Er hat jetzt eine eigene Länge:
+
+- Neuer Regler **"Knall-Länge"** (`jumpBoomSize`), 0,1 bis 60 m, Default
+  1,5 m ≈ 9 ms ≈ 115 Hz.
+- `triggerNWave()` nimmt die Länge optional von außen (`sizeOverride`), wie
+  schon die Entfernung (`radiusOverride`).
+- **Ohne Größenkopplung**: der Amplitudenfaktor L^(3/4) kommt aus der
+  Körperlänge und gilt hier nicht - sonst machte der Längenregler den Knall
+  nebenbei leiser.
+
+Dazu der Regelweg von "Startknall": 0..1 → 0..4, Default 1. Der Deckel bei 1
+saß auch noch in `PropagationPath::setJumpBoom()` und machte den halben
+Regelweg wirkungslos.
+
+**Neu geprüft:** "Startknall-Wucht" (ohne Begrenzer, mit seinen Preset-Werten):
+Regler 1 → 0,6262, Regler 4 → 2,5048, also exakt 4,00×.
+
+### Was in seinem Preset bleibt
+
+Mit Begrenzer steht der Knall schon bei Regler 1 auf 1,0 am Anschlag. Nicht
+der Knall ist zu leise, der Ausgang ist zu voll - mehr Wucht kommt dort über
+weniger Umfeld, nicht über mehr Knall.
+
+Und ein drittes Rätsel war keines: die Strecke ist zweimal der Anflug (746 m),
+bei 47,6 m/s also 15,7 s je Runde. In 20 Sekunden sind das **zwei** Starts,
+und genau zwei Knälle stehen da - bei 1,1 s und 16,8 s, jeweils Startzeit plus
+1,1 s Laufzeit vom 373 m entfernten Startpunkt. Die erste Fassung der Prüfung
+erwartete drei und meldete deshalb einen Fehler, den es nicht gab.
+
+### Gegenprobe
+
+Alle 51 Szenarien grün. Das Knall-Start-Szenario behält seine Spitze (0,314 →
+0,306), verliert aber Energie (RMS im Ankunftsfenster 0,100 → 0,032) und wird
+steiler (steilster Anstieg 17,1 → 32,2 dB) - genau der Unterschied zwischen
+87 ms Beule und 9 ms Schlag.
+
 ## Stand 2026-08-25 nachmittags (Startknall, Scope-Perioden, Slew, Meereshöhe)
 
 ### Der Startknall fehlte bei Überschall vollständig
