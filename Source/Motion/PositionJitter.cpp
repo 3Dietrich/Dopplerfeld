@@ -20,49 +20,55 @@ float PositionJitter::nextRandom01 (std::uint32_t& state)
     return (float) (state >> 8) / (float) (1u << 24);   // [0, 1)
 }
 
-Vec3 PositionJitter::pickAxisFactors()
+Vec3 PositionJitter::pickWaypoint()
 {
-    // Je Achse unabhaengig im Bereich [0.5, 2.0] gewuerfelt - keine
-    // synchronen Achsen, sonst entstuende auf Dauer ein hoerbar periodisches
-    // Lissajous-Muster statt eines unregelmaessigen Wackelns.
+    // Der naechste Punkt, den die Fliege anfliegt.
     //
-    // Das sind seit dem Umbau auf Ausschlag/Tempo VERHAELTNISSE, keine
-    // Frequenzen. Wie schnell die Bewegung insgesamt ablaeuft, sagt allein
-    // das Tempo; hier wird nur ausgewuerfelt, welche der drei Achsen gerade
-    // die fuehrende ist.
-    const double gx = 0.5 + 1.5 * (double) nextRandom01 (rngState);
-    const double gy = 0.5 + 1.5 * (double) nextRandom01 (rngState);
-    const double gz = 0.5 + 1.5 * (double) nextRandom01 (rngState);
+    // Ebene und Hoehe werden getrennt gewuerfelt, damit der Hoehenanteil
+    // (setZFactor) nur die Hoehe aendert: eine gemeinsame Kugelrichtung
+    // wuerde bei flachem Wackeln auch den Ausschlag in der Ebene
+    // verkleinern, weil beide sich denselben Radius teilen.
+    //
+    // In der Ebene liegt der Punkt auf einem Kreis um den Anker, dessen
+    // Radius zwischen 40 und 100 Prozent des Ausschlags schwankt - so fliegt
+    // die Fliege mal quer durch die Mitte und mal nur ein kurzes Stueck.
+    const double azi   = kTwoPi * (double) nextRandom01 (rngState);
+    const double reach = amount * (0.4 + 0.6 * (double) nextRandom01 (rngState));
 
-    return { gx, gy, gz };
+    const double high = amount * zFactor * (2.0 * (double) nextRandom01 (rngState) - 1.0);
+
+    return { reach * std::cos (azi),
+             reach * std::sin (azi),
+             high };
 }
 
 void PositionJitter::prepare (double tickRateHz)
 {
     tickRate = tickRateHz > 0.0 ? tickRateHz : 1000.0;
 
-    freqSmoother.prepare (tickRateHz);
+    headingSmoother.prepare (tickRateHz);
     reset();
 }
 
 void PositionJitter::reset()
 {
-    // Startphasen aus dem eigenen Zufallsgenerator, nicht alle bei null: sonst
-    // stuenden saemtliche Klone im selben Punkt ihrer Bahn und wackelten
-    // sichtbar wie ein einziger Koerper. Der Generator ist ueber setSeed je
-    // Klon verschieden und trotzdem deterministisch.
-    for (auto& p : phase)
-        p = kTwoPi * (double) nextRandom01 (rngState);
-
-    freqSmoother.reset (pickAxisFactors());
-    retargetTimer = 0.0;
-
-    // Kein Anfahren aus dem Nichts: nach einem reset() steht der Wackler
-    // sofort auf seinem eingestellten Ausschlag, sonst faehre er nach jedem
-    // Neuanlassen erst wieder hoch.
+    // Startpunkt und Startrichtung aus dem eigenen Zufallsgenerator, nicht
+    // alle bei null: sonst stuenden saemtliche Klone im selben Punkt und
+    // floegen dieselbe Bahn. Der Generator ist ueber setSeed je Klon
+    // verschieden und trotzdem deterministisch.
     amount  = amountTarget;
     speed   = speedTarget;
     zFactor = zTarget;
+
+    offset   = pickWaypoint();
+    waypoint = pickWaypoint();
+
+    const Vec3 toGo    = waypoint - offset;
+    const Vec3 heading = toGo.lengthSquared() > 1.0e-18 ? toGo.normalised()
+                                                        : Vec3 { 1.0, 0.0, 0.0 };
+
+    headingSmoother.reset (heading);
+    headingSmoother.setTarget (heading);
 }
 
 void PositionJitter::setAmount (double metres)
@@ -132,136 +138,91 @@ Vec3 PositionJitter::tick (double dt)
         zFactor += zDelta;
     }
 
-    // --- Tempo heisst Tempo: Parametrisierung nach Bogenlaenge ---
+    // --- Wie eine Fliege, nicht wie ein Karussell ---
     //
-    // Die Bahn ist ein Lissajous aus drei Sinus, x/y/z mit eigenen
-    // Achsenfaktoren. Wie SCHNELL sie durchlaufen wird, ist davon unabhaengig -
-    // und genau das wird hier laufend so eingestellt, dass die
-    // Bahngeschwindigkeit exakt dem Regler entspricht.
+    // Die Bewegung ist eine Folge angeflogener Zielpunkte: ein Punkt im
+    // Wackelbereich wird geradlinig angesteuert, und sobald er erreicht ist,
+    // knickt die Fliege zum naechsten ab (@dpa 20260825: "wie die Fliegen:
+    // jeder einzeln ueber den Jitter bereich", nachdem die Klone sich sichtbar
+    // "um das Original gedreht" hatten).
     //
-    // Der Vorgaenger rechnete stattdessen EINE feste Frequenz aus dem
-    // unguenstigsten denkbaren Fall (alle drei Achsenfaktoren gleichzeitig am
-    // oberen Anschlag UND alle drei Kosinus gleichzeitig eins). Der tritt
-    // praktisch nie ein, und deshalb kam nur ein Bruchteil des eingestellten
-    // Tempos an: @dpa 20260825 mass Mach 1,5, wo Mach 3 stand. Nachgemessen
-    // im load_check-Abschnitt "Wackler-Tempo" waren es 60 bis 73 Prozent der
-    // Spitze und 37 bis 39 Prozent im Effektivwert.
+    // Warum nicht Sinusse je Achse: drei Sinus mit festem Achsenverhaeltnis
+    // ergeben eine geschlossene Lissajous-Figur, und laesst man sie mit
+    // konstanter Bahngeschwindigkeit durchlaufen, ist genau das eine
+    // Kreisbahn - der Karussell-Eindruck steckte in der Bahnform selbst, nicht
+    // in ihrer Geschwindigkeit.
     //
-    // Ableitung: mit P_i = A_i * sin(phi_i) ist
-    //     dP_i/dt = A_i * cos(phi_i) * dphi_i/dt.
-    // Sollen die Achsen ihr gewuerfeltes Verhaeltnis g_i behalten, ist
-    // dphi_i/dt = omega * g_i, und aus |dP/dt| = v folgt
-    //     omega = v / sqrt( SUM (A_i * g_i * cos phi_i)^2 ).
-    // Die Wurzel ist der Momentanwert - deshalb wird omega jeden Tick neu
-    // bestimmt, und deshalb stimmt das Tempo immer statt nur im Mittel.
-    //
-    // Klingt das nach einem Kreisel? Nein. Konstant ist nur der BETRAG der
-    // Geschwindigkeit, die RICHTUNG wechselt weiter unregelmaessig - und fuer
-    // den Doppler zaehlt allein die Komponente entlang der Sichtlinie zum
-    // Hoerer. Die schwankt nach wie vor von +v bis -v durch null. Was wegfaellt,
-    // ist das zufaellige Langsamsein, mit dem sich vorher kein Tempo einstellen
-    // liess.
-
-    // Zeitkonstante der Achsendrift und Takt des Neuwuerfelns haengen an einer
-    // GROBEN Bezugsfrequenz aus den Reglerwerten, nicht am momentanen omega:
-    // omega schwankt von Tick zu Tick (das ist ja der Zweck), und eine daran
-    // haengende Zeitkonstante wuerde mitzappeln, statt eine zu sein. Die
-    // Naeherung ist die Frequenz, die sich ergaebe, stuenden alle Achsen auf
-    // eins - fuer "wie oft wuerfeln wir neu" genau genug.
-    const double driftHz = std::max (0.001,
-                                     amount > 1.0e-9
-                                         ? speed / (kTwoPi * amount
-                                                    * std::sqrt (2.0 + zFactor * zFactor))
-                                         : 0.0);
-
-    freqSmoother.setTau (1.0 / (2.0 * driftHz));
-
-    retargetTimer -= dt;
-
-    if (retargetTimer <= 0.0)
+    // Das Tempo bleibt dabei exakt der eingestellte Wert: der Schritt ist
+    // heading (Einheitsvektor) mal speed mal dt, unabhaengig davon, wo die
+    // Fliege gerade ist. Der Ausschlag bleibt exakt der eingestellte: die
+    // Zielpunkte liegen im Bereich, und die Klemmung ganz unten faengt den
+    // Rest ab.
+    if (amount <= 1.0e-9 || speed <= 0.0)
     {
-        freqSmoother.setTarget (pickAxisFactors());
+        // Kein Ausschlag oder kein Tempo heisst: keine Bewegung. Der Versatz
+        // faellt nicht auf null zurueck, sondern wird unten mit dem
+        // schrumpfenden Ausschlag hereingezogen - ein Sprung waere hier
+        // formal Ueberschall.
+        if (amount <= 1.0e-9)
+            offset = {};
 
-        // Zwei Zeitkonstanten, bis wieder neu gewuerfelt wird - sonst driftet
-        // das Achsenverhaeltnis irgendwann exakt in den letzten Zufallswert
-        // und bleibt dort stehen; die Unregelmaessigkeit soll aber andauern,
-        // nicht abklingen.
-        retargetTimer = 2.0 / driftHz;
+        return offset;
     }
 
-    Vec3 axisNow, axisVel;
-    freqSmoother.tick (axisNow, axisVel);
+    // Ist der Zielpunkt erreicht (oder liegt er nach einer Reglerbewegung
+    // ausserhalb des Bereichs), wird der naechste gewuerfelt.
+    const Vec3   toGo     = waypoint - offset;
+    const double distance = toGo.length();
 
-    // std::abs, weil ein negativ driftender Faktor sonst die Phase rueckwaerts
-    // liefe - als Wert ohne Bedeutung, nur sein Betrag zaehlt.
-    const double gx = std::abs (axisNow.x);
-    const double gy = std::abs (axisNow.y);
-    const double gz = std::abs (axisNow.z);
-
-    // Die drei Beitraege zur Momentangeschwindigkeit, je Achse.
-    const double cx = amount           * gx * std::cos (phase[0]);
-    const double cy = amount           * gy * std::cos (phase[1]);
-    const double cz = amount * zFactor * gz * std::cos (phase[2]);
-
-    // Nur gegen die Division durch null: der Fall, dass alle drei Achsen
-    // gleichzeitig an ihrem Umkehrpunkt stehen. Die eigentliche Absicherung
-    // steht weiter unten und misst den zurueckgelegten Weg direkt.
-    const double reach = std::max (std::sqrt (cx * cx + cy * cy + cz * cz),
-                                   1.0e-9 * std::max (1.0, amount));
-
-    const double omega = amount > 1.0e-9 ? speed / reach : 0.0;
-
-    double step[3] { omega * gx * dt, omega * gy * dt, omega * gz * dt };
-
-    // --- Der Schritt wird am tatsaechlich zurueckgelegten Weg nachgemessen ---
-    //
-    // omega kommt aus der ABLEITUNG an der aktuellen Stelle. Das stimmt nur,
-    // solange der Schritt klein ist; nahe einem Umkehrpunkt ist die Ableitung
-    // fast null, omega wird gross, und ein Euler-Schritt schiesst dann weit
-    // ueber das Ziel hinaus. Nachgemessen waren das bei 50 m Ausschlag und
-    // Mach 3 Spitzen vom Fuenffachen des eingestellten Tempos - also genau
-    // wieder ein Regler, der nicht haelt, was er sagt, nur in die andere
-    // Richtung.
-    //
-    // Deshalb wird die neue Stelle probeweise ausgerechnet und der Schritt
-    // heruntergezogen, wenn der Weg dorthin laenger waere als v * dt. Ein
-    // Durchgang genuegt: die Bahn ist glatt, und der Ueberschuss tritt nur in
-    // der unmittelbaren Umgebung eines Umkehrpunkts auf.
-    const Vec3 current { amount * std::sin (phase[0]),
-                         amount * std::sin (phase[1]),
-                         amount * zFactor * std::sin (phase[2]) };
-
-    auto positionAfter = [&] (const double s[3])
+    if (distance <= speed * dt * 2.0 || waypoint.length() > amount * 1.5)
     {
-        return Vec3 { amount * std::sin (phase[0] + s[0]),
-                      amount * std::sin (phase[1] + s[1]),
-                      amount * zFactor * std::sin (phase[2] + s[2]) };
-    };
-
+        waypoint = pickWaypoint();
+        headingSmoother.setTarget ((waypoint - offset).normalised());
+    }
+    else
     {
-        const double allowed = speed * dt;
-        const double moved   = (positionAfter (step) - current).length();
+        headingSmoother.setTarget (toGo * (1.0 / distance));
+    }
 
-        if (moved > allowed && moved > 1.0e-12)
+    // Der Knick am Zielpunkt laeuft ueber einen kurzen Ein-Pol, statt die
+    // Richtung umzuschalten. Ein harter Richtungswechsel waere ein Sprung in
+    // der Geschwindigkeit und damit ein Klick im Doppler; ueber ein paar
+    // Millisekunden gezogen bleibt er sichtbar ein Knick und ist trotzdem
+    // stetig. Die Zeitkonstante haengt an der Zeit, die ein Weg quer durch den
+    // Bereich dauert - bei gemaechlichem Wackeln darf der Bogen laenger sein.
+    const double crossingSeconds = amount / speed;
+
+    headingSmoother.setTau (std::clamp (0.15 * crossingSeconds, 4.0 / tickRate, 0.25));
+
+    Vec3 heading, headingVel;
+    headingSmoother.tick (heading, headingVel);
+
+    const double headingLength = heading.length();
+
+    if (headingLength > 1.0e-12)
+        offset += heading * (speed * dt / headingLength);
+
+    // Sicherheitsnetz und zugleich der Weg, auf dem ein kleiner werdender
+    // Ausschlag die Fliege hereinholt: der Versatz bleibt in der Ebene
+    // innerhalb des Ausschlags und in der Hoehe innerhalb seines Anteils -
+    // dieselbe Trennung wie bei den Zielpunkten. Weil der Ausschlag selbst nur
+    // mit dem eingestellten Tempo schrumpft (siehe oben), ist auch dieses
+    // Hereinholen nie schneller als die Bewegung selbst.
+    {
+        const double flat = std::sqrt (offset.x * offset.x + offset.y * offset.y);
+
+        if (flat > amount && flat > 1.0e-12)
         {
-            const double scale = allowed / moved;
+            const double scale = amount / flat;
 
-            for (auto& v : step)
-                v *= scale;
+            offset.x *= scale;
+            offset.y *= scale;
         }
+
+        const double zReach = amount * zFactor;
+
+        offset.z = std::clamp (offset.z, -zReach, zReach);
     }
 
-    phase[0] += step[0];
-    phase[1] += step[1];
-    phase[2] += step[2];
-
-    for (auto& p : phase)
-        if (p > kTwoPi)
-            p = std::fmod (p, kTwoPi);
-
-    // Alle drei Achsen mit eigenem Verhaeltnis und ohne bevorzugte Ebene; die
-    // Hoehe bekommt zusaetzlich ihren Anteil (siehe setZFactor).
-    return { amount * std::sin (phase[0]),
-             amount * std::sin (phase[1]),
-             amount * zFactor * std::sin (phase[2]) };
+    return offset;
 }

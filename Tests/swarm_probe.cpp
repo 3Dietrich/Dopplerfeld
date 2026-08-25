@@ -54,6 +54,7 @@ void run (const char* label, float jitterAmount, float jitterSpeed, float spread
     }
 
     std::vector<std::vector<Vec3>> rel;   // je Klon: Versatz zur Quelle ueber die Zeit
+    std::vector<Vec3>              src;   // die Quelle selbst, fuer den Karussell-Test
 
     for (int i = 0; i < 400; ++i)
     {
@@ -68,10 +69,39 @@ void run (const char* label, float jitterAmount, float jitterSpeed, float spread
 
         for (int c = 0; c < snap.clonePositionCount && c < (int) rel.size(); ++c)
             rel[(size_t) c].push_back (snap.clonePositions[(size_t) c] - snap.sourcePos);
+
+        src.push_back (snap.sourcePos);
     }
 
     std::printf ("\n=== %s  (Wackler %.1f m / %.0f m/s, Spread %.2f m, %d Klone)\n",
                  label, jitterAmount, jitterSpeed, spread, clones);
+
+    // Karussell-Test: laeuft die Quelle auf einer Kreisbahn um ihren
+    // Ankerpunkt, bleibt ihr Abstand dazu konstant. Eine Fliege dagegen kommt
+    // mal nah heran und geht mal weit weg (@dpa 20260825: die Klone "drehen"
+    // sich um das Original).
+    if (! src.empty())
+    {
+        Vec3 anchor;
+        for (const auto& v : src)
+            anchor += v;
+        anchor *= 1.0 / (double) src.size();
+
+        double minR = 1.0e30, maxR = 0.0;
+        for (const auto& v : src)
+        {
+            const double r = (v - anchor).length();
+            minR = std::min (minR, r);
+            maxR = std::max (maxR, r);
+        }
+
+        // Kein Urteil, nur das Verhaeltnis: auf einer Kreisbahn ist der
+        // kleinste Abstand so gross wie der groesste (100 %), eine Fliege
+        // kommt dagegen auch durch die Mitte.
+        std::printf ("    Quelle zum Ankerpunkt: %.2f .. %.2f m, kleinster Abstand %.0f %% "
+                     "des groessten (Kreisbahn waere 100 %%)\n",
+                     minR, maxR, maxR > 1.0e-6 ? 100.0 * minR / maxR : 0.0);
+    }
 
     if (rel.empty())
     {

@@ -5,44 +5,54 @@
 #include <cstdint>
 
 // Langsame, additive Mikrobewegung der Quelle M ("echter Chorus" bei
-// Stillstand, @dpa 20260818): drei unabhängige Sinusoszillatoren (x/y/z),
-// deren Momentanfrequenz über einen OnePoleSmoother langsam zwischen
-// zufällig gewürfelten Zielfrequenzen driftet, statt zu springen.
+// Stillstand, @dpa 20260818), gebaut wie der Flug einer Fliege: ein zufaellig
+// gewuerfelter Punkt im Wackelbereich wird geradlinig angeflogen, und sobald
+// er erreicht ist, knickt die Bewegung zum naechsten ab.
 //
 // Bewusst KEINE Kreisbahn und keine bevorzugte Ebene (@dpa 20260824: "nicht
 // mehr nur auf der XY Ebene und nicht nur im Kreis (wir haben Hubschrauber ja
-// extra). Bitte den Jitter wieder gleichmäßig auf x, y und z."). Die
-// Rotoren-Betriebsart, die es hier von 20260821 bis 20260824 gab, ist damit
-// entfallen - eine umlaufende Bewegung gehört zum Motor (EngineGenerator,
-// Betriebsart Hubschrauber), nicht zur Mikrobewegung der Position. Alle drei
-// Achsen bekommen denselben Ausschlag und je eine eigene, unabhängig
-// gewürfelte Frequenz.
+// extra). Bitte den Jitter wieder gleichmaessig auf x, y und z." und
+// @dpa 20260825: "wie die Fliegen: jeder einzeln ueber den Jitter bereich").
+// Eine umlaufende Bewegung gehoert zum Motor (EngineGenerator, Betriebsart
+// Hubschrauber), nicht zur Mikrobewegung der Position. Die Zielpunkte liegen
+// gleichverteilt auf der Kugel um den Ankerpunkt, die Hoehe bekommt ihren
+// Anteil ueber setZFactor().
+//
+// Warum Zielpunkte und nicht drei Sinus je Achse: drei Sinus mit festem
+// Achsenverhaeltnis ergeben eine geschlossene Lissajous-Figur. Laesst man sie
+// mit konstanter Bahngeschwindigkeit durchlaufen - und genau das verlangt ein
+// Tempo-Regler in m/s - ist das eine Kreisbahn, sichtbar als Karussell um den
+// Ankerpunkt. Der Karussell-Eindruck steckt in der Bahnform, nicht in ihrer
+// Geschwindigkeit.
+//
+// Der Trick gegen Klicks: die Richtung wird nicht umgeschaltet, sondern ueber
+// einen kurzen Ein-Pol auf die neue Zielrichtung gezogen. Ein harter
+// Richtungswechsel waere ein Sprung in der Geschwindigkeit - fuer den Doppler
+// dieselbe Kante wie ein Positionssprung. Ueber ein paar Millisekunden gezogen
+// bleibt der Knick sichtbar und ist trotzdem stetig. OnePoleSmoother
+// (Baustein aus diesem Ordner) wird dafuer zweckentfremdet: er glaettet keine
+// Position, sondern die Flugrichtung.
+//
+// Ausschlag und Tempo bleiben dabei genau das, was auf den Reglern steht: der
+// Schritt ist Richtung mal Tempo mal dt (also exakt die eingestellte
+// Bahngeschwindigkeit), und die Zielpunkte liegen im Ausschlag (die Klemmung
+// in tick() ist nur das Netz darunter).
+//
+// Wird additiv VOR den Bewegungsglaettern (SmootherSet in PluginProcessor)
+// auf das rohe Positionsziel aufgeschlagen - dadurch profitiert auch die
+// sichtbare Quellenposition (FieldComponent::drawSource(), das runde
+// "SendSignalIcon") automatisch vom Wackeln, ohne dass Snapshot/UI extra
+// angefasst werden muessten.
+//
+// Reines C++ wie der Rest von Source/Motion, kein JUCE. Statt juce::Random
+// (das waere die einzige JUCE-Abhaengigkeit im ganzen Ordner) ein eigener
+// kleiner deterministischer Generator - reicht fuer "irgendeine plausible
+// Streuung" und bleibt offline testbar.
 //
 // Bedient wird das seit @dpa 20260825 ueber ZWEI Groessen, die sich nicht
 // gegenseitig aufheben: Ausschlag in Metern (wie weit) und Bahngeschwindigkeit
 // in m/s (wie schnell). Die Frequenz ist kein Regler mehr, sie ergibt sich -
 // siehe setSpeed().
-//
-// Der Trick gegen Klicks: Position = amount * sin(phase), phase' =
-// 2π·freq(t). Weil freq(t) durch den One-Pole immer C0-stetig ist, ist auch
-// d(position)/dt = amount·cos(phase)·2π·freq(t) stetig - ein Knick beim
-// Umwürfeln der Zielfrequenz zeigt sich erst in der Beschleunigung, nicht in
-// dem für den Doppler maßgeblichen v. Gefiltertes Rauschen bräuchte
-// denselben Umweg über einen eigenen Glätter noch einmal extra; hier ist die
-// Stetigkeit im Rezept eingebaut. OnePoleSmoother (Vorbild/Baustein aus
-// diesem Ordner) wird dafür zweckentfremdet: er glättet keine Position,
-// sondern das Frequenztripel wie einen Vec3.
-//
-// Wird additiv VOR den Bewegungsglättern (SmootherSet in PluginProcessor)
-// auf das rohe Positionsziel aufgeschlagen - dadurch profitiert auch die
-// sichtbare Quellenposition (FieldComponent::drawSource(), das runde
-// "SendSignalIcon") automatisch vom Wackeln, ohne dass Snapshot/UI extra
-// angefasst werden müssten.
-//
-// Reines C++ wie der Rest von Source/Motion, kein JUCE. Statt juce::Random
-// (das wäre die einzige JUCE-Abhängigkeit im ganzen Ordner) ein eigener
-// kleiner deterministischer Generator - reicht für "irgendeine plausible
-// Streuung" und bleibt offline testbar.
 class PositionJitter
 {
 public:
@@ -95,10 +105,9 @@ public:
     Vec3 tick (double dt);
 
 private:
-    // Relative Achsenfaktoren, keine Frequenzen: gewuerfelt wird nur das
-    // VERHAELTNIS der drei Achsen zueinander, die absolute Hoehe kommt aus
-    // dem Tempo. Siehe tick().
-    Vec3 pickAxisFactors();
+    // Der naechste anzufliegende Punkt im Wackelbereich, relativ zum
+    // Ankerpunkt. Siehe tick().
+    Vec3 pickWaypoint();
     static float nextRandom01 (std::uint32_t& state);
 
     // Ausschlag, Tempo und Hoehenanteil werden ANGEFAHREN, nicht gesetzt
@@ -131,12 +140,14 @@ private:
     // ein Sample-Raster jeder Wellenform setzt.
     double tickRate = 1000.0;
 
-    // Zweckentfremdet: glättet das Achsenfaktoren-Tripel, nicht eine
-    // Position - siehe Klassenkommentar.
-    OnePoleSmoother freqSmoother { 1.0 };
-    double          retargetTimer = 0.0;
+    // Zweckentfremdet: glaettet die Flugrichtung, nicht eine Position - siehe
+    // Klassenkommentar.
+    OnePoleSmoother headingSmoother { 1.0 };
 
-    double phase[3] { 0.0, 0.0, 0.0 };
+    // Aktueller Versatz zum Ankerpunkt und der Punkt, der gerade angeflogen
+    // wird - beide in Metern, beide relativ zum Anker.
+    Vec3 offset;
+    Vec3 waypoint;
 
     // Fester Startwert statt Uhrzeit-Aussaat (wie EngineGenerator::prepare) -
     // derselbe Regelweg muss zweimal dasselbe ergeben.

@@ -6029,7 +6029,14 @@ int main()
 
         // Die Ebene darf sich davon nicht beeindrucken lassen - der Regler
         // gilt nur der Hoehe.
-        if (std::abs (none.first - full.first) > 0.001)
+        //
+        // Ein halbes Prozent Toleranz, kein Millimeter: der Wackler fliegt
+        // gewuerfelte Zielpunkte an (siehe PositionJitter), der groesste
+        // Ausschlag in einem Messfenster ist damit ein statistischer Wert und
+        // nicht auf die Nachkommastelle wiederholbar. Gemeint ist "der
+        // Hoehenanteil verschiebt den Ausschlag in der Ebene nicht", und das
+        // faengt diese Schranke.
+        if (std::abs (none.first - full.first) > 0.005 * 50.0)
         {
             std::printf ("  FEHLER: der Z-Anteil aendert auch den Ausschlag in der Ebene "
                          "(%.3f gegen %.3f).\n", none.first, full.first);
