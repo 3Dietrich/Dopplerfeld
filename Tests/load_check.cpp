@@ -2215,31 +2215,20 @@ int main()
         {
             // Einmal im Kreis: der Schalter hat drei Stellungen, und in jeder
             // muss die Beschriftung des Reglers zur Stellung passen.
-            // Slew Amax stellt eine Beschleunigung ein und haengt am selben
-            // Schalter: eine Beschleunigung ist ein Tempo pro Sekunde, es kommt
-            // also nur "/s" an die Einheit.
             for (int i = 0; i < 3; ++i)
             {
                 const juce::String unit  = editor->speedUnitLabelForTest();
                 const juce::String shown = editor->flySpeedTextForTest();
-                const juce::String accel = editor->slewAmaxTextForTest();
 
-                std::printf ("%-22s Schalter %-5s -> Fly Speed \"%s\", Slew Amax \"%s\"\n",
+                std::printf ("%-22s Schalter %-5s -> Fly Speed \"%s\"\n",
                              i == 0 ? "Reglereinheit" : "", unit.toRawUTF8(),
-                             shown.toRawUTF8(), accel.toRawUTF8());
+                             shown.toRawUTF8());
 
                 if (! shown.contains (unit))
                 {
                     std::printf ("FEHLGESCHLAGEN: der Schalter steht auf %s, der Regler zeigt "
                                  "\"%s\" - die Umrechnung kommt am Textfeld nicht an\n",
                                  unit.toRawUTF8(), shown.toRawUTF8());
-                    failed = true;
-                }
-
-                if (! accel.containsChar ('/'))
-                {
-                    std::printf ("FEHLGESCHLAGEN: Slew Amax zeigt \"%s\" - dort fehlt die "
-                                 "Einheit\n", accel.toRawUTF8());
                     failed = true;
                 }
 
@@ -2383,7 +2372,6 @@ int main()
         setParam (proc, Params::smootherType,   1.0f);
         setParam (proc, Params::smootherTau,    0.531f);
         setParam (proc, Params::slewVmax,       1000.0f);
-        setParam (proc, Params::slewAmax,       2004.95f);
         setParam (proc, Params::globalMaxSpeed, 687.62f);
         setParam (proc, Params::flyKind,        1.0f);
         setParam (proc, Params::flyStart,       0.0f);
@@ -3711,7 +3699,6 @@ int main()
         setParam (proc, Params::fieldMetres, 10000.0f);
         setParam (proc, Params::smootherType, 2.0f);    // SlewLimiter
         setParam (proc, Params::slewVmax, 1000.0f);     // knapp Mach 3
-        setParam (proc, Params::slewAmax, 5000.0f);
         setParam (proc, Params::lisX, 0.5f);
         setParam (proc, Params::lisY, 0.5f);
         setParam (proc, Params::srcX, 0.02f);
@@ -5155,6 +5142,217 @@ int main()
         if (tooSlow)
         {
             std::printf ("  FEHLER: der Wackler haelt sein eingestelltes Tempo nicht ein.\n");
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // Zeigt der Sync ganze Wellen? (@dpa 20260825: "die Wellen sind oft 2
+    // geteilt ... egal wo es synct - der naechste sync soll 2n spaeter sein
+    // oder so")
+    //
+    // Ein Oszilloskop mit fester Zeitbasis zeigt fast nie eine ganze Zahl von
+    // Perioden. Bei anderthalb sieht die Welle aus, als waere sie in der Mitte
+    // durchgeschnitten - genau das beschreibt er. Bei aktivem Sync wird die
+    // gezeichnete Laenge deshalb auf ein Vielfaches der Periode gerundet.
+    //
+    // Geprueft wird beides: dass die Laenge aufgeht UND dass die Welle am
+    // rechten Rand dort steht, wo sie am linken angefangen hat.
+    {
+        ScopeComponent scope;
+
+        scope.setSampleRateHint (sampleRate);
+        scope.setMaxDisplaySampleCount (1 << 20);
+        scope.setDisplaySeconds (0.02, sampleRate);     // 960 Samples
+        scope.setSyncEnabled (true);
+
+        const int captureLen = scope.captureWindowSampleCount();
+
+        // 220 Hz sind bei 48 kHz rund 218,2 Samples je Periode - eine Zahl,
+        // die in 960 Samples NICHT ganzzahlig aufgeht (4,4 Perioden). Genau
+        // der Fall, den er sieht.
+        const double f0 = 220.0;
+
+        std::vector<float> rawL ((size_t) captureLen), rawR ((size_t) captureLen);
+
+        for (int n = 0; n < captureLen; ++n)
+        {
+            const double t = (double) n / sampleRate;
+            const double v = 0.5 * std::sin (juce::MathConstants<double>::twoPi * f0 * t)
+                           + 0.45 * std::sin (juce::MathConstants<double>::twoPi * 7.0 * f0 * t + 0.7);
+
+            rawL[(size_t) n] = (float) v;
+            rawR[(size_t) n] = rawL[(size_t) n];
+        }
+
+        scope.feed (rawL.data(), rawR.data(), (std::uint32_t) captureLen);
+
+        const int    shown  = scope.shownSampleCountForTest();
+        const double period = scope.periodSamplesForTest();
+        const float* trace  = scope.shownLeftForTest();
+
+        const double cycles = period > 0.0 ? (double) shown / period : 0.0;
+
+        // Wie weit die Welle am rechten Rand von ihrem linken Anfang abweicht,
+        // gemessen an ihrer eigenen Amplitude. Bei ganzen Perioden ist das
+        // nahe null, bei anderthalb liegt der rechte Rand irgendwo mitten in
+        // der Welle.
+        double amplitude = 0.0;
+
+        for (int n = 0; n < shown; ++n)
+            amplitude = std::max (amplitude, (double) std::abs (trace[n]));
+
+        const double edgeGap = (amplitude > 0.0 && shown > 1)
+                             ? std::abs ((double) trace[0] - (double) trace[shown - 1]) / amplitude
+                             : 1.0;
+
+        std::printf ("%-22s Periode %.1f Samples | gezeigt %d (%.2f Perioden) | "
+                     "Randabweichung %.1f %% der Amplitude\n",
+                     "Scope ganze Wellen", period, shown, cycles, 100.0 * edgeGap);
+
+        if (period <= 0.0)
+        {
+            std::printf ("  FEHLER: keine Grundwelle erkannt, es gibt nichts zu rasten.\n");
+            failed = true;
+        }
+        else
+        {
+            // Die gezeigte Laenge muss auf eine ganze Periode aufgehen -
+            // Rundung auf ganze Samples erlaubt eine halbe daneben.
+            const double fraction = std::abs (cycles - std::floor (cycles + 0.5));
+
+            if (fraction > 0.5 / period + 0.01)
+            {
+                std::printf ("  FEHLER: die gezeigte Laenge ist kein Vielfaches der Periode "
+                             "(%.3f Perioden).\n", cycles);
+                failed = true;
+            }
+
+            if (edgeGap > 0.15)
+            {
+                std::printf ("  FEHLER: die Welle ist am rechten Rand durchgeschnitten "
+                             "(%.1f %% Abweichung).\n", 100.0 * edgeGap);
+                failed = true;
+            }
+        }
+    }
+
+    //==================================================================
+    // Kommt der Startknall bei JEDEM Tempo an? (@dpa 20260825: "was ist nur
+    // mit dem KnallStart los.. er ist wieder nicht hoeren. Ist der Startknall
+    // etwa im 'Tempo' des Objekts?? ... Ich will einen Knall unabhaengig vom
+    // M speed.")
+    //
+    // Gemessen wird die DIFFERENZ zweier sample-genau gleicher Laeufe, einmal
+    // mit und einmal ohne Startknall. Beide sind deterministisch (feste
+    // Startwerte der Zufallsgeneratoren, Begrenzer aus), die Differenz ist
+    // also exakt der Knall - unabhaengig davon, wann er ankommt und wie laut
+    // der Vorbeiflug daneben ist.
+    //
+    // Eine reine Spitzenmessung taugt hier nicht: bei Mach 3 ist der
+    // Ueberschallknall des Vorbeifluges um ein Vielfaches lauter und verdeckt
+    // jeden Unterschied.
+    {
+        auto renderRun = [&] (float machSpeed, float boom)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 4000.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcZ, 30.0f);
+            setParam (proc, Params::limiterOn, 0.0f);
+
+            setParam (proc, Params::flyKind,     1.0f);
+            setParam (proc, Params::flyStart,    1.0f);   // Knall-Start
+            setParam (proc, Params::flyDistance, 60.0f);
+            setParam (proc, Params::flyApproach, 300.0f);
+            setParam (proc, Params::flySpeed,    machSpeed * 343.0f);
+
+            setParam (proc, Params::nWaveOn,  1.0f);
+            setParam (proc, Params::jumpBoom, boom);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            Stats settle;
+            render (proc, buffer, 1.5, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            std::vector<float> left;
+            juce::MidiBuffer   midi;
+
+            // Der Startpunkt liegt rund 300 m weit weg, sein Schall braucht
+            // also knapp 0,9 s. Vier Sekunden decken Ankunft UND Vorbeiflug ab.
+            for (int block = 0; block < (int) (4.0 * sampleRate / blockSize); ++block)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                const float* data = buffer.getReadPointer (0);
+
+                for (int i = 0; i < blockSize; ++i)
+                    left.push_back (data[i]);
+            }
+
+            return left;
+        };
+
+        struct Case { float mach; const char* name; };
+
+        const Case cases[] {
+            { 0.6f, "Mach 0,6" },
+            { 1.5f, "Mach 1,5" },
+            { 3.0f, "Mach 3,0" }
+        };
+
+        double quietest = 1.0e9, loudest = 0.0;
+
+        for (const auto& c : cases)
+        {
+            const auto withBoom    = renderRun (c.mach, 1.0f);
+            const auto withoutBoom = renderRun (c.mach, 0.0f);
+
+            const size_t count = std::min (withBoom.size(), withoutBoom.size());
+
+            double bangPeak = 0.0;
+            double bangAt   = 0.0;
+
+            for (size_t i = 0; i < count; ++i)
+            {
+                const double d = std::abs ((double) withBoom[i] - (double) withoutBoom[i]);
+
+                if (d > bangPeak)
+                {
+                    bangPeak = d;
+                    bangAt   = (double) i / sampleRate;
+                }
+            }
+
+            std::printf ("%-22s %s: Knall allein %.4f (bei t=%.2fs nach dem Start)\n",
+                         "Startknall je Tempo", c.name, bangPeak, bangAt);
+
+            quietest = std::min (quietest, bangPeak);
+            loudest  = std::max (loudest,  bangPeak);
+        }
+
+        if (quietest <= 0.0)
+        {
+            std::printf ("  FEHLER: bei mindestens einem Tempo kommt gar kein Startknall an.\n");
+            failed = true;
+        }
+        // Unabhaengig vom Tempo heisst: gleich laut. Der Faktor zwischen dem
+        // leisesten und dem lautesten der drei darf klein sein - was bleibt,
+        // ist die Geometrie (Abstand zum Startpunkt), nicht das Tempo.
+        else if (loudest > 2.0 * quietest)
+        {
+            std::printf ("  FEHLER: der Startknall haengt am Tempo (%.4f gegen %.4f, "
+                         "Faktor %.1f).\n", loudest, quietest, loudest / quietest);
             failed = true;
         }
     }

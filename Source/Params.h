@@ -122,7 +122,10 @@ namespace Params
     constexpr const char* smootherType = "smootherType";
     constexpr const char* smootherTau  = "smootherTau";
     constexpr const char* slewVmax     = "slewVmax";
-    constexpr const char* slewAmax     = "slewAmax";
+    // Eine eigene Beschleunigungsgrenze gibt es nicht mehr (@dpa 20260825:
+    // "ich verstehe ja bis heute nicht warum es zwei regler sind. Ich habe
+    // die besten Ergebnisse, wenn ich sie gleich einstelle"). Sie folgt aus
+    // slewVmax, siehe SlewLimiter::accelTimeSeconds.
     constexpr const char* playSpeed    = "playSpeed";
     constexpr const char* playInterp   = "playInterp";
     constexpr const char* playLoop     = "playLoop";

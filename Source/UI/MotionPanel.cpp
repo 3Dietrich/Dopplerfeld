@@ -37,7 +37,6 @@ void MotionPanel::setSpeedUnit (FieldComponent::SpeedUnit unit, double speedOfSo
         { &flySpeedKnob,       false },
         { &globalMaxSpeedKnob, false },
         { &slewVmaxKnob,       false },
-        { &slewAmaxKnob,       true  },
 
         // Das Tempo des Wacklers ist genauso ein Tempo wie die anderen drei
         // (@dpa 20260824: "Jit Max ist ja eine 'Speed'angabe, bitte gib ihn
@@ -119,7 +118,6 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (smootherTauKnob, apvts, Params::smootherTau, "Tau", Tooltips::Key::SmootherTau);
     setupKnob (slewVmaxKnob,    apvts, Params::slewVmax,    "Slew Vmax", Tooltips::Key::SlewVmax);
-    setupKnob (slewAmaxKnob,    apvts, Params::slewAmax,    "Slew Amax", Tooltips::Key::SlewAmax);
     setupKnob (playSpeedKnob,   apvts, Params::playSpeed,   "Play Speed", Tooltips::Key::PlaySpeed);
     setupKnob (globalMaxSpeedKnob, apvts, Params::globalMaxSpeed, "Max Speed", Tooltips::Key::GlobalMaxSpeed);
 
@@ -298,7 +296,6 @@ void MotionPanel::updateTabVisibility()
                       (juce::Component*) &playLoopButton, (juce::Component*) &coastButton, (juce::Component*) &mouseFrameButton,
                       (juce::Component*) &smootherTauKnob.slider, (juce::Component*) &smootherTauKnob.label,
                       (juce::Component*) &slewVmaxKnob.slider,    (juce::Component*) &slewVmaxKnob.label,
-                      (juce::Component*) &slewAmaxKnob.slider,    (juce::Component*) &slewAmaxKnob.label,
                       (juce::Component*) &playSpeedKnob.slider,   (juce::Component*) &playSpeedKnob.label })
         c->setVisible (! showFly);
 }
@@ -319,8 +316,6 @@ void MotionPanel::updateSlewControlsVisibility()
 
     slewVmaxKnob.slider.setEnabled (active);
     slewVmaxKnob.label.setEnabled (active);
-    slewAmaxKnob.slider.setEnabled (active);
-    slewAmaxKnob.label.setEnabled (active);
 }
 
 void MotionPanel::setPlaying (bool isPlaying)
@@ -390,7 +385,7 @@ void MotionPanel::refreshTooltips()
     coastButton.setButtonText (Labels::text ("Nachlauf"));
     mouseFrameButton.setButtonText (Labels::text ("Maus glatt"));
 
-    for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob,
+    for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &playSpeedKnob,
                       &globalMaxSpeedKnob, &srcJitterAmountKnob, &srcJitterSpeedKnob,
                       &srcJitterZKnob,
                       &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob, &flyJumpBoomKnob })
@@ -485,7 +480,7 @@ void MotionPanel::resized()
         a.removeFromTop (6);
 
         auto knobRow = a.removeFromTop (knobH);
-        for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &slewAmaxKnob, &playSpeedKnob })
+        for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &playSpeedKnob })
         {
             layoutKnob (*k, knobRow.removeFromLeft (knobW));
             knobRow.removeFromLeft (4);

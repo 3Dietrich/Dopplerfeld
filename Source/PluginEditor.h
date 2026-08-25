@@ -43,7 +43,6 @@ public:
     // Fenster pruefen, und genau dieser Weg war schon einmal still kaputt.
     juce::String speedUnitLabelForTest() const { return speedUnitButton.getButtonText(); }
     juce::String flySpeedTextForTest() { return motionPanel.flySpeedTextForTest(); }
-    juce::String slewAmaxTextForTest() { return motionPanel.slewAmaxTextForTest(); }
 
     // Nur fuer den Test: was nach einem Anzeige-Durchlauf wirklich im Feld
     // ankommt. Der Weg Processor -> Editor -> FieldComponent ist der, den das

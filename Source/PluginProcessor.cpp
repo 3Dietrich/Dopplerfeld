@@ -254,7 +254,6 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.smootherType = raw (Params::smootherType);
     pp.smootherTau  = raw (Params::smootherTau);
     pp.slewVmax     = raw (Params::slewVmax);
-    pp.slewAmax     = raw (Params::slewAmax);
     pp.playSpeed    = raw (Params::playSpeed);
     pp.playInterp   = raw (Params::playInterp);
     pp.playLoop     = raw (Params::playLoop);
@@ -692,7 +691,9 @@ void DopplerfeldProcessor::applyParameters()
     // --- Bewegungsglättung ---
     const double tau  = (double) pp.smootherTau->load();
     const double vMax = (double) pp.slewVmax->load();
-    const double aMax = (double) pp.slewAmax->load();
+    // Die Beschleunigungsgrenze folgt aus dem Tempo (siehe
+    // SlewLimiter::accelTimeSeconds) - ein Regler statt zweier.
+    const double aMax = vMax / SlewLimiter::accelTimeSeconds;
 
     sourceSmoothers.setType ((int) pp.smootherType->load(), smoothedSourcePos);
     listenerSmoothers.setType ((int) pp.smootherType->load(), listenerState.head);
@@ -1495,7 +1496,7 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // Bypass-Zweig auf der aktuellen Position aufsetzen, damit kein
             // Sprung entsteht (der erste Tick liefert dann exakt target,
             // wie zuvor) - danach begrenzt der Waechter jeden weiteren Tick
-            // auf slewVmax/slewAmax.
+            // auf slewVmax.
             if (! wasMotionSlewGuardActive)
                 sourceSmoothers.slew.reset (target);
 

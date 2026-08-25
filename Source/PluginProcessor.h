@@ -402,7 +402,6 @@ private:
         std::atomic<float>* smootherType = nullptr;
         std::atomic<float>* smootherTau  = nullptr;
         std::atomic<float>* slewVmax     = nullptr;
-        std::atomic<float>* slewAmax     = nullptr;
         std::atomic<float>* playSpeed    = nullptr;
         std::atomic<float>* playInterp   = nullptr;
         std::atomic<float>* playLoop     = nullptr;
@@ -625,8 +624,8 @@ private:
     // überspringt advanceMotion() den kompletten sourceSmoothers-Schritt
     // (siehe Kommentar dort) - eine scharfe Schwungumkehr im aufgezeichneten
     // Pfad kann die Spline dabei kurz über Schallgeschwindigkeit hinausschiessen
-    // lassen, ungebremst von slewVmax/slewAmax. Der Wächter ist die eigene
-    // SlewLimiter-Instanz aus sourceSmoothers (Params::slewVmax/slewAmax
+    // lassen, ungebremst von slewVmax. Der Wächter ist die eigene
+    // SlewLimiter-Instanz aus sourceSmoothers (Params::slewVmax
     // werden ihr ohnehin immer nachgeführt, siehe SmootherSet::
     // applyParameters - unabhängig davon, ob "Slew Limiter" als Verfahren
     // ausgewählt ist), NICHT der von @dpa gewählte Smoother-Typ: eine

@@ -80,13 +80,12 @@ public:
     // Was im Textfeld von Fly Speed steht, fuer den Test der Einheiten-
     // umschaltung (siehe DopplerfeldEditor::flySpeedTextForTest).
     juce::String flySpeedTextForTest() { return flySpeedKnob.slider.getTextFromValue (flySpeedKnob.slider.getValue()); }
-    juce::String slewAmaxTextForTest() { return slewAmaxKnob.slider.getTextFromValue (slewAmaxKnob.slider.getValue()); }
 
 private:
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     // Slew Vmax/Amax sind nur bei Smoother "Slew Limiter" ueberhaupt wirksam
-    // (siehe Params::slewVmax/slewAmax) - bei jedem anderen Verfahren
+    // (siehe Params::slewVmax) - bei jedem anderen Verfahren
     // ausgegraut statt weiter bedienbar, aber wirkungslos, herumzustehen.
     void updateSlewControlsVisibility();
 
@@ -103,7 +102,7 @@ private:
 
     static void populateChoices (juce::ComboBox& combo, juce::AudioProcessorValueTreeState& apvts, const juce::String& paramID);
 
-    Knob smootherTauKnob, slewVmaxKnob, slewAmaxKnob, playSpeedKnob;
+    Knob smootherTauKnob, slewVmaxKnob, playSpeedKnob;
 
     // Gemeinsamer Tempo-Deckel fuer jede Bewegungsquelle (Maus/Automation UND
     // Vorbeiflug) - siehe Params::globalMaxSpeed. Steht darum IMMER sichtbar

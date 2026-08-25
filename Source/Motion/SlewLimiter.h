@@ -13,9 +13,9 @@
 // Diskretisierungsschritt, sich bewegendes Ziel), aber kein Dauerschwingen.
 // Gut geeignet, wenn v_max gezielt Überschall erreichen soll.
 //
-// Defaults hier sind bewusst identisch zu den Parameter-Defaults von
-// Params::slewVmax/slewAmax (Source/Params.cpp), damit ein frisch angelegter
-// Smoother auch ohne Parameter-Sync schon plausibel klingt.
+// Der Default fuer v_max ist bewusst identisch zu Params::slewVmax
+// (Source/Params.cpp), damit ein frisch angelegter Smoother auch ohne
+// Parameter-Sync schon plausibel klingt; a_max folgt daraus.
 class SlewLimiter : public MotionSmoother
 {
 public:
@@ -23,6 +23,21 @@ public:
 
     void setVMax (double vMaxIn);
     void setAMax (double aMaxIn);
+
+    // Zeit, die der Limiter aus dem Stand auf v_max braucht.
+    //
+    // Eine eigene Beschleunigungsgrenze gibt es nicht mehr: sie ergibt sich
+    // aus v_max geteilt durch diese Zeit (@dpa 20260825: "ich verstehe ja bis
+    // heute nicht warum es zwei regler sind. Ich habe die besten Ergebnisse,
+    // wenn ich sie gleich einstelle. Meinst Du nicht auch, dass die
+    // Kombination der beiden Regler (Vmax=Amax) ausreichen?").
+    //
+    // Eine Sekunde ist genau seine Einstellung: a_max = v_max heisst
+    // rechnerisch v_max / 1 s. Die beiden Zahlen gleich zu setzen sah nach
+    // Willkuer aus, weil sie verschiedene Einheiten haben - dahinter steckt
+    // aber eine handfeste Groesse, und das ist diese Anfahrzeit. Sie ist
+    // zugleich das tau des Limiters (siehe naturalTauSeconds()).
+    static constexpr double accelTimeSeconds = 1.0;
 
     void prepare (double tickRateHz) override;
     void reset (Vec3 pos) override;
