@@ -508,8 +508,17 @@ private:
     //
     // singleSided macht aus der N-Welle die einseitige Beule, siehe
     // Branch::nSingleSided.
+    // radiusOverride > 0 setzt die Entfernung, mit der Amplitude und
+    // Frontbreite gerechnet werden, statt der aktuellen Entfernung des
+    // Zweigs. Gebraucht wird das vom Startknall: der entstand am STARTPUNKT,
+    // und von dort ist er gelaufen - wo die Quelle inzwischen steht, hat
+    // damit nichts zu tun. Ohne diesen Umweg waere ein Knall bei Mach 3
+    // um ein Vielfaches leiser als bei Mach 0,6, weil die Quelle in derselben
+    // Zeit weiter geflogen ist (@dpa 20260825: "Ich will einen Knall
+    // unabhaengig vom M speed").
     void triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale = 1.0,
-                       bool ducksOthers = true, bool singleSided = false);
+                       bool ducksOthers = true, bool singleSided = false,
+                       double radiusOverride = 0.0);
 
     // Absenkungsfaktor durch die Stossfront zur Hoererzeit t, 1 = unberuehrt.
     double shockDuckAt (double listenerTime) const;
@@ -736,6 +745,29 @@ private:
     // gibt es keinen Sprung.
     double jumpMarkerTime     = -1.0e18;
     double jumpMarkerStrength = 0.0;
+
+    // Wann der Startknall beim Hoerer ANKOMMT, in Hoererzeit. Wird beim
+    // ersten process() nach dem Setzen der Marke einmal ausgerechnet
+    // (Emissionszeit plus Laufzeit vom Startpunkt ueber DIESEN Weg) und danach
+    // nur noch abgewartet.
+    //
+    // Der Grund fuer diesen Umweg (@dpa 20260825: "was ist nur mit dem
+    // KnallStart los.. er ist wieder nicht hoeren"): vorher wurde geprueft, ob
+    // die Emissionszeit eines Zweigs ueber die Marke laeuft. Bei Unterschall
+    // geht das, dort verfolgt ein Zweig die Bahn durchgehend. Bei Ueberschall
+    // werden Zweige neu GEBOREN - ihre Emissionszeit beginnt jenseits der
+    // Marke und laeuft nie darueber. Nachgemessen war der Knall bei Mach 1,5
+    // und Mach 3 nicht nur leise, sondern bitgleich abwesend.
+    //
+    // Die Ankunftszeit haengt an nichts davon. Der Knall entsteht am
+    // Startpunkt und braucht seine Laufzeit dorthin - mehr ist daran nicht.
+    double jumpArrivalTime = -1.0e18;
+    bool   jumpArmed       = false;
+
+    // Abstand des Startpunkts ueber diesen Weg, aus derselben Rechnung wie
+    // jumpArrivalTime. Damit werden Amplitude und Frontbreite des Startknalls
+    // bestimmt - siehe radiusOverride in triggerNWave().
+    double jumpDistance    = 0.0;
 
     // Spitzendruck der N-Welle in einem Meter Abstand. Modellkonstante, kein
     // Regler: die Regler sind An/Aus und Größe. Der Wert ist so gewählt, dass

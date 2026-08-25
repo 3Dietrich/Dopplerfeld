@@ -127,7 +127,6 @@ namespace Tooltips
         // --- MotionPanel ---
         SmootherTau,
         SlewVmax,
-        SlewAmax,
         PlaySpeed,
         GlobalMaxSpeed,
         SmootherType,
@@ -675,18 +674,26 @@ namespace Tooltips
                           "the cold there AND the altitude there.";
                 case Key::AirAltitude:
                     return lang == Language::De
-                        ? "Höhe über NN in Metern. Wirkt NICHT auf die Temperatur (eigener "
-                          "Regler daneben), sondern über den mit der Höhe fallenden Luftdruck auf "
-                          "die Luftdichte - und damit als reiner Pegelfaktor auf den Ausgang: in "
-                          "dünner Höhenluft ist alles leiser. So lässt sich die Peitsche knapp "
-                          "über dem Boden (dichte Luft) vom Düsenjet in großer Höhe (dünne, "
-                          "kalte Luft - Temperatur separat einstellen) unterscheiden."
-                        : "Altitude above sea level in metres. Does NOT affect temperature (its own "
-                          "control next to it), but lowers air density as pressure drops with "
-                          "altitude - acting as a pure level factor on the output: thin high-"
-                          "altitude air makes everything quieter. This is how a whip crack near "
-                          "the ground (dense air) differs from a jet at high altitude (thin, cold "
-                          "air - set temperature separately).";
+                        ? "Höhe des ganzen Schauplatzes über dem Meeresspiegel, in Metern. "
+                          "Nicht zu verwechseln mit 'Source Z' und 'Listener Z' - die sagen, wie "
+                          "hoch Quelle und Hörer über dem Boden stehen, dieser Regler sagt, wo "
+                          "dieser Boden liegt.\n\n"
+                          "Wirkt NICHT auf die Temperatur (eigener Regler daneben), sondern über "
+                          "den mit der Höhe fallenden Luftdruck auf die Luftdichte - und damit "
+                          "als reiner Pegelfaktor auf den Ausgang: in dünner Höhenluft ist alles "
+                          "leiser. So lässt sich die Peitsche knapp über dem Boden (dichte Luft) "
+                          "vom Düsenjet in großer Höhe (dünne, kalte Luft - Temperatur separat "
+                          "einstellen) unterscheiden."
+                        : "Height of the whole scene above sea level, in metres. Not to be "
+                          "confused with 'Source Z' and 'Listener Z' - those say how high source "
+                          "and listener stand above the ground; this one says where that ground "
+                          "is.\n\n"
+                          "Does NOT affect temperature (its own control next to it), but lowers "
+                          "air density as pressure drops with altitude - acting as a pure level "
+                          "factor on the output: thin high-altitude air makes everything "
+                          "quieter. This is how a whip crack near the ground (dense air) differs "
+                          "from a jet at high altitude (thin, cold air - set temperature "
+                          "separately).";
                 case Key::OutputGain:
                     return lang == Language::De
                         ? "Ausgangslautstärke, -36 bis +36 dB. Der Pegel folgt 1/Abstand ohne "
@@ -883,36 +890,10 @@ namespace Tooltips
                           "depth. 0 = applies everywhere equally.";
                 case Key::JumpBoom:
                     return lang == Language::De
-                        ? "Lautstärke des Knalls beim LOSFLIEGEN - und zwar nur, wenn die "
-                          "Startvariante auf 'Knall-Start' steht. 0 = aus.\n\n"
-                          "Was das NICHT ist: ein Regler dafür, wie laut ein Positionssprung "
-                          "knallt. Sprünge sind hier grundsätzlich lautlos - Zustand laden, "
-                          "Rundenwechsel, Vorbeiflug-Start: überall wird ausgeblendet, "
-                          "umgebaut und wieder aufgeblendet, und die Bewegung dazwischen ist "
-                          "nicht zu hören. Auch der Rundenwechsel einer Dauerschleife bekommt "
-                          "keinen Knall.\n\n"
-                          "Gemeint ist allein die Kante, die entsteht, wenn eine ruhende "
-                          "Quelle schlagartig auf volle Fahrt geht. Das ist formal unendliche "
-                          "Beschleunigung, und die strahlt physikalisch eine Druckwelle ab - "
-                          "deshalb knallt es auch unterschallig. Die Amplitude wächst mit der "
-                          "Sprunghöhe; ganz oben ist ein Sprung um M_r = 1 so laut wie ein "
-                          "Überschallknall. Wer das nicht will, nimmt die Startvariante "
-                          "'Kontinuierlich' - dort fliegt die Quelle, als wäre sie schon immer "
-                          "geflogen."
-                        : "Loudness of the bang when the fly-by STARTS - and only when the "
-                          "start mode is set to 'Bang Start'. 0 = off.\n\n"
-                          "What this is NOT: a control for how loudly a position jump bangs. "
-                          "Jumps are silent here as a matter of principle - loading a state, "
-                          "a loop round, the start of a fly-by: everything fades out, rebuilds "
-                          "and fades back in, and the movement in between is not audible. A "
-                          "loop round gets no bang either.\n\n"
-                          "What is meant is only the edge that appears when a source at rest "
-                          "goes to full speed instantly. That is formally infinite "
-                          "acceleration, and it physically radiates a pressure wave - which is "
-                          "why it bangs even below Mach 1. Amplitude grows with the size of "
-                          "the jump; at the top, a jump of M_r = 1 is as loud as a sonic boom. "
-                          "If you do not want it, use the 'Continuous' start mode - there the "
-                          "source flies as if it always had been.";
+                        ? "Lautstärke des Knalls beim Losfliegen. Wirkt nur bei der "
+                          "Startvariante 'Knall-Start'. 0 = aus."
+                        : "Loudness of the bang when the fly-by starts. Only has an effect "
+                          "with start mode 'Bang Start'. 0 = off.";
                 case Key::ShadowTail:
                     return lang == Language::De
                         ? "Wie weich ein Hörweg ausklingt, der an der Kaustik verschwindet (der "
@@ -1221,29 +1202,18 @@ namespace Tooltips
                           "more sluggish.";
                 case Key::SlewVmax:
                     return lang == Language::De
-                        ? "Maximale Geschwindigkeit in m/s. Wirkt in zwei Fällen: als gewähltes "
-                          "Glättungsverfahren 'Slew Limiter' selbst - UND, unabhängig davon, immer "
-                          "als Ueberschwinger-Wächter während Catmull-Rom-Clip-Wiedergabe (dort "
-                          "begrenzt er nur Ausreißer an scharfen Bahn-Umkehrpunkten, ohne normale "
-                          "Bewegung abzurunden)."
-                        : "Maximum speed in m/s. Acts in two cases: as the selected "
-                          "smoothing method 'Slew Limiter' itself - AND, independently "
-                          "of that, always as an overshoot guard during Catmull-Rom clip "
-                          "playback (there it only limits outliers at sharp path reversal "
-                          "points, without rounding off normal movement).";
-                case Key::SlewAmax:
-                    return lang == Language::De
-                        ? "Maximale Beschleunigung in m/s^2 - dieselbe Doppelrolle wie Slew Vmax "
-                          "(gewählter Smoother UND Catmull-Rom-Ueberschwinger-Wächter). Bei einer "
-                          "energiereichen Aufnahme (viele schnelle Richtungswechsel) muss dieser Wert "
-                          "deutlich über der natürlichen Beschleunigung der Aufnahme liegen, sonst "
-                          "bremst der Wächter durchgehend statt nur an Ausreißern."
-                        : "Maximum acceleration in m/s^2 - the same dual role as Slew "
-                          "Vmax (selected smoother AND Catmull-Rom overshoot guard). For "
-                          "an energetic recording (many fast direction changes) this "
-                          "value must be clearly above the recording's natural "
-                          "acceleration, otherwise the guard brakes continuously instead "
-                          "of only at outliers.";
+                        ? "Höchstgeschwindigkeit des Slew Limiters in m/s. Aus dem Stand "
+                          "braucht er eine Sekunde bis dorthin - eine eigene "
+                          "Beschleunigungsgrenze gibt es deshalb nicht.\n\n"
+                          "Wirkt auch dann, wenn ein anderes Glättungsverfahren gewählt ist: "
+                          "während der Clip-Wiedergabe mit Catmull-Rom bremst er Ausreißer an "
+                          "scharfen Bahn-Umkehrpunkten ab."
+                        : "Top speed of the slew limiter in m/s. From standstill it takes one "
+                          "second to get there - which is why there is no separate "
+                          "acceleration limit.\n\n"
+                          "Also active when another smoothing method is selected: during "
+                          "Catmull-Rom clip playback it brakes outliers at sharp path "
+                          "reversal points.";
                 case Key::PlaySpeed:
                     return lang == Language::De
                         ? "Wiedergabegeschwindigkeit einer Aufnahme (0.25-4x). Skaliert die Bewegung "

@@ -175,9 +175,14 @@ double PropagationPath::nWaveAt (const Branch& b)
 }
 
 void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale,
-                                    bool ducksOthers, bool singleSided)
+                                    bool ducksOthers, bool singleSided,
+                                    double radiusOverride)
 {
     b.nSingleSided = singleSided;
+
+    // Entfernung, mit der gerechnet wird: normalerweise die des Zweigs, beim
+    // Startknall die des Startpunkts (siehe radiusOverride im Header).
+    const double radius = radiusOverride > 0.0 ? radiusOverride : b.R;
 
     // Pulsdauer aus der Ausdehnung des Körpers: die Zeit, die der Schall
     // braucht, um ihn der Länge nach zu durchlaufen, mal zwei (Bug- und
@@ -197,7 +202,7 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // Kante. Die Verbreiterung mit der Entfernung (zweiter Term) bleibt
     // unangetastet, sie ist die eigentliche Physik dahinter: in 100 m ein
     // Peitschenknall, in 3 km ein dumpfes Grollen.
-    b.nRise = 0.02 * b.nDuration + 2.0e-6 * b.R;
+    b.nRise = 0.02 * b.nDuration + 2.0e-6 * radius;
 
     // Eigenes Abstandsgesetz statt des regularisierten Fokussierungsfaktors:
     // die Druckwelle ist eine separate Schicht und soll nicht an demselben
@@ -233,7 +238,7 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // ist ueber den ganzen Reglerbereich (0,5 bis 200 m) von selbst monoton
     // und endlich.
     b.nAmp = (nWaveLevel / nWaveRefMetres)
-           * std::pow (nWaveRefMetres / std::max (b.R, minRadius), nWaveDistanceExponent)
+           * std::pow (nWaveRefMetres / std::max (radius, minRadius), nWaveDistanceExponent)
            * std::pow (nWaveSizeM / nWaveSizeRefMetres, nWaveSizeExponent)
            * nWaveGain
            * levelScale;
@@ -254,7 +259,7 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // Drumherum stehen (siehe setShockDuck). Wie beim Fenster gilt der
     // staerkere Wert, damit eine ferne Front eine nahe nicht aufweicht.
     const double reach = shockDuckRange > 0.0
-                       ? shockDuckRange / (shockDuckRange + std::max (0.0, b.R))
+                       ? shockDuckRange / (shockDuckRange + std::max (0.0, radius))
                        : 1.0;
 
     shockDuckStrength = std::max (shockDuckStrength, reach);
@@ -297,6 +302,12 @@ void PropagationPath::setJumpMarker (double emissionTime, double speedStepMps)
 {
     jumpMarkerTime     = emissionTime;
     jumpMarkerStrength = std::max (0.0, speedStepMps);
+
+    // Die Ankunftszeit steht erst fest, wenn Bahn und Empfaengerposition
+    // vorliegen - das ist im naechsten process(). Hier wird nur scharf
+    // gestellt.
+    jumpArrivalTime = -1.0e18;
+    jumpArmed       = true;
 }
 
 void PropagationPath::setShockDuck (double amount01, double rangeMetres)
@@ -608,6 +619,28 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                         + offsetStep * (1.0 / std::max (1.0e-9, blockSeconds));
 
     const double c = medium.speedOfSound();
+
+    // Ankunftszeit des Startknalls, einmal je Marke (siehe jumpArrivalTime im
+    // Header). Der Knall entsteht am Startpunkt zur Markenzeit; wann er hier
+    // ankommt, ist dessen Abstand ueber DIESEN Weg geteilt durch c. Fuer einen
+    // Spiegelpfad ist das automatisch der laengere Weg, weil recvPos0 bereits
+    // gespiegelt ist.
+    if (jumpArmed && jumpArrivalTime < -1.0e17)
+    {
+        Vec3 sourceAtJump;
+
+        if (traj.samplePositionAt (jumpMarkerTime, sourceAtJump))
+        {
+            jumpDistance    = (recvPos0 - sourceAtJump).length();
+            jumpArrivalTime = jumpMarkerTime + jumpDistance / std::max (1.0, c);
+        }
+        else
+        {
+            // Die Marke liegt ausserhalb der gespeicherten Bahn - dann gibt es
+            // nichts, worauf sich eine Laufzeit beziehen liesse.
+            jumpArmed = false;
+        }
+    }
 
     solver.setMinScanStep (trajGridSeconds);
 
@@ -956,26 +989,25 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             //
             // Stattdessen weiss die Engine selbst, WANN sie die Bahn
             // umgeschrieben hat, und legt diesen Zeitpunkt als Marke ab (siehe
-            // setJumpMarker). Hier ist nur noch zu pruefen, ob die
-            // Emissionszeit dieses Hoerwegs in diesem Segment ueber die Marke
-            // laeuft - dann kommt die Kante gerade an. Das ist exakt statt
-            // geraten, und es gilt fuer jeden Zweig einzeln: ein zeitverkehrt
-            // gehoerter Zweig laeuft spaeter darueber als der vorwaerts
-            // laufende, und ein rueckwaerts laufender sogar ein zweites Mal.
-            const double emitStart = tStart - b.tau;
-            const double emitEnd   = tEnd   - tau1;
-
-            const bool jumped = (jumpMarkerTime > -1.0e17)
-                             && ((emitStart < jumpMarkerTime) != (emitEnd < jumpMarkerTime));
+            // setJumpMarker). Daraus steht die ANKUNFTSZEIT fest (siehe
+            // jumpArrivalTime), und hier wird nur noch abgewartet, bis dieses
+            // Segment sie enthaelt.
+            //
+            // Bewusst nicht mehr ueber die Emissionszeit eines Zweigs: die
+            // laeuft nur dann ueber die Marke, wenn der Zweig die Bahn
+            // durchgehend verfolgt. Bei Ueberschall werden Zweige neu geboren,
+            // ihre Emissionszeit beginnt jenseits der Marke, und der Knall
+            // blieb dort vollstaendig aus (@dpa 20260825: "er ist wieder nicht
+            // hoeren"). Eine Ankunftszeit kennt dieses Problem nicht.
+            const bool jumped = jumpArmed
+                             && jumpArrivalTime > -1.0e17
+                             && tStart <= jumpArrivalTime && jumpArrivalTime < tEnd;
 
             if (jumped && jumpBoom > 0.0)
             {
-                // Druckwelle auf den Sprung. Die Amplitude waechst mit der
-                // Hoehe des Geschwindigkeitssprungs, den die Engine mit der
-                // Marke abgelegt hat: ein kleiner Ruck knallt weniger als ein
-                // Start aus dem Stand auf volle Fahrt. Bezugspunkt ist ein
-                // Sprung um eine Schallgeschwindigkeit - bei Regler ganz oben
-                // ist der dann so laut wie ein Ueberschallknall.
+                // Druckwelle auf den Sprung. Ihre Lautstaerke steht am
+                // Regler, unabhaengig davon, wie schnell die Quelle danach
+                // fliegt.
                 //
                 // Zwei Unterschiede zum Ueberschallknall (@dpa 20260824):
                 //
@@ -995,9 +1027,20 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 //     Stossfront mit.
                 const bool subsonicJump = jumpMarkerStrength < c;
 
-                triggerNWave (b, c, tStart,
-                              jumpBoom * std::min (1.0, jumpMarkerStrength / std::max (1.0, c)),
-                              false, subsonicJump);
+                // Die Lautstaerke steht am Regler und sonst nirgends
+                // (@dpa 20260825: "Ich will einen Knall unabhaengig vom M
+                // speed."). Vorher wuchs sie mit der Sprunghoehe und war bei
+                // langsamen Starts nur ein Bruchteil - zwei Dinge an einem
+                // Regler, von denen man eines nicht sah.
+                triggerNWave (b, c, tStart, jumpBoom, false, subsonicJump, jumpDistance);
+
+                // Genau EINMAL, nicht je Zweig. Der Knall ist ein einziges
+                // physikalisches Ereignis und trifft das Ohr einmal - dieselbe
+                // Ueberlegung wie bei der Kegelankunft weiter oben, wo auch
+                // nur ein Zweig den Puls traegt. Bei Ueberschall laufen drei
+                // Zweige gleichzeitig, und drei uebereinandergelegte Pulse
+                // waeren schlicht dreimal so laut wie bei Unterschall.
+                jumpArmed = false;
             }
 
             b.prevMach = machNow;
