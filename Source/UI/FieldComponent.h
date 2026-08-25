@@ -117,7 +117,10 @@ public:
     // Positions-Drags in der Draufsicht (Quelle, Hoererposition); die
     // Perspektive und die Kopfdrehung bleiben aussen vor, siehe .cpp.
     // Reines Bedienungsgefuehl, keine Szenenphysik - deshalb zu-/abschaltbar
-    // und kein Parameter.
+    // und kein Parameter. Der Zustand bleibt trotzdem nicht folgenlos: er
+    // wird bei jedem Aufruf in einer eigenen ApplicationProperties-Datei
+    // gemerkt (nicht im Host-Preset) und beim naechsten Start wieder geholt
+    // - siehe coastProperties() in FieldComponent.cpp.
     void setCoastEnabled (bool shouldCoast);
     bool isCoastEnabled() const { return coastEnabled; }
 
@@ -313,6 +316,11 @@ private:
     // exponentiell, Critically Damped Spring: kein Ueberschwinger, Slew
     // Limiter: dessen eigene Beschleunigungsrampe+Bremskurve, One Euro:
     // Cutoff-Glaettung) - kein zweiter, konkurrierender Bremsmechanismus.
+    //
+    // Default true nur als Fallback fuer den allerersten Start - der
+    // Konstruktor ueberschreibt ihn sofort mit dem zuletzt gewaehlten,
+    // dauerhaft gemerkten Stand (siehe coastProperties()/setCoastEnabled()
+    // in FieldComponent.cpp).
     bool coastEnabled = true;
 
     // Waehrend eines Drags fortlaufend geschaetzt (leicht geglaettet, siehe

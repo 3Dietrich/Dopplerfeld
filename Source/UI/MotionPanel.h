@@ -126,6 +126,14 @@ private:
     juce::ToggleButton srcJitterOnButton { "Jitter An" };
     std::unique_ptr<ButtonAttachment> srcJitterOnAttachment;
 
+    // Nachlauf beim Loslassen von Quelle/Hoerer im Feld (siehe
+    // FieldComponent::setCoastEnabled) - hat mit Record/Play NICHTS zu tun,
+    // wirkt gleichermassen im Vorbeiflug-Reiter. Frueher faelschlich in der
+    // Record/Play-Gruppe, dort im Vorbeiflug-Reiter unsichtbar
+    // (@dpa-Beschwerde). Steht darum wie globalMaxSpeedKnob/srcJitterOnButton
+    // IMMER sichtbar, gestapelt ueber srcJitterOnButton (s. resized()).
+    juce::ToggleButton coastButton { "Nachlauf" };
+
     // Graut Jitter/Hektik aus, solange srcJitterOnButton aus ist - auch nach
     // dem Laden eines Presets, nicht nur beim Klicken (siehe Konstruktor).
     void updateJitterEnabledState();
@@ -177,8 +185,6 @@ private:
 
     juce::ToggleButton playLoopButton { "Loop" };
     std::unique_ptr<ButtonAttachment> playLoopAttachment;
-
-    juce::ToggleButton coastButton { "Nachlauf" };
 
     // Mausbewegung auf den Bildtakt legen, siehe
     // FieldComponent::setMouseFrameSmoothing().

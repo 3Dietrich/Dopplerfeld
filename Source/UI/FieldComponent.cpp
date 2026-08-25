@@ -33,12 +33,60 @@ namespace
             return juce::String ((int) std::round (metres)) + "m";
         return juce::String (metres, 1) + "m";
     }
+
+    // Dauerhafter Merker fuer den Nachlauf-Schalter (@dpa-Beschwerde: "immer
+    // an", weil coastEnabled bewusst KEIN APVTS-Parameter ist, siehe
+    // PluginProcessor.h - der Zustand wurde bisher also nie gespeichert und
+    // stand nach jedem Laden wieder auf dem Default true). Eigene
+    // ApplicationProperties, dieselbe Datei wie WelcomeOverlays
+    // "welcomeSeen"-Merker (gleiche Options: Ordner/Name "Dopplerfeld"),
+    // nur ein anderer Schluessel - gilt damit fuer Plugin UND Standalone
+    // gleichermassen, unabhaengig vom Host-Preset/-Projekt.
+    // Function-lokales static: legt die Storage-Parameter genau einmal fest,
+    // bevor irgendein Zugriff stattfindet (ApplicationProperties liefert erst
+    // nach setStorageParameters() eine echte PropertiesFile zurueck).
+    juce::ApplicationProperties& coastProperties()
+    {
+        static juce::ApplicationProperties properties;
+        static bool initialised = false;
+
+        if (! initialised)
+        {
+            juce::PropertiesFile::Options options;
+            options.applicationName     = "Dopplerfeld";
+            options.filenameSuffix      = ".settings";
+            options.folderName          = "Dopplerfeld";
+            options.osxLibrarySubFolder = "Application Support";
+
+            properties.setStorageParameters (options);
+            initialised = true;
+        }
+
+        return properties;
+    }
+
+    bool loadPersistedCoastEnabled()
+    {
+        return coastProperties().getUserSettings()->getBoolValue ("coastEnabled", true);
+    }
+
+    void savePersistedCoastEnabled (bool shouldCoast)
+    {
+        auto* settings = coastProperties().getUserSettings();
+        settings->setValue ("coastEnabled", shouldCoast);
+        settings->saveIfNeeded();
+    }
 }
 
 FieldComponent::FieldComponent()
 {
     setSize (700, 400); // Plan 3.13: exakte Groesse
     setWantsKeyboardFocus (true); // fuer Tastatur-Kurzbefehle, s. keyPressed()
+
+    // Letzten Nachlauf-Zustand holen statt immer beim Default true zu starten
+    // (siehe coastProperties() oben) - der Editor fragt isCoastEnabled() kurz
+    // nach diesem Konstruktor ab, um coastButton entsprechend zu setzen.
+    coastEnabled = loadPersistedCoastEnabled();
 }
 
 void FieldComponent::setTooltip (const juce::String& newTooltip)
@@ -1540,6 +1588,11 @@ void FieldComponent::mouseUp (const juce::MouseEvent&)
 void FieldComponent::setCoastEnabled (bool shouldCoast)
 {
     coastEnabled = shouldCoast;
+
+    // Persistiert ausserhalb des Host-Zustands (siehe coastProperties() oben)
+    // - das ist der Grund, warum der Schalter jetzt ueber ein Laden hinweg
+    // seinen zuletzt gewaehlten Stand behaelt statt immer wieder auf true.
+    savePersistedCoastEnabled (shouldCoast);
 }
 
 void FieldComponent::mouseDoubleClick (const juce::MouseEvent&)

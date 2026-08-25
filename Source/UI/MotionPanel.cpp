@@ -294,7 +294,7 @@ void MotionPanel::updateTabVisibility()
     for (auto* c : { (juce::Component*) &recordButton, (juce::Component*) &playButton,
                       (juce::Component*) &smootherTypeLabel, (juce::Component*) &smootherTypeCombo,
                       (juce::Component*) &playInterpLabel,   (juce::Component*) &playInterpCombo,
-                      (juce::Component*) &playLoopButton, (juce::Component*) &coastButton, (juce::Component*) &mouseFrameButton,
+                      (juce::Component*) &playLoopButton, (juce::Component*) &mouseFrameButton,
                       (juce::Component*) &smootherTauKnob.slider, (juce::Component*) &smootherTauKnob.label,
                       (juce::Component*) &slewVmaxKnob.slider,    (juce::Component*) &slewVmaxKnob.label,
                       (juce::Component*) &playSpeedKnob.slider,   (juce::Component*) &playSpeedKnob.label })
@@ -475,8 +475,6 @@ void MotionPanel::resized()
         auto loopRow = a.removeFromTop (26);
         playLoopButton.setBounds (loopRow.removeFromLeft (100));
         loopRow.removeFromLeft (12);
-        coastButton.setBounds (loopRow.removeFromLeft (100));
-        loopRow.removeFromLeft (12);
         mouseFrameButton.setBounds (loopRow.removeFromLeft (120));
         a.removeFromTop (6);
 
@@ -518,11 +516,15 @@ void MotionPanel::resized()
         }
     }
 
-    // --- Immer sichtbar, unabhaengig vom Reiter: gemeinsamer Tempo-Deckel
-    // und der Jitter. Beide gelten fuer Maus/Automation UND Vorbeiflug ---
+    // --- Immer sichtbar, unabhaengig vom Reiter: gemeinsamer Tempo-Deckel,
+    // Nachlauf und der Jitter. Alle drei gelten fuer Maus/Automation UND
+    // Vorbeiflug - der Nachlauf frueher faelschlich in der Record/Play-Gruppe
+    // (@dpa-Beschwerde: "im Vorbeiflug-Reiter ist der Schalter weg"), obwohl
+    // er ausschliesslich beim Loslassen von Quelle/Hoerer IM FELD wirkt
+    // (FieldComponent::mouseUp) und mit Record/Play nichts zu tun hat ---
     //
     // EINE Zeile, in dieser Reihenfolge:
-    //   Tempo-Deckel | Luecke | Jitter An | Jitter | Jit Tempo | Z-Anteil
+    //   Tempo-Deckel | Luecke | [Nachlauf ueber Jitter An] | Jitter | Jit Tempo | Z-Anteil
     //
     // Der Schalter steht VOR den Reglern, die er schaltet, und nicht am Ende
     // der Zeile. Das ist kein Geschmack: hier wird von links weggenommen, und
@@ -533,6 +535,10 @@ void MotionPanel::resized()
     // Pixel bei 446 verfuegbaren. Die Luecke von 6 Pixeln setzt den
     // Tempo-Deckel ab - er gehoert nicht zum Jitter, sondern ueber beide
     // Reiter. Nachgeprueft wird das im load_check-Abschnitt "Bedienelemente".
+    // Nachlauf braucht in dieser knapp bemessenen Zeile keine eigene Breite:
+    // er sitzt gestapelt UEBER "Jitter An" in derselben 82px-Spalte - die
+    // Spalte ist in voller Reglerhoehe (knobH) ohnehin hoeher, als ein
+    // einzelner Schalter braucht.
     area.removeFromTop (6);
 
     auto sharedRow = area.removeFromTop (knobH);
@@ -542,9 +548,12 @@ void MotionPanel::resized()
 
     constexpr int toggleW = 82;
 
-    srcJitterOnButton.setBounds (sharedRow.removeFromLeft (toggleW)
-                                          .withSizeKeepingCentre (toggleW, 18));
+    auto toggleColumn = sharedRow.removeFromLeft (toggleW);
     sharedRow.removeFromLeft (4);
+
+    auto coastCell = toggleColumn.removeFromTop (toggleColumn.getHeight() / 2);
+    coastButton.setBounds (coastCell.withSizeKeepingCentre (toggleW, 18));
+    srcJitterOnButton.setBounds (toggleColumn.withSizeKeepingCentre (toggleW, 18));
 
     for (auto* k : { &srcJitterAmountKnob, &srcJitterSpeedKnob, &srcJitterZKnob })
     {
