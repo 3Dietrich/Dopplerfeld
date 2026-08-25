@@ -1044,7 +1044,11 @@ void DopplerfeldProcessor::handlePendingRequests()
             // Anfangsgeschwindigkeit der neuen Runde, ein geladener Zustand
             // nichts. Nur so bekommt die Bahn eine bewegte statt einer
             // ruhenden Vorgeschichte (siehe cutPreVelocity im Header).
-            dopplerEngine.cutTo (cutTargetMetres, cutPreVelocity);
+            // Plus den Wackler-Versatz: genau diese Summe schreibt der
+            // naechste Tick in die Bahn (siehe lastSourceJitter im Header).
+            // Ohne ihn steht zwischen Vorgeschichte und erstem Tick ein
+            // Sprung in Hoehe des Ausschlags.
+            dopplerEngine.cutTo (cutTargetMetres + lastSourceJitter, cutPreVelocity);
         }
 
         cutPreVelocity = Vec3{};
@@ -1309,13 +1313,17 @@ void DopplerfeldProcessor::startFlyBy()
     // Geometrie-Crossfade waere hier zweierlei zu viel - er liesse den alten
     // Satz waehrenddessen weiterfliegen (also den Sprung als Bewegung hoeren)
     // und rechnete dafuer auch noch zwei komplette Loesersaetze.
+    // Der Wackler-Versatz gehoert dazu: die Bahn bekommt in jedem Tick
+    // smoothedSourcePos PLUS ihn, und eine Vorgeschichte ohne ihn stellt dem
+    // ersten Tick einen Sprung in Hoehe des Ausschlags voran (siehe
+    // lastSourceJitter im Header).
     if (start == FlyByGenerator::Start::Continuous)
     {
-        dopplerEngine.cutTo (smoothedSourcePos, direction * speed);
+        dopplerEngine.cutTo (smoothedSourcePos + lastSourceJitter, direction * speed);
     }
     else
     {
-        dopplerEngine.cutTo (smoothedSourcePos);
+        dopplerEngine.cutTo (smoothedSourcePos + lastSourceJitter);
 
         // Der Knall-Start setzt eine ruhende Quelle schlagartig auf volle
         // Fahrt. Genau das ist die Kante, die spaeter beim Hoerer ankommt -
@@ -1485,6 +1493,9 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         // auskommen: die Quellposition enthaelt den Wackler nun unveraendert,
         // der Abzug im Klon-Versatz hebt ihn also exakt auf statt nur naeherungsweise.
         const Vec3 sourceJitterNow = sourceJitter.tick (tickDt);
+
+        // Fuer den naechsten Schnitt merken, siehe lastSourceJitter im Header.
+        lastSourceJitter = sourceJitterNow;
 
         // Die Klone wackeln auf derselben Rate wie die Quelle, jeder fuer sich.
         // Ihr Versatz sitzt in der Geometrie der Engine, nicht in der Bahn -

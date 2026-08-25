@@ -608,6 +608,21 @@ private:
     // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.
     PositionJitter  sourceJitter;
 
+    // Der zuletzt an die Bahn uebergebene Wackler-Versatz der Quelle.
+    //
+    // Wozu: die Bahn bekommt in jedem Tick smoothedSourcePos PLUS diesen
+    // Versatz (siehe advanceMotion). Ein Schnitt setzt die Bahn-Vorgeschichte
+    // dagegen auf die reine Zielposition - der erste Tick danach schlaegt den
+    // Wackler wieder drauf, und dieser Unterschied steht als ein einziger
+    // Schritt in der Bahn. Bei einem Ausschlag von zehn Metern sind das auf
+    // dem Millisekundenraster ein paar tausend Meter je Sekunde: der Loeser
+    // haelt danach fuer die ganze Laenge seines Suchfensters Ueberschall fuer
+    // moeglich und rechnet sekundenlang im teuren Zweig (gemessen mit
+    // Tests/loop_peak.cpp am Rundenpunkt: 17-facher Aufwand ueber acht
+    // Sekunden). Der Schnitt setzt die Vorgeschichte deshalb dort auf, wo der
+    // naechste Tick auch wirklich hinschreibt.
+    Vec3 lastSourceJitter { 0.0, 0.0, 0.0 };
+
     // Eigener Wackler je echtem Klon, siehe advanceMotion().
     std::array<PositionJitter, (size_t) DopplerEngine::maxRealClones> cloneJitter;
 

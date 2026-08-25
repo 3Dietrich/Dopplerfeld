@@ -141,6 +141,23 @@ target_compile_definitions(load_check PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(load_check PRIVATE cxx_std_20)
 
+# Messprogramm zum Rundenpunkt einer Wiedergabe (Tests/loop_peak.cpp). Wie
+# load_check an der Plugin-Bibliothek, aber bewusst NICHT als Test
+# registriert: es misst Rechenzeit und ist damit von der Maschine abhaengig.
+add_executable(loop_peak EXCLUDE_FROM_ALL Tests/loop_peak.cpp)
+target_link_libraries(loop_peak
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(loop_peak PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(loop_peak PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(loop_peak PRIVATE cxx_std_20)
+
 enable_testing()
 add_test(NAME solver_check COMMAND solver_check)
 add_test(NAME load_check COMMAND load_check)

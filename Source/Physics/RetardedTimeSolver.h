@@ -150,6 +150,7 @@ public:
     // Wanduhrmessung, die auf einem beschäftigten Rechner um Faktor zwei
     // schwankt und Regressionen darin verschwinden lässt (load_check).
     std::uint64_t residualEvaluations() const { return evalCount; }
+
     void clearResidualEvaluations() { evalCount = 0; }
 
 private:
