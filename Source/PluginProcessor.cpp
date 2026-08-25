@@ -515,6 +515,7 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     cutExecutePending = false;
     cutRewindsPlayer  = false;
     cutStartsFlyBy    = false;
+    cutLoopsFlyBy     = false;
     cutTargetMetres   = smoothedSourcePos;
     cutHoldMetres     = smoothedSourcePos;
 }
@@ -973,7 +974,8 @@ void DopplerfeldProcessor::applyCloneParameters()
     activeRealClones.store (effectiveRealClones);
 }
 
-void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy)
+void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy,
+                                     bool loopsFlyBy)
 {
     // Ein bereits laufender Schnitt wird nicht neu angestossen, sondern nur
     // umgelenkt: sein Ziel ist immer das zuletzt angemeldete. Sonst kaskadieren
@@ -982,6 +984,7 @@ void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer, bool 
     cutTargetMetres  = targetMetres;
     cutRewindsPlayer = cutRewindsPlayer || rewindPlayer;
     cutStartsFlyBy   = cutStartsFlyBy   || startsFlyBy;
+    cutLoopsFlyBy    = cutLoopsFlyBy    || loopsFlyBy;
 
     if (cutState == CutState::FadingOut)
         return;
@@ -1010,10 +1013,13 @@ void DopplerfeldProcessor::handlePendingRequests()
         {
             cutStartsFlyBy = false;
 
+            const bool wasLoop = cutLoopsFlyBy;
+            cutLoopsFlyBy = false;
+
             // startFlyBy() setzt Glaetter, Bahn-Vorgeschichte und Geometrie
             // selbst - hier im stillen Fenster, also ohne dass irgendetwas
             // davon zu hoeren waere.
-            startFlyBy();
+            startFlyBy (wasLoop);
         }
         else
         {
@@ -1185,7 +1191,7 @@ void DopplerfeldProcessor::handlePendingRequests()
     recordedFrames.store (motionRecorder.numFrames());
 }
 
-void DopplerfeldProcessor::startFlyBy()
+void DopplerfeldProcessor::startFlyBy (bool isLoopRound)
 {
     const auto kind = pp.flyKind->load() < 0.5f ? FlyByGenerator::Kind::ThroughScreen
                                                 : FlyByGenerator::Kind::Crossing;
@@ -1300,7 +1306,16 @@ void DopplerfeldProcessor::startFlyBy()
         // hier wird sie markiert, damit die Pfade sie erkennen, sobald ihre
         // Emissionszeit darueber laeuft (siehe DopplerEngine::markSourceJump).
         // Der kontinuierliche Start bekommt keine Marke: dort springt nichts.
-        dopplerEngine.markSourceJump (speed);
+        //
+        // Ein RUNDENWECHSEL bekommt ebenfalls keine (@dpa 20260825). Das
+        // Zurueckspringen ans Streckenende ist genau die Sorte Sprung, die
+        // hier ausgeblendet und nicht hoerbar gemacht werden soll - der
+        // Schnitt erledigt das bereits, und ein Knall obendrauf waere das
+        // Gegenteil davon. Der Startknall gehoert zum Losfliegen, das man
+        // ausloest, nicht zur Runde, die von selbst wieder anfaengt. Wer ihn
+        // erneut hoeren will, loest den Vorbeiflug neu aus.
+        if (! isLoopRound)
+            dopplerEngine.markSourceJump (speed);
     }
 }
 
@@ -1325,8 +1340,14 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         // Vom Ende der Strecke zurueck an ihren Anfang ist derselbe Umbau wie
         // beim ersten Start - geschnitten, nicht geflogen (@dpa: "weil das
         // andere ist voellig sinnlos: von ende auf anfang springen??").
+        //
+        // Als RUNDENWECHSEL gekennzeichnet: er bekommt keine Sprungmarke und
+        // damit keinen Knall, auch nicht bei der Startvariante "Knall-Start"
+        // (@dpa 20260825). Ein Rundenwechsel ist ein Sprung, und Spruenge
+        // werden hier ausgeblendet, nicht beknallt. Wer den Startknall noch
+        // einmal hoeren will, loest den Vorbeiflug neu aus.
         if (pp.flyLoop->load() > 0.5f)
-            beginCut (smoothedSourcePos, false, true);
+            beginCut (smoothedSourcePos, false, true, true);
     }
 
     // Der Glätter tickt auf der Trajektorienrate, nicht auf der Blockrate

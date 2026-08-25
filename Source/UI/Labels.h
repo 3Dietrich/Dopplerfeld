@@ -98,7 +98,7 @@ namespace Labels
             { "Front-Duck",     "Front Duck"  },
             { "Duck-Reichw.",   "Duck Range"  },
             { "Schatten",       "Shadow"      },
-            { "Sprungknall",    "Jump Boom"   },
+            { "Startknall",     "Start Boom"  },
             { "N-Welle",        "N-Wave"      },
             { "Bodenreflexion", "Ground Reflection" },
             { "Notaus: minimale Konfiguration", "Panic: minimal setup" },

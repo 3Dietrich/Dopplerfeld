@@ -309,7 +309,10 @@ private:
     // Setzt den Vorbeiflug auf: Generator, Glätter-Vorwärmung und die zur
     // Startvariante passende Trajektorien-Vorgeschichte. Nur aus dem
     // Audiothread (handlePendingRequests).
-    void startFlyBy();
+    // isLoopRound = dieser Start ist ein Rundenwechsel der Dauerschleife und
+    // kein von Hand ausgeloester. Dann faellt die Sprungmarke weg - siehe
+    // beginCut() und den Kommentar am Ende von startFlyBy().
+    void startFlyBy (bool isLoopRound = false);
     // untilTime in Sekunden auf der Zeitachse der Engine: getickt wird,
     // solange der nächste Bahnpunkt davor liegt.
     void advanceMotion (double untilTime);
@@ -550,6 +553,9 @@ private:
     static constexpr double cutFadeSeconds = 0.012;
 
     CutState cutState = CutState::Idle;
+
+    // Ob der anstehende Schnitt ein Rundenwechsel ist, siehe beginCut().
+    bool cutLoopsFlyBy = false;
     double   cutGain  = 1.0;
 
     // Wohin geschnitten wird. Wird beim Anmelden gesetzt, nicht beim
@@ -585,7 +591,12 @@ private:
     //
     // Das Ziel darf beim Vorbeiflug offenbleiben (startFlyBy setzt es
     // selbst); dann zaehlt nur die Stille drumherum.
-    void beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy = false);
+    // loopsFlyBy = dieser Schnitt ist ein RUNDENWECHSEL, kein von Hand
+    // ausgeloester Start. Der Unterschied ist nur einer, aber ein wichtiger:
+    // der Rundenwechsel bekommt keine Sprungmarke und damit keinen Knall
+    // (siehe startFlyBy() und @dpa 20260825).
+    void beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy = false,
+                   bool loopsFlyBy = false);
 
     // Geschwindigkeit der Quelle entlang der Sichtlinie zum Hoerer, positiv
     // beim Anflug. Aus dem tatsaechlichen Positionsschritt gemessen, damit sie
