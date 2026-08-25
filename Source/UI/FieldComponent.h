@@ -269,6 +269,17 @@ private:
     struct SourceMarker { juce::Point<float> px; float radiusPx; };
     SourceMarker perspectiveSourceMarker() const;
 
+    // Dieselbe Idee wie perspectiveSourceMarker() oben, nur fuer die
+    // Draufsicht: Bildposition von M ueber worldToScreen(), an den Rand
+    // geklemmt (6 px Abstand), wenn M ausserhalb des sichtbaren Feldes liegt
+    // (@dpa 20260825: "manchmal fliegt M weiter als das Feld gross... dann
+    // will man ihn irgendwann wieder haben"). EINE Stelle fuer Zeichnen
+    // (drawSource) UND Hit-Test (dragTargetAt) - ein Klick/Zug auf die
+    // Randmarke trifft dadurch immer genau dort, wo sie zu sehen ist, und
+    // holt M ueber den normalen Drag-Pfad zurueck (handleDragTo() ->
+    // reportNormalisedDrag() klemmt dabei wie gewohnt auf [0,1] des Feldes).
+    SourceMarker topDownSourceMarker() const;
+
     // Weltpunkte als Linienzug zeichnen, Teilstuecke hinter der Kamera
     // auslassen. Jede perspektivische Linie laeuft hierueber, statt die
     // Sichtbarkeitspruefung mehrfach hinzuschreiben.

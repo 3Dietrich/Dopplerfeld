@@ -29,16 +29,18 @@ void setParam (DopplerfeldProcessor& proc, const char* id, float value)
         p->setValueNotifyingHost (p->convertTo0to1 (value));
 }
 
-void run (const char* label, double startSpeed, int smootherType)
+void run (const char* label, double dragSpeed, int smootherType)
 {
     DopplerfeldProcessor proc;
     proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
     proc.prepareToPlay (sampleRate, blockSize);
 
-    setParam (proc, Params::fieldMetres,   1000.0f);
+    constexpr double fieldMetres = 1000.0;
+
+    setParam (proc, Params::fieldMetres,   (float) fieldMetres);
     setParam (proc, Params::smootherType,  (float) smootherType);
     setParam (proc, Params::srcJitterOn,   0.0f);
-    setParam (proc, Params::srcX,          0.5f);
+    setParam (proc, Params::srcX,          0.2f);
     setParam (proc, Params::srcY,          0.5f);
 
     juce::AudioBuffer<float> buffer (2, blockSize);
@@ -50,30 +52,57 @@ void run (const char* label, double startSpeed, int smootherType)
         proc.processBlock (buffer, midi);
     }
 
-    FieldSnapshot before;
-    proc.fillFieldSnapshot (before);
+    const double blockSeconds = (double) blockSize / sampleRate;
 
-    proc.startSourceCoast ({ startSpeed, 0.0, 0.0 });
+    // Erst ziehen: das Ziel wandert wie unter der Maus, die Quelle folgt ihm
+    // geglaettet. Ohne diesen Teil faengt der Nachlauf aus dem Stand an und
+    // die Naht, um die es geht, kaeme gar nicht vor.
+    double normX = 0.2;
 
-    // Gemessen wird an der Uhr des Schnappschusses (snap.now), nicht je Block:
-    // der Schnappschuss wird nicht in jedem Block neu gefuellt, und ein fester
-    // Blocktakt als Zeitbasis ergaebe abwechselnd Nullen und Doppelschritte.
+    FieldSnapshot snap;
+    Vec3   last    = {};
+    double lastNow = 0.0;
+
+    proc.fillFieldSnapshot (snap);
+    last    = snap.sourcePos;
+    lastNow = snap.now;
+
+    double dragMeasured = 0.0;
+
+    for (int block = 0; block < (int) (1.5 / blockSeconds); ++block)
+    {
+        normX += dragSpeed * blockSeconds / fieldMetres;
+        setParam (proc, Params::srcX, (float) juce::jlimit (0.0, 1.0, normX));
+
+        buffer.clear();
+        proc.processBlock (buffer, midi);
+
+        proc.fillFieldSnapshot (snap);
+
+        const double dt = snap.now - lastNow;
+
+        if (dt > 0.0)
+        {
+            dragMeasured = (snap.sourcePos - last).length() / dt;
+            last    = snap.sourcePos;
+            lastNow = snap.now;
+        }
+    }
+
+    // Loslassen.
+    proc.startSourceCoast();
+
     std::vector<std::pair<double, double>> speeds;   // (Zeit seit Loslassen, m/s)
 
-    Vec3   last     = before.sourcePos;
-    double lastNow  = before.now;
     double total    = 0.0;
     double stopTime = -1.0;
     double elapsed  = 0.0;
-
-    const double blockSeconds = (double) blockSize / sampleRate;
 
     for (int block = 0; block < 200; ++block)
     {
         buffer.clear();
         proc.processBlock (buffer, midi);
 
-        FieldSnapshot snap;
         proc.fillFieldSnapshot (snap);
 
         const double dt = snap.now - lastNow;
@@ -95,13 +124,27 @@ void run (const char* label, double startSpeed, int smootherType)
             stopTime = elapsed;
     }
 
-    std::printf ("\n=== %s  (Start %.1f m/s, Glaetter %d)\n", label, startSpeed, smootherType);
-    std::printf ("    Weg %.2f m (Theorie 2*v0*tau = %.2f m), Stillstand nach %.2f s\n",
-                 total, 2.0 * startSpeed * 0.45,
-                 stopTime < 0.0 ? (double) speeds.size() * blockSeconds : stopTime);
+    std::printf ("\n=== %s  (Ziel %.1f m/s, Glaetter %d)\n", label, dragSpeed, smootherType);
 
-    // Der Verlauf in Zehntelsekunden: hier zeigt sich, ob die Geschwindigkeit
-    // mit einer Kante losfaellt oder weich anfaengt und ausklingt.
+    if (speeds.empty())
+    {
+        std::printf ("    keine Messpunkte\n");
+        return;
+    }
+
+    // Die Naht: das Tempo im letzten Moment des Ziehens gegen das erste nach
+    // dem Loslassen. Ein Sprung hier waere ein Knick in f' - genau der, der
+    // nicht sein darf.
+    const double firstAfter = speeds.front().second;
+
+    std::printf ("    Tempo beim Ziehen %.2f m/s, erster Wert danach %.2f m/s "
+                 "-> Naht %+.1f %%\n",
+                 dragMeasured, firstAfter,
+                 dragMeasured > 1.0e-9 ? 100.0 * (firstAfter - dragMeasured) / dragMeasured : 0.0);
+
+    std::printf ("    Weg %.2f m, Stillstand nach %.2f s\n",
+                 total, stopTime < 0.0 ? (double) speeds.size() * blockSeconds : stopTime);
+
     std::printf ("    Tempo (m/s) je 0,1 s:");
 
     double nextMark = 0.0;
@@ -114,33 +157,11 @@ void run (const char* label, double startSpeed, int smootherType)
         std::printf (" %.1f", v);
         nextMark += 0.1;
 
-        if (nextMark > 2.5)
+        if (nextMark > 2.0)
             break;
     }
 
     std::printf ("\n");
-
-    // Groesster Tempowechsel je Sekunde - eine Kante zeigt sich hier als
-    // Ausreisser. Bezogen auf die Anfangsgeschwindigkeit ist der Wert
-    // vergleichbar, egal wie schnell losgelassen wurde.
-    //
-    // Der erste Messpunkt zaehlt nicht mit: hier steht die Quelle vor dem
-    // Loslassen still, in Wirklichkeit kommt sie mit genau dieser
-    // Geschwindigkeit aus der Mausbewegung. Der Sprung von null auf v0 ist
-    // also ein Artefakt des Messaufbaus und keine Kante im Nachlauf.
-    double steepest = 0.0;
-
-    for (size_t i = 2; i < speeds.size(); ++i)
-    {
-        const double dt = speeds[i].first - speeds[i - 1].first;
-
-        if (dt > 0.0)
-            steepest = std::max (steepest, std::abs (speeds[i].second - speeds[i - 1].second) / dt);
-    }
-
-    std::printf ("    steilster Tempowechsel: %.1f m/s je Sekunde "
-                 "(%.0f %% der Anfangsgeschwindigkeit je Sekunde)\n",
-                 steepest, startSpeed > 0.0 ? 100.0 * steepest / startSpeed : 0.0);
 }
 }
 
@@ -148,10 +169,11 @@ int main()
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
 
-    run ("langsam losgelassen",  5.0, 1);
-    run ("zuegig losgelassen",  20.0, 1);
-    run ("schnell losgelassen", 80.0, 1);
-    run ("zuegig, Slew Limiter", 20.0, 2);
+    run ("langsam gezogen",        5.0, 1);
+    run ("zuegig gezogen",        20.0, 1);
+    run ("schnell gezogen",       80.0, 1);
+    run ("zuegig, Slew Limiter",  20.0, 2);
+    run ("zuegig, One-Pole",      20.0, 0);
 
     return 0;
 }

@@ -662,6 +662,26 @@ void FieldComponent::drawFlyByPreview (juce::Graphics& g) const
                juce::Justification::left);
 }
 
+FieldComponent::SourceMarker FieldComponent::topDownSourceMarker() const
+{
+    // Dieselbe Position wie drawSource() beim normalen M (dragTarget==source
+    // -> zuletzt gemeldete Zielposition, sonst snapshot.sourcePos) - keine
+    // Anker-Glaettung (sourceAnchorWorld), die ist nur fuers Fangen von M
+    // IM Feld gedacht (s. dragTargetAt()). EIN Ort fuer Zeichnen UND
+    // Hit-Test der Randmarke, analog perspectiveSourceMarker() oben.
+    const Vec3 pos = dragTarget == DragTarget::source ? sourceDragWorldOverride : snapshot.sourcePos;
+    const auto px  = worldToScreen (pos);
+
+    // 6 px Randabstand wie in der Perspektive (perspectiveSourceMarker()) -
+    // dieselbe Randmarken-Konvention in beiden Ansichten. Liegt M ohnehin im
+    // Bild, aendert die Klemmung nichts an px.
+    const juce::Point<float> edge {
+        juce::jlimit (6.0f, (float) getWidth()  - 6.0f, px.x),
+        juce::jlimit (6.0f, (float) getHeight() - 6.0f, px.y)
+    };
+    return { edge, 4.5f };
+}
+
 void FieldComponent::drawSource (juce::Graphics& g) const
 {
     // Der Schwarm zuerst, damit die Quelle selbst obenauf liegt. Klein und
@@ -705,8 +725,31 @@ void FieldComponent::drawSource (juce::Graphics& g) const
 
     // Waehrend M gezogen wird: die zuletzt gemeldete Zielposition statt der
     // (moeglicherweise gejitterten) Snapshot-Position, s. sourceDragWorldOverride.
-    const auto centrePx = worldToScreen (dragTarget == DragTarget::source ? sourceDragWorldOverride
-                                                                           : snapshot.sourcePos);
+    const Vec3 sourcePos = dragTarget == DragTarget::source ? sourceDragWorldOverride : snapshot.sourcePos;
+    const auto centrePx  = worldToScreen (sourcePos);
+
+    if (! getLocalBounds().toFloat().contains (centrePx))
+    {
+        // M steht ausserhalb des sichtbaren Feldes (@dpa 20260825: "manchmal
+        // fliegt M weiter als das Feld gross, oder ist irgendwie draussen...
+        // dann will man ihn irgendwann wieder haben. In der Perspektivansicht
+        // geht das - so aehnlich soll es auch in der Draufsicht sein"). Statt
+        // des normalen Punkts nur noch die an den Rand geklemmte Randmarke -
+        // Ring statt gefuellter Punkt, damit auf einen Blick klar ist "M ist
+        // eigentlich weiter draussen" (gleicher Stil wie die Perspektiv-
+        // Randmarke, s. drawPerspectiveSource()). dragTargetAt() greift auf
+        // dieselbe Stelle zu (topDownSourceMarker()); ein Klick/Zug darauf
+        // holt M ueber den normalen Drag-Pfad zurueck.
+        const auto marker = topDownSourceMarker();
+
+        g.setColour (juce::Colours::yellow.withAlpha (0.55f));
+        g.fillEllipse (juce::Rectangle<float> (marker.radiusPx * 2.0f, marker.radiusPx * 2.0f)
+                           .withCentre (marker.px));
+        g.setColour (juce::Colours::yellow.withAlpha (0.30f));
+        g.drawEllipse (juce::Rectangle<float> (marker.radiusPx * 2.0f + 7.0f, marker.radiusPx * 2.0f + 7.0f)
+                           .withCentre (marker.px), 1.2f);
+        return;
+    }
 
     g.setColour (juce::Colours::yellow);
     g.fillEllipse (juce::Rectangle<float> (sourceRadiusPx * 2.0f, sourceRadiusPx * 2.0f).withCentre (centrePx));
@@ -1305,6 +1348,18 @@ FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> scre
     // des Hoerers), er wird durch den Vorrang nicht weiter vergroessert -
     // ausserhalb davon bleibt der Hoerer weiterhin ganz normal greifbar.
     if (screenPx.getDistanceFrom (sourcePx) <= sourceRadiusPx + sourceDragHitRadiusPx)
+        return DragTarget::source;
+
+    // M steht ausserhalb des sichtbaren Feldes: dort zeichnet drawSource()
+    // statt des normalen Punkts nur noch die an den Rand geklemmte Randmarke
+    // (topDownSourceMarker()) - deshalb muss auch der Hit-Test dorthin
+    // wandern, sonst waere die einzige sichtbare Anfassstelle fuer M gar
+    // nicht klickbar (@dpa: Klick/Zug auf die Randmarke holt M zurueck, s.
+    // handleDragTo()). Liegt M ohnehin im Feld, faellt dieser Treffer mit dem
+    // obigen Anker-Test praktisch zusammen und aendert nichts.
+    const auto marker = topDownSourceMarker();
+
+    if (screenPx.getDistanceFrom (marker.px) <= marker.radiusPx + sourceDragHitRadiusPx)
         return DragTarget::source;
 
     // Nase vor Kopf: sie liegt oft innerhalb des grosszuegigen

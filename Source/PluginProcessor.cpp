@@ -1086,9 +1086,10 @@ void DopplerfeldProcessor::handlePendingRequests()
     // selbst weiter (siehe startSourceCoast im Header).
     if (coastRequest.exchange (false))
     {
-        const Vec3 v { (double) coastVelocityX.load(),
-                       (double) coastVelocityY.load(),
-                       (double) coastVelocityZ.load() };
+        // Die Geschwindigkeit der QUELLE, nicht die der Maus: nur so geht das
+        // Auslaufen ohne Knick aus der gezogenen Bewegung hervor (siehe
+        // lastSourceVelocity im Header).
+        const Vec3 v = lastSourceVelocity;
 
         coastPos = smoothedSourcePos;
 
@@ -1642,6 +1643,11 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             clampStep (prevSourcePos, smoothedSourcePos);
             clampStep (prevHeadPos,   listenerState.head);
         }
+
+        // Der tatsaechlich gefahrene Schritt als Geschwindigkeit - dort setzt
+        // der Nachlauf an (siehe lastSourceVelocity im Header).
+        if (tickDt > 0.0)
+            lastSourceVelocity = (smoothedSourcePos - prevSourcePos) * (1.0 / tickDt);
 
         // Naeherungsgeschwindigkeit fuer den Rotor (siehe
         // sourceClosingSpeed im Header): aus dem tatsaechlichen Schritt

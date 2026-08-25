@@ -46,9 +46,11 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
 
     // Losgelassen mit Schwung: die Geschwindigkeit geht an die Bewegungskette,
     // dort laeuft die Quelle damit aus (DopplerfeldProcessor::startSourceCoast).
-    field.onSourceCoast = [this] (Vec3 velocity)
+    field.onSourceCoast = [this] (Vec3)
     {
-        dopplerfeldProcessor.startSourceCoast (velocity);
+        // Die Geschwindigkeit kommt nicht von hier: die Bewegungskette misst
+        // ihre eigene (siehe startSourceCoast).
+        dopplerfeldProcessor.startSourceCoast();
     };
 
     field.onListenerRotated = [this] (double yawRadians)

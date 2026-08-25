@@ -45,8 +45,9 @@ int main (int argc, char** argv)
     const juce::String pattern = argc > 1 ? juce::String::fromUTF8 (argv[1]) + "*"
                                           : juce::String ("Flighter*");
 
+    // Auch in presets/test suchen: dort liegen @dpas Faelle zum Nachstellen.
     const auto folder  = juce::File (DOPPLERFELD_SOURCE_DIR).getChildFile ("presets");
-    const auto matches = folder.findChildFiles (juce::File::findFiles, false, pattern);
+    auto       matches = folder.findChildFiles (juce::File::findFiles, true, pattern);
 
     if (matches.isEmpty())
     {
@@ -92,7 +93,14 @@ int main (int argc, char** argv)
         proc.processBlock (buffer, midi);
     }
 
-    proc.triggerPlayback();
+    // Drittes Argument "fly": statt der Aufzeichnung den Vorbeiflug starten -
+    // dessen Dauerschleife hat dieselbe Naht am Rundenpunkt.
+    const bool useFlyBy = argc > 3 && juce::String (argv[3]).equalsIgnoreCase ("fly");
+
+    if (useFlyBy)
+        proc.triggerFlyBy();
+    else
+        proc.triggerPlayback();
 
     // Rundenlaenge aus der Aufzeichnung: so laesst sich zuordnen, ob eine
     // Lastspitze am Rundenpunkt sitzt oder irgendwo im Flug.

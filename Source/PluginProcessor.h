@@ -267,13 +267,13 @@ public:
     // abfaehrt - je nach Verfahren mit konstantem Tempo bis kurz vor Schluss.
     // Hier klingt stattdessen die Geschwindigkeit selbst ab, und die Position
     // ist ihr Integral. Vom Editor-Thread aufzurufen.
-    void startSourceCoast (Vec3 velocityMetresPerSecond)
-    {
-        coastVelocityX.store ((float) velocityMetresPerSecond.x);
-        coastVelocityY.store ((float) velocityMetresPerSecond.y);
-        coastVelocityZ.store ((float) velocityMetresPerSecond.z);
-        coastRequest.store (true);
-    }
+    // Wie schnell die Quelle dabei war, misst die Bewegungskette selbst - die
+    // Anzeige meldet nur, DASS losgelassen wurde. Die Maus ist waehrend eines
+    // Zuges naemlich fast immer schneller als die Quelle, die ihr geglaettet
+    // folgt; mit der Mausgeschwindigkeit anzufangen hiesse, das Auslaufen mit
+    // einem Sprung in der Geschwindigkeit zu beginnen (@dpa 20260825: "darf
+    // nicht in f' springen").
+    void startSourceCoast() { coastRequest.store (true); }
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -644,10 +644,12 @@ private:
     Vec3 coastPos;
     bool coastActive = false;
 
-    std::atomic<bool>  coastRequest { false };
-    std::atomic<float> coastVelocityX { 0.0f };
-    std::atomic<float> coastVelocityY { 0.0f };
-    std::atomic<float> coastVelocityZ { 0.0f };
+    std::atomic<bool> coastRequest { false };
+
+    // Der letzte tatsaechlich gefahrene Schritt der Quelle, als Geschwindigkeit.
+    // Damit faengt das Auslaufen genau dort an, wo die gezogene Bewegung
+    // aufgehoert hat - ohne Knick in f'.
+    Vec3 lastSourceVelocity;
 
     // Wie lang ausgelaufen wird. Der Weg haengt linear daran (s.o.), das
     // Ende ist trotzdem weich: unter coastRestSpeed gilt die Quelle als
