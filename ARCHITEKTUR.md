@@ -160,6 +160,82 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-25 nachmittags (Startknall, Scope-Perioden, Slew, Meereshöhe)
+
+### Der Startknall fehlte bei Überschall vollständig
+
+@dpa: "er ist wieder nicht hören. Ist der Startknall etwa im 'Tempo' des
+Objekts?? ... Ich will einen Knall unabhängig vom M speed." Nachgemessen als
+Differenz zweier sample-genau gleicher Läufe (neuer `load_check`-Abschnitt
+"Startknall je Tempo"): Mach 0,6 hob die Spitze um Faktor 5,17, Mach 1,5 und
+Mach 3,0 um **exakt 1,00** - der Knall war nicht leise, sondern bitgleich
+abwesend.
+
+Drei Ursachen:
+
+- **Ausgelöst wurde über die Emissionszeit eines Zweigs.** Das setzt voraus,
+  dass ein Zweig die Bahn durchgehend verfolgt. Bei Überschall werden Zweige
+  neu GEBOREN, ihre Emissionszeit beginnt jenseits der Marke und läuft nie
+  darüber. Jetzt steht die **Ankunftszeit** fest, sobald die Marke gesetzt ist
+  (`jumpArrivalTime` = Markenzeit + Laufzeit vom Startpunkt über diesen Weg).
+- **Die Amplitude wuchs mit der Sprunghöhe** (`min(1, v/c)`). Jetzt steht die
+  Lautstärke am Regler und sonst nirgends.
+- **Gerechnet wurde mit der aktuellen Entfernung des Zweigs.** Die Welle
+  entstand am Startpunkt; `triggerNWave()` nimmt jetzt optional dessen Abstand
+  (`radiusOverride`) - denselben Wert, aus dem auch die Ankunftszeit kommt.
+
+Dazu wird der Puls genau **einmal** ausgelöst, nicht je Zweig - bei Überschall
+laufen drei gleichzeitig, und drei übereinandergelegte Pulse waren dreimal so
+laut wie bei Unterschall.
+
+Danach: 0,258 / 0,244 / 0,244 bei Mach 0,6 / 1,5 / 3,0, Ankunft jeweils bei
+t ≈ 1,0 s - der Laufzeit vom Startpunkt.
+
+### Scope-Sync zeigt ganze Wellen
+
+"Die Wellen sind oft 2 geteilt ... der nächste sync soll 2n später sein oder
+so?" Ein Oszilloskop mit fester Zeitbasis zeigt fast nie eine ganze Zahl von
+Perioden - bei 220 Hz und 20 ms sind es 4,40, die letzte bricht mittendrin ab.
+
+Der Sync misst jetzt nebenbei die Periodenlänge (mittlerer Abstand der
+steigenden Nulldurchgänge im ohnehin gefilterten Fenster) und rundet die
+gezeichnete Länge auf ein Vielfaches. Gezeichnet wird ab dem Trigger nach
+rechts statt um ihn zentriert; die weniger gezeigten Samples werden auf die
+volle Breite gestreckt.
+
+Nachgemessen ("Scope ganze Wellen"): mit Rasten 873 Samples = 4,00 Perioden,
+Randabweichung 8,3 %; ohne Rasten 960 Samples = 4,40 Perioden, Randabweichung
+**167 %**.
+
+### Slew: ein Regler statt zweier
+
+"Ich habe die besten Ergebnisse, wenn ich sie gleich einstelle." `slewAmax`
+entfällt; die Beschleunigungsgrenze ist `v_max / accelTimeSeconds` mit
+`accelTimeSeconds` = 1 s. Das ist genau seine Einstellung - a_max numerisch
+gleich v_max heißt gerechnet v_max / 1 s. Die Sekunde ist zugleich das tau des
+Limiters.
+
+### Meereshöhe
+
+"Höhe" stand neben "Source Z" und "Listener Z" - drei Regler für eine Höhe,
+einer davon so benannt. Jetzt "Meereshöhe" (EN "Altitude"), "NN" überall
+ausgeschrieben.
+
+### Hilfetexte
+
+@dpa zum Startknall-Tooltip: "was es 'nicht ist' ist völlig irrelevant! bitte
+texte nicht zuviel in die Helphints!!" Tooltips bleiben ab jetzt bei ein bis
+zwei Sätzen: was der Regler tut, in welchem Bereich, und höchstens eine
+Bedingung. Begründungen gehören hierher oder in den Code-Kommentar.
+
+### Gegenprobe
+
+Alle 50 Szenarien grün. Gegenüber dem Stand davor: das Knall-Start-Szenario
+wird lauter (Ankunftsspitze 0,187 → 0,314), weil der Knall nicht mehr mit
+`min(1, v/c)` gedämpft wird - dort lag er bei Mach 0,58 und damit bei 58 %.
+Die Beschriftungszahlen sinken um einen Regler (Slew Amax). Der Rest ist
+Wanduhr-Streuung.
+
 ## Stand 2026-08-25 mittags (Rakete im Infraschall, Bewegung-Panel kompakt)
 
 ### Die Energie der Rakete lag unter der Hörschwelle
