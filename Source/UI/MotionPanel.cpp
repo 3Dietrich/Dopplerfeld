@@ -156,6 +156,18 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     // setClickingTogglesState+setRadioGroupId ergibt ein Segmented-Control-
     // Paar: Klick auf den einen hebt den anderen automatisch auf.
     constexpr int tabRadioGroupId = 1;
+
+    // Drei Reiter, eine Bewegungsquelle je Reiter (@dpa 20260825: "dritten
+    // Reiter klingt gut"): Live ist Maus und Automation, dazu gehoert das
+    // Glaettungsverfahren und der Nachlauf. Vorher lagen die beiden in der
+    // Record/Play-Gruppe beziehungsweise in der gemeinsamen Zeile, also dort,
+    // wo sie gar nicht wirken.
+    liveTabButton.setClickingTogglesState (true);
+    liveTabButton.setRadioGroupId (tabRadioGroupId);
+    liveTabButton.setTooltip (Tooltips::text (Tooltips::Key::LiveTab));
+    liveTabButton.onClick = [this] { updateTabVisibility(); };
+    addAndMakeVisible (liveTabButton);
+
     flyTabButton.setClickingTogglesState (true);
     flyTabButton.setRadioGroupId (tabRadioGroupId);
     flyTabButton.setTooltip (Tooltips::text (Tooltips::Key::Fly));
@@ -279,26 +291,33 @@ void MotionPanel::updateTabVisibility()
     // flyTabButton (@dpa-Feedback: "spart Platz und bringt Uebersicht"). Die
     // jeweils andere bleibt existent (setVisible(false)), keine Regler werden
     // neu angelegt oder ihre Attachments geloest.
-    const bool showFly = flyTabButton.getToggleState();
+    const bool showFly    = flyTabButton.getToggleState();
+    const bool showLive   = liveTabButton.getToggleState();
+    const bool showRecord = ! showFly && ! showLive;
 
     for (auto* c : { (juce::Component*) &flyKindLabel, (juce::Component*) &flyKindCombo,
                       (juce::Component*) &flyStartLabel, (juce::Component*) &flyStartCombo,
                       (juce::Component*) &flyJumpBoomKnob.slider,
                       (juce::Component*) &flyJumpBoomKnob.label,
-                      (juce::Component*) &flyButton,
+                      (juce::Component*) &flyButton, (juce::Component*) &flyLoopButton,
+                      (juce::Component*) &flyJumpSizeKnob.slider,
+                      (juce::Component*) &flyJumpSizeKnob.label,
                       (juce::Component*) &flyDistanceKnob.slider, (juce::Component*) &flyDistanceKnob.label,
                       (juce::Component*) &flyApproachKnob.slider, (juce::Component*) &flyApproachKnob.label,
                       (juce::Component*) &flySpeedKnob.slider,    (juce::Component*) &flySpeedKnob.label })
         c->setVisible (showFly);
 
     for (auto* c : { (juce::Component*) &recordButton, (juce::Component*) &playButton,
-                      (juce::Component*) &smootherTypeLabel, (juce::Component*) &smootherTypeCombo,
-                      (juce::Component*) &playInterpLabel,   (juce::Component*) &playInterpCombo,
-                      (juce::Component*) &playLoopButton, (juce::Component*) &mouseFrameButton,
-                      (juce::Component*) &smootherTauKnob.slider, (juce::Component*) &smootherTauKnob.label,
-                      (juce::Component*) &slewVmaxKnob.slider,    (juce::Component*) &slewVmaxKnob.label,
+                      (juce::Component*) &playInterpLabel, (juce::Component*) &playInterpCombo,
+                      (juce::Component*) &playLoopButton,
                       (juce::Component*) &playSpeedKnob.slider,   (juce::Component*) &playSpeedKnob.label })
-        c->setVisible (! showFly);
+        c->setVisible (showRecord);
+
+    for (auto* c : { (juce::Component*) &smootherTypeLabel, (juce::Component*) &smootherTypeCombo,
+                      (juce::Component*) &coastButton, (juce::Component*) &mouseFrameButton,
+                      (juce::Component*) &smootherTauKnob.slider, (juce::Component*) &smootherTauKnob.label,
+                      (juce::Component*) &slewVmaxKnob.slider,    (juce::Component*) &slewVmaxKnob.label })
+        c->setVisible (showLive);
 }
 
 void MotionPanel::updateSlewControlsVisibility()
@@ -376,6 +395,7 @@ void MotionPanel::refreshTooltips()
     // Beschriftungen mit dem Sprachumschalter mitnehmen.
     srcJitterOnButton.setButtonText (Labels::text ("Jitter An"));
     flyLoopButton.setButtonText (Labels::text ("Loop"));
+    liveTabButton.setButtonText (Labels::text ("Live"));
     flyTabButton.setButtonText (Labels::text ("Vorbeiflug"));
 
     // Der Flug-Knopf traegt seinen Zustand im Text (siehe setFlying) - beim
@@ -435,12 +455,23 @@ void MotionPanel::resized()
     constexpr int knobH = 67;
     auto area = getLocalBounds().reduced (8);
 
-    // Reiter oben: Vorbeiflug ODER Record/Play, nie beide gleichzeitig
-    // (@dpa-Feedback: "spart Platz und bringt Uebersicht").
+    // Reiter oben: immer genau eine der drei Bewegungsquellen sichtbar
+    // (@dpa-Feedback: "spart Platz und bringt Uebersicht"). Die Breite ist
+    // gleichmaessig aufgeteilt, damit die Zeile bei jeder Panelbreite aufgeht.
     auto tabRow = area.removeFromTop (28);
-    flyTabButton.setBounds (tabRow.removeFromLeft (150));
-    tabRow.removeFromLeft (8);
-    recordTabButton.setBounds (tabRow.removeFromLeft (150));
+
+    {
+        constexpr int gap = 8;
+
+        const int tabW = (tabRow.getWidth() - 2 * gap) / 3;
+
+        liveTabButton.setBounds (tabRow.removeFromLeft (tabW));
+        tabRow.removeFromLeft (gap);
+        flyTabButton.setBounds (tabRow.removeFromLeft (tabW));
+        tabRow.removeFromLeft (gap);
+        recordTabButton.setBounds (tabRow.removeFromLeft (tabW));
+    }
+
     area.removeFromTop (6);
 
     // Beide Reitergruppen bekommen denselben reservierten Bereich zugewiesen
@@ -448,42 +479,69 @@ void MotionPanel::resized()
     // (updateTabVisibility()), aber die Panel-Hoehe bleibt dadurch unabhaengig
     // vom aktiven Reiter konstant, wie von CollapsiblePanel gefordert (siehe
     // Klassenkommentar dort: der Aufrufer legt die Gesamthoehe fest vor).
-    // Bemessen an der groesseren der beiden Gruppen (Record/Play).
-    constexpr int tabContentHeight = 28 + 6 + 44 + 6 + 26 + 6 + knobH;
+    // Bemessen an der groessten der drei Gruppen. Alle drei kommen mit
+    // hoechstens drei Zeilen aus: eine Knopfzeile, eine Auswahlzeile und eine
+    // Reglerzeile.
+    constexpr int tabContentHeight = 28 + 6 + 44 + 6 + knobH;
     auto tabContentArea = area.removeFromTop (tabContentHeight);
+
+    // --- Live-Gruppe: Maus und Automation ---
+    //
+    // Das Glaettungsverfahren steht hier, weil es die Bewegung formt, die von
+    // Maus oder Automation kommt. Es wirkt zusaetzlich auf eine LINEAR
+    // abgespielte Aufzeichnung und als Ueberschwinger-Waechter waehrend einer
+    // Catmull-Rom-Wiedergabe (siehe updateSlewControlsVisibility und
+    // DopplerfeldProcessor::advanceMotion) - das steht im Tooltip des Reiters,
+    // damit niemand die Regler im Record/Play-Reiter sucht.
+    {
+        auto a = tabContentArea;
+
+        // Die beiden Schalter stehen neben der Auswahl, nicht darunter: so
+        // kommt die Gruppe mit denselben drei Zeilen aus wie die anderen
+        // beiden.
+        auto comboRow = a.removeFromTop (28);
+        coastButton.setBounds (comboRow.removeFromLeft (110).withSizeKeepingCentre (110, 18));
+        comboRow.removeFromLeft (12);
+        mouseFrameButton.setBounds (comboRow.removeFromLeft (120).withSizeKeepingCentre (120, 18));
+        a.removeFromTop (6);
+
+        auto smootherRow = a.removeFromTop (44);
+        auto smootherArea = smootherRow.removeFromLeft (180);
+        smootherTypeLabel.setBounds (smootherArea.removeFromTop (18));
+        smootherTypeCombo.setBounds (smootherArea);
+        a.removeFromTop (6);
+
+        auto knobRow = a.removeFromTop (knobH);
+        for (auto* k : { &smootherTauKnob, &slewVmaxKnob })
+        {
+            layoutKnob (*k, knobRow.removeFromLeft (knobW));
+            knobRow.removeFromLeft (4);
+        }
+    }
 
     // --- Record/Play-Gruppe ---
     {
         auto a = tabContentArea;
 
+        // Aufnehmen, Abspielen und die Dauerschleife in EINER Zeile: sie
+        // gehoeren zusammen, und die gesparte Zeile nimmt das ganze Panel mit
+        // (siehe tabContentHeight oben).
         auto transportRow = a.removeFromTop (28);
         recordButton.setBounds (transportRow.removeFromLeft (100));
         transportRow.removeFromLeft (8);
         playButton.setBounds (transportRow.removeFromLeft (100));
+        transportRow.removeFromLeft (12);
+        playLoopButton.setBounds (transportRow.removeFromLeft (90).withSizeKeepingCentre (90, 18));
         a.removeFromTop (6);
 
         auto comboRow = a.removeFromTop (44);
-        auto smootherArea = comboRow.removeFromLeft (180);
-        smootherTypeLabel.setBounds (smootherArea.removeFromTop (18));
-        smootherTypeCombo.setBounds (smootherArea);
-        comboRow.removeFromLeft (12);
         auto interpArea = comboRow.removeFromLeft (180);
         playInterpLabel.setBounds (interpArea.removeFromTop (18));
         playInterpCombo.setBounds (interpArea);
         a.removeFromTop (6);
 
-        auto loopRow = a.removeFromTop (26);
-        playLoopButton.setBounds (loopRow.removeFromLeft (100));
-        loopRow.removeFromLeft (12);
-        mouseFrameButton.setBounds (loopRow.removeFromLeft (120));
-        a.removeFromTop (6);
-
         auto knobRow = a.removeFromTop (knobH);
-        for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &playSpeedKnob })
-        {
-            layoutKnob (*k, knobRow.removeFromLeft (knobW));
-            knobRow.removeFromLeft (4);
-        }
+        layoutKnob (playSpeedKnob, knobRow.removeFromLeft (knobW));
     }
 
     // --- Vorbeiflug-Gruppe ---
@@ -516,15 +574,13 @@ void MotionPanel::resized()
         }
     }
 
-    // --- Immer sichtbar, unabhaengig vom Reiter: gemeinsamer Tempo-Deckel,
-    // Nachlauf und der Jitter. Alle drei gelten fuer Maus/Automation UND
-    // Vorbeiflug - der Nachlauf frueher faelschlich in der Record/Play-Gruppe
-    // (@dpa-Beschwerde: "im Vorbeiflug-Reiter ist der Schalter weg"), obwohl
-    // er ausschliesslich beim Loslassen von Quelle/Hoerer IM FELD wirkt
-    // (FieldComponent::mouseUp) und mit Record/Play nichts zu tun hat ---
+    // --- Immer sichtbar, unabhaengig vom Reiter: gemeinsamer Tempo-Deckel
+    // und der Jitter. Beide gelten fuer JEDE Bewegungsquelle - Maus,
+    // Automation, Vorbeiflug und Wiedergabe - und gehoeren deshalb in keinen
+    // der drei Reiter ---
     //
     // EINE Zeile, in dieser Reihenfolge:
-    //   Tempo-Deckel | Luecke | [Nachlauf ueber Jitter An] | Jitter | Jit Tempo | Z-Anteil
+    //   Tempo-Deckel | Luecke | Jitter An | Jitter | Jit Tempo | Z-Anteil
     //
     // Der Schalter steht VOR den Reglern, die er schaltet, und nicht am Ende
     // der Zeile. Das ist kein Geschmack: hier wird von links weggenommen, und
@@ -533,12 +589,8 @@ void MotionPanel::resized()
     //
     // Die Rechnung geht auf: 84 + 4 + 6 + 82 + 4 + 3 x (84 + 4) - 4 = 440
     // Pixel bei 446 verfuegbaren. Die Luecke von 6 Pixeln setzt den
-    // Tempo-Deckel ab - er gehoert nicht zum Jitter, sondern ueber beide
+    // Tempo-Deckel ab - er gehoert nicht zum Jitter, sondern ueber alle
     // Reiter. Nachgeprueft wird das im load_check-Abschnitt "Bedienelemente".
-    // Nachlauf braucht in dieser knapp bemessenen Zeile keine eigene Breite:
-    // er sitzt gestapelt UEBER "Jitter An" in derselben 82px-Spalte - die
-    // Spalte ist in voller Reglerhoehe (knobH) ohnehin hoeher, als ein
-    // einzelner Schalter braucht.
     area.removeFromTop (6);
 
     auto sharedRow = area.removeFromTop (knobH);
@@ -551,8 +603,6 @@ void MotionPanel::resized()
     auto toggleColumn = sharedRow.removeFromLeft (toggleW);
     sharedRow.removeFromLeft (4);
 
-    auto coastCell = toggleColumn.removeFromTop (toggleColumn.getHeight() / 2);
-    coastButton.setBounds (coastCell.withSizeKeepingCentre (toggleW, 18));
     srcJitterOnButton.setBounds (toggleColumn.withSizeKeepingCentre (toggleW, 18));
 
     for (auto* k : { &srcJitterAmountKnob, &srcJitterSpeedKnob, &srcJitterZKnob })

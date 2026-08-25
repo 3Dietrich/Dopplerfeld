@@ -134,6 +134,7 @@ namespace Tooltips
         PlayInterp,
         PlayLoop,
         Coast,
+        LiveTab,
         MouseFrame,
         Record,
         Play,
@@ -1262,6 +1263,15 @@ namespace Tooltips
                         ? "Wiedergabe am Ende des Clips von vorn beginnen statt zu stoppen."
                         : "Restart playback from the beginning at the end of the clip "
                           "instead of stopping.";
+                case Key::LiveTab:
+                    return lang == Language::De
+                        ? "Einstellungen für den Livezugriff: wie die Quelle einer Bewegung "
+                          "von Maus oder Automation folgt und wie sie nach dem Loslassen "
+                          "ausläuft. Das Glättungsverfahren formt auch eine linear "
+                          "abgespielte Aufzeichnung."
+                        : "Settings for live control: how the source follows a movement from "
+                          "mouse or automation, and how it coasts to a halt after release. The "
+                          "smoothing method also shapes a linearly played back recording.";
                 case Key::Coast:
                     return lang == Language::De
                         ? "Nach dem Loslassen von Quelle/Hörer im Feld noch kurz mit Schwung "

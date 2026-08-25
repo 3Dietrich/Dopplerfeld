@@ -81,6 +81,19 @@ public:
     // umschaltung (siehe DopplerfeldEditor::flySpeedTextForTest).
     juce::String flySpeedTextForTest() { return flySpeedKnob.slider.getTextFromValue (flySpeedKnob.slider.getValue()); }
 
+    // Reiter umschalten wie ein Klick - fuer das Layout-Bild aus
+    // Tests/panel_shot.cpp, das jede der drei Gruppen einmal zeigt.
+    void selectTabForTest (const juce::String& tab)
+    {
+        auto* button = tab.startsWithIgnoreCase ("Live")       ? &liveTabButton
+                     : tab.startsWithIgnoreCase ("Vorbeiflug") ? &flyTabButton
+                                                               : &recordTabButton;
+
+        // Mit Benachrichtigung: erst dadurch hebt die Radiogruppe die anderen
+        // beiden auf und laeuft updateTabVisibility() mit.
+        button->setToggleState (true, juce::sendNotificationSync);
+    }
+
 private:
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
@@ -147,6 +160,7 @@ private:
     juce::ToggleButton flyLoopButton { "Loop" };
     std::unique_ptr<ButtonAttachment> flyLoopAttachment;
 
+    juce::TextButton liveTabButton   { "Live" };
     juce::TextButton flyTabButton    { "Vorbeiflug" };
     juce::TextButton recordTabButton { "Record/Play" };
     void updateTabVisibility();

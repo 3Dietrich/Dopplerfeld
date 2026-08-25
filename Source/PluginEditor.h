@@ -276,7 +276,7 @@ public:
     // des Motor-Panels (84 x 67): Reiterzeile 28 + 6, Reiterinhalt
     // 28 + 6 + 44 + 6 + 26 + 6 + 67 = 183, Abstand 6, gemeinsame Zeile 67,
     // dazu oben und unten je 8 Rand.
-    static constexpr int motionContentHeight = 306;
+    static constexpr int motionContentHeight = 274;
     static constexpr int fieldContentHeight  = 352;   // vier Reglerreihen, die vierte ist Rueckwaerts/Front-Duck/Schatten (s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // 226 minus die 40px, die frueher fuer den CPU-Balken reserviert waren -

@@ -188,6 +188,21 @@ target_compile_definitions(coast_probe PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(coast_probe PRIVATE cxx_std_20)
 
+# Layout-Bilder des Bewegungs-Panels (Tests/panel_shot.cpp), kein Test.
+add_executable(panel_shot EXCLUDE_FROM_ALL Tests/panel_shot.cpp)
+target_link_libraries(panel_shot
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(panel_shot PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(panel_shot PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(panel_shot PRIVATE cxx_std_20)
+
 enable_testing()
 add_test(NAME solver_check COMMAND solver_check)
 add_test(NAME load_check COMMAND load_check)
