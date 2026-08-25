@@ -94,6 +94,25 @@ Vec3 MotionPlayer::frameAt (double framePos) const
                         clipFrames[(size_t) i2c], clipFrames[(size_t) i3c], frac);
 }
 
+Vec3 MotionPlayer::startVelocity() const
+{
+    if (clipFrames.size() < 2)
+        return {};
+
+    // Numerisch als Steigung ueber einen Bruchteil eines Frames statt einfach
+    // (p1 - p0): bei CatmullRom ist die Tangente am geklemmten Rand nur halb
+    // so gross wie die Sehne (p0 wird als Randstuetzstelle gedoppelt), und
+    // gebraucht wird genau die Gerade, auf der die Wiedergabe weiterlaeuft -
+    // eine zu grosse Vorgeschwindigkeit waere an der Naht wieder ein
+    // Geschwindigkeitssprung, nur mit anderem Vorzeichen.
+    constexpr double h = 0.01;   // Frames
+
+    const Vec3 step = frameAt (h) - frameAt (0.0);
+
+    // Pro Frame -> pro Sekunde: der Kopf rueckt mit speed * clipRateHz vor.
+    return step * (speed * clipRateHz / h);
+}
+
 Vec3 MotionPlayer::tick (double dt)
 {
     if (! playing || clipFrames.empty())

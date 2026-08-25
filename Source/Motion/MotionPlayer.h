@@ -60,6 +60,21 @@ public:
     // Erster Frame des Clips, in Metern - das Ziel des Schnitts.
     Vec3 firstFrame() const { return clipFrames.empty() ? Vec3{} : clipFrames.front(); }
 
+    // Geschwindigkeit, mit der eine Runde anfaengt, in m/s: die Steigung der
+    // Bahn am Rundenanfang, gemessen mit derselben Interpolation, mit der die
+    // Wiedergabe sie gleich abfaehrt, und mit der Wiedergabegeschwindigkeit
+    // skaliert.
+    //
+    // Wozu: der Rundenschnitt setzt die Bahn am ersten Frame komplett neu auf.
+    // Ohne Vorgeschwindigkeit bekommt sie dort eine RUHENDE Vorgeschichte
+    // (SourceTrajectory::jumpTo), der Loeser findet vor dem Schnitt ueberall
+    // M_r = 0. Im Ueberschall lebt der zeitverkehrt gehoerte Zweig aber genau
+    // von dieser Vorgeschichte: er laeuft in ihr rueckwaerts und stirbt an
+    // ihrem kuenstlichen Rand mitten im Ton. Mit dieser Geschwindigkeit fuellt
+    // die Engine stattdessen eine gleichfoermig bewegte Vorgeschichte
+    // (SourceTrajectory::fillLinear), und der Zweig hat Bahn unter sich.
+    Vec3 startVelocity() const;
+
     // Rückt die interne Wiedergabeposition um dt*speed vor und liest die
     // Position an dieser Stelle aus den Clip-Frames. Rohposition, siehe
     // Klassenkommentar - kein Smoothing hier.

@@ -516,6 +516,7 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     cutRewindsPlayer  = false;
     cutStartsFlyBy    = false;
     cutTargetMetres   = smoothedSourcePos;
+    cutPreVelocity    = Vec3{};
     cutHoldMetres     = smoothedSourcePos;
 }
 
@@ -983,13 +984,15 @@ void DopplerfeldProcessor::applyCloneParameters()
     activeRealClones.store (effectiveRealClones);
 }
 
-void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy)
+void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy,
+                                     Vec3 preVelocity)
 {
     // Ein bereits laufender Schnitt wird nicht neu angestossen, sondern nur
     // umgelenkt: sein Ziel ist immer das zuletzt angemeldete. Sonst kaskadieren
     // zwei kurz aufeinanderfolgende Ereignisse (Zustand laden waehrend eines
     // Rundenwechsels) zu einer Kette halber Blenden.
     cutTargetMetres  = targetMetres;
+    cutPreVelocity   = preVelocity;
     cutRewindsPlayer = cutRewindsPlayer || rewindPlayer;
     cutStartsFlyBy   = cutStartsFlyBy   || startsFlyBy;
 
@@ -1035,8 +1038,16 @@ void DopplerfeldProcessor::handlePendingRequests()
             wasMotionSlewGuardActive = false;
 
             dopplerEngine.setSourceTarget (cutTargetMetres);
-            dopplerEngine.cutTo (cutTargetMetres);
+
+            // Die Vorgeschwindigkeit gehoert zum Ereignis, das den Schnitt
+            // ausgeloest hat: der Rundenwechsel einer Wiedergabe uebergibt die
+            // Anfangsgeschwindigkeit der neuen Runde, ein geladener Zustand
+            // nichts. Nur so bekommt die Bahn eine bewegte statt einer
+            // ruhenden Vorgeschichte (siehe cutPreVelocity im Header).
+            dopplerEngine.cutTo (cutTargetMetres, cutPreVelocity);
         }
+
+        cutPreVelocity = Vec3{};
 
         cutState = CutState::FadingIn;
     }
@@ -1183,7 +1194,8 @@ void DopplerfeldProcessor::handlePendingRequests()
         // an. Ohne Schnitt floege sie die Strecke dazwischen ab - beim Start
         // genauso teuer wie am Rundenpunkt.
         if (motionPlayer.isPlaying())
-            beginCut (motionPlayer.firstFrame(), false);
+            beginCut (motionPlayer.firstFrame(), false, false,
+                      motionPlayer.startVelocity());
     }
 
     if (stopTriggerRequest.exchange (false))
@@ -1433,7 +1445,8 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // start") - vorher lief der Weg vom Ende zum Anfang als echte
             // Bewegung durch die Glaettung.
             if (motionPlayer.atLoopEdge())
-                beginCut (motionPlayer.firstFrame(), true);
+                beginCut (motionPlayer.firstFrame(), true, false,
+                          motionPlayer.startVelocity());
         }
 
         // Waehrend der Ausblende steht die Quelle still. Was sie jetzt noch

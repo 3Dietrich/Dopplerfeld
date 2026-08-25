@@ -13,6 +13,7 @@
 
 #include "Physics/RetardedTimeSolver.h"
 #include "Physics/SourceTrajectory.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -28,9 +29,12 @@ static constexpr double xStart   = -1421.73;  // m    Anflugstrecke
 
 static Vec3 posAt (double t) { return Vec3 { xStart + vFly * t, sideDist, dz }; }
 
-// cutAt < 0 = kein Rundenschnitt. Sonst wird dort jumpTo() gerufen, genau wie
-// DopplerEngine::configurePendingSet es beim Loop-Schnitt tut.
-static void run (const char* label, double cutAt, double tEnd, bool historyFlying = false)
+// cutAt < 0 = kein Rundenschnitt. Sonst wird dort die Historie neu aufgesetzt,
+// genau wie DopplerEngine::configureSet es beim Loop-Schnitt tut: mit jumpTo()
+// (ruhende Vorgeschichte) oder, wenn cutLinear, mit fillLinear() und der
+// Anfangsgeschwindigkeit der neuen Runde.
+static void run (const char* label, double cutAt, double tEnd, bool historyFlying = false,
+                 bool cutLinear = false)
 {
     const MediumState medium;
     const double c = medium.speedOfSound();
@@ -73,13 +77,30 @@ static void run (const char* label, double cutAt, double tEnd, bool historyFlyin
 
         if (cutAt >= 0.0 && ! cutDone && t_h >= cutAt)
         {
-            // Genau der Weg aus DopplerEngine::configurePendingSet: Position
-            // bleibt stehen, die Historie wird mit ihr ueberschrieben, und die
-            // Zweige werden vergessen.
-            traj.jumpTo (posAt (t_h), t_h);
+            if (cutLinear)
+            {
+                // Der Weg mit Vorgeschwindigkeit, Zahlen wie in
+                // DopplerEngine::configureSet: die Gerade reicht nur so weit
+                // zurueck, wie der Schall von dort den Hoerer noch erreicht.
+                const double reach   = 0.9 * 331.3 * bufferSeconds;
+                const double startR  = (receiver - posAt (t_h)).length();
+                const double allowed = std::max (0.0, (reach - startR) / vFly);
+
+                traj.fillLinear (posAt (t_h), Vec3 { vFly, 0.0, 0.0 }, t_h,
+                                 std::min (bufferSeconds, allowed));
+            }
+            else
+            {
+                // Position bleibt stehen, die Historie wird mit ihr
+                // ueberschrieben - eine ruhende Quelle vor dem Schnitt.
+                traj.jumpTo (posAt (t_h), t_h);
+            }
+
             solver.reset();
             cutDone = true;
-            std::printf ("    [%.3f s] SCHNITT: Historie ueberschrieben, Zweige vergessen\n", t_h);
+            std::printf ("    [%.3f s] SCHNITT (%s): Historie neu aufgesetzt, Zweige vergessen\n",
+                         t_h, cutLinear ? "fillLinear, bewegte Vorgeschichte"
+                                        : "jumpTo, ruhende Vorgeschichte");
         }
 
         Root roots[8];
@@ -137,6 +158,12 @@ int main()
     // C: Schnitt VOR der Geburt des Rueckwaertszweigs - so liegt der Loop-Schnitt
     //    bei @dpa, der ihn ja mehrfach pro Aufnahme durchlaeuft.
     run ("C  mit Rundenschnitt bei 3,0 s (VOR der Geburt)", 3.0, 8.0);
+
+    // E: derselbe Schnitt wie C, aber mit bewegter Vorgeschichte - der Fix.
+    run ("E  Rundenschnitt bei 3,0 s MIT Vorgeschwindigkeit", 3.0, 8.0, false, true);
+
+    // F: derselbe Schnitt wie B, aber mit bewegter Vorgeschichte.
+    run ("F  Rundenschnitt bei 5,0 s MIT Vorgeschwindigkeit", 5.0, 8.0, false, true);
 
     // D: Vorgeschichte durchgehend fliegend - das waere der Naturfall, in dem
     //    die Quelle keinen Anfang hat.

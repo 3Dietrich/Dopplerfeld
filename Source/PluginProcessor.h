@@ -561,6 +561,16 @@ private:
     // fliegen, bevor der Schnitt sie versetzt.
     Vec3 cutHoldMetres { 0.0, 0.0, 0.0 };
 
+    // Mit welcher Vorgeschichte der neue Ort aufgesetzt wird: {0,0,0} heisst
+    // ruhend, sonst gleichfoermig bewegt auf derselben Geraden
+    // (DopplerEngine::cutTo -> SourceTrajectory::fillLinear).
+    //
+    // Beim Rundenwechsel einer Wiedergabe ist das die Anfangsgeschwindigkeit
+    // der neuen Runde. Ohne sie stuende vor dem Schnitt eine ruhende Quelle,
+    // und im Ueberschall stirbt der zeitverkehrt gehoerte Zweig an diesem
+    // kuenstlichen Rand (siehe MotionPlayer::startVelocity).
+    Vec3 cutPreVelocity { 0.0, 0.0, 0.0 };
+
     // Die Ausblende ist durch, der Umbau steht am Anfang des naechsten
     // Blocks an. Nur vom Audiothread beschrieben und gelesen.
     bool cutExecutePending = false;
@@ -585,7 +595,8 @@ private:
     //
     // Das Ziel darf beim Vorbeiflug offenbleiben (startFlyBy setzt es
     // selbst); dann zaehlt nur die Stille drumherum.
-    void beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy = false);
+    void beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy = false,
+                   Vec3 preVelocity = Vec3{});
 
     // Geschwindigkeit der Quelle entlang der Sichtlinie zum Hoerer, positiv
     // beim Anflug. Aus dem tatsaechlichen Positionsschritt gemessen, damit sie
