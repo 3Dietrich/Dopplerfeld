@@ -70,7 +70,7 @@ private:
     // Pegel der Bodenreflexion, siehe Params::groundGain.
     Knob groundGainKnob;
 
-    // Höhe über NN (Params::airAltitude) - steht bei den anderen
+    // Höhe über dem Meeresspiegel (Params::airAltitude) - steht bei den anderen
     // Höhenreglern dieser Reihe (Zeile aus Platzgruenden, siehe
     // FieldPanel::resized()), wirkt aber unabhaengig von ihnen ueber die
     // Luftdichte auf den Ausgangspegel (Physics/Medium.h).

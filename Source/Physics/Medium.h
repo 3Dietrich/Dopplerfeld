@@ -17,7 +17,7 @@ struct MediumState
         return 331.3 * std::sqrt (1.0 + tempCelsius / 273.15);
     }
 
-    // Höhe über NN in Metern, siehe Params::airAltitude. Wirkt NICHT auf
+    // Höhe über dem Meeresspiegel in Metern, siehe Params::airAltitude. Wirkt NICHT auf
     // tempCelsius zurück - Temperatur bleibt ein eigener, unabhängiger
     // Regler (sonst gäbe es zwei Werte für dieselbe Größe). Wer einen Jet in
     // 10 km darstellen will, stellt die Höhe UND die dort herrschende Kälte

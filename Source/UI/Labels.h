@@ -92,7 +92,7 @@ namespace Labels
             { "Jitter An",      "Jitter On"   },
 
             // --- Feld / Physik / Ausgang ---
-            { "Höhe",           "Height"      },
+            { "Meereshöhe",     "Altitude"    },
             { "Luft °C",        "Air °C"      },
             { "Rückwärts",      "Reverse"     },
             { "Front-Duck",     "Front Duck"  },

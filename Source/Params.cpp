@@ -253,9 +253,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         vmax.setSkewForCentre (50.0f);
         layout.add (floatParam (slewVmax, "Slew Vmax", vmax, 50.0f, "m/s"));
 
-        auto amax = juce::NormalisableRange<float> (0.1f, 5000.0f);
-        amax.setSkewForCentre (200.0f);
-        layout.add (floatParam (slewAmax, "Slew Amax", amax, 200.0f, Text::utf8 ("m/s²")));
     }
     layout.add (floatParam (playSpeed, "Play Speed", { 0.25f, 4.0f, 0.0f }, 1.0f, "x"));
     // Catmull-Rom ist der Default, weil der Pfad damit C1-stetig ist und ohne
@@ -325,7 +322,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Klang bestehender Presets nichts aendert.
     layout.add (floatParam (airTempC, "Air Temperature", { -60.0f, 60.0f, 0.1f }, 20.0f, Text::utf8 ("°C")));
 
-    // Hoehe ueber NN (Params::airAltitude) - wirkt NICHT auf airTempC (siehe
+    // Hoehe ueber dem Meeresspiegel (Params::airAltitude) - wirkt NICHT auf airTempC (siehe
     // dort), sondern ueber die barometrische Hoehenformel auf die Luftdichte
     // und damit den Ausgangspegel (PluginProcessor::applyParameters,
     // "--- Ausgang ---"). Default 0 m = Meereshoehe, wie MediumState es bisher

@@ -41,7 +41,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 
     setupKnob (groundDampKnob,  apvts, Params::groundDampAmount, "Ground Damp",  Tooltips::Key::GroundDamp);
     setupKnob (groundGainKnob,  apvts, Params::groundGain,       "Ground Gain",  Tooltips::Key::GroundGain);
-    setupKnob (airAltitudeKnob, apvts, Params::airAltitude,      "Höhe", Tooltips::Key::AirAltitude);
+    setupKnob (airAltitudeKnob, apvts, Params::airAltitude,      "Meereshöhe", Tooltips::Key::AirAltitude);
 
     groundReflectionButton.setTooltip (Tooltips::text (Tooltips::Key::GroundReflection));
     addAndMakeVisible (groundReflectionButton);
@@ -135,7 +135,7 @@ void FieldPanel::resized()
 
     // Zweite Reihe: die Geometrie-Achse z, die daran hängende Bodendämpfung
     // und (aus Platzgruenden hier, thematisch aber unabhaengig von den
-    // z-Positionen) die Hoehe ueber NN des Mediums.
+    // z-Positionen) die Hoehe ueber dem Meeresspiegel des Mediums.
     area.removeFromTop (6);
 
     auto geoRow = area.removeFromTop (knobH);
