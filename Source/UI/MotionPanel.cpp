@@ -430,21 +430,13 @@ void MotionPanel::refreshTooltips()
 
 void MotionPanel::resized()
 {
-    // Groesser als die 84x82, die die uebrigen Panels nutzen (@dpa-Feedback:
-    // Regler hier "zu klein gequetscht") - der Reiter-Umschalter unten (immer
-    // nur eine der beiden Gruppen sichtbar, s. updateTabVisibility()) schafft
-    // dafuer erst den Platz, ohne dass die Panel-Gesamthoehe waechst (s.
-    // PluginEditor::motionContentHeight-Rechnung im Aufgabenbericht).
-    // Nur das DREHRAD auf zwei Drittel (@dpa 20260823, Berichtigung: "NUR die
-    // Knobs! Label und Value sollen so bleiben wie zuvor"). Beschriftung
-    // (18 px) und Wertefeld (18 px) bleiben unveraendert, die Zellenhoehe
-    // schrumpft genau um das Drittel, das dem Drehrad selbst gehoert: aus
-    // 100 - 18 - 18 = 64 px Rad werden 43, also 43 + 36 = 79 px Zelle. Die
-    // Zellenbreite bleibt ebenfalls, sonst wuerde das Wertefeld beschnitten -
-    // JUCE zeichnet das Rad mit dem kleineren der beiden Masse, die Hoehe
-    // allein macht es also klein.
-    constexpr int knobW = 100;
-    constexpr int knobH = 79;
+    // Reglermasse wie im Motor-Panel (@dpa 20260825: "mach die Controls bitte
+    // so gross wie in Motor, dann ordne nochmal Uebersichtlich und kompakt").
+    // Dieselben Masse ueberall heissen: die Panels sehen aus wie ein Geraet
+    // und nicht wie zwei - und die eingesparte Breite ist genau das, was die
+    // Jitter-Zeile braucht, um samt Schalter in EINE Reihe zu passen.
+    constexpr int knobW = 84;
+    constexpr int knobH = 67;
     auto area = getLocalBounds().reduced (8);
 
     // Reiter oben: Vorbeiflug ODER Record/Play, nie beide gleichzeitig
@@ -529,52 +521,37 @@ void MotionPanel::resized()
         }
     }
 
-    // --- Immer sichtbar, unabhaengig vom Reiter: Jitter + gemeinsamer
-    // Tempo-Deckel (globalMaxSpeed gilt fuer Maus/Automation UND Vorbeiflug,
-    // Jitter ist ebenfalls reiterunabhaengig) ---
+    // --- Immer sichtbar, unabhaengig vom Reiter: gemeinsamer Tempo-Deckel
+    // und der Jitter. Beide gelten fuer Maus/Automation UND Vorbeiflug ---
     //
-    // ZWEI Zeilen, seit @dpa 20260825 den Jitter-Schalter vermisst hat
-    // ("bitte ein Schalter hinzufuegen: Jitter on/off"). Es gab ihn laengst -
-    // er stand nur am Ende einer Zeile, die zu diesem Zeitpunkt bereits
-    // breiter war als das Panel, und bekam deshalb null Pixel. Genau das,
-    // was dem Tempo-Deckel am 24.08. passiert ist ("als letztes, kleiner,
-    // Abgeschnitten, hinzugequetscht").
+    // EINE Zeile, in dieser Reihenfolge:
+    //   Tempo-Deckel | Luecke | Jitter An | Jitter | Jit Tempo | Z-Anteil
     //
-    // Die Rechnung, die nicht aufging: 128 (Tempo-Deckel) + 20 (Luecke) +
-    // 3 x 104 (Jitter-Regler) sind 460 Pixel, verfuegbar sind 446. Wer am
-    // Ende steht, verliert - und der Schalter stand am Ende.
+    // Der Schalter steht VOR den Reglern, die er schaltet, und nicht am Ende
+    // der Zeile. Das ist kein Geschmack: hier wird von links weggenommen, und
+    // wer am Ende steht, bekommt das, was uebrig bleibt - beim Schalter waren
+    // das null Pixel, beim Tempo-Deckel am 24.08. die halbe Breite.
     //
-    // Deshalb bekommt der Jitter jetzt eine eigene Zeile, und der Schalter
-    // steht dort ganz VORN. Das kostet Panelhoehe (siehe
-    // PluginEditor::motionContentHeight), aber ein Bedienelement, das es nur
-    // rechnerisch gibt, ist keines. Geprueft wird das seither im
-    // load_check-Abschnitt "Bedienelemente".
+    // Die Rechnung geht auf: 84 + 4 + 6 + 82 + 4 + 3 x (84 + 4) - 4 = 440
+    // Pixel bei 446 verfuegbaren. Die Luecke von 6 Pixeln setzt den
+    // Tempo-Deckel ab - er gehoert nicht zum Jitter, sondern ueber beide
+    // Reiter. Nachgeprueft wird das im load_check-Abschnitt "Bedienelemente".
     area.removeFromTop (6);
-
-    // Zeile 1: der Tempo-Deckel allein. Breiter als die uebrigen, und er
-    // gehoert nicht zum Jitter - er gilt fuer Maus, Automation UND Vorbeiflug
-    // und steht damit ueber beiden Reitern.
-    constexpr int maxSpeedW = 128;
 
     auto sharedRow = area.removeFromTop (knobH);
-    layoutKnob (globalMaxSpeedKnob, sharedRow.removeFromLeft (maxSpeedW));
 
-    area.removeFromTop (6);
+    layoutKnob (globalMaxSpeedKnob, sharedRow.removeFromLeft (knobW));
+    sharedRow.removeFromLeft (4 + 6);
 
-    // Zeile 2: der Jitter. Schalter zuerst, dann die drei Regler, die er
-    // schaltet - 110 + 4 + 3 x 104 = 426 Pixel und damit sicher innerhalb der
-    // Panelbreite.
-    auto jitterRow = area.removeFromTop (knobH);
+    constexpr int toggleW = 82;
 
-    constexpr int toggleW = 110;
-
-    srcJitterOnButton.setBounds (jitterRow.removeFromLeft (toggleW)
+    srcJitterOnButton.setBounds (sharedRow.removeFromLeft (toggleW)
                                           .withSizeKeepingCentre (toggleW, 18));
-    jitterRow.removeFromLeft (4);
+    sharedRow.removeFromLeft (4);
 
     for (auto* k : { &srcJitterAmountKnob, &srcJitterSpeedKnob, &srcJitterZKnob })
     {
-        layoutKnob (*k, jitterRow.removeFromLeft (knobW));
-        jitterRow.removeFromLeft (4);
+        layoutKnob (*k, sharedRow.removeFromLeft (knobW));
+        sharedRow.removeFromLeft (4);
     }
 }

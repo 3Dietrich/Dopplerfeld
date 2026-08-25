@@ -272,12 +272,12 @@ public:
     // Betriebsart, siehe EnginePanel::preferredContentHeight(). Hier steht
     // darum keine Konstante mehr.
     static constexpr int sampleContentHeight = 190;   // Dateizeile + zwei Reglerreihen
-    // Reiter Vorbeiflug/Record-Play + Tempo-Deckel-Zeile + Jitter-Zeile,
-    // s. MotionPanel::resized(). Seit 20260825 zwei Zeilen statt einer: der
-    // Jitter-Schalter stand am Ende einer Zeile, die schon breiter war als
-    // das Panel, und bekam null Pixel (@dpa: "bitte ein Schalter hinzufuegen:
-    // Jitter on/off"). 330 + 79 (Zellenhoehe) + 6 (Abstand) = 415.
-    static constexpr int motionContentHeight = 415;
+    // Reiter Vorbeiflug/Record-Play + eine gemeinsame Zeile fuer Tempo-Deckel
+    // und Jitter, s. MotionPanel::resized(). Gerechnet mit den Reglermassen
+    // des Motor-Panels (84 x 67): Reiterzeile 28 + 6, Reiterinhalt
+    // 28 + 6 + 44 + 6 + 26 + 6 + 67 = 183, Abstand 6, gemeinsame Zeile 67,
+    // dazu oben und unten je 8 Rand.
+    static constexpr int motionContentHeight = 306;
     static constexpr int fieldContentHeight  = 352;   // vier Reglerreihen, die vierte ist Rueckwaerts/Front-Duck/Schatten (s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // 226 minus die 40px, die frueher fuer den CPU-Balken reserviert waren -
