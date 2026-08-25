@@ -85,6 +85,7 @@ namespace Tooltips
         ShockDuck,
         ShockDuckRange,
         JumpBoom,
+        JumpBoomSize,
         ShadowTail,
         SrcJitterZAmount,
         MasterOn,
@@ -888,6 +889,16 @@ namespace Tooltips
                           "decayed, and what arrives is a rumble along with everything "
                           "around it. At exactly this distance the ducking is at half "
                           "depth. 0 = applies everywhere equally.";
+                case Key::JumpBoomSize:
+                    return lang == Language::De
+                        ? "Länge des Startknalls in Metern - kurz knallt, lang wummert. "
+                          "1,5 m sind knapp 9 ms und damit ein hörbarer Schlag; ab etwa 15 m "
+                          "rutscht die Welle unter die Hörschwelle und ist nur noch als "
+                          "Druckbeule zu spüren."
+                        : "Length of the start bang in metres - short cracks, long rumbles. "
+                          "1.5 m is just under 9 ms and gives an audible hit; from about 15 m "
+                          "the wave drops below the hearing threshold and is only felt as a "
+                          "pressure bulge.";
                 case Key::JumpBoom:
                     return lang == Language::De
                         ? "Lautstärke des Knalls beim Losfliegen. Wirkt nur bei der "

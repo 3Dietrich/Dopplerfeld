@@ -140,6 +140,9 @@ public:
 
     void setJumpBoom (double amount01);
 
+    // Laenge des Startknalls in Metern, siehe PropagationPath::setJumpSize().
+    void setJumpSize (double metres);
+
     // Legt die Sprungmarke auf JETZT, mit der Hoehe des
     // Geschwindigkeitssprungs in m/s (siehe PropagationPath::setJumpMarker).
     //
@@ -516,6 +519,7 @@ private:
     double shockDuckAmount = 0.0;
     double shockDuckRange  = 0.0;
     double jumpBoom        = 0.0;
+    double jumpSizeM       = 1.5;
     double shadowTailSeconds = 1.0e-3;
 
     // Eckfrequenz der Bodendämpfung bei voller Stärke. Rund ein Kilohertz ist

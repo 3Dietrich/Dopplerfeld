@@ -232,6 +232,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     flyStartAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::flyStart, flyStartCombo);
 
     setupKnob (flyJumpBoomKnob, apvts, Params::jumpBoom, "Startknall", Tooltips::Key::JumpBoom);
+    setupKnob (flyJumpSizeKnob, apvts, Params::jumpBoomSize, "Knall-Länge", Tooltips::Key::JumpBoomSize);
 
 
     setupKnob (flyDistanceKnob, apvts, Params::flyDistance, "Fly Dist", Tooltips::Key::FlyDistance);
@@ -509,7 +510,8 @@ void MotionPanel::resized()
         a.removeFromTop (6);
 
         auto flyKnobRow = a.removeFromTop (knobH);
-        for (auto* k : { &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob, &flyJumpBoomKnob })
+        for (auto* k : { &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob,
+                          &flyJumpBoomKnob, &flyJumpSizeKnob })
         {
             layoutKnob (*k, flyKnobRow.removeFromLeft (knobW));
             flyKnobRow.removeFromLeft (4);

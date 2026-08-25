@@ -608,7 +608,41 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Unterschied zur weichen Startvariante nur an der Bahn zu sehen, nicht zu
     // hoeren. Gemessen im load_check-Abschnitt "Knall-Start": bei 1,0 hebt die
     // Druckwelle die Spitze im Ankunftsfenster um Faktor 9,5 an.
-    layout.add (floatParam (jumpBoom, "Jump Boom", unitRange(), 0.5f));
+    {
+        // Bis 4 statt bis 1 (@dpa 20260825: "bei Startknall maximum! das muss
+        // mehr wummsen"). Dieselbe Erweiterung wie beim Knattern des Rotors
+        // und beim Druckstoss der Rakete, und aus demselben Grund: wenn der
+        // ganze bisherige Regelweg unter dem liegt, was man tatsaechlich
+        // einstellt, ist der Regelweg falsch gewaehlt. Skew auf 1, damit der
+        // bisherige Bereich den halben Reglerweg behaelt.
+        //
+        // Ueber 1 darf das uebersteuern - dafuer gibt es den sichtbaren
+        // Begrenzer.
+        auto range = juce::NormalisableRange<float> (0.0f, 4.0f);
+        range.setSkewForCentre (1.0f);
+        layout.add (floatParam (jumpBoom, "Jump Boom", range, 1.0f));
+    }
+    {
+        // Laenge des Startknalls, und damit seine Haerte (@dpa 20260825: "mehr
+        // als eine Beule ist es nicht, bei Startknall maximum! das muss mehr
+        // wummsen! mach doch bitte einen knallregler dazu").
+        //
+        // Vorher hing sie an "N-Wave Size", der Koerpergroesse fuer den
+        // Ueberschallknall. Bei den dort ueblichen 15 m dauert die Welle
+        // 2 * 15 / 343 = 87 ms, und ihre Energie sitzt damit um 11 Hz - das
+        // ist Infraschall. Man spuert eine Beule und hoert keinen Knall, und
+        // mehr Pegel macht es nur noch mehr spuerbar.
+        //
+        // Der Startknall bildet auch gar keinen Koerper ab, sondern eine
+        // Beschleunigung. Wie lange die dauert, hat mit der Groesse des
+        // Objekts nichts zu tun - deshalb ein eigener Regler.
+        //
+        // Default 1,5 m sind 8,7 ms und damit rund 115 Hz: ein Schlag, den man
+        // hoert. Bis 60 m bleibt der Weg zum Donnern offen.
+        auto range = juce::NormalisableRange<float> (0.1f, 60.0f);
+        range.setSkewForCentre (2.0f);
+        layout.add (floatParam (jumpBoomSize, "Jump Boom Size", range, 1.5f, "m"));
+    }
     {
         // Ab 1 ms (heutiges Verhalten) bis 1 s. Skew unten, denn der
         // interessante Bereich liegt bei wenigen bis einigen zehn

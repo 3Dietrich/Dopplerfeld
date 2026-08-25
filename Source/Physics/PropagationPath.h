@@ -241,6 +241,11 @@ public:
     // anderer Moment und genau richtig so.
     void setJumpMarker (double emissionTime, double speedStepMps);
 
+    // Laenge des Startknalls in Metern (Params::jumpBoomSize). Kurz heisst
+    // knackig, lang heisst wummernd - und anders als bei nWaveSize steckt
+    // dahinter keine Koerpergroesse, sondern nur die Dauer der Kante.
+    void setJumpSize (double metres);
+
     // Phase 2 (Plan 2.7 / Abschnitt 7). In Phase 1 ohne Wirkung, damit später
     // kein Aufrufer geändert werden muss.
     // Klassisches Pegel-Panning zusaetzlich zur Ohrgeometrie (@dpa 20260819:
@@ -508,6 +513,11 @@ private:
     //
     // singleSided macht aus der N-Welle die einseitige Beule, siehe
     // Branch::nSingleSided.
+    // sizeOverride > 0 setzt die Laenge der Welle, statt sie aus nWaveSize zu
+    // nehmen. Gebraucht wird das vom Startknall: er bildet eine
+    // BESCHLEUNIGUNG ab und keinen Koerper, und wie lange die dauert, hat mit
+    // der Groesse des Objekts nichts zu tun.
+    //
     // radiusOverride > 0 setzt die Entfernung, mit der Amplitude und
     // Frontbreite gerechnet werden, statt der aktuellen Entfernung des
     // Zweigs. Gebraucht wird das vom Startknall: der entstand am STARTPUNKT,
@@ -518,7 +528,7 @@ private:
     // unabhaengig vom M speed").
     void triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale = 1.0,
                        bool ducksOthers = true, bool singleSided = false,
-                       double radiusOverride = 0.0);
+                       double radiusOverride = 0.0, double sizeOverride = 0.0);
 
     // Absenkungsfaktor durch die Stossfront zur Hoererzeit t, 1 = unberuehrt.
     double shockDuckAt (double listenerTime) const;
@@ -701,6 +711,10 @@ private:
     // wollen die wenigsten.
     bool   nWaveOn        = false;
     double nWaveSizeM     = 15.0;
+
+    // Laenge des Startknalls in Metern, siehe setJumpSize(). Eigene Groesse,
+    // weil er eine Beschleunigung abbildet und keinen Koerper.
+    double jumpSizeM      = 1.5;
 
     // Regelbarer Pegel des Knalls, linear (siehe Params::nWaveGainDb).
     double nWaveGain      = 1.0;

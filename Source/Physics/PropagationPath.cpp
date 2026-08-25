@@ -176,7 +176,7 @@ double PropagationPath::nWaveAt (const Branch& b)
 
 void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow, double levelScale,
                                     bool ducksOthers, bool singleSided,
-                                    double radiusOverride)
+                                    double radiusOverride, double sizeOverride)
 {
     b.nSingleSided = singleSided;
 
@@ -189,7 +189,11 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // Heckstoß liegen nicht am selben Punkt). Damit heißt größer wirklich
     // länger und tiefer, kleiner kürzer und knackiger - ohne dass hinter dem
     // Regler eine Formel steckt, die niemand nachvollziehen kann.
-    b.nDuration = 2.0 * nWaveSizeM / std::max (1.0, c);
+    // Laenge der Welle: normalerweise die Koerpergroesse (nWaveSize), beim
+    // Startknall seine eigene (siehe sizeOverride im Header).
+    const double sizeM = sizeOverride > 0.0 ? sizeOverride : nWaveSizeM;
+
+    b.nDuration = 2.0 * sizeM / std::max (1.0, c);
 
     // Verbreiterung der Stoßfront mit der Entfernung, siehe nWaveAt(). Zwei
     // Mikrosekunden je Meter sind eine Modellkonstante: in 100 m ergibt das
@@ -225,6 +229,12 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // etwas leiser, weiter weg deutlich lauter. 20 m ist bewusst nah gewählt -
     // dort war die Schicht eingehört, und dieser Stand soll erhalten bleiben.
     //
+    // KEINE Groessenkopplung beim Startknall (sizeOverride): sie kommt aus der
+    // Koerperlaenge, und er bildet keinen Koerper ab, sondern eine
+    // Beschleunigung. Seine Laenge ist eine Form, kein Objekt - waere sie
+    // gekoppelt, machte der Laengenregler den Knall nebenbei leiser, und
+    // "Startknall" waere nicht mehr allein die Lautstaerke.
+    //
     // Größenkopplung (@dpa: "die N-Welle ist das Druckabbild des Körpers ...
     // Größerer Körper = lauterer Knall waere der passende Ausbau"): dasselbe
     // 3/4-Potenzgesetz wie beim Abstand, denn beide Zahlen kommen physikalisch
@@ -239,7 +249,8 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // und endlich.
     b.nAmp = (nWaveLevel / nWaveRefMetres)
            * std::pow (nWaveRefMetres / std::max (radius, minRadius), nWaveDistanceExponent)
-           * std::pow (nWaveSizeM / nWaveSizeRefMetres, nWaveSizeExponent)
+           * std::pow (sizeOverride > 0.0 ? 1.0 : sizeM / nWaveSizeRefMetres,
+                       nWaveSizeExponent)
            * nWaveGain
            * levelScale;
 
@@ -295,7 +306,14 @@ void PropagationPath::setShadowTailSeconds (double seconds)
 
 void PropagationPath::setJumpBoom (double amount01)
 {
-    jumpBoom = std::min (1.0, std::max (0.0, amount01));
+    // Nach oben offen bis zum Reglerende (siehe Params::jumpBoom, bis 4).
+    // Der frühere Deckel bei 1 machte den halben Regelweg wirkungslos.
+    jumpBoom = std::max (0.0, amount01);
+}
+
+void PropagationPath::setJumpSize (double metres)
+{
+    jumpSizeM = std::max (0.05, metres);
 }
 
 void PropagationPath::setJumpMarker (double emissionTime, double speedStepMps)
@@ -1032,7 +1050,8 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // speed."). Vorher wuchs sie mit der Sprunghoehe und war bei
                 // langsamen Starts nur ein Bruchteil - zwei Dinge an einem
                 // Regler, von denen man eines nicht sah.
-                triggerNWave (b, c, tStart, jumpBoom, false, subsonicJump, jumpDistance);
+                triggerNWave (b, c, tStart, jumpBoom, false, subsonicJump,
+                              jumpDistance, jumpSizeM);
 
                 // Genau EINMAL, nicht je Zweig. Der Knall ist ein einziges
                 // physikalisches Ereignis und trifft das Ohr einmal - dieselbe

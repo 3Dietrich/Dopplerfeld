@@ -158,7 +158,7 @@ private:
     // Raketen-Stoss hoerbar sein, ist es aber nicht"). Beides stand vorher im
     // Feld/Physik-Panel - drei Panels entfernt von der Startvariante, die es
     // ausloest. Hier steht es neben seiner Ursache.
-    Knob flyJumpBoomKnob;
+    Knob flyJumpBoomKnob, flyJumpSizeKnob;
 
 
     juce::TextButton flyButton { "Vorbeiflug" };

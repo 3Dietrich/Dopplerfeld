@@ -5147,6 +5147,186 @@ int main()
     }
 
     //==================================================================
+    // @dpas Preset "wo ist der Startknall??" nachgestellt (20260825).
+    //
+    // Alle Werte aus seiner Datei. Entscheidend sind drei davon: Dauerschleife
+    // AN, Startvariante "Knall-Start", und ein sehr langsamer Flug (47,6 m/s
+    // = Mach 0,14) ueber eine 406 m lange Strecke - eine Runde dauert damit
+    // gut acht Sekunden.
+    {
+        auto runPreset = [&] (float boom, bool loop, double seconds, bool limiter = true)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres,    1958.155f);
+            setParam (proc, Params::smootherType,   1.0f);
+            setParam (proc, Params::smootherTau,    0.2297f);
+            setParam (proc, Params::lisX,           0.51203f);
+            setParam (proc, Params::lisY,           0.43618f);
+            setParam (proc, Params::lisZ,           1.7503f);
+            setParam (proc, Params::srcX,           0.43063f);
+            setParam (proc, Params::srcY,           0.55308f);
+            setParam (proc, Params::srcZ,           2.0f);
+            setParam (proc, Params::globalMaxSpeed, 366.094f);
+            setParam (proc, Params::outputGain,     0.0f);
+            setParam (proc, Params::boomLimitDb,    14.5f);
+            setParam (proc, Params::limiterOn,      limiter ? 1.0f : 0.0f);
+            setParam (proc, Params::airAbsorbAmount, 0.2773f);
+
+            setParam (proc, Params::engineKind,     3.0f);   // Hubschrauber
+            setParam (proc, Params::shockDuckAmount, 0.0f);
+
+            setParam (proc, Params::flyKind,        1.0f);
+            setParam (proc, Params::flyStart,       1.0f);   // Knall-Start
+            setParam (proc, Params::flyDistance,   33.063f);
+            setParam (proc, Params::flyApproach,  373.118f);
+            setParam (proc, Params::flySpeed,      47.604f);
+            setParam (proc, Params::flyLoop,        loop ? 1.0f : 0.0f);
+
+            setParam (proc, Params::nWaveOn,        1.0f);
+            setParam (proc, Params::nWaveSize,     15.112f);
+            setParam (proc, Params::nWaveGainDb,     9.0f);
+            setParam (proc, Params::jumpBoom,       boom);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            Stats settle;
+            render (proc, buffer, 1.5, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            std::vector<float> left;
+            juce::MidiBuffer   midi;
+
+            for (int block = 0; block < (int) (seconds * sampleRate / blockSize); ++block)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                const float* data = buffer.getReadPointer (0);
+
+                for (int i = 0; i < blockSize; ++i)
+                    left.push_back (data[i]);
+            }
+
+            return left;
+        };
+
+        // 20 Sekunden decken den Start plus zwei Rundenwechsel ab. Der
+        // Startknall steht dabei auf 4, dem neuen Reglerende - @dpa hatte ihn
+        // auf dem alten Maximum 1 und fand ihn zu schwach ("das muss mehr
+        // wummsen").
+        const auto withBoom    = runPreset (4.0f, true, 20.0);
+        const auto withoutBoom = runPreset (0.0f, true, 20.0);
+
+        // Kommt mehr Reglerweg auch an, oder deckelt etwas dazwischen? Sein
+        // Preset hat "Boom Limit" auf 14,5 dB und den Begrenzer an.
+        // Kommt mehr Reglerweg in der Signalkette an? Gemessen OHNE Begrenzer -
+        // mit ihm prueft man den Begrenzer und nicht die Kette. Was sein
+        // Preset am Ausgang erreicht, steht in der Zeile darunter.
+        {
+            const auto quietOff = runPreset (0.0f, true, 20.0, false);
+            const auto oneOff   = runPreset (1.0f, true, 20.0, false);
+            const auto fourOff  = runPreset (4.0f, true, 20.0, false);
+
+            const size_t n = std::min (quietOff.size(), std::min (oneOff.size(), fourOff.size()));
+
+            double peakOne = 0.0, peakFour = 0.0;
+
+            for (size_t i = 0; i < n; ++i)
+            {
+                peakOne  = std::max (peakOne,
+                                     std::abs ((double) oneOff[i]  - (double) quietOff[i]));
+                peakFour = std::max (peakFour,
+                                     std::abs ((double) fourOff[i] - (double) quietOff[i]));
+            }
+
+            std::printf ("%-22s ohne Begrenzer: Regler 1 -> %.4f | Regler 4 -> %.4f (%.2f x)\n",
+                         "Startknall-Wucht", peakOne, peakFour,
+                         peakOne > 0.0 ? peakFour / peakOne : 0.0);
+
+            // Vier soll auch viermal so laut sein. Kommt deutlich weniger an,
+            // deckelt etwas in der Kette - dann waere der erweiterte Regelweg
+            // eine Zahl ohne Wirkung.
+            if (peakOne > 0.0 && peakFour < 3.5 * peakOne)
+            {
+                std::printf ("  FEHLER: mehr Reglerweg kommt nicht an (%.2f x statt 4 x) - "
+                             "etwas deckelt in der Signalkette.\n", peakFour / peakOne);
+                failed = true;
+            }
+        }
+
+        const size_t count = std::min (withBoom.size(), withoutBoom.size());
+
+        // Jeder Knall einzeln: Ausschlaege der DIFFERENZ ueber einer Schwelle,
+        // mit einer Sekunde Sperre dazwischen.
+        double peak = 0.0;
+
+        for (size_t i = 0; i < count; ++i)
+            peak = std::max (peak, std::abs ((double) withBoom[i] - (double) withoutBoom[i]));
+
+        const int    minGap = (int) (1.0 * sampleRate);
+        int          bangs  = 0;
+        int          lastAt = -minGap;
+        juce::String times;
+
+        for (size_t i = 0; i < count; ++i)
+        {
+            const double d = std::abs ((double) withBoom[i] - (double) withoutBoom[i]);
+
+            if (peak > 0.0 && d > 0.15 * peak && (int) i - lastAt >= minGap)
+            {
+                ++bangs;
+                lastAt = (int) i;
+                times << juce::String ((double) i / sampleRate, 1) << "s ";
+            }
+        }
+
+        std::printf ("%-22s 20 s, Dauerschleife: %d Knall (Spitze %.4f) bei %s\n",
+                     "Preset Startknall", bangs, peak,
+                     times.isEmpty() ? "-" : times.toRawUTF8());
+
+        // Diagnose: die Differenz-Huellkurve in Halbsekunden-Fenstern. Damit
+        // ist zu sehen, ob ein Knall fehlt oder nur unter der Zaehlschwelle
+        // liegt.
+        {
+            juce::String line;
+            const int win = (int) (0.5 * sampleRate);
+
+            for (size_t i = 0; i + (size_t) win <= count; i += (size_t) win)
+            {
+                double w = 0.0;
+
+                for (int j = 0; j < win; ++j)
+                    w = std::max (w, std::abs ((double) withBoom[i + (size_t) j]
+                                               - (double) withoutBoom[i + (size_t) j]));
+
+                line << juce::String (w, 2) << " ";
+            }
+
+            std::printf ("%-22s je halbe Sekunde: %s\n", "", line.toRawUTF8());
+        }
+
+        if (peak <= 0.0)
+        {
+            std::printf ("  FEHLER: in diesem Preset kommt ueberhaupt kein Startknall an.\n");
+            failed = true;
+        }
+        // Die Strecke ist zweimal der Anflug (746 m), bei 47,6 m/s also gut
+        // 15,7 s je Runde - in 20 Sekunden sind das ZWEI Starts. Nachgemessen
+        // liegen die Knaelle bei 1,1 s und 16,8 s, jeweils der Startzeit plus
+        // 1,1 s Laufzeit vom 373 m entfernten Startpunkt.
+        else if (bangs < 2)
+        {
+            std::printf ("  FEHLER: nur %d Knall in zwei Runden - bei 'Knall-Start' gehoert "
+                         "zu jedem Losfliegen einer.\n", bangs);
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // Zeigt der Sync ganze Wellen? (@dpa 20260825: "die Wellen sind oft 2
     // geteilt ... egal wo es synct - der naechste sync soll 2n spaeter sein
     // oder so")
@@ -5358,24 +5538,129 @@ int main()
     }
 
     //==================================================================
-    // Knallt der RUNDENWECHSEL? (@dpa 20260825, sinngemaess: "Ich bin die
-    // ganze Zeit am erklaeren wie man diesen ... Sprung UMGEHT!! Und Du baust
-    // mir einen Regler ein 'spruenge willkommen: hier wie laut'?")
+    // Bleibt der Rundenwechsel bei "Kontinuierlich" lautlos? (@dpa 20260825:
+    // "kommt jetzt wieder umschaltknall dazu? bitte nicht!")
     //
-    // Der Startknall gehoert zum Losfliegen, das man ausloest. Eine Runde, die
-    // von selbst wieder anfaengt, ist dagegen ein Sprung - und Spruenge werden
-    // hier ausgeblendet, nicht hoerbar gemacht.
+    // Der Sprung ans Streckenende und zurueck ist ein Umbau, keine Bewegung -
+    // er laeuft ueber den Schnitt (CutState): ausblenden, umsetzen,
+    // aufblenden. Daran aendert der Startknall nichts, denn den gibt es NUR
+    // bei der Startvariante "Knall-Start".
     //
-    // Gemessen wird als DIFFERENZ zweier sonst gleicher Laeufe: einmal mit
-    // Startknall, einmal ohne. Die Vorbeifluege selbst sind ebenfalls laute
-    // Stellen und zaehlen in beiden Laeufen gleich mit - was uebrig bleibt,
-    // sind die Knaelle. Erwartet wird genau einer, der des Starts.
+    // Gemessen wird die Differenz zweier sonst gleicher Laeufe, einmal mit
+    // dem Startknall-Regler am Anschlag und einmal auf null. Bei
+    // "Kontinuierlich" muss diese Differenz VERSCHWINDEN - der Regler hat
+    // dort nichts zu bestellen, egal wie weit er aufgedreht ist. Bei
+    // "Knall-Start" muss sie da sein, sonst misst dieser Abschnitt am
+    // falschen Ort.
     //
-    // (Zwei Anlaeufe dieser Pruefung haben vorher danebengelegen: ein festes
-    // Zeitfenster traf den Rundenwechsel nicht, und eine reine Ereigniszahl
-    // konnte Knall und Vorbeiflug nicht auseinanderhalten.)
+    // (Ein erster Anlauf mass den groessten Samplesprung. Der wird vom
+    // Vorbeiflug selbst bestimmt und war in beiden Faellen gleich - ein Mass,
+    // das nichts unterscheidet.)
     {
-        auto countLoudEvents = [&] (float boom)
+        auto loopDifference = [&] (float startMode)
+        {
+            auto renderWith = [&] (float boom)
+            {
+                DopplerfeldProcessor proc;
+
+                proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+                setParam (proc, Params::fieldMetres, 300.0f);
+                setParam (proc, Params::smootherType, 1.0f);
+                setParam (proc, Params::smootherTau, 0.05f);
+                setParam (proc, Params::lisX, 0.5f);
+                setParam (proc, Params::lisY, 0.5f);
+                setParam (proc, Params::lisZ, 1.75f);
+                setParam (proc, Params::srcZ, 30.0f);
+                setParam (proc, Params::limiterOn, 0.0f);
+
+                setParam (proc, Params::flyKind,     1.0f);
+                setParam (proc, Params::flyStart,    startMode);
+                setParam (proc, Params::flyDistance, 40.0f);
+                setParam (proc, Params::flyApproach, 240.0f);
+                setParam (proc, Params::flySpeed,    200.0f);
+                setParam (proc, Params::flyLoop,     1.0f);
+
+                setParam (proc, Params::nWaveOn,  1.0f);
+                setParam (proc, Params::jumpBoom, boom);
+
+                proc.prepareToPlay (sampleRate, blockSize);
+
+                Stats settle;
+                render (proc, buffer, 1.5, settle, [] (double) {});
+
+                proc.triggerFlyBy();
+
+                std::vector<float> left;
+                juce::MidiBuffer   midi;
+
+                for (int block = 0; block < (int) (6.0 * sampleRate / blockSize); ++block)
+                {
+                    buffer.clear();
+                    proc.processBlock (buffer, midi);
+
+                    const float* data = buffer.getReadPointer (0);
+
+                    for (int i = 0; i < blockSize; ++i)
+                        left.push_back (data[i]);
+                }
+
+                return left;
+            };
+
+            const auto loud  = renderWith (4.0f);
+            const auto quiet = renderWith (0.0f);
+
+            const size_t count = std::min (loud.size(), quiet.size());
+
+            double worst = 0.0;
+
+            for (size_t i = 0; i < count; ++i)
+                worst = std::max (worst, std::abs ((double) loud[i] - (double) quiet[i]));
+
+            return worst;
+        };
+
+        const double continuous = loopDifference (0.0f);   // Kontinuierlich
+        const double bangStart  = loopDifference (1.0f);   // Knall-Start
+
+        std::printf ("%-22s Wirkung des Startknall-Reglers in der Schleife: "
+                     "kontinuierlich %.5f | Knall-Start %.5f\n",
+                     "Rundenwechsel lautlos", continuous, bangStart);
+
+        if (continuous > 1.0e-6)
+        {
+            std::printf ("  FEHLER: der Startknall wirkt auch bei 'Kontinuierlich' (%.5f) - "
+                         "dort darf der Rundenwechsel nichts hoeren lassen.\n", continuous);
+            failed = true;
+        }
+
+        if (bangStart <= 1.0e-6)
+        {
+            std::printf ("  FEHLER: der Startknall wirkt auch bei 'Knall-Start' nicht - "
+                         "dann misst dieser Abschnitt am falschen Ort.\n");
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // Knallt JEDE Runde? (@dpa 20260825: "Knall-Start: noch immer nicht zu
+    // hoeren!!")
+    //
+    // Bei eingeschalteter Dauerschleife ist jeder Rundenwechsel ein
+    // Losfliegen, und welche Sorte Losfliegen es sein soll, sagt allein die
+    // Startvariante. Wer "Knall-Start" waehlt, will den Knall - jedes Mal.
+    // Mit nur einem Knall beim allerersten Start hoert ihn niemand, der den
+    // Flug laufen laesst.
+    //
+    // Der SPRUNG selbst bleibt davon unberuehrt lautlos (Schnitt/CutState);
+    // das prueft der Abschnitt "Sprungnaht" weiter oben.
+    //
+    // Gemessen als Differenz zweier sonst gleicher Laeufe, mit und ohne
+    // Startknall: der Vorbeiflug selbst ist ebenfalls laut und zaehlt in
+    // beiden mit.
+    {
+        auto renderLoop = [&] (float boom)
         {
             DopplerfeldProcessor proc;
 
@@ -5388,13 +5673,14 @@ int main()
             setParam (proc, Params::lisY, 0.5f);
             setParam (proc, Params::lisZ, 1.75f);
             setParam (proc, Params::srcZ, 30.0f);
+            setParam (proc, Params::limiterOn, 0.0f);
 
             setParam (proc, Params::flyKind,     1.0f);
             setParam (proc, Params::flyStart,    1.0f);   // Knall-Start
             setParam (proc, Params::flyDistance, 40.0f);
             setParam (proc, Params::flyApproach, 240.0f);
             setParam (proc, Params::flySpeed,    200.0f);
-            setParam (proc, Params::flyLoop,     1.0f);   // Dauerschleife
+            setParam (proc, Params::flyLoop,     1.0f);
 
             setParam (proc, Params::nWaveOn,  1.0f);
             setParam (proc, Params::jumpBoom, boom);
@@ -5406,8 +5692,6 @@ int main()
 
             proc.triggerFlyBy();
 
-            // Die Strecke ist rund 1,4 s lang (280 m bei 200 m/s) - sechs
-            // Sekunden decken vier Runden ab.
             std::vector<float> left;
             juce::MidiBuffer   midi;
 
@@ -5422,41 +5706,163 @@ int main()
                     left.push_back (data[i]);
             }
 
-            // Feste Schwelle statt eines Anteils der Spitze: die Spitze ist
-            // in den beiden Laeufen verschieden, und mit ihr waere auch die
-            // Schwelle verschieden - dann verglichen sich die Zahlen nicht
-            // mehr. Der Wert liegt ueber dem Motorton der Passagen, aber weit
-            // unter einer Druckwelle.
-            constexpr double threshold = 0.05;
+            return left;
+        };
 
-            const int minGap   = (int) (0.5 * sampleRate);
-            int       events   = 0;
-            int       lastLoud = -minGap;
+        const auto withBoom    = renderLoop (1.0f);
+        const auto withoutBoom = renderLoop (0.0f);
 
-            for (int i = 0; i < (int) left.size(); ++i)
+        const size_t count = std::min (withBoom.size(), withoutBoom.size());
+
+        double peak = 0.0;
+
+        for (size_t i = 0; i < count; ++i)
+            peak = std::max (peak, std::abs ((double) withBoom[i] - (double) withoutBoom[i]));
+
+        const int minGap = (int) (0.5 * sampleRate);
+        int       bangs  = 0;
+        int       lastAt = -minGap;
+
+        for (size_t i = 0; i < count; ++i)
+        {
+            const double d = std::abs ((double) withBoom[i] - (double) withoutBoom[i]);
+
+            if (peak > 0.0 && d > 0.3 * peak && (int) i - lastAt >= minGap)
             {
-                if (std::abs ((double) left[(size_t) i]) > threshold && i - lastLoud >= minGap)
+                ++bangs;
+                lastAt = (int) i;
+            }
+        }
+
+        std::printf ("%-22s sechs Sekunden Dauerschleife: %d Knall (Spitze %.4f)\n",
+                     "Knall je Runde", bangs, peak);
+
+        // Die Strecke ist rund 1,4 s lang - in sechs Sekunden sind das
+        // mindestens drei Starts.
+        if (bangs < 3)
+        {
+            std::printf ("  FEHLER: nur %d Knall - bei 'Knall-Start' gehoert zu jedem "
+                         "Losfliegen einer.\n", bangs);
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // Kommt der Startknall bei JEDEM Tempo an? (@dpa 20260825: "was ist nur
+    // mit dem KnallStart los.. er ist wieder nicht hoeren. Ist der Startknall
+    // etwa im 'Tempo' des Objekts?? ... Ich will einen Knall unabhaengig vom
+    // M speed.")
+    //
+    // Gemessen wird die DIFFERENZ zweier sample-genau gleicher Laeufe, einmal
+    // mit und einmal ohne Startknall. Beide sind deterministisch (feste
+    // Startwerte der Zufallsgeneratoren, Begrenzer aus), die Differenz ist
+    // also exakt der Knall - unabhaengig davon, wann er ankommt und wie laut
+    // der Vorbeiflug daneben ist.
+    //
+    // Eine reine Spitzenmessung taugt hier nicht: bei Mach 3 ist der
+    // Ueberschallknall des Vorbeifluges um ein Vielfaches lauter und verdeckt
+    // jeden Unterschied.
+    {
+        auto renderRun = [&] (float machSpeed, float boom)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 4000.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcZ, 30.0f);
+            setParam (proc, Params::limiterOn, 0.0f);
+
+            setParam (proc, Params::flyKind,     1.0f);
+            setParam (proc, Params::flyStart,    1.0f);   // Knall-Start
+            setParam (proc, Params::flyDistance, 60.0f);
+            setParam (proc, Params::flyApproach, 300.0f);
+            setParam (proc, Params::flySpeed,    machSpeed * 343.0f);
+
+            setParam (proc, Params::nWaveOn,  1.0f);
+            setParam (proc, Params::jumpBoom, boom);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            Stats settle;
+            render (proc, buffer, 1.5, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            std::vector<float> left;
+            juce::MidiBuffer   midi;
+
+            // Der Startpunkt liegt rund 300 m weit weg, sein Schall braucht
+            // also knapp 0,9 s. Vier Sekunden decken Ankunft UND Vorbeiflug ab.
+            for (int block = 0; block < (int) (4.0 * sampleRate / blockSize); ++block)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                const float* data = buffer.getReadPointer (0);
+
+                for (int i = 0; i < blockSize; ++i)
+                    left.push_back (data[i]);
+            }
+
+            return left;
+        };
+
+        struct Case { float mach; const char* name; };
+
+        const Case cases[] {
+            { 0.6f, "Mach 0,6" },
+            { 1.5f, "Mach 1,5" },
+            { 3.0f, "Mach 3,0" }
+        };
+
+        double quietest = 1.0e9, loudest = 0.0;
+
+        for (const auto& c : cases)
+        {
+            const auto withBoom    = renderRun (c.mach, 1.0f);
+            const auto withoutBoom = renderRun (c.mach, 0.0f);
+
+            const size_t count = std::min (withBoom.size(), withoutBoom.size());
+
+            double bangPeak = 0.0;
+            double bangAt   = 0.0;
+
+            for (size_t i = 0; i < count; ++i)
+            {
+                const double d = std::abs ((double) withBoom[i] - (double) withoutBoom[i]);
+
+                if (d > bangPeak)
                 {
-                    ++events;
-                    lastLoud = i;
+                    bangPeak = d;
+                    bangAt   = (double) i / sampleRate;
                 }
             }
 
-            return events;
-        };
+            std::printf ("%-22s %s: Knall allein %.4f (bei t=%.2fs nach dem Start)\n",
+                         "Startknall je Tempo", c.name, bangPeak, bangAt);
 
-        const int withBoom    = countLoudEvents (1.0f);
-        const int withoutBoom = countLoudEvents (0.0f);
+            quietest = std::min (quietest, bangPeak);
+            loudest  = std::max (loudest,  bangPeak);
+        }
 
-        std::printf ("%-22s vier Runden, laute Stellen: mit Startknall %d | ohne %d "
-                     "-> %d Knall\n",
-                     "Rundenwechsel stumm", withBoom, withoutBoom, withBoom - withoutBoom);
-
-        if (withBoom - withoutBoom != 1)
+        if (quietest <= 0.0)
         {
-            std::printf ("  FEHLER: erwartet war genau der Startknall, gezaehlt wurden %d - "
-                         "ein Rundenwechsel soll ausgeblendet werden, nicht knallen.\n",
-                         withBoom - withoutBoom);
+            std::printf ("  FEHLER: bei mindestens einem Tempo kommt gar kein Startknall an.\n");
+            failed = true;
+        }
+        // Unabhaengig vom Tempo heisst: gleich laut. Der Faktor zwischen dem
+        // leisesten und dem lautesten der drei darf klein sein - was bleibt,
+        // ist die Geometrie (Abstand zum Startpunkt), nicht das Tempo.
+        else if (loudest > 2.0 * quietest)
+        {
+            std::printf ("  FEHLER: der Startknall haengt am Tempo (%.4f gegen %.4f, "
+                         "Faktor %.1f).\n", loudest, quietest, loudest / quietest);
             failed = true;
         }
     }

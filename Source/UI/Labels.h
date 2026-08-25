@@ -99,6 +99,7 @@ namespace Labels
             { "Duck-Reichw.",   "Duck Range"  },
             { "Schatten",       "Shadow"      },
             { "Startknall",     "Start Boom"  },
+            { "Knall-Länge",    "Boom Size"   },
             { "N-Welle",        "N-Wave"      },
             { "Bodenreflexion", "Ground Reflection" },
             { "Notaus: minimale Konfiguration", "Panic: minimal setup" },

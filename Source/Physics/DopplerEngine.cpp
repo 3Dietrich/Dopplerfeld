@@ -226,6 +226,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setShockDuck (shockDuckAmount, shockDuckRange);
     setShadowTailSeconds (shadowTailSeconds);
     setJumpBoom (jumpBoom);
+    setJumpSize (jumpSizeM);
 
     reset();
 }
@@ -326,6 +327,7 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
         p.setShockDuck (shockDuckAmount, shockDuckRange);
         p.setShadowTailSeconds (shadowTailSeconds);
         p.setJumpBoom (jumpBoom);
+        p.setJumpSize (jumpSizeM);
     }
 }
 
@@ -569,6 +571,15 @@ void DopplerEngine::setJumpBoom (double amount01)
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
             p.setJumpBoom (amount01);
+}
+
+void DopplerEngine::setJumpSize (double metres)
+{
+    jumpSizeM = metres;
+
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setJumpSize (metres);
 }
 
 void DopplerEngine::setShadowTailSeconds (double seconds)

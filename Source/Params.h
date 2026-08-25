@@ -321,6 +321,12 @@ namespace Params
     // jumpBoom setzt die Druckwelle darauf, die dabei entsteht.
     constexpr const char* jumpBoom = "jumpBoom";
 
+    // Laenge des Startknalls in Metern, siehe PropagationPath::setJumpSize().
+    // Getrennt von nWaveSize: der Ueberschallknall bildet einen KOERPER ab,
+    // der Startknall eine BESCHLEUNIGUNG - zwei verschiedene Dinge, die
+    // vorher an derselben Zahl hingen.
+    constexpr const char* jumpBoomSize = "jumpBoomSize";
+
     // Mindestdauer des Ausklangs, wenn ein Hoerweg an der Kaustik
     // verschwindet, in Millisekunden. Rechnerisch folgt sie aus der Physik,
     // faellt bei schnellen Vorbeifluegen aber immer auf die Untergrenze von
