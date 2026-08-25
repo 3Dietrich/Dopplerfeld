@@ -618,6 +618,11 @@ void DopplerfeldProcessor::applyParameters()
         {
             sourceTargetHeld   = false;
             sourceTargetMetres = metresFromNormalised ((double) srcX, (double) srcY, (double) srcZ);
+
+            // Ein Griff an die Quelle beendet auch ein laufendes Auslaufen:
+            // wer sie wieder anfasst, will sie dort haben und nicht noch ein
+            // Stueck weiterfliegen sehen.
+            coastActive = false;
         }
     }
 
@@ -1077,6 +1082,24 @@ void DopplerfeldProcessor::handlePendingRequests()
     if (stateLoadRequest.exchange (false))
         beginCut (sourceTargetMetres, false);
 
+    // Nachlauf: die Maus wurde losgelassen, ab hier traegt die Quelle sich
+    // selbst weiter (siehe startSourceCoast im Header).
+    if (coastRequest.exchange (false))
+    {
+        const Vec3 v { (double) coastVelocityX.load(),
+                       (double) coastVelocityY.load(),
+                       (double) coastVelocityZ.load() };
+
+        coastPos = smoothedSourcePos;
+
+        // Beide Stufen auf die Anfangsgeschwindigkeit: so beginnt die zweite
+        // (die zaehlt) mit Steigung null statt mit einem Knick.
+        coastVelocityStage1 = v;
+        coastVelocityStage2 = v;
+
+        coastActive = v.length() > coastRestSpeed;
+    }
+
     if (sourceSwitchRequest.exchange (false))
         sourceHolder.switchTo (sourceForKind (currentSourceKind()));
 
@@ -1402,6 +1425,10 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         Vec3 target = sourceTargetMetres;
         bool bypassSmoothing = false;
 
+        // Die Position steht schon fertig fest und geht ohne jede Glaettung
+        // durch - siehe den Nachlauf weiter unten, der einzige Fall.
+        bool positionIsFinal = false;
+
         if (flyBy.isRunning())
         {
             target = flyBy.tick (tickDt);
@@ -1432,6 +1459,39 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
                 // advanceMotion(), also hoechstens einen Block spaeter.
                 flyLoopRestartPending = pp.flyLoop->load() > 0.5f;
             }
+        }
+        else if (coastActive)
+        {
+            // Auslaufen nach dem Loslassen: die Geschwindigkeit laeuft durch
+            // zwei Ein-Pol-Stufen gegen null, die Position ist ihr Integral
+            // (Herleitung und Kurve stehen bei coastVelocityStage1 im Header).
+            const double coeff = 1.0 - std::exp (-tickDt / coastTauSeconds);
+
+            coastVelocityStage1 -= coastVelocityStage1 * coeff;
+            coastVelocityStage2 += (coastVelocityStage1 - coastVelocityStage2) * coeff;
+
+            coastPos += coastVelocityStage2 * tickDt;
+
+            // Weder Glaetter noch Slew-Waechter: die Kurve IST die fertige
+            // Bewegung. Der Waechter begrenzt jeden Tick auf seine
+            // Beschleunigungsrampe und baute das Auslaufen erst ueber
+            // Zehntelsekunden auf, statt es mit der Geschwindigkeit beginnen
+            // zu lassen, mit der losgelassen wurde (gemessen mit
+            // Tests/coast_probe.cpp: aus 20 m/s wurden im ersten Zehntel
+            // 1,1 m/s). Der gemeinsame Tempo-Deckel weiter unten gilt
+            // weiterhin - der ist keine Glaettung, sondern eine Obergrenze.
+            target          = coastPos;
+            positionIsFinal = true;
+
+            // Das Ziel mitfuehren, statt es am Ende einmal zu setzen: damit
+            // steht die Quelle auch dann an der richtigen Stelle, wenn der
+            // Nachlauf unterbrochen wird - und ein Regler- oder Mausgriff
+            // beendet ihn ueber denselben Weg, auf dem er auch einen
+            // gehaltenen Vorbeiflug-Endpunkt beendet (applyParameters).
+            holdSourceTargetAt (coastPos);
+
+            if (coastVelocityStage2.length() < coastRestSpeed)
+                coastActive = false;
         }
         else if (motionPlayer.isPlaying())
         {
@@ -1514,7 +1574,16 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
                                                        - sourceJitterNow);
         }
 
-        if (bypassSmoothing)
+        if (positionIsFinal)
+        {
+            smoothedSourcePos = target;
+
+            // Alle vier Verfahren auf der Position halten, damit der naechste
+            // Griff dort weitermacht statt an der Stelle, an der zuletzt
+            // geglaettet wurde.
+            sourceSmoothers.reset (target);
+        }
+        else if (bypassSmoothing)
         {
             // Ueberschwinger-Waechter (siehe Klassenkommentar zu
             // wasMotionSlewGuardActive im Header): beim Einstieg in den
@@ -1539,6 +1608,11 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         }
 
         wasMotionSlewGuardActive = bypassSmoothing;
+
+        // Nach einem Nachlauf faengt der Waechter wieder von vorn an: seine
+        // Position ist gerade extern gesetzt worden.
+        if (positionIsFinal)
+            wasMotionSlewGuardActive = false;
 
         listenerSmoothers.setTarget (listenerTargetMetres);
 

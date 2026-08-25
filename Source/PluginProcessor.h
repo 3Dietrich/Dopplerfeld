@@ -258,6 +258,23 @@ public:
     void notifySourceGrabbed()  { sourceGrabRequest.store (true); }
     void notifySourceReleased() { sourceReleaseRequest.store (true); }
 
+    // Nachlauf: die Quelle wurde mit dieser Geschwindigkeit losgelassen und
+    // soll damit auslaufen (@dpa 20260825: "es soll nicht die Kante zum Stopp
+    // abrunden, sondern speed mit langsamem doppeltem Lopass zur Null").
+    //
+    // Uebergeben wird die GESCHWINDIGKEIT, nicht ein Zielpunkt. Ein Zielpunkt
+    // waere wieder eine Strecke, die irgendein Glaetter auf seine Weise
+    // abfaehrt - je nach Verfahren mit konstantem Tempo bis kurz vor Schluss.
+    // Hier klingt stattdessen die Geschwindigkeit selbst ab, und die Position
+    // ist ihr Integral. Vom Editor-Thread aufzurufen.
+    void startSourceCoast (Vec3 velocityMetresPerSecond)
+    {
+        coastVelocityX.store ((float) velocityMetresPerSecond.x);
+        coastVelocityY.store ((float) velocityMetresPerSecond.y);
+        coastVelocityZ.store ((float) velocityMetresPerSecond.z);
+        coastRequest.store (true);
+    }
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -603,6 +620,40 @@ private:
     // unabhaengig davon stimmt, welcher Glaetter oder Generator die Bewegung
     // erzeugt hat. Geht an EngineGenerator::setRotorFlightSpeed().
     double sourceClosingSpeed = 0.0;
+
+    //==================================================================
+    // Nachlauf nach dem Loslassen (siehe startSourceCoast).
+    //
+    // Zwei Ein-Pol-Stufen hintereinander auf die Geschwindigkeit: die erste
+    // faellt exponentiell, die zweite folgt ihr. Zusammen ergibt das
+    // v(t) = v0 * (1 + t/tau) * exp(-t/tau) - eine Kurve, die bei v0 mit der
+    // Steigung NULL beginnt und dann ausklingt. Genau darum zwei Stufen: eine
+    // einzelne faellt vom ersten Moment an mit voller Steigung, und dieser
+    // Knick ist die Kante, die es nicht sein soll.
+    //
+    // Der zurueckgelegte Weg ist das Integral, also v0 * 2 * tau: bei 20 m/s
+    // und 0,45 s rund 18 m.
+    //
+    // Die Position ist das Integral der Geschwindigkeit und geht als ZIEL in
+    // dieselbe Kette wie jede andere Bewegung. Weil die Kurve schon glatt ist,
+    // laeuft sie an der Bewegungsglaettung vorbei (bypassSmoothing) - sonst
+    // legte sich deren Zeitkonstante ein zweites Mal darueber und aus dem
+    // Auslaufen wuerde ein Kriechen.
+    Vec3 coastVelocityStage1;
+    Vec3 coastVelocityStage2;
+    Vec3 coastPos;
+    bool coastActive = false;
+
+    std::atomic<bool>  coastRequest { false };
+    std::atomic<float> coastVelocityX { 0.0f };
+    std::atomic<float> coastVelocityY { 0.0f };
+    std::atomic<float> coastVelocityZ { 0.0f };
+
+    // Wie lang ausgelaufen wird. Der Weg haengt linear daran (s.o.), das
+    // Ende ist trotzdem weich: unter coastRestSpeed gilt die Quelle als
+    // stehend, und was dann noch fehlt, ist unter einem Millimeter je Tick.
+    static constexpr double coastTauSeconds  = 0.45;
+    static constexpr double coastRestSpeed   = 0.05;   // m/s
 
     // Additive Mikrobewegung der Quelle M, vor sourceSmoothers eingehakt
     // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.

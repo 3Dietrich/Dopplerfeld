@@ -1589,19 +1589,30 @@ void FieldComponent::mouseUp (const juce::MouseEvent&)
 
     stopTimer();
 
-    if (coastEnabled && haveDragVelocity
-        && (released == DragTarget::source || released == DragTarget::listenerHead)
-        && dragVelocityEstimate.lengthSquared() > coastMinSpeedSquared)
+    if (coastEnabled && haveDragVelocity && released == DragTarget::source
+        && dragVelocityEstimate.lengthSquared() > coastMinSpeedSquared
+        && onSourceCoast != nullptr)
     {
-        // Integral von v0*exp(-t*ln(2)/halfLife) über t=0..unendlich =
-        // v0*halfLife/ln(2) - der Gesamtweg des gedachten Abklingens in EINEM
-        // Schritt statt ihn tickweise nachzubilden (siehe Klassenkommentar in
-        // FieldComponent.h, warum das die vorherige Fassung mit "Slew
-        // Limiter" kollidieren liess).
+        // Die Quelle laeuft in der Bewegungskette aus, nicht hier: uebergeben
+        // wird die Geschwindigkeit, das Abklingen macht der Processor
+        // (startSourceCoast). Ein hier gesetzter Zielpunkt waere wieder eine
+        // Strecke, die der jeweils aktive Glaetter auf seine Weise abfaehrt.
+        onSourceCoast (dragVelocityEstimate);
+    }
+    else if (coastEnabled && haveDragVelocity && released == DragTarget::listenerHead
+             && dragVelocityEstimate.lengthSquared() > coastMinSpeedSquared)
+    {
+        // Der Hoerer bekommt weiterhin einen Zielpunkt: das Abklingen in der
+        // Bewegungskette gilt der Quelle, deren Bewegung man hoert. Integral
+        // von v0*exp(-t*ln(2)/halfLife) ueber t=0..unendlich = v0*halfLife/ln(2)
+        // - der Gesamtweg des gedachten Abklingens in EINEM Schritt statt ihn
+        // hier tickweise nachzubilden (siehe Klassenkommentar in
+        // FieldComponent.h, warum ein eigener Timer hier mit dem "Slew
+        // Limiter" kollidierte).
         const Vec3 projected = lastDragWorldPos
                               + dragVelocityEstimate * (coastHalfLifeSeconds / std::log (2.0));
 
-        reportNormalisedDrag (projected, released == DragTarget::source);
+        reportNormalisedDrag (projected, false);
     }
 
     haveDragVelocity = false;

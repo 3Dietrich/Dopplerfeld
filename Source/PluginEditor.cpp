@@ -44,6 +44,13 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     field.onSourceGrabbed  = [this] { dopplerfeldProcessor.notifySourceGrabbed(); };
     field.onSourceReleased = [this] { dopplerfeldProcessor.notifySourceReleased(); };
 
+    // Losgelassen mit Schwung: die Geschwindigkeit geht an die Bewegungskette,
+    // dort laeuft die Quelle damit aus (DopplerfeldProcessor::startSourceCoast).
+    field.onSourceCoast = [this] (Vec3 velocity)
+    {
+        dopplerfeldProcessor.startSourceCoast (velocity);
+    };
+
     field.onListenerRotated = [this] (double yawRadians)
     {
         setParameter (Params::lisYaw, juce::radiansToDegrees (yawRadians));

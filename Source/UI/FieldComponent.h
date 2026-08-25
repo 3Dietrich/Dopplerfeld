@@ -195,6 +195,12 @@ public:
     std::function<void()> onSourceGrabbed;
     std::function<void()> onSourceReleased;
 
+    // Die Quelle wurde in Bewegung losgelassen: Geschwindigkeit in Metern je
+    // Sekunde, Weltkoordinaten. Der Nachlauf selbst gehoert nicht hierher,
+    // sondern in die Bewegungskette (DopplerfeldProcessor::startSourceCoast) -
+    // hier wird nur gemessen, wie schnell die Maus zuletzt war.
+    std::function<void (Vec3 velocity)> onSourceCoast;
+
 private:
     // -- Koordinatenumrechnung (Plan 2.1: px = position_m/n*700, isotrop) --
     float pixelsPerMetre() const;
