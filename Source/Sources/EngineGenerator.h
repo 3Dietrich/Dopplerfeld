@@ -311,10 +311,13 @@ private:
     // Oktaven. Nach oben ist der Weg fuer beide Betriebsarten gleich.
     // extraOctavesDown = zusaetzliche Verschiebung nach unten, die nicht am
     // Regler haengt, sondern an der Entfernung (siehe setRocketDistance).
+    // lowQ = Guete des Tiefbands. Je Betriebsart verschieden, siehe
+    // jetLowQ/rocketLowQ.
     VoiceGains applyVoicing (BandVoicing& v, const EngineVoicePreset& preset,
                              double tone01, double u,
                              double darkOctaves = 1.1,
-                             double extraOctavesDown = 0.0);
+                             double extraOctavesDown = 0.0,
+                             double lowQ = 0.6);
 
     // Reglerweg nach unten je Betriebsart, siehe applyVoicing().
     //
@@ -325,6 +328,28 @@ private:
     // genau dort, wo @dpa ihn haben will.
     static constexpr double jetDarkOctaves    = 1.1;
     static constexpr double rocketDarkOctaves = 3.2;
+
+    // Guete des Tiefbands je Betriebsart.
+    //
+    // Die Duese behaelt ihre flachen 0,6 - ihr Tiefband ist ein Fundament
+    // unter den Mitten, kein eigener Ton, und mit Resonanz saenge es.
+    //
+    // Die Rakete bekommt 1,1. Ein flacher Tiefpass laesst ALLES unterhalb
+    // seiner Eckfrequenz durch, und bei einer Eckfrequenz von 30 Hz ist der
+    // groesste Teil davon unhoerbar - die Energie verlief sich nach unten,
+    // statt dort zu sitzen, wo der Regler sie hinstellt. Mit Resonanz bekommt
+    // das Tiefband einen Schwerpunkt AN seiner Eckfrequenz. Das ist auch das
+    // ehrlichere Bild: ein Raketenstrahl hat eine Vorzugsfrequenz, kein
+    // Rauschplateau bis null Hertz.
+    static constexpr double jetLowQ    = 0.6;
+    static constexpr double rocketLowQ = 1.1;
+
+    // Ab hier abwaerts zahlt sich Bandbreiten-Ausgleich nicht mehr in
+    // Lautheit aus, sondern nur noch in Auslenkung - siehe place() in der
+    // .cpp. 30 Hz ist die Gegend, in der Tiefton aufhoert, ein Ton zu sein,
+    // und anfaengt, ein Druck zu sein; darunter wird er zwar noch gespuert,
+    // aber der Zugewinn je Dezibel faellt steil ab.
+    static constexpr double audibleFloorHz = 30.0;
 
     // Ein Rauschsample durch die drei Bänder, mit den Pegeln aus applyVoicing().
     static double voiceSample (BandVoicing& v, const VoiceGains& g, double in, double narrowIn);

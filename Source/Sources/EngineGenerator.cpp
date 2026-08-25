@@ -71,24 +71,29 @@ const std::array<EngineVoicePreset, 5> jetVoiceTable
 // als hoert.
 const std::array<EngineVoicePreset, 5> rocketVoiceTable
 {{
-    // Vollschub: ein Flüssigkeitstriebwerk unter Last. Fast alles sitzt
-    // unten, das ist das Wummern, das man im Bauch spürt.
-    {  32.0,  180.0, 0.50, 1200.0,   1.85, 0.70, 0.24,      0.0, 1.0, 0.00 },
+    // Vollschub: ein Flüssigkeitstriebwerk unter Last. Der Schwerpunkt liegt
+    // unten - aber im hoerbaren Tiefton, nicht im Infraschall (siehe
+    // audibleFloorHz). Das Wummern, das man im Bauch spuert, sitzt bei 30 bis
+    // 80 Hz; darunter spuert man nichts mehr, dort bewegt sich nur noch die
+    // Membran.
+    {  55.0,  200.0, 0.50, 1200.0,   1.50, 1.00, 0.30,      0.0, 1.0, 0.00 },
 
     // Feststoff: rauer und körniger als flüssig, mit deutlich mehr Mitten -
     // ein Feststoffbooster prasselt, er wummert nicht nur.
-    {  55.0,  450.0, 0.85, 2200.0,   1.20, 1.15, 0.50,      0.0, 1.0, 0.00 },
+    {  75.0,  500.0, 0.85, 2200.0,   1.10, 1.30, 0.55,      0.0, 1.0, 0.00 },
 
     // Zündung: der Augenblick, in dem der Strahl aufreißt. Breiter als der
     // eingeschwungene Vollschub, mit deutlich mehr Obenrum.
-    {  45.0,  340.0, 0.65, 3200.0,   1.40, 0.95, 0.75,      0.0, 1.0, 0.00 },
+    {  65.0,  380.0, 0.65, 3200.0,   1.25, 1.10, 0.80,      0.0, 1.0, 0.00 },
 
-    // Ferne: nur noch Grollen, die Luft hat den Rest geschluckt. Die
-    // tiefste der fuenf - hier sitzt der Subsubbass, den @dpa sucht.
-    {  20.0,  120.0, 0.50,  700.0,   2.20, 0.35, 0.03,      0.0, 1.0, 0.00 },
+    // Ferne: nur noch Grollen, die Luft hat den Rest geschluckt. Die tiefste
+    // der fuenf - und mit dem Klangfarbe-Regler ganz unten kommt sie an die
+    // 4 Hz heran, die @dpa als Extrem bestellt hat. Als VORLAGE steht sie
+    // aber dort, wo Grollen noch grollt.
+    {  38.0,  140.0, 0.50,  700.0,   1.80, 0.55, 0.05,      0.0, 1.0, 0.00 },
 
     // Breit: neutraler Ausgangspunkt.
-    {  60.0,  400.0, 0.55, 2000.0,   1.10, 0.95, 0.95,      0.0, 1.0, 0.00 }
+    {  70.0,  420.0, 0.55, 2000.0,   1.05, 1.00, 0.95,      0.0, 1.0, 0.00 }
 }};
 
 EngineGenerator::EngineGenerator()
@@ -140,7 +145,8 @@ EngineGenerator::VoiceGains EngineGenerator::applyVoicing (BandVoicing& v,
                                                             const EngineVoicePreset& preset,
                                                             double tone01, double u,
                                                             double darkOctaves,
-                                                            double extraOctavesDown)
+                                                            double extraOctavesDown,
+                                                            double lowQ)
 {
     // Klangfarbe als Kippung um die Mitte: -1 ganz dunkel, 0 die Vorlage
     // unveraendert, +1 ganz hell.
@@ -200,13 +206,32 @@ EngineGenerator::VoiceGains EngineGenerator::applyVoicing (BandVoicing& v,
 
         // bandwidth ist die wirksame Rauschbandbreite als Vielfaches der
         // Eckfrequenz (Tiefpass) bzw. der Bandbreite fc/Q (Bandpass).
-        const double effective = juce::jmax (1.0, placed * bandwidth);
+        //
+        // Untergrenze bei audibleFloorHz, und das ist keine Willkuer, sondern
+        // die Stelle, an der die Rechnung ihre Voraussetzung verliert. Der
+        // Ausgleich soll bewirken, dass "lowGain 1,0" so LAUT klingt wie
+        // "midGain 1,0" - er rechnet dafuer mit Energie und setzt gleiche
+        // Energie gleich Lautheit. Unterhalb der Hoerschwelle stimmt das
+        // nicht mehr: dort fuegt mehr Pegel keine Lautheit hinzu, nur
+        // Auslenkung. Ein Tiefpass bei 16 Hz bekam so das rund Vierzigfache
+        // an Verstaerkung, steuerte den Ausgang voll aus und war trotzdem
+        // nicht zu hoeren - gemessen lagen bei 300 m 89,5 Prozent der Energie
+        // unter 20 Hz (@dpa 20260825: "eine Rakete im Vollantrieb und alles
+        // was man hoert ist ein kleines Stossen mit hohem Zischen").
+        //
+        // Der Regler kommt weiterhin bis an die 4 Hz herunter, die er
+        // hergeben soll - nur wird die Verstaerkung dort nicht mehr ins
+        // Absurde gezogen.
+        const double effective = juce::jmax (audibleFloorHz * bandwidth,
+                                             juce::jmax (1.0, placed * bandwidth));
 
         return std::sqrt (halfRate / effective);
     };
 
-    // Tiefpass zweiter Ordnung: wirksame Bandbreite rund 1,1 x Eckfrequenz.
-    const double lowComp  = place (v.low,  preset.lowFc,  0.6, 1.11);
+    // Tiefpass zweiter Ordnung, wirksame Bandbreite rund 1,1 x Eckfrequenz.
+    // Die Guete kommt von aussen, sie ist je Betriebsart verschieden (siehe
+    // jetLowQ/rocketLowQ im Header).
+    const double lowComp  = place (v.low,  preset.lowFc,  lowQ, 1.11);
 
     // Bandpaesse: die -3-dB-Breite ist fc/Q, die wirksame Rauschbandbreite
     // etwa pi/2 davon.
@@ -572,7 +597,7 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     const auto jetGains = applyVoicing (jetVoicing,
                                         jetVoiceTable[(size_t) jetVoiceIndex.load()],
                                         (double) jetTone.load(), u,
-                                        jetDarkOctaves);
+                                        jetDarkOctaves, 0.0, jetLowQ);
 
     // Verfaerbung durch die Entfernung (siehe setRocketDistance): je
     // Verdopplung des Abstands ueber rocketFarRefMetres hinaus wandern die
@@ -588,7 +613,8 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                                            rocketVoiceTable[(size_t) rocketVoiceIndex.load()],
                                            (double) rocketTone.load(), u,
                                            rocketDarkOctaves,
-                                           farOctaves);
+                                           farOctaves,
+                                           rocketLowQ);
 
     // Tiefe der Absenkung durch einen Druckstoss. Dieselbe Formel wie in
     // PropagationPath::triggerNWave: nah ist die Front eine echte

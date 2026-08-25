@@ -664,6 +664,138 @@ namespace
         return centroidHz (collected, rate);
     }
 
+    // --- Wo sitzt die Energie? (@dpa 20260825) ---
+    //
+    // Seine Klage: "eine Rakete im Vollantrieb und alles was man hoert ist ein
+    // kleines Stossen mit hohem Zischen (wie bei einem undichten Ventil am
+    // Fahrrad mit 3Bar!!)". Ein spektraler Schwerpunkt allein beantwortet das
+    // nicht - er kann tief liegen und trotzdem zu einem Klang gehoeren, dessen
+    // hoerbarer Anteil oben sitzt, weil die ganze Energie darunter im
+    // Infraschall verpufft.
+    //
+    // Deshalb hier die Verteilung ueber Baender, und ausdruecklich mit einer
+    // eigenen Spalte fuer alles UNTER 20 Hz: was dort liegt, ist nicht leise,
+    // es ist unhoerbar - und es kostet trotzdem Aussteuerung, treibt also den
+    // Begrenzer und macht alles andere leiser.
+    struct BandEnergy
+    {
+        double belowHearing = 0.0;   // < 20 Hz
+        double bass         = 0.0;   // 20 - 80
+        double lowMid       = 0.0;   // 80 - 300
+        double mid          = 0.0;   // 300 - 1500
+        double high         = 0.0;   // > 1500
+        double peak         = 0.0;
+        double rms          = 0.0;
+    };
+
+    BandEnergy bandEnergyOf (const std::vector<float>& samples, double rate)
+    {
+        BandEnergy out;
+
+        constexpr int order = 13;              // 8192 Punkte
+        constexpr int size  = 1 << order;
+
+        juce::dsp::FFT fft (order);
+
+        std::vector<float> window ((size_t) size * 2, 0.0f);
+
+        const int frames = juce::jmax (1, (int) (samples.size() / (size_t) size));
+
+        std::array<double, (size_t) size / 2> power {};
+
+        for (int f = 0; f < frames; ++f)
+        {
+            std::fill (window.begin(), window.end(), 0.0f);
+
+            for (int i = 0; i < size; ++i)
+            {
+                const size_t index = (size_t) (f * size + i);
+
+                // Hann-Fenster, sonst schmiert jede Blockkante ueber das ganze
+                // Spektrum und faelscht genau die Hochtonspalte, um die es hier
+                // geht.
+                const double w = 0.5 - 0.5 * std::cos (2.0 * juce::MathConstants<double>::pi
+                                                       * (double) i / (double) (size - 1));
+
+                window[(size_t) i] = (float) ((double) samples[index] * w);
+            }
+
+            fft.performFrequencyOnlyForwardTransform (window.data());
+
+            for (int bin = 0; bin < size / 2; ++bin)
+                power[(size_t) bin] += (double) window[(size_t) bin] * (double) window[(size_t) bin];
+        }
+
+        for (int bin = 1; bin < size / 2; ++bin)
+        {
+            const double hz = (double) bin * rate / (double) size;
+            const double e  = power[(size_t) bin];
+
+            if      (hz <   20.0) out.belowHearing += e;
+            else if (hz <   80.0) out.bass         += e;
+            else if (hz <  300.0) out.lowMid       += e;
+            else if (hz < 1500.0) out.mid          += e;
+            else                  out.high         += e;
+        }
+
+        const double total = out.belowHearing + out.bass + out.lowMid + out.mid + out.high;
+
+        if (total > 0.0)
+        {
+            out.belowHearing = 100.0 * out.belowHearing / total;
+            out.bass         = 100.0 * out.bass         / total;
+            out.lowMid       = 100.0 * out.lowMid       / total;
+            out.mid          = 100.0 * out.mid          / total;
+            out.high         = 100.0 * out.high         / total;
+        }
+
+        double sumSq = 0.0;
+
+        for (float v : samples)
+        {
+            out.peak = std::max (out.peak, (double) std::abs (v));
+            sumSq   += (double) v * (double) v;
+        }
+
+        out.rms = samples.empty() ? 0.0 : std::sqrt (sumSq / (double) samples.size());
+
+        return out;
+    }
+
+    // Rendert das Raketen-Bruellen und gibt seine Bandverteilung zurueck.
+    // farColour ist die Verfaerbung durch die Entfernung (siehe
+    // EngineGenerator::setRocketFarColour), distanceM der Abstand dafuer.
+    BandEnergy measureRocketBands (double rate, float farColour, float distanceM)
+    {
+        constexpr int block  = 512;
+        constexpr int blocks = 200;
+
+        EngineGenerator gen;
+        gen.prepare (rate, block);
+
+        gen.setEngineKind (2);            // Raketenantrieb
+        gen.setKindLevelDb (0.0f);
+        gen.setRpm (3661.0f);             // wie in @dpas Preset
+        gen.setRocketShock (0.0f);        // nur das Bruellen
+        gen.setRocketVoice (0, 0.5f);     // Vollschub, Klangfarbe neutral
+        gen.setRocketFarColour (farColour);
+        gen.setRocketDistance (distanceM);
+
+        std::vector<float> buffer ((size_t) block);
+        std::vector<float> collected;
+        collected.reserve ((size_t) (block * blocks));
+
+        for (int b = 0; b < blocks; ++b)
+        {
+            gen.renderMono (buffer.data(), block);
+
+            if (b > 2)   // Betriebsart-Blende und Filter einschwingen lassen
+                collected.insert (collected.end(), buffer.begin(), buffer.end());
+        }
+
+        return bandEnergyOf (collected, rate);
+    }
+
     // --- Abstandsabhaengigkeit der Rakete (@dpa 20260825) ---
     //
     // Seine Klage: "Rauschen Bug: ist z.Z. bei jedem Abstand gleichlaut". Hier
@@ -980,6 +1112,51 @@ int main()
                 {
                     std::printf ("  FEHLER: die Druckstoesse sind nicht steiler als das Bruellen - "
                                  "das waeren keine Stosswellen.\n");
+                    failed = true;
+                }
+            }
+
+            // Wo sitzt die Energie des Bruellens? (@dpa 20260825: "eine
+            // Rakete im Vollantrieb und alles was man hoert ist ein kleines
+            // Stossen mit hohem Zischen")
+            {
+                struct Row { float farColour; float distance; const char* name; };
+
+                const Row rows[] {
+                    { 0.0f,    0.0f, "am Startplatz    " },
+                    { 0.25f,  30.0f, "30 m             " },
+                    { 0.25f, 300.0f, "300 m            " },
+                    { 1.0f,  300.0f, "300 m, Fern voll " }
+                };
+
+                bool wasted = false;
+
+                for (const auto& row : rows)
+                {
+                    const auto band = measureRocketBands (sampleRate, row.farColour, row.distance);
+
+                    std::printf ("%-22s %s: <20Hz %4.1f%% | 20-80 %4.1f%% | 80-300 %4.1f%% | "
+                                 "300-1500 %4.1f%% | >1500 %4.1f%% | Spitze %.2f\n",
+                                 "Raketen-Baender", row.name,
+                                 band.belowHearing, band.bass, band.lowMid,
+                                 band.mid, band.high, band.peak);
+
+                    // Mehr als ein Drittel der Energie unterhalb der
+                    // Hoerschwelle heisst: der Klang steuert aus und ist
+                    // trotzdem leise. Genau das beschreibt @dpa - "im
+                    // Vollantrieb" und zu hoeren ist ein Zischen.
+                    //
+                    // Die letzte Zeile ist ausgenommen: dort steht der Regler
+                    // absichtlich am Anschlag, und wer die Rakete in den
+                    // Infraschall schieben will, darf das.
+                    if (band.belowHearing > 34.0 && row.farColour <= 0.5f)
+                        wasted = true;
+                }
+
+                if (wasted)
+                {
+                    std::printf ("  FEHLER: der groesste Teil der Energie liegt unter 20 Hz - "
+                                 "unhoerbar, kostet aber die ganze Aussteuerung.\n");
                     failed = true;
                 }
             }

@@ -505,12 +505,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (rocketShockSize, "Rocket Shock Size", range, 20.0f, "m"));
     }
 
-    // Verfaerbung durch die Entfernung. 0 = die Rakete klingt in zwei
-    // Kilometern wie am Startplatz, nur leiser. 1 = je Verdopplung des
-    // Abstands wandert der Klang eine Oktave nach unten, in 2 km sind das
-    // gut sechs Oktaven - das ist "Energie von weit Weit weg". Bis 3, denn
-    // was hier zu wenig ist, laesst sich nirgends sonst nachholen.
-    layout.add (floatParam (rocketFarColour, "Rocket Far Colour", { 0.0f, 3.0f, 0.01f }, 1.0f, "Okt"));
+    // Verfaerbung durch die Entfernung, in Oktaven je Verdopplung des
+    // Abstands. 0 = die Rakete klingt in zwei Kilometern wie am Startplatz,
+    // nur leiser.
+    //
+    // Default 0,25 statt der anfaenglichen 1,0. Eine ganze Oktave je
+    // Verdopplung klingt nach wenig und ist es nicht: in 300 m sind das
+    // dreieinhalb Oktaven, und damit landete das Tiefband der Rakete im
+    // Infraschall. Gemessen lagen dort 89,5 Prozent der Energie unter 20 Hz -
+    // unhoerbar, aber voll ausgesteuert, und uebrig blieb das, was @dpa am
+    // 25.08. gehoert hat: "ein kleines Stossen mit hohem Zischen (wie bei
+    // einem undichten Ventil am Fahrrad mit 3Bar)".
+    //
+    // 0,25 Oktaven je Verdopplung sind in 300 m knapp eine Oktave. Das hoert
+    // man als "weiter weg", ohne dass der Klang unter die Hoerschwelle
+    // rutscht. Bis 3 bleibt der Regler offen - wer die Rakete in den
+    // Infraschall schieben will, kann das.
+    layout.add (floatParam (rocketFarColour, "Rocket Far Colour", { 0.0f, 3.0f, 0.01f }, 0.25f, "Okt"));
 
     // Mittlere Folge der Stoesse. Unten einzelne Schlaege, oben ein
     // zusammenhaengender Teppich - das Knattern echter Raketen ("crackle")
