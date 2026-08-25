@@ -144,6 +144,21 @@ public:
     // umschalter in der Kopfzeile (siehe PluginEditor).
     void refreshTooltips() { setTooltip (Tooltips::text (Tooltips::Key::Scope)); }
 
+    // Fuer load_check: wieviele Samples zuletzt tatsaechlich gezeichnet
+    // wurden und wo sie stehen. Bei aktivem Sync ist das eine ganze Zahl von
+    // Perioden und damit weniger als displaySampleCount() - siehe
+    // shownSampleCount weiter unten.
+    int shownSampleCountForTest() const
+    {
+        return shownSampleCount > 0 ? shownSampleCount : displaySamples;
+    }
+
+    const float* shownLeftForTest() const { return shownLeft.data(); }
+
+    // Zuletzt gemessene Periodenlaenge der Grundwelle, in Samples. 0 = keine
+    // erkannt.
+    double periodSamplesForTest() const { return lastPeriodSamples; }
+
 private:
     // Sucht in [searchLo, searchHi) den steigenden Nulldurchgang von left,
     // der `target` am naechsten liegt. Liefert -1, wenn keiner gefunden
@@ -172,6 +187,22 @@ private:
 
     // Wie oben, aber ohne Tiefpass - der zweite Schritt fuer sich.
     static int nearestRisingZero (const float* left, int searchLo, int searchHi, int target);
+
+    // Mittlere Periodenlaenge der Grundwelle in Samples, aus den steigenden
+    // Nulldurchgaengen des tiefpassgefilterten Fensters. 0 = keine erkennbar.
+    //
+    // Setzt voraus, dass buildSyncLowpass() fuer dieses Fenster bereits
+    // gelaufen ist - beides passiert in findTriggerIndexNear(), und der
+    // gemessene Wert bleibt bis zum naechsten Bild in lastPeriodSamples
+    // stehen.
+    double measurePeriodSamples (int searchLo, int searchHi) const;
+
+    // Rundet `requested` auf das naechste ganzzahlige Vielfache der zuletzt
+    // gemessenen Periode. Ohne erkennbare Periode, bei weniger als einer
+    // vollen Periode im Bild oder bei sehr kurzen Perioden (dort sind es
+    // ohnehin Dutzende und der Rest faellt nicht auf) bleibt `requested`
+    // unveraendert.
+    int periodAlignedLength (int requested) const;
 
     // Fuellt syncScratch mit dem nullphasig tiefpassgefilterten Fenster.
     // Grenzfrequenz aus der Nulldurchgangsrate des Fensters selbst, siehe
@@ -278,6 +309,27 @@ private:
     // Live-Modus relevant, im History-Modus uebernimmt triggerAbsoluteIndex
     // dieselbe Rolle.
     bool lastFrameWasSynced = false;
+
+    // --- Periodenrasten (@dpa 20260825: "die Wellen sind oft 2 geteilt ...
+    // egal wo es synct - der naechste sync soll 2n spaeter sein oder so") ---
+    //
+    // Ein Oszilloskop mit fester Zeitbasis zeigt fast nie eine ganze Zahl von
+    // Perioden: bei anderthalb sieht die Welle aus, als waere sie in der Mitte
+    // durchgeschnitten. Bei aktivem Sync wird die gezeichnete Laenge deshalb
+    // auf das naechste Vielfache der Periode gerundet - das Bild fuellt sich
+    // dann mit ganzen Wellen, und aufeinanderfolgende Bilder sehen gleich aus.
+    //
+    // Der Zoomregler bleibt, was er ist: er sagt weiterhin, wieviel Zeit
+    // ungefaehr ins Bild soll. Gerastet wird nur um bis zu eine halbe Periode
+    // nach oben oder unten, und wenn keine Grundwelle erkennbar ist, gar
+    // nicht.
+    // mutable, weil findTriggerIndexNear() const ist und den Wert nebenbei
+    // mitnimmt - genau wie syncScratch darunter.
+    mutable double lastPeriodSamples = 0.0;
+
+    // Wieviele der displaySamples tatsaechlich gezeichnet werden. Ohne Sync
+    // oder ohne erkannte Periode ist das displaySamples selbst.
+    int shownSampleCount = 0;
 
     // Klick-Ziehen zum Pannen (nur History-Modus, s. mouseDown/mouseDrag).
     int dragStartX          = 0;

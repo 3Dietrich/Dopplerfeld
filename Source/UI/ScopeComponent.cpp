@@ -91,6 +91,10 @@ int ScopeComponent::findTriggerIndexNear (const float* left, int searchLo, int s
     // Stufe 1: die Grundwelle. Sie hat je Periode genau einen steigenden
     // Nulldurchgang, das Bild kann also nicht mehr zwischen Obertoenen
     // springen.
+    // Die Periode faellt bei dieser Gelegenheit mit ab - sie steckt in
+    // denselben Nulldurchgaengen (siehe measurePeriodSamples).
+    lastPeriodSamples = measurePeriodSamples (searchLo, searchHi);
+
     const int coarse = nearestRisingZero (syncScratch.data(), searchLo, searchHi, target);
 
     if (coarse < 0)
@@ -106,6 +110,60 @@ int ScopeComponent::findTriggerIndexNear (const float* left, int searchLo, int s
     const int fine = nearestRisingZero (left, searchLo, searchHi, coarse);
 
     return fine >= 0 ? fine : coarse;
+}
+
+double ScopeComponent::measurePeriodSamples (int searchLo, int searchHi) const
+{
+    // Mittlerer Abstand aufeinanderfolgender steigender Nulldurchgaenge im
+    // gefilterten Fenster. Der Mittelwert und nicht der erste Abstand: eine
+    // einzelne Periode kann durch Rauschen daneben liegen, ueber ein ganzes
+    // Fenster mittelt sich das heraus.
+    const float* w = syncScratch.data();
+
+    int    first = -1, last = -1, count = 0;
+
+    for (int i = juce::jmax (1, searchLo); i < searchHi; ++i)
+    {
+        if (w[i - 1] <= 0.0f && w[i] > 0.0f)
+        {
+            if (first < 0)
+                first = i;
+
+            last = i;
+            ++count;
+        }
+    }
+
+    // Mindestens zwei Durchgaenge, sonst gibt es keinen Abstand zu messen.
+    if (count < 2 || last <= first)
+        return 0.0;
+
+    return (double) (last - first) / (double) (count - 1);
+}
+
+int ScopeComponent::periodAlignedLength (int requested) const
+{
+    const double period = lastPeriodSamples;
+
+    // Keine Grundwelle erkannt, oder sie passt gar nicht erst einmal ins
+    // Bild: dann gibt es nichts zu rasten.
+    if (period < 2.0 || period > (double) requested)
+        return requested;
+
+    const double cycles = std::floor ((double) requested / period + 0.5);
+
+    if (cycles < 1.0)
+        return requested;
+
+    const int aligned = (int) std::lround (cycles * period);
+
+    // Nur rasten, wenn es wirklich um weniger als eine halbe Periode geht -
+    // sonst waere es kein Rasten mehr, sondern ein eigener Zoom. Und nie
+    // ueber das hinaus, was tatsaechlich im Rohfenster steht.
+    if (aligned < 2 || aligned > requested)
+        return requested;
+
+    return aligned;
 }
 
 void ScopeComponent::setEventTriggerEnabled (bool shouldTrigger)
@@ -400,6 +458,8 @@ void ScopeComponent::feed (const float* rawLeft, const float* rawRight, std::uin
     // weil enterHistoryMode() unten korrekt das aktuelle Ende zeigt).
     int start = displaySamples;
     lastFrameWasSynced = false;
+    lastPeriodSamples  = 0.0;
+    shownSampleCount   = displaySamples;
 
     if (syncEnabled)
     {
@@ -408,12 +468,24 @@ void ScopeComponent::feed (const float* rawLeft, const float* rawRight, std::uin
 
         if (trigger >= 0)
         {
-            start = trigger - displaySamples / 2;
+            // Ganze Perioden ins Bild (siehe lastPeriodSamples im Header).
+            // Gezeichnet wird ab dem Trigger nach RECHTS, nicht um ihn herum
+            // zentriert: nur so faengt das Bild an der Flanke an und hoert
+            // eine ganze Zahl von Perioden spaeter wieder dort auf.
+            shownSampleCount = periodAlignedLength (displaySamples);
+
+            start = shownSampleCount < displaySamples
+                  ? trigger
+                  : trigger - displaySamples / 2;
+
+            // Innerhalb des Rohfensters bleiben.
+            start = juce::jlimit (0, juce::jmax (0, captureLen - shownSampleCount), start);
+
             lastFrameWasSynced = true;
         }
     }
 
-    for (int n = 0; n < displaySamples; ++n)
+    for (int n = 0; n < shownSampleCount; ++n)
     {
         shownLeft[(size_t) n]  = rawLeft[start + n];
         shownRight[(size_t) n] = rawRight[start + n];
@@ -568,12 +640,20 @@ void ScopeComponent::paint (juce::Graphics& g)
                     juce::Justification::topRight, false);
     }
 
+    // Im Live-Sync koennen weniger Samples gezeichnet werden als der Zoom
+    // vorgibt - sie werden dann auf die volle Breite gestreckt, damit das Bild
+    // gefuellt bleibt (siehe shownSampleCount im Header). Im History-Modus
+    // gilt immer die volle Fensterbreite.
+    const int traceCount = (historyMode || shownSampleCount <= 0)
+                         ? displaySamples
+                         : shownSampleCount;
+
     auto drawTrace = [&] (const float* samples, juce::Colour colour)
     {
         juce::Path path;
-        const float xStep = area.getWidth() / (float) juce::jmax (1, displaySamples - 1);
+        const float xStep = area.getWidth() / (float) juce::jmax (1, traceCount - 1);
 
-        for (int n = 0; n < displaySamples; ++n)
+        for (int n = 0; n < traceCount; ++n)
         {
             const float v = juce::jlimit (-amplitudeRange, amplitudeRange, samples[n]);
             const float x = area.getX() + (float) n * xStep;
