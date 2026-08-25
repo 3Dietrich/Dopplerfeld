@@ -158,6 +158,21 @@ target_compile_definitions(loop_peak PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(loop_peak PRIVATE cxx_std_20)
 
+# Messprogramm zum Klon-Schwarm (Tests/swarm_probe.cpp), wie loop_peak kein Test.
+add_executable(swarm_probe EXCLUDE_FROM_ALL Tests/swarm_probe.cpp)
+target_link_libraries(swarm_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(swarm_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(swarm_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(swarm_probe PRIVATE cxx_std_20)
+
 enable_testing()
 add_test(NAME solver_check COMMAND solver_check)
 add_test(NAME load_check COMMAND load_check)
