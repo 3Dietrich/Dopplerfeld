@@ -260,18 +260,35 @@ private:
     // Inhaltshöhen der vier Panels: was ihr resized() an Reihen und Reglern
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines
     // CollapsiblePanel setzen kann.
+    //
+    // Oeffentlich, damit der load_check-Abschnitt "Bedienelemente" die Panels
+    // mit GENAU den Massen pruefen kann, die sie im Editor bekommen. Mit
+    // abgeschriebenen Zahlen liefe die Pruefung sonst irgendwann gegen eine
+    // Groesse, die es nicht mehr gibt - und meldete dann entweder nichts oder
+    // Falsches.
+public:
     static constexpr int engineControlContentHeight = 115;   // Reihe (RPM, Imbalance) + Gate-Schalter
     // Das Motor-Panel fuehrt seine Hoehe selbst: sie haengt an der gewaehlten
     // Betriebsart, siehe EnginePanel::preferredContentHeight(). Hier steht
     // darum keine Konstante mehr.
     static constexpr int sampleContentHeight = 190;   // Dateizeile + zwei Reglerreihen
-    static constexpr int motionContentHeight = 330;   // Reiter Vorbeiflug/Record-Play + gemeinsame Jitter/Speed-Zeile, s. MotionPanel::resized()
-    static constexpr int fieldContentHeight  = 352;   // vier Reglerreihen, die vierte ist Rueckwaerts/Front-Duck/Schatten/Sprungknall (s. FieldPanel::resized())
+    // Reiter Vorbeiflug/Record-Play + Tempo-Deckel-Zeile + Jitter-Zeile,
+    // s. MotionPanel::resized(). Seit 20260825 zwei Zeilen statt einer: der
+    // Jitter-Schalter stand am Ende einer Zeile, die schon breiter war als
+    // das Panel, und bekam null Pixel (@dpa: "bitte ein Schalter hinzufuegen:
+    // Jitter on/off"). 330 + 79 (Zellenhoehe) + 6 (Abstand) = 415.
+    static constexpr int motionContentHeight = 415;
+    static constexpr int fieldContentHeight  = 352;   // vier Reglerreihen, die vierte ist Rueckwaerts/Front-Duck/Schatten (s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // 226 minus die 40px, die frueher fuer den CPU-Balken reserviert waren -
     // der sitzt jetzt in der eigenen Zeile am unteren Fensterrand statt hier
     // (siehe cpuMeterBlockHeight), das Panel braucht darum weniger Hoehe.
     static constexpr int swarmContentHeight  = 171;
+
+    // Breite der Panelspalte - ebenfalls oeffentlich, aus demselben Grund wie
+    // die Hoehen darueber.
+    static constexpr int panelColumnWidth = 470;   // breitestes Panel (Sample) plus Scrollbalken
+private:
 
     // Das Feld bleibt exakt 700x400 (Plan 3.13). Die Größe ist nicht nur
     // Optik: FieldComponent rechnet die Feldhöhe in Metern aus seinem
@@ -298,7 +315,6 @@ private:
     static constexpr int cpuMeterBlockHeight = cpuMeterBarHeight + 2 + cpuMeterLabelHeight + 6;
 
     static constexpr int statusHeight = 44;
-    static constexpr int panelColumnWidth = 470;   // breitestes Panel (Sample) plus Scrollbalken
 
     // Scope-Block zwischen Feld und Statuszeile: Toolbar (Freeze/Sync) +
     // Scope-Flaeche, volle Feldbreite. scopeBlockHeight ist der Platz, den

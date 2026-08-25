@@ -233,7 +233,7 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     addAndMakeVisible (flyStartCombo);
     flyStartAttachment = std::make_unique<ComboBoxAttachment> (apvts, Params::flyStart, flyStartCombo);
 
-    setupKnob (flyJumpBoomKnob, apvts, Params::jumpBoom, "Sprungknall", Tooltips::Key::JumpBoom);
+    setupKnob (flyJumpBoomKnob, apvts, Params::jumpBoom, "Startknall", Tooltips::Key::JumpBoom);
 
 
     setupKnob (flyDistanceKnob, apvts, Params::flyDistance, "Fly Dist", Tooltips::Key::FlyDistance);
@@ -532,28 +532,49 @@ void MotionPanel::resized()
     // --- Immer sichtbar, unabhaengig vom Reiter: Jitter + gemeinsamer
     // Tempo-Deckel (globalMaxSpeed gilt fuer Maus/Automation UND Vorbeiflug,
     // Jitter ist ebenfalls reiterunabhaengig) ---
+    //
+    // ZWEI Zeilen, seit @dpa 20260825 den Jitter-Schalter vermisst hat
+    // ("bitte ein Schalter hinzufuegen: Jitter on/off"). Es gab ihn laengst -
+    // er stand nur am Ende einer Zeile, die zu diesem Zeitpunkt bereits
+    // breiter war als das Panel, und bekam deshalb null Pixel. Genau das,
+    // was dem Tempo-Deckel am 24.08. passiert ist ("als letztes, kleiner,
+    // Abgeschnitten, hinzugequetscht").
+    //
+    // Die Rechnung, die nicht aufging: 128 (Tempo-Deckel) + 20 (Luecke) +
+    // 3 x 104 (Jitter-Regler) sind 460 Pixel, verfuegbar sind 446. Wer am
+    // Ende steht, verliert - und der Schalter stand am Ende.
+    //
+    // Deshalb bekommt der Jitter jetzt eine eigene Zeile, und der Schalter
+    // steht dort ganz VORN. Das kostet Panelhoehe (siehe
+    // PluginEditor::motionContentHeight), aber ein Bedienelement, das es nur
+    // rechnerisch gibt, ist keines. Geprueft wird das seither im
+    // load_check-Abschnitt "Bedienelemente".
     area.removeFromTop (6);
 
-    auto sharedRow = area.removeFromTop (knobH);
-
-    // Der Tempo-Deckel zuerst, breiter als die uebrigen und mit einer Luecke
-    // dahinter abgesetzt. Vorher stand er am ENDE der Zeile - und weil hier
-    // von links weggenommen wird, war er der erste, dem bei knapper
-    // Panelbreite die Haelfte fehlte (@dpa 20260824: "als letztes, kleiner,
-    // Abgeschnitten, hinzugequetscht"). Ganz vorn kann ihm das nicht mehr
-    // passieren, und die Luecke zeigt, dass er nicht zum Jitter gehoert,
-    // sondern ueber beiden Reitern steht.
+    // Zeile 1: der Tempo-Deckel allein. Breiter als die uebrigen, und er
+    // gehoert nicht zum Jitter - er gilt fuer Maus, Automation UND Vorbeiflug
+    // und steht damit ueber beiden Reitern.
     constexpr int maxSpeedW = 128;
 
+    auto sharedRow = area.removeFromTop (knobH);
     layoutKnob (globalMaxSpeedKnob, sharedRow.removeFromLeft (maxSpeedW));
-    sharedRow.removeFromLeft (20);
+
+    area.removeFromTop (6);
+
+    // Zeile 2: der Jitter. Schalter zuerst, dann die drei Regler, die er
+    // schaltet - 110 + 4 + 3 x 104 = 426 Pixel und damit sicher innerhalb der
+    // Panelbreite.
+    auto jitterRow = area.removeFromTop (knobH);
+
+    constexpr int toggleW = 110;
+
+    srcJitterOnButton.setBounds (jitterRow.removeFromLeft (toggleW)
+                                          .withSizeKeepingCentre (toggleW, 18));
+    jitterRow.removeFromLeft (4);
 
     for (auto* k : { &srcJitterAmountKnob, &srcJitterSpeedKnob, &srcJitterZKnob })
     {
-        layoutKnob (*k, sharedRow.removeFromLeft (knobW));
-        sharedRow.removeFromLeft (4);
+        layoutKnob (*k, jitterRow.removeFromLeft (knobW));
+        jitterRow.removeFromLeft (4);
     }
-
-    const int toggleW = juce::jmin (120, sharedRow.getWidth());
-    srcJitterOnButton.setBounds (sharedRow.removeFromTop (18).withWidth (toggleW));
 }

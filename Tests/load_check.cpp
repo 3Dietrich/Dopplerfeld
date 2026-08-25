@@ -21,6 +21,9 @@
 #include "UI/RoundedSlider.h"
 #include "UI/ScopeComponent.h"
 #include "UI/Labels.h"
+#include "UI/MotionPanel.h"
+#include "UI/FieldPanel.h"
+#include "UI/EnginePanel.h"
 #include "Motion/PositionJitter.h"
 #include "Sources/EngineGenerator.h"
 
@@ -501,6 +504,61 @@ namespace
         for (auto* child : c.getChildren())
             if (child != nullptr)
                 collectVisibleText (*child, out);
+    }
+
+
+    // --- Sind alle Bedienelemente ueberhaupt zu sehen? ---
+    //
+    // @dpa 20260825 meldete einen fehlenden Schalter ("Jitter: bitte ein
+    // Schalter hinzufuegen: Jitter on/off"), den es im Code laengst gab. Ein
+    // Bedienelement kann aus drei Gruenden unsichtbar sein, ohne dass
+    // irgendwo ein Fehler auftritt: es hat keine Flaeche bekommen, es liegt
+    // ausserhalb seines Elternteils, oder es steht auf setVisible(false).
+    //
+    // Genau das prueft diese Funktion am ECHTEN Editor. Sie laeuft nur ueber
+    // Regler und Schalter - Beschriftungen duerfen abgeschnitten sein, ein
+    // Bedienelement nicht.
+    //
+    // "Bedienbar" heisst hier: mindestens 12 x 8 Pixel liegen innerhalb des
+    // Elternteils. Darunter ist zwar formal etwas da, aber nichts, was man
+    // treffen koennte.
+    void collectClippedControls (juce::Component& c,
+                                 std::vector<juce::String>& out,
+                                 const juce::String& path = {})
+    {
+        for (auto* child : c.getChildren())
+        {
+            if (child == nullptr)
+                continue;
+
+            const auto name = child->getName().isNotEmpty()
+                            ? child->getName()
+                            : juce::String (typeid (*child).name());
+
+            const auto here = path.isEmpty() ? name : path + " / " + name;
+
+            const bool isControl = dynamic_cast<juce::Button*> (child)   != nullptr
+                                || dynamic_cast<juce::Slider*> (child)   != nullptr
+                                || dynamic_cast<juce::ComboBox*> (child) != nullptr;
+
+            // Unsichtbar Geschaltetes zaehlt nicht: die Panels blenden
+            // bewusst aus, was zur gewaehlten Betriebsart nicht gehoert.
+            if (isControl && child->isVisible())
+            {
+                const auto bounds  = child->getBounds();
+                const auto visible = bounds.getIntersection (c.getLocalBounds());
+
+                if (visible.getWidth() < 12 || visible.getHeight() < 8)
+                    out.push_back (here + juce::String (" (") + juce::String (bounds.getX()) + ","
+                                        + juce::String (bounds.getY()) + " "
+                                        + juce::String (bounds.getWidth()) + "x"
+                                        + juce::String (bounds.getHeight())
+                                        + " in " + juce::String (c.getWidth()) + "x"
+                                        + juce::String (c.getHeight()) + ")");
+            }
+
+            collectClippedControls (*child, out, here);
+        }
     }
 
     // Prüft zusätzlich die Parameter selbst: ihre Namen, Einheiten und
@@ -4763,6 +4821,370 @@ int main()
             failed = true;
     }
 
+
+    //==================================================================
+    // Ist jedes Bedienelement zu sehen? (@dpa 20260825: "Jitter: bitte ein
+    // Schalter hinzufuegen: Jitter on/off" - den es im Code laengst gab. Er
+    // bekam in MotionPanel::resized() null Pixel Breite, weil die Zeile davor
+    // schon breiter war als das Panel.)
+    //
+    // Geprueft werden die Panels EINZELN, mit genau den Massen, die ihnen der
+    // Editor gibt (PluginEditor::panelColumnWidth und die je Panel
+    // hinterlegte Inhaltshoehe). Nicht ueber den ganzen Editor: dort haengen
+    // die Panels in einem Viewport, der ohne Fenster keine Breite meldet, und
+    // eingeklappte Panels legen ihren Inhalt gar nicht erst aus - geprueft
+    // waere dann nichts.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        // Breite wie im Editor: die Panelspalte abzueglich des Scrollbalkens.
+        constexpr int panelWidth = DopplerfeldEditor::panelColumnWidth - 8;
+
+        std::vector<juce::String> clipped;
+        int checkedPanels = 0;
+
+        auto checkPanel = [&] (juce::Component& panel, const char* name, int height)
+        {
+            panel.setSize (panelWidth, height);
+
+            // Einmal zeichnen, damit resized() und die Sichtbarkeitsregeln
+            // vollstaendig durchgelaufen sind.
+            juce::Image image (juce::Image::ARGB, panelWidth, juce::jmax (1, height), true);
+            juce::Graphics g (image);
+            panel.paintEntireComponent (g, true);
+
+            std::vector<juce::String> found;
+            collectClippedControls (panel, found);
+
+            for (const auto& entry : found)
+                clipped.push_back (juce::String (name) + " / " + entry);
+
+            ++checkedPanels;
+        };
+
+        // Hoehen AUS dem Editor, nicht abgeschrieben: sonst prueft dieser
+        // Abschnitt irgendwann eine Groesse, die es nicht mehr gibt. Das
+        // Motor-Panel meldet seine selbst.
+        {
+            MotionPanel motion (proc.apvts);
+            checkPanel (motion, "Bewegung", DopplerfeldEditor::motionContentHeight);
+        }
+        {
+            FieldPanel field (proc.apvts);
+            checkPanel (field, "Feld", DopplerfeldEditor::fieldContentHeight);
+        }
+        {
+            EnginePanel engine (proc.apvts);
+            checkPanel (engine, "Motor", engine.preferredContentHeight());
+        }
+
+        std::printf ("%-22s %d Panels geprueft, %d Bedienelemente ohne bedienbare Flaeche\n",
+                     "Bedienelemente", checkedPanels, (int) clipped.size());
+
+        for (size_t i = 0; i < clipped.size() && i < 12; ++i)
+            std::printf ("  FEHLER: %s ist nicht zu sehen\n", clipped[i].toRawUTF8());
+
+        if (! clipped.empty())
+            failed = true;
+    }
+
+    //==================================================================
+    // Kommt beim Wackler an, was am Regler steht? (@dpa 20260825: "'Jit
+    // Tempo'=Mach3, gemessenes Tempo:max Mach 1,5")
+    //
+    // Gemessen wird die tatsaechliche Bahngeschwindigkeit des Wacklers ueber
+    // eine lange Strecke, gegen den eingestellten Wert. Ohne Glaetter und
+    // ohne Ausbreitung - hier geht es allein darum, ob der Regler haelt, was
+    // er sagt.
+    {
+        auto measureSpeed = [] (double amountM, double speedSetting, double zShare)
+        {
+            PositionJitter jitter;
+
+            jitter.prepare (DopplerEngine::trajectoryRateHz);
+            jitter.setAmount (amountM);
+            jitter.setSpeed (speedSetting);
+            jitter.setZFactor (zShare);
+
+            const double dt = 1.0 / DopplerEngine::trajectoryRateHz;
+
+            // Eine halbe Minute: lange genug, dass der Wuerfel die
+            // Achsenverhaeltnisse oft genug durchlaeuft.
+            const int total  = (int) (30.0 * DopplerEngine::trajectoryRateHz);
+            const int settle = (int) (1.0  * DopplerEngine::trajectoryRateHz);
+
+            Vec3   previous {};
+            double peak = 0.0, sumSq = 0.0;
+            int    counted = 0;
+
+            for (int n = 0; n < total; ++n)
+            {
+                const Vec3 out = jitter.tick (dt);
+
+                if (n > 0 && n >= settle)
+                {
+                    const Vec3   step  = out - previous;
+                    const double speed = step.length() / dt;
+
+                    peak = std::max (peak, speed);
+                    sumSq += speed * speed;
+                    ++counted;
+                }
+
+                previous = out;
+            }
+
+            const double rms = counted > 0 ? std::sqrt (sumSq / (double) counted) : 0.0;
+
+            return std::make_pair (peak, rms);
+        };
+
+        struct Case { double amount, setting; const char* name; };
+
+        const Case cases[] {
+            {  50.0,  343.0, "50 m / Mach 1"   },
+            {  50.0, 1029.0, "50 m / Mach 3"   },
+            { 200.0, 1029.0, "200 m / Mach 3"  }
+        };
+
+        bool tooSlow = false;
+
+        for (const auto& c : cases)
+        {
+            const auto measured = measureSpeed (c.amount, c.setting, 1.0);
+
+            std::printf ("%-22s %s: eingestellt %.0f m/s -> Spitze %.0f (%.0f %%), "
+                         "Effektivwert %.0f (%.0f %%)\n",
+                         "Wackler-Tempo", c.name, c.setting,
+                         measured.first,  100.0 * measured.first  / c.setting,
+                         measured.second, 100.0 * measured.second / c.setting);
+
+            // Der Regler muss halten, was er sagt. Unter 90 Prozent der
+            // eingestellten Spitze waere er eine Absichtserklaerung, keine
+            // Angabe - und genau daran ist @dpa haengengeblieben, als er
+            // Mach 3 einstellte und Mach 1,5 gemessen hat.
+            if (measured.first < 0.9 * c.setting)
+                tooSlow = true;
+
+            // Und er darf sie auch nicht ueberschreiten: der Wert soll mit
+            // der Schallgeschwindigkeit vergleichbar sein.
+            if (measured.first > 1.05 * c.setting)
+                tooSlow = true;
+        }
+
+        if (tooSlow)
+        {
+            std::printf ("  FEHLER: der Wackler haelt sein eingestelltes Tempo nicht ein.\n");
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // Knallt der RUNDENWECHSEL? (@dpa 20260825, sinngemaess: "Ich bin die
+    // ganze Zeit am erklaeren wie man diesen ... Sprung UMGEHT!! Und Du baust
+    // mir einen Regler ein 'spruenge willkommen: hier wie laut'?")
+    //
+    // Der Startknall gehoert zum Losfliegen, das man ausloest. Eine Runde, die
+    // von selbst wieder anfaengt, ist dagegen ein Sprung - und Spruenge werden
+    // hier ausgeblendet, nicht hoerbar gemacht.
+    //
+    // Gemessen wird als DIFFERENZ zweier sonst gleicher Laeufe: einmal mit
+    // Startknall, einmal ohne. Die Vorbeifluege selbst sind ebenfalls laute
+    // Stellen und zaehlen in beiden Laeufen gleich mit - was uebrig bleibt,
+    // sind die Knaelle. Erwartet wird genau einer, der des Starts.
+    //
+    // (Zwei Anlaeufe dieser Pruefung haben vorher danebengelegen: ein festes
+    // Zeitfenster traf den Rundenwechsel nicht, und eine reine Ereigniszahl
+    // konnte Knall und Vorbeiflug nicht auseinanderhalten.)
+    {
+        auto countLoudEvents = [&] (float boom)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 300.0f);
+            setParam (proc, Params::smootherType, 1.0f);
+            setParam (proc, Params::smootherTau, 0.05f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::lisZ, 1.75f);
+            setParam (proc, Params::srcZ, 30.0f);
+
+            setParam (proc, Params::flyKind,     1.0f);
+            setParam (proc, Params::flyStart,    1.0f);   // Knall-Start
+            setParam (proc, Params::flyDistance, 40.0f);
+            setParam (proc, Params::flyApproach, 240.0f);
+            setParam (proc, Params::flySpeed,    200.0f);
+            setParam (proc, Params::flyLoop,     1.0f);   // Dauerschleife
+
+            setParam (proc, Params::nWaveOn,  1.0f);
+            setParam (proc, Params::jumpBoom, boom);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            Stats settle;
+            render (proc, buffer, 1.5, settle, [] (double) {});
+
+            proc.triggerFlyBy();
+
+            // Die Strecke ist rund 1,4 s lang (280 m bei 200 m/s) - sechs
+            // Sekunden decken vier Runden ab.
+            std::vector<float> left;
+            juce::MidiBuffer   midi;
+
+            for (int block = 0; block < (int) (6.0 * sampleRate / blockSize); ++block)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                const float* data = buffer.getReadPointer (0);
+
+                for (int i = 0; i < blockSize; ++i)
+                    left.push_back (data[i]);
+            }
+
+            // Feste Schwelle statt eines Anteils der Spitze: die Spitze ist
+            // in den beiden Laeufen verschieden, und mit ihr waere auch die
+            // Schwelle verschieden - dann verglichen sich die Zahlen nicht
+            // mehr. Der Wert liegt ueber dem Motorton der Passagen, aber weit
+            // unter einer Druckwelle.
+            constexpr double threshold = 0.05;
+
+            const int minGap   = (int) (0.5 * sampleRate);
+            int       events   = 0;
+            int       lastLoud = -minGap;
+
+            for (int i = 0; i < (int) left.size(); ++i)
+            {
+                if (std::abs ((double) left[(size_t) i]) > threshold && i - lastLoud >= minGap)
+                {
+                    ++events;
+                    lastLoud = i;
+                }
+            }
+
+            return events;
+        };
+
+        const int withBoom    = countLoudEvents (1.0f);
+        const int withoutBoom = countLoudEvents (0.0f);
+
+        std::printf ("%-22s vier Runden, laute Stellen: mit Startknall %d | ohne %d "
+                     "-> %d Knall\n",
+                     "Rundenwechsel stumm", withBoom, withoutBoom, withBoom - withoutBoom);
+
+        if (withBoom - withoutBoom != 1)
+        {
+            std::printf ("  FEHLER: erwartet war genau der Startknall, gezaehlt wurden %d - "
+                         "ein Rundenwechsel soll ausgeblendet werden, nicht knallen.\n",
+                         withBoom - withoutBoom);
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // Knallt ein ueberschallschneller Wackler? (@dpa 20260825: "jitter=Mach3,
+    // tatsachlich1,5 aber null Knall")
+    //
+    // Gemessen wird am ganzen Processor, ohne Vorbeiflug: nur die ruhende
+    // Quelle plus Wackler. Interessant sind drei Zahlen - was von dem
+    // eingestellten Tempo NACH den Bewegungsglaettern noch ankommt, welches
+    // |M_r| der Loeser daraus sieht, und ob er N-Wellen ausloest.
+    //
+    // Der Unterschied zwischen den ersten beiden ist keine Panne, sondern
+    // Geometrie: M_r ist die Komponente ENTLANG der Sichtlinie zum Hoerer.
+    // Ein Wackler, der im Raum umherfaehrt, zeigt nur einen Teil davon zum
+    // Hoerer - im Mittel rund 1/sqrt(3) seiner Bahngeschwindigkeit.
+    {
+        auto runJitter = [&] (float speedSetting, float amountM, const char* name)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 500.0f);
+            setParam (proc, Params::lisX, 0.5f);
+            setParam (proc, Params::lisY, 0.5f);
+            setParam (proc, Params::srcX, 0.5f);
+            setParam (proc, Params::srcY, 0.25f);
+            setParam (proc, Params::srcZ, 0.0f);
+
+            setParam (proc, Params::nWaveOn,   1.0f);
+            setParam (proc, Params::limiterOn, 0.0f);
+
+            setParam (proc, Params::srcJitterOn,      1.0f);
+            setParam (proc, Params::srcJitterAmount,  amountM);
+            setParam (proc, Params::srcJitterSpeed,   speedSetting);
+            setParam (proc, Params::srcJitterZAmount, 1.0f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            juce::MidiBuffer midi;
+            FieldSnapshot    snapshot;
+
+            double peakSourceSpeed = 0.0;
+            double peakMach        = 0.0;
+
+            // Erst einschwingen, dann acht Sekunden messen.
+            for (int block = 0; block < (int) (10.0 * sampleRate / blockSize); ++block)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+                proc.fillFieldSnapshot (snapshot);
+
+                if (block < (int) (2.0 * sampleRate / blockSize))
+                    continue;
+
+                peakSourceSpeed = std::max (peakSourceSpeed, snapshot.sourceSpeed);
+
+                // |M_r| ist die Machzahl ENTLANG der Sichtlinie, je Hoerweg -
+                // genau die Groesse, an der die Kegelankunft haengt.
+                for (int i = 0; i < snapshot.pathCount; ++i)
+                    peakMach = std::max (peakMach,
+                                         std::abs (snapshot.paths[(size_t) i].machRadial));
+            }
+
+            const auto booms = snapshot.nWavePairBirths + snapshot.nWaveRising;
+
+            std::printf ("%-22s %s: Regler %.0f m/s -> Quelle max %.0f m/s (Mach %.2f) | "
+                         "|M_r| max %.2f | N-Wellen %llu\n",
+                         "Wackler-Knall", name, (double) speedSetting,
+                         peakSourceSpeed, peakSourceSpeed / 343.0,
+                         peakMach, (unsigned long long) booms);
+
+            return std::make_pair (peakMach, (unsigned long long) booms);
+        };
+
+        // Mach 3 bei grossem Ausschlag: hier MUSS es knallen. Der Ausschlag ist
+        // gross genug, dass die Glaetter der Bewegung nicht dagegen anarbeiten
+        // (eine langsame, weite Bahn kommt durch, ein schnelles Zittern nicht).
+        const auto fast = runJitter (1029.0f, 200.0f, "Mach 3, 200 m");
+
+        // Und die Gegenprobe: unterhalb der Schallgeschwindigkeit darf nichts
+        // knallen.
+        const auto slow = runJitter (100.0f, 200.0f, "100 m/s, 200 m");
+
+        if (fast.first < 1.0)
+        {
+            std::printf ("  FEHLER: der Wackler kommt bei Mach 3 nicht ueber |M_r| = 1.\n");
+            failed = true;
+        }
+        else if (fast.second == 0)
+        {
+            std::printf ("  FEHLER: |M_r| ueber 1, aber keine einzige N-Welle ausgeloest.\n");
+            failed = true;
+        }
+
+        if (slow.second > 0)
+        {
+            std::printf ("  FEHLER: unterhalb der Schallgeschwindigkeit knallt es trotzdem.\n");
+            failed = true;
+        }
+    }
 
     //==================================================================
     // Z-Anteil des Wacklers (@dpa 20260824: "Jitter: bitte doch einen Regler
