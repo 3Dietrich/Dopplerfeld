@@ -132,51 +132,47 @@ Vec3 PositionJitter::tick (double dt)
         zFactor += zDelta;
     }
 
-    // --- Frequenz aus Ausschlag und Tempo ---
+    // --- Tempo heisst Tempo: Parametrisierung nach Bogenlaenge ---
     //
-    // Das ist der Kern des Umbaus. Ein Sinus der Amplitude A und der Frequenz
-    // f hat die Bahngeschwindigkeit A*2pi*f*cos(phase). Aus dem gewuenschten
-    // Tempo v folgt damit rueckwaerts die Frequenz - sie ist Ergebnis, nicht
-    // Eingabe.
+    // Die Bahn ist ein Lissajous aus drei Sinus, x/y/z mit eigenen
+    // Achsenfaktoren. Wie SCHNELL sie durchlaufen wird, ist davon unabhaengig -
+    // und genau das wird hier laufend so eingestellt, dass die
+    // Bahngeschwindigkeit exakt dem Regler entspricht.
     //
-    // Bezugsgroesse ist die SPITZE, nicht der Mittelwert: "Tempo" soll die
-    // Geschwindigkeit sein, die der Wackler erreicht, und nicht eine, um die
-    // herum er auch deutlich schneller werden darf. Nur so laesst sich die
-    // Zahl mit der Schallgeschwindigkeit vergleichen - und genau darum geht
-    // es, denn ein Wackler ueber Mach 1 loest fortwaehrend Stossfronten aus.
-    // Auf den Mittelwert bezogen lag die Spitze beim Doppelten, und 340 m/s
-    // im Regler waeren in Wahrheit Mach 2 gewesen.
+    // Der Vorgaenger rechnete stattdessen EINE feste Frequenz aus dem
+    // unguenstigsten denkbaren Fall (alle drei Achsenfaktoren gleichzeitig am
+    // oberen Anschlag UND alle drei Kosinus gleichzeitig eins). Der tritt
+    // praktisch nie ein, und deshalb kam nur ein Bruchteil des eingestellten
+    // Tempos an: @dpa 20260825 mass Mach 1,5, wo Mach 3 stand. Nachgemessen
+    // im load_check-Abschnitt "Wackler-Tempo" waren es 60 bis 73 Prozent der
+    // Spitze und 37 bis 39 Prozent im Effektivwert.
     //
-    // Die Spitze liegt vor, wenn alle drei Achsenfaktoren gleichzeitig an
-    // ihrem oberen Anschlag (2) stehen und alle drei Kosinus gleichzeitig 1
-    // sind:
-    //     v_peak = A * 2pi * fBase * 2*sqrt(2 + z^2).
-    // Fuer z = 1 ist das der Faktor 2*sqrt(3), also derselbe, mit dem der
-    // frueher davorgeschaltete Tempo-Deckel gerechnet hat. Ein alter Zustand
-    // mit "Jit Max" bewegt sich nach der Umrechnung deshalb genauso schnell
-    // wie zuvor.
+    // Ableitung: mit P_i = A_i * sin(phi_i) ist
+    //     dP_i/dt = A_i * cos(phi_i) * dphi_i/dt.
+    // Sollen die Achsen ihr gewuerfeltes Verhaeltnis g_i behalten, ist
+    // dphi_i/dt = omega * g_i, und aus |dP/dt| = v folgt
+    //     omega = v / sqrt( SUM (A_i * g_i * cos phi_i)^2 ).
+    // Die Wurzel ist der Momentanwert - deshalb wird omega jeden Tick neu
+    // bestimmt, und deshalb stimmt das Tempo immer statt nur im Mittel.
     //
-    // Dass die Bewegung damit die meiste Zeit LANGSAMER laeuft als die Zahl
-    // sagt, ist gewollt und keine versteckte Bremse: der ungueenstigste Fall
-    // tritt selten ein, und dazwischen soll das Wackeln atmen. Ein Wackler,
-    // der immer exakt gleich schnell ist, waere ein Kreisel.
-    const double zNow = zFactor;
+    // Klingt das nach einem Kreisel? Nein. Konstant ist nur der BETRAG der
+    // Geschwindigkeit, die RICHTUNG wechselt weiter unregelmaessig - und fuer
+    // den Doppler zaehlt allein die Komponente entlang der Sichtlinie zum
+    // Hoerer. Die schwankt nach wie vor von +v bis -v durch null. Was wegfaellt,
+    // ist das zufaellige Langsamsein, mit dem sich vorher kein Tempo einstellen
+    // liess.
 
-    const double peakFactor = 2.0 * std::sqrt (2.0 + zNow * zNow);
-
-    // Der Ausschlag steht im Nenner: bei winzigem Ausschlag muesste die
-    // Bewegung sehr schnell schwingen, um ueberhaupt auf das eingestellte
-    // Tempo zu kommen. Nach oben begrenzt das allein die Darstellbarkeit auf
-    // dem Tick-Raster (siehe tickRate im Header) - kein Bedienlimit, sondern
-    // dieselbe Grenze, die ein Sample-Raster jeder Wellenform setzt.
-    const double baseFreq = (amount > 1.0e-9 && peakFactor > 0.0)
-                          ? std::min (speed / (kTwoPi * amount * peakFactor), tickRate * 0.5)
-                          : 0.0;
-
-    // Zeitkonstante der Achsendrift an die Frequenz gekoppelt: eine schnelle
-    // Bewegung wuerfelt schneller neu und driftet schneller dorthin, eine
-    // traege bleibt traege.
-    const double driftHz = std::max (0.001, baseFreq);
+    // Zeitkonstante der Achsendrift und Takt des Neuwuerfelns haengen an einer
+    // GROBEN Bezugsfrequenz aus den Reglerwerten, nicht am momentanen omega:
+    // omega schwankt von Tick zu Tick (das ist ja der Zweck), und eine daran
+    // haengende Zeitkonstante wuerde mitzappeln, statt eine zu sein. Die
+    // Naeherung ist die Frequenz, die sich ergaebe, stuenden alle Achsen auf
+    // eins - fuer "wie oft wuerfeln wir neu" genau genug.
+    const double driftHz = std::max (0.001,
+                                     amount > 1.0e-9
+                                         ? speed / (kTwoPi * amount
+                                                    * std::sqrt (2.0 + zFactor * zFactor))
+                                         : 0.0);
 
     freqSmoother.setTau (1.0 / (2.0 * driftHz));
 
@@ -198,9 +194,66 @@ Vec3 PositionJitter::tick (double dt)
 
     // std::abs, weil ein negativ driftender Faktor sonst die Phase rueckwaerts
     // liefe - als Wert ohne Bedeutung, nur sein Betrag zaehlt.
-    phase[0] += kTwoPi * baseFreq * std::abs (axisNow.x) * dt;
-    phase[1] += kTwoPi * baseFreq * std::abs (axisNow.y) * dt;
-    phase[2] += kTwoPi * baseFreq * std::abs (axisNow.z) * dt;
+    const double gx = std::abs (axisNow.x);
+    const double gy = std::abs (axisNow.y);
+    const double gz = std::abs (axisNow.z);
+
+    // Die drei Beitraege zur Momentangeschwindigkeit, je Achse.
+    const double cx = amount           * gx * std::cos (phase[0]);
+    const double cy = amount           * gy * std::cos (phase[1]);
+    const double cz = amount * zFactor * gz * std::cos (phase[2]);
+
+    // Nur gegen die Division durch null: der Fall, dass alle drei Achsen
+    // gleichzeitig an ihrem Umkehrpunkt stehen. Die eigentliche Absicherung
+    // steht weiter unten und misst den zurueckgelegten Weg direkt.
+    const double reach = std::max (std::sqrt (cx * cx + cy * cy + cz * cz),
+                                   1.0e-9 * std::max (1.0, amount));
+
+    const double omega = amount > 1.0e-9 ? speed / reach : 0.0;
+
+    double step[3] { omega * gx * dt, omega * gy * dt, omega * gz * dt };
+
+    // --- Der Schritt wird am tatsaechlich zurueckgelegten Weg nachgemessen ---
+    //
+    // omega kommt aus der ABLEITUNG an der aktuellen Stelle. Das stimmt nur,
+    // solange der Schritt klein ist; nahe einem Umkehrpunkt ist die Ableitung
+    // fast null, omega wird gross, und ein Euler-Schritt schiesst dann weit
+    // ueber das Ziel hinaus. Nachgemessen waren das bei 50 m Ausschlag und
+    // Mach 3 Spitzen vom Fuenffachen des eingestellten Tempos - also genau
+    // wieder ein Regler, der nicht haelt, was er sagt, nur in die andere
+    // Richtung.
+    //
+    // Deshalb wird die neue Stelle probeweise ausgerechnet und der Schritt
+    // heruntergezogen, wenn der Weg dorthin laenger waere als v * dt. Ein
+    // Durchgang genuegt: die Bahn ist glatt, und der Ueberschuss tritt nur in
+    // der unmittelbaren Umgebung eines Umkehrpunkts auf.
+    const Vec3 current { amount * std::sin (phase[0]),
+                         amount * std::sin (phase[1]),
+                         amount * zFactor * std::sin (phase[2]) };
+
+    auto positionAfter = [&] (const double s[3])
+    {
+        return Vec3 { amount * std::sin (phase[0] + s[0]),
+                      amount * std::sin (phase[1] + s[1]),
+                      amount * zFactor * std::sin (phase[2] + s[2]) };
+    };
+
+    {
+        const double allowed = speed * dt;
+        const double moved   = (positionAfter (step) - current).length();
+
+        if (moved > allowed && moved > 1.0e-12)
+        {
+            const double scale = allowed / moved;
+
+            for (auto& v : step)
+                v *= scale;
+        }
+    }
+
+    phase[0] += step[0];
+    phase[1] += step[1];
+    phase[2] += step[2];
 
     for (auto& p : phase)
         if (p > kTwoPi)
