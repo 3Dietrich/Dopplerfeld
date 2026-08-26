@@ -372,10 +372,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         dopplerfeldProcessor.setScopePlaybackModeEnabled (on);
         scope.setPlaybackEnabled (on);
 
-        scopePlayButton.setButtonText (Labels::text (on ? "Play: An" : "Play"));
-        scopePlayButton.setColour (juce::TextButton::buttonColourId,
-                                   on ? juce::Colours::orangered.withAlpha (0.35f)
-                                      : juce::Colours::transparentBlack);
+        updateScopePlayButton (on);
     };
     scopePlayButton.setButtonText (Labels::text ("Play"));
     addAndMakeVisible (scopePlayButton);
@@ -456,7 +453,7 @@ void DopplerfeldEditor::refreshAllTooltips()
     scopeFreezeButton.setButtonText (Labels::text (scope.isFrozen() ? "Freeze: An" : "Freeze"));
     scopeSyncButton.setButtonText (Labels::text (scope.isSyncEnabled() ? "Sync: An" : "Sync"));
     scopeEventButton.setButtonText (Labels::text (scope.isEventTriggerEnabled() ? "Knall: An" : "Knall"));
-    scopePlayButton.setButtonText (Labels::text (scope.isPlaybackEnabled() ? "Play: An" : "Play"));
+    updateScopePlayButton (scope.isPlaybackEnabled());
 
     // Der Quelle-Knopf wird ohnehin im 30-Hz-Timer gesetzt und braucht hier
     // nichts.
@@ -468,6 +465,14 @@ void DopplerfeldEditor::refreshAllTooltips()
     fieldPanel.refreshTooltips();
     wallPanel.refreshTooltips();
     swarmPanel.refreshTooltips();
+}
+
+void DopplerfeldEditor::updateScopePlayButton (bool on)
+{
+    scopePlayButton.setButtonText (Labels::text (on ? "Play: An" : "Play"));
+    scopePlayButton.setColour (juce::TextButton::buttonColourId,
+                               on ? juce::Colours::orangered.withAlpha (0.35f)
+                                  : juce::Colours::transparentBlack);
 }
 
 void DopplerfeldEditor::updateScopeVisibility()
@@ -597,6 +602,16 @@ void DopplerfeldEditor::refreshDisplay()
         // davon unabhaengig.
         scope.setPlaybackProgress (dopplerfeldProcessor.scopePlaybackProgress(),
                                    dopplerfeldProcessor.isScopePlaybackAudible());
+
+        // Der Processor stellt den Play-Modus beim Neuvorbereiten zurueck
+        // (prepareToPlay, z.B. Puffergroessen- oder Samplerate-Wechsel im
+        // Host). Ohne diese Nachfuehrung behauptete der Knopf danach weiter
+        // "an", waehrend am Ausgang laengst wieder das Dopplersignal steht.
+        if (scope.isPlaybackEnabled() && ! dopplerfeldProcessor.isScopePlaybackModeEnabled())
+        {
+            scope.setPlaybackEnabled (false);
+            updateScopePlayButton (false);
+        }
 
         // Bestaetigungstext nach dem Speichern nur ein paar Sekunden stehen
         // lassen, nicht dauerhaft im Toolbar rumstehen.

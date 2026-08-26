@@ -86,6 +86,12 @@ private:
     // braucht (siehe scopeBlockHeight).
     void updateScopeVisibility();
 
+    // Beschriftung und Farbe des Play-Knopfs an einen Zustand angleichen.
+    // An einer Stelle, weil ihn drei setzen: der Klick, der Sprachwechsel
+    // und der Timer, wenn der Processor den Modus von sich aus zurueckstellt
+    // (prepareToPlay).
+    void updateScopePlayButton (bool on);
+
     // Schreibt einen Wert in den Bereich des Parameters und meldet ihn dem
     // Host. Über die Range des Parameters statt mit eigenen Grenzen, damit
     // Feld-Drag und Regler nie auseinanderlaufen.
