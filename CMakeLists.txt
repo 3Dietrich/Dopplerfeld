@@ -219,6 +219,51 @@ target_compile_definitions(field_shot PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(field_shot PRIVATE cxx_std_20)
 
+# Messprogramm zum Anfassen von M (Tests/grab_probe.cpp) - simuliert
+# Mausereignisse auf der FieldComponent, kein Test.
+add_executable(grab_probe EXCLUDE_FROM_ALL Tests/grab_probe.cpp)
+target_link_libraries(grab_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(grab_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(grab_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>)
+target_compile_features(grab_probe PRIVATE cxx_std_20)
+
+# Messprogramm zum Play-Knopf am Scope (Tests/scope_play_probe.cpp) - misst
+# die Wiedergabe am Ausgang des Processors, kein Test.
+add_executable(scope_play_probe EXCLUDE_FROM_ALL Tests/scope_play_probe.cpp)
+target_link_libraries(scope_play_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(scope_play_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(scope_play_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>)
+target_compile_features(scope_play_probe PRIVATE cxx_std_20)
+
+# Bildaufnahmen von Editor und Schwarm-Panel (Tests/editor_shot.cpp) - kein Test.
+add_executable(editor_shot EXCLUDE_FROM_ALL Tests/editor_shot.cpp)
+target_link_libraries(editor_shot
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(editor_shot PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(editor_shot PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(editor_shot PRIVATE cxx_std_20)
+
 enable_testing()
 add_test(NAME solver_check COMMAND solver_check)
 add_test(NAME load_check COMMAND load_check)

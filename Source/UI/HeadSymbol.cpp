@@ -10,21 +10,25 @@ namespace
     // unabhaengig vom Kopfradius klein und kontrollierbar, statt sich ueber
     // einen grossen Kreisbogen bis zur Nase zu ziehen. Der Haken schwenkt
     // von "radial nach aussen" auf "tangential nach vorne", die Spitze
-    // zeigt also zur Nase, nicht von ihr weg - genau umgekehrt zur
-    // fruaeheren, nach hinten weggeklappten Form.
-    juce::Path buildEarPath (juce::Point<float> centre, float r, float noseAngle, float side)
+    // zeigt also zur Nase, nicht von ihr weg.
+    //
+    // Gerechnet wird in der Kopfebene (Kopfradius = 1, Nase entlang +lx,
+    // siehe HeadSymbol::PointMapper); auf den Bildschirm kommt jeder Punkt
+    // erst durch die uebergebene Abbildung.
+    juce::Path buildEarPath (const HeadSymbol::PointMapper& map, float side)
     {
-        const float sideAngle = noseAngle + side * (juce::MathConstants<float>::pi * 0.5f);
-        const juce::Point<float> outward { std::cos (sideAngle), std::sin (sideAngle) };
-        const juce::Point<float> forward { std::cos (noseAngle), std::sin (noseAngle) };
+        const juce::Point<float> outward { 0.0f, side };
+        const juce::Point<float> forward { 1.0f, 0.0f };
 
-        const auto base = centre + outward * (r * 0.98f);
-        const auto ctrl = base + outward * (r * 0.30f) + forward * (r * 0.06f);
-        const auto tip  = base + outward * (r * 0.05f) + forward * (r * 0.30f);
+        const auto local = [&] (juce::Point<float> p) { return map (p.x, p.y); };
+
+        const auto base = outward * 0.98f;
+        const auto ctrl = base + outward * 0.30f + forward * 0.06f;
+        const auto tip  = base + outward * 0.05f + forward * 0.30f;
 
         juce::Path p;
-        p.startNewSubPath (base);
-        p.quadraticTo (ctrl, tip);
+        p.startNewSubPath (local (base));
+        p.quadraticTo (local (ctrl), local (tip));
         return p;
     }
 }
@@ -37,31 +41,49 @@ namespace HeadSymbol
         return centre + noseDir * (radiusPx * 1.5f);
     }
 
-    void draw (juce::Graphics& g, juce::Point<float> centre, float radiusPx,
-               float angleRadians, const Style& style)
+    void drawMapped (juce::Graphics& g, const PointMapper& map, const Style& style)
     {
-        // Kopf: Kreiskontur, optional gefuellt.
-        const auto headBounds = juce::Rectangle<float> (radiusPx * 2.0f, radiusPx * 2.0f)
-                                     .withCentre (centre);
+        // Kopf: Kreis der Kopfebene als Vieleck (siehe Kommentar im Header).
+        // 48 Ecken sind bei den hier ueblichen Radien von wenigen bis einigen
+        // Dutzend Pixeln nicht mehr von einem Kreis zu unterscheiden.
+        constexpr int   segments = 48;
+        constexpr float twoPi    = juce::MathConstants<float>::twoPi;
+
+        juce::Path head;
+
+        for (int i = 0; i < segments; ++i)
+        {
+            const float a  = twoPi * (float) i / (float) segments;
+            const auto  px = map (std::cos (a), std::sin (a));
+
+            if (i == 0)
+                head.startNewSubPath (px);
+            else
+                head.lineTo (px);
+        }
+
+        head.closeSubPath();
+
         if (! style.fillColour.isTransparent())
         {
             g.setColour (style.fillColour);
-            g.fillEllipse (headBounds);
+            g.fillPath (head);
         }
+
         g.setColour (style.headColour);
-        g.drawEllipse (headBounds, style.lineThickness);
+        g.strokePath (head, juce::PathStrokeType (style.lineThickness));
 
         // Nase: Dreieck, Basis auf der Kreiskontur, Spitze nach aussen.
         constexpr float baseHalfAngle = 0.42f; // Radiant, Oeffnungswinkel der Nasenbasis
-        const juce::Point<float> baseDirA { std::cos (angleRadians - baseHalfAngle),
-                                             std::sin (angleRadians - baseHalfAngle) };
-        const juce::Point<float> baseDirB { std::cos (angleRadians + baseHalfAngle),
-                                             std::sin (angleRadians + baseHalfAngle) };
+
         juce::Path nose;
-        nose.startNewSubPath (centre + baseDirA * (radiusPx * 0.95f));
-        nose.lineTo (noseTip (centre, radiusPx, angleRadians));
-        nose.lineTo (centre + baseDirB * (radiusPx * 0.95f));
+        nose.startNewSubPath (map (std::cos (-baseHalfAngle) * 0.95f,
+                                   std::sin (-baseHalfAngle) * 0.95f));
+        nose.lineTo (map (1.5f, 0.0f));
+        nose.lineTo (map (std::cos (baseHalfAngle) * 0.95f,
+                          std::sin (baseHalfAngle) * 0.95f));
         nose.closeSubPath();
+
         g.setColour (style.headColour);
         g.strokePath (nose, juce::PathStrokeType (style.lineThickness,
                                                     juce::PathStrokeType::curved,
@@ -69,12 +91,30 @@ namespace HeadSymbol
 
         // Ohren: je ein gebogener Strich links und rechts der Blickrichtung.
         g.setColour (style.earColour);
+
         for (float side : { -1.0f, 1.0f })
         {
-            auto earPath = buildEarPath (centre, radiusPx, angleRadians, side);
+            auto earPath = buildEarPath (map, side);
             g.strokePath (earPath, juce::PathStrokeType (style.lineThickness,
                                                            juce::PathStrokeType::curved,
                                                            juce::PathStrokeType::rounded));
         }
+    }
+
+    void draw (juce::Graphics& g, juce::Point<float> centre, float radiusPx,
+               float angleRadians, const Style& style)
+    {
+        // Die flache Darstellung ist der Sonderfall "drehen und skalieren"
+        // derselben Zeichnung - eine zweite Geometrie dafuer gaebe es nur,
+        // damit beide auseinanderlaufen koennen.
+        const juce::Point<float> forward { std::cos (angleRadians), std::sin (angleRadians) };
+        const juce::Point<float> right   { -std::sin (angleRadians), std::cos (angleRadians) };
+
+        drawMapped (g,
+                    [&] (float lx, float ly)
+                    {
+                        return centre + (forward * lx + right * ly) * radiusPx;
+                    },
+                    style);
     }
 }

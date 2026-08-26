@@ -35,6 +35,7 @@ SwarmPanel::SwarmPanel (juce::AudioProcessorValueTreeState& apvts)
     // wann die anderen Regler ueberhaupt etwas bewirken.
     totalKnob.slider.onValueChange = [this] { updateEnabledState(); };
     setupKnob (spreadKnob, apvts, Params::cloneSpread, "Streuung", Tooltips::Key::CloneSpread);
+    setupKnob (zAmountKnob, apvts, Params::srcJitterZAmount, "Z-Anteil", Tooltips::Key::SrcJitterZAmount);
     setupKnob (realLevelKnob, apvts, Params::cloneRealLevel, "Gain", Tooltips::Key::CloneRealLevel);
 
     showButton.setTooltip (Tooltips::text (Tooltips::Key::CloneShow));
@@ -57,6 +58,8 @@ void SwarmPanel::updateEnabledState()
 
     spreadKnob.slider.setEnabled (anyClones);
     spreadKnob.label.setEnabled (anyClones);
+    zAmountKnob.slider.setEnabled (anyClones);
+    zAmountKnob.label.setEnabled (anyClones);
     realLevelKnob.slider.setEnabled (anyClones);
     realLevelKnob.label.setEnabled (anyClones);
     showButton.setEnabled (anyClones);
@@ -69,7 +72,7 @@ void SwarmPanel::refreshTooltips()
     showButton.setButtonText (Labels::text ("Zeigen"));
     panicButton.setButtonText (Labels::text ("Notaus: minimale Konfiguration"));
 
-    for (auto* k : { &totalKnob, &spreadKnob, &realLevelKnob })
+    for (auto* k : { &totalKnob, &spreadKnob, &zAmountKnob, &realLevelKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -101,7 +104,7 @@ void SwarmPanel::resized()
 
     auto knobRow = area.removeFromTop (knobH);
 
-    for (auto* k : { &totalKnob, &spreadKnob, &realLevelKnob })
+    for (auto* k : { &totalKnob, &spreadKnob, &zAmountKnob, &realLevelKnob })
     {
         layoutKnob (*k, knobRow.removeFromLeft (knobW));
         knobRow.removeFromLeft (4);

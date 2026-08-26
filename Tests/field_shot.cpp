@@ -1,6 +1,7 @@
-// Rendert die Draufsicht von FieldComponent headless in PNG-Dateien - einmal
-// mit M im Feld, einmal mit M weit ausserhalb, um die neue Randmarke zu
-// pruefen (s. topDownSourceMarker() in FieldComponent.cpp).
+// Rendert FieldComponent headless in PNG-Dateien: die Draufsicht mit M im
+// Feld und mit M weit ausserhalb (Randmarke, s. topDownSourceMarker()) sowie
+// die Perspektive mit dem Hoerersymbol in mehreren Blickrichtungen und
+// Ohrhoehen (s. drawPerspectiveListener()).
 //
 // Zweck: Layout/Randmarken-Position lassen sich nicht am Quelltext pruefen.
 // Hier entstehen Bilder, ohne dass ein Fenster auf dem Bildschirm aufgeht -
@@ -78,6 +79,35 @@ int main()
     snap.sourcePos = { 50.0, 300.0, 0.0 };
     field.setSnapshot (snap);
     shoot (field, "field_topdown_outside_north");
+
+    // 5) Perspektive: der Hoerer liegt flach in seiner Ohrhoehe und ist
+    // perspektivisch verzerrt, mit Lotlinie auf den Boden. Drei Blick-
+    // richtungen, weil die Verzerrung genau daran ablesbar ist - von der
+    // Kamera weg, quer und zur Kamera hin.
+    field.setViewMode (FieldComponent::ViewMode::Perspective);
+
+    snap.sourcePos      = { 50.0, 60.0, 12.0 };
+    snap.listener.head  = { 50.0, 28.5, 1.7 };
+    snap.listener.yaw   = 0.0;                 // Nase in +y, von der Kamera weg
+    field.setSnapshot (snap);
+    shoot (field, "field_persp_listener_away");
+
+    snap.listener.yaw = juce::MathConstants<double>::halfPi;   // Nase in +x, quer
+    field.setSnapshot (snap);
+    shoot (field, "field_persp_listener_side");
+
+    snap.listener.yaw = juce::MathConstants<double>::pi;       // Nase zur Kamera
+    field.setSnapshot (snap);
+    shoot (field, "field_persp_listener_towards");
+
+    // 6) Hoerer deutlich ueber dem Boden: der senkrechte Strich zu z = 0 wird
+    // lang, das Symbol bleibt in seiner Hoehe liegen. Viel hoeher darf er
+    // hier nicht stehen - die Kamera haengt an seiner Grundflaeche, nicht an
+    // seiner Hoehe (s. cameraPosition()), und schiebt ihn sonst aus dem Bild.
+    snap.listener.head = { 50.0, 28.5, 6.0 };
+    snap.listener.yaw  = 0.0;
+    field.setSnapshot (snap);
+    shoot (field, "field_persp_listener_high");
 
     return 0;
 }

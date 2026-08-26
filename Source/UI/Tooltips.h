@@ -172,6 +172,7 @@ namespace Tooltips
         ScopeZoomOutPrefix,
         ScopeZoomOutSuffix,
         ScopeSave,
+        ScopePlay,
         LanguageToggle,
 
         // Begrenzer-Marke in der Loeserlast-Zeile (nicht Kopfzeile/Scope-
@@ -939,14 +940,20 @@ namespace Tooltips
                           "wackelt nur in der Ebene.\n\n"
                           "Ein Anteil statt einer eigenen Auslenkung: \"Jitter\" bleibt "
                           "der eine Regler für die Größe der Bewegung, dieser hier sagt "
-                          "nur, ob sie flach liegt oder den Raum füllt."
+                          "nur, ob sie flach liegt oder den Raum füllt.\n\n"
+                          "Derselbe Regler steht im Schwarm-Panel neben \"Streuung\" und "
+                          "gilt dort für die Höhe der Klone - ein Parameter, zwei Räder, "
+                          "immer gleich."
                         : "How far the height joins the wobble, as a share of the set "
                           "amount. 1 = z wobbles as far as x and y, 0 = not at all, the "
                           "source stays at its set height and wobbles only in the "
                           "plane.\n\n"
                           "A share rather than its own amount: \"Jitter\" stays the one "
                           "control for the size of the movement, this one only says "
-                          "whether it lies flat or fills the space.";
+                          "whether it lies flat or fills the space.\n\n"
+                          "The same control sits next to \"Spread\" in the swarm panel and "
+                          "governs the height of the clones there - one parameter, two "
+                          "knobs, always in step.";
                 case Key::SrcJitterOn:
                     return lang == Language::De
                         ? "Schaltet das Wackeln der Schallquelle M und aller Klone komplett ab. Die "
@@ -1545,6 +1552,16 @@ namespace Tooltips
                           "to ~/Downloads (@dpa-Feedback: \"für Dich, debuggen\") - "
                           "timestamp in the file name, playable with the correct "
                           "sample rate/pitch.";
+                case Key::ScopePlay:
+                    return lang == Language::De
+                        ? "Spielt das sichtbare Scope-Bild einmal von vorn bis hinten ab, "
+                          "danach still. Bleibt der Schalter an, startet ein Klick im Scope "
+                          "die Wiedergabe ab der geklickten Stelle bis zum rechten Rand. "
+                          "Solange er an ist, ersetzt die Wiedergabe den Ausgang."
+                        : "Plays the visible scope picture once from start to end, then "
+                          "goes quiet. While the switch stays on, clicking in the scope "
+                          "starts playback from that point to the right edge. While it's "
+                          "on, playback replaces the plugin output.";
                 case Key::LanguageToggle:
                     return lang == Language::De
                         ? "Sprache der Hilfehinweise umschalten (Deutsch/Englisch)."

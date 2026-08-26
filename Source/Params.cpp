@@ -177,7 +177,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     {
         // Skew Richtung niedrige Werte: die Klangänderung beim Hochdrehen ist
         // unten am dichtesten, dort soll der Regler die meiste Auflösung haben.
-        auto range = juce::NormalisableRange<float> (0.0f, 12000.0f);
+        //
+        // Obergrenze 96000 statt der frueheren 12000 (@dpa 20260826: "max ist
+        // derzeit 12000, da ist aber theoretisch noch viel Platz. bitte
+        // erweitere es um 2-3 Oktaven"): drei Oktaven, also 8x. 96000 RPM sind
+        // 1600 Hz Grundfrequenz - mit den Teiltoenen darueber reicht das bis
+        // an den oberen Rand des Hoerbaren, und weiter zu gehen brauchte
+        // niemand. Der Skew bleibt bei 1000, der brauchbare Bereich liegt
+        // weiterhin unten.
+        auto range = juce::NormalisableRange<float> (0.0f, 96000.0f);
         range.setSkewForCentre (1000.0f);
         layout.add (floatParam (rpm, "RPM", range, 1000.0f, "RPM"));
     }

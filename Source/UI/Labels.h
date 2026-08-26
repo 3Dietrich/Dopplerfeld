@@ -136,6 +136,7 @@ namespace Labels
             { "Knall: An",      "Bang: On"    },
             { "Freeze: An",     "Freeze: On"  },
             { "Sync: An",       "Sync: On"    },
+            { "Play: An",       "Play: On"    },
             { "Scope ausblenden", "Hide Scope" },
             { "Ansicht: Draufsicht",  "View: Top Down"    },
             { "Ansicht: Perspektive", "View: Perspective" },

@@ -63,6 +63,15 @@ private:
     void layoutKnob (Knob& knob, juce::Rectangle<int> cell);
 
     Knob totalKnob, spreadKnob;
+
+    // Anteil der Hoehe an der Streuung. Haengt am SELBEN Parameter wie der
+    // "Z-Anteil" im Bewegungs-Panel (Params::srcJitterZAmount) - @dpa
+    // 20260826: "zwei mal den Control scheint zuviel, aber in beiden ist er
+    // wichtig.. vielleicht gegenseitig ferngesteuert/gleich geschaltet?".
+    // Zwei SliderAttachments auf denselben Parameter sind genau diese
+    // Gleichschaltung, ohne dass irgendwer die beiden Regler von Hand
+    // synchron halten muesste.
+    Knob zAmountKnob;
     // Gain der Klone in dB, siehe Params::cloneRealLevel.
     Knob realLevelKnob;
 

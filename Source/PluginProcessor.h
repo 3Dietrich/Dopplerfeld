@@ -128,6 +128,36 @@ public:
     void stopFlyBy()    { flyStopRequest.store (true); }
     bool isFlyingBy() const { return flyByActive.load(); }
 
+    // "Play"-Toggle im Scope (@dpa: "Play an schalten: es spielt die
+    // Scopeansicht von vorn bis hinten ab und geht dann auf null. Wenn Play
+    // an bleibt, kann man ... an bestimmten Stellen starten"). Zwei getrennte
+    // Signale, wie ueberall sonst hier:
+    //  - Ein LEVEL-Flag fuer den Ein/Aus-Zustand, direkt gelesen wie
+    //    motorGateEnabled - steuert die Doppler<->Wiedergabe-Blende in
+    //    renderScopePlayback() UND, "solange der Toggle an ist ersetzt die
+    //    Wiedergabe den Plugin-Ausgang" woertlich: bei ausgeschaltetem
+    //    Toggle bleibt der Dopplerausgang unangetastet.
+    //  - Ein diskretes Anfrage-Flag fuer "jetzt genau DIESEN Puffer
+    //    abspielen" (Einschalten ODER ein Klick im Scope). Der Puffer wird
+    //    VORHER im Message-Thread gefuellt (requestScopePlayback()) - der
+    //    Audiothread kopiert ihn beim naechsten Block in seinen eigenen,
+    //    seit prepareToPlay() feststehenden Puffer (derselbe Weg wie
+    //    stagedMotionFrames/motionLoadRequest, s. dort) und allokiert dabei
+    //    selbst nichts.
+    void setScopePlaybackModeEnabled (bool shouldEnable) { scopePlaybackModeEnabled.store (shouldEnable); }
+    bool isScopePlaybackModeEnabled() const { return scopePlaybackModeEnabled.load(); }
+
+    // left/right zeigen `length` Samples lang in den sichtbaren Scope-
+    // Ausschnitt (ScopeComponent::visibleLeft()/visibleRight()) - werden
+    // hier sofort kopiert, die Zeiger muessen danach nicht mehr gueltig sein.
+    void requestScopePlayback (const float* left, const float* right, int length);
+
+    // Fortschritt/Hoerbarkeit des laufenden Abspielvorgangs, fuer den
+    // Abspielcursor im Scope (Editor-Timer, 30 Hz, s. ScopeComponent::
+    // setPlaybackProgress()).
+    float scopePlaybackProgress() const { return scopePlaybackProgressOut.load (std::memory_order_relaxed); }
+    bool  isScopePlaybackAudible() const { return scopePlaybackActiveOut.load (std::memory_order_relaxed); }
+
     // Wie oft der Begrenzer im letzten Block eingegriffen hat. Null heisst: der
     // Ausgang laeuft frei.
     int limiterHits() const { return limiterHitCount.load (std::memory_order_relaxed); }
@@ -318,6 +348,21 @@ private:
 
     void applyParameters();
     void handlePendingRequests();
+
+    // Blendet den Ausgang zwischen Dopplersignal und Scope-Wiedergabe (s.
+    // setScopePlaybackModeEnabled() oben) und mischt den aktiven Abspiel-
+    // Puffer ein. Laeuft PER SAMPLE (nicht nur blockweise wie
+    // handlePendingRequests) - die Blenden brauchen eine laufende Rampe,
+    // kein einmaliges Umschalten, genau wie die Schnittblende (cutState)
+    // weiter unten. Aufgerufen aus processBlock(), VOR applyOutputStage(),
+    // damit Gain/Limiter/Levelmeter/Scope-Ringpuffer die Wiedergabe genauso
+    // behandeln wie das normale Dopplersignal.
+    void renderScopePlayback (juce::AudioBuffer<float>& buffer);
+
+    // Uebernimmt stagedScopePlaybackL/R (vom Message-Thread gefuellt, s.
+    // requestScopePlayback()) in den aktiven Wiedergabepuffer und startet die
+    // Einblende-Rampe. Nur aus renderScopePlayback() (Audiothread).
+    void startStagedScopePlayback();
 
     // Klone: Reglerstand einlesen, Zahl an die Engine weiterreichen. Nur aus
     // applyParameters() (Audiothread).
@@ -831,6 +876,58 @@ private:
     // sofort Signal da, sobald der Scope eingeschaltet wird (kein stiller
     // Deckel, der erst "warmlaufen" muesste).
     ScopeRingBuffer scopeRing;
+
+    //==================================================================
+    // Scope-Play-Toggle (s. setScopePlaybackModeEnabled()/
+    // requestScopePlayback() oben, renderScopePlayback() in der .cpp).
+    //
+    // Zwei Rampen, weil sie zwei verschiedene Klicks verhindern:
+    //  - scopeReplaceGain blendet zwischen Dopplersignal und Wiedergabe, mit
+    //    dem Ein-/Ausschalten des Toggles. Deckt allein schon "Ausschalten
+    //    stoppt sofort ... sauber ausgeblendet" ab - der laufende
+    //    Abspielvorgang selbst braucht dafuer KEINE Sonderbehandlung, er
+    //    laeuft (voruebergehend unhoerbar) im Hintergrund weiter, bis er von
+    //    selbst am Pufferende ankommt.
+    //  - scopePlaybackShotGain blendet EINEN einzelnen Abspielvorgang selbst
+    //    ein/aus: an einer angeklickten Stelle steht eine beliebige
+    //    Amplitude (Klickrisiko am Start), das letzte Sample eines Puffers
+    //    ist selten null (Klickrisiko am Ende), und ein Klick mitten in
+    //    eine laufende Wiedergabe hinein waere ein harter Quellwechsel.
+    //    Reicht ein neuer Puffer ein, waehrend noch einer laeuft
+    //    (scopePlaybackSwapPending), wird erst sauber zu Ende ausgeblendet
+    //    und DANACH umgeschaltet - kein Crossfade zweier Ausschnitte.
+    enum class ScopeShotPhase { Idle, FadingIn, Playing, FadingOut };
+
+    static constexpr double scopePlaybackModeFadeSeconds = 0.008;   // Doppler <-> Wiedergabe
+    static constexpr double scopePlaybackShotFadeSeconds = 0.003;   // je Abspielvorgang
+
+    ScopeShotPhase scopePlaybackShotPhase          = ScopeShotPhase::Idle;
+    double         scopePlaybackShotGain           = 0.0;   // aktueller Wert 0..1
+    double         scopePlaybackShotStep           = 0.0;   // pro Sample waehrend Ein-/Ausblenden
+    int            scopePlaybackShotFadeSamplesCurrent = 1; // Fade-Laenge des AKTIVEN Puffers (adaptiv, s. startStagedScopePlayback())
+    int            scopePlaybackReadPos            = 0;
+    int            scopePlaybackLength             = 0;     // 0 = nichts (mehr) zu lesen
+    bool           scopePlaybackSwapPending         = false;
+
+    double scopeReplaceGain       = 0.0;     // 0 = reines Dopplersignal, 1 = reine Wiedergabe
+
+    // Audiothread-eigene Puffer, Kapazitaet in prepareToPlay() einmal auf
+    // scopeMaxDisplaySeconds festgelegt - mehr kann ein sichtbares Fenster
+    // ohnehin nie sein (s. ScopeComponent::setMaxDisplaySampleCount()).
+    std::vector<float> scopePlaybackL, scopePlaybackR;
+
+    // Message-Thread -> Audiothread, s. requestScopePlayback(): der Puffer
+    // wird VOR dem Anfrage-Flag gefuellt, derselbe Weg wie
+    // stagedMotionFrames/motionLoadRequest weiter unten.
+    std::vector<float> stagedScopePlaybackL, stagedScopePlaybackR;
+    int                stagedScopePlaybackLength = 0;
+
+    std::atomic<bool>  scopePlaybackModeEnabled  { false };
+    std::atomic<bool>  scopePlaybackStartRequest { false };
+
+    // Audiothread -> Message-Thread, nur zur Anzeige (Abspielcursor).
+    std::atomic<float> scopePlaybackProgressOut { 0.0f };
+    std::atomic<bool>  scopePlaybackActiveOut   { false };
 
     //==================================================================
     // Message-Thread -> Audiothread

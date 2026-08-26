@@ -30,7 +30,8 @@ void setParam (DopplerfeldProcessor& proc, const char* id, float value)
         std::printf ("  (Parameter %s gibt es nicht)\n", id);
 }
 
-void run (const char* label, float jitterAmount, float jitterSpeed, float spread, int clones)
+void run (const char* label, float jitterAmount, float jitterSpeed, float spread, int clones,
+          float zAmount = 1.0f)
 {
     DopplerfeldProcessor proc;
     proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
@@ -42,6 +43,10 @@ void run (const char* label, float jitterAmount, float jitterSpeed, float spread
     setParam (proc, Params::srcJitterSpeed,  jitterSpeed);
     setParam (proc, Params::cloneTotal,      (float) clones);
     setParam (proc, Params::cloneSpread,     spread);
+
+    // Derselbe Regler traegt die Hoehe des Wacklers UND die der Streuung
+    // (s. DopplerEngine::setRealClones).
+    setParam (proc, Params::srcJitterZAmount, zAmount);
 
     juce::AudioBuffer<float> buffer (2, blockSize);
     juce::MidiBuffer         midi;
@@ -73,8 +78,8 @@ void run (const char* label, float jitterAmount, float jitterSpeed, float spread
         src.push_back (snap.sourcePos);
     }
 
-    std::printf ("\n=== %s  (Wackler %.1f m / %.0f m/s, Spread %.2f m, %d Klone)\n",
-                 label, jitterAmount, jitterSpeed, spread, clones);
+    std::printf ("\n=== %s  (Wackler %.1f m / %.0f m/s, Spread %.2f m, %d Klone, Z-Anteil %.2f)\n",
+                 label, jitterAmount, jitterSpeed, spread, clones, zAmount);
 
     // Karussell-Test: laeuft die Quelle auf einer Kreisbahn um ihren
     // Ankerpunkt, bleibt ihr Abstand dazu konstant. Eine Fliege dagegen kommt
@@ -107,6 +112,26 @@ void run (const char* label, float jitterAmount, float jitterSpeed, float spread
     {
         std::printf ("    keine Klone im Schnappschuss\n");
         return;
+    }
+
+    // Hoehenspanne des ganzen Schwarms: daran haengt der Z-Anteil. Bei 0
+    // muessen alle Klone in der Ebene der Quelle liegen (Spanne 0), bei 1
+    // streuen sie in der Hoehe so weit wie in der Ebene.
+    {
+        double minZ = 1.0e30, maxZ = -1.0e30, maxXY = 0.0;
+
+        for (const auto& r : rel)
+            for (const auto& v : r)
+            {
+                minZ  = std::min (minZ, v.z);
+                maxZ  = std::max (maxZ, v.z);
+                maxXY = std::max (maxXY, std::sqrt (v.x * v.x + v.y * v.y));
+            }
+
+        if (maxZ >= minZ)
+            std::printf ("    Schwarm in der Hoehe: %.3f .. %.3f m (Spanne %.3f m), "
+                         "groesster Versatz in der Ebene %.3f m\n",
+                         minZ, maxZ, maxZ - minZ, maxXY);
     }
 
     for (size_t c = 0; c < rel.size(); ++c)
@@ -167,6 +192,12 @@ int main()
     run ("Wackler aus, Spread 10 m",  0.0f,  0.0f, 10.0f, 4);
     run ("Wackler 10 m, Spread aus", 10.0f, 20.0f, 0.0f, 4);
     run ("Wackler 10 m, Spread 10 m",10.0f, 20.0f, 10.0f, 4);
+
+    // Der Z-Anteil gilt fuer beides: bei 0 liegt der Schwarm flach in der
+    // Ebene der Quelle, bei 1 streut er in der Hoehe so weit wie in der
+    // Ebene (@dpa 20260826: "Z-Anteil auch bei Feld/.. Streuung").
+    run ("Spread 10 m, Z-Anteil 0",   0.0f,  0.0f, 10.0f, 4, 0.0f);
+    run ("Spread 10 m, Z-Anteil 1",   0.0f,  0.0f, 10.0f, 4, 1.0f);
 
     return 0;
 }

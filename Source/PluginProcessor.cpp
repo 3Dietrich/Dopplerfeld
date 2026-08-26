@@ -437,6 +437,33 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     // fuer die Trigger-Suche bei Sync, siehe dortigen Klassenkommentar).
     scopeRing.prepare (sampleRate, 2.0 * scopeMaxDisplaySeconds);
 
+    // Wiedergabepuffer fuer den Scope-Play-Toggle: hoechstens ein sichtbares
+    // Fenster lang (scopeMaxDisplaySeconds, s. dortigen Kommentar), einmal
+    // reserviert - renderScopePlayback() darf danach nie mehr allokieren.
+    {
+        const int scopePlaybackCapacity = (int) std::ceil (scopeMaxDisplaySeconds * sampleRate);
+
+        scopePlaybackL.assign ((size_t) scopePlaybackCapacity, 0.0f);
+        scopePlaybackR.assign ((size_t) scopePlaybackCapacity, 0.0f);
+        stagedScopePlaybackL.assign ((size_t) scopePlaybackCapacity, 0.0f);
+        stagedScopePlaybackR.assign ((size_t) scopePlaybackCapacity, 0.0f);
+        stagedScopePlaybackLength = 0;
+
+        scopePlaybackShotPhase             = ScopeShotPhase::Idle;
+        scopePlaybackShotGain              = 0.0;
+        scopePlaybackShotStep              = 0.0;
+        scopePlaybackShotFadeSamplesCurrent = 1;
+        scopePlaybackReadPos               = 0;
+        scopePlaybackLength                = 0;
+        scopePlaybackSwapPending           = false;
+        scopeReplaceGain                   = 0.0;
+
+        scopePlaybackModeEnabled.store (false);
+        scopePlaybackStartRequest.store (false);
+        scopePlaybackProgressOut.store (0.0f);
+        scopePlaybackActiveOut.store (false);
+    }
+
     engineGenerator.prepare (sampleRate, maxBlock);
     sampleSource.prepare (sampleRate, maxBlock);
     audioInSource.prepare (sampleRate, maxBlock);
@@ -984,7 +1011,15 @@ void DopplerfeldProcessor::applyCloneParameters()
     // Faktor.
     const double gainLinear = juce::Decibels::decibelsToGain ((double) pp.cloneRealLevel->load());
 
-    dopplerEngine.setRealClones (effectiveRealClones, (double) pp.cloneSpread->load(), gainLinear);
+    // Der Z-Anteil ist ausdruecklich DERSELBE Regler wie beim Wackler der
+    // Quelle (@dpa 20260826: "zwei mal den Control scheint zuviel, aber in
+    // beiden ist er wichtig.. vielleicht gegenseitig ferngesteuert/gleich
+    // geschaltet?") - ein Parameter, zwei Regler im UI (Bewegung und
+    // Schwarm), die dadurch von selbst gleich stehen.
+    dopplerEngine.setRealClones (effectiveRealClones,
+                                 (double) pp.cloneSpread->load(),
+                                 (double) pp.srcJitterZAmount->load(),
+                                 gainLinear);
 
     activeRealClones.store (effectiveRealClones);
 }
@@ -1815,6 +1850,164 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
     }
 }
 
+void DopplerfeldProcessor::requestScopePlayback (const float* left, const float* right, int length)
+{
+    length = juce::jlimit (0, (int) stagedScopePlaybackL.size(), length);
+
+    std::copy (left, left + length, stagedScopePlaybackL.begin());
+    std::copy (right, right + length, stagedScopePlaybackR.begin());
+
+    // Puffer steht, BEVOR das Flag ihn ankuendigt - derselbe Weg wie
+    // stagedMotionFrames/motionLoadRequest (s. Header dort): kein Lock, der
+    // Audiothread liest beides erst, nachdem er das Flag gesehen hat.
+    stagedScopePlaybackLength = length;
+    scopePlaybackStartRequest.store (true);
+}
+
+void DopplerfeldProcessor::startStagedScopePlayback()
+{
+    const int n = juce::jlimit (0, (int) scopePlaybackL.size(), stagedScopePlaybackLength);
+
+    if (n <= 0)
+    {
+        scopePlaybackShotPhase = ScopeShotPhase::Idle;
+        scopePlaybackLength    = 0;
+        return;
+    }
+
+    std::copy (stagedScopePlaybackL.begin(), stagedScopePlaybackL.begin() + n, scopePlaybackL.begin());
+    std::copy (stagedScopePlaybackR.begin(), stagedScopePlaybackR.begin() + n, scopePlaybackR.begin());
+
+    scopePlaybackLength  = n;
+    scopePlaybackReadPos = 0;
+
+    // Fade-Laenge adaptiv: hoechstens die halbe Pufferlaenge, sonst waere
+    // beim kuerzesten moeglichen Fenster (ScopeComponent::minDisplaySamples
+    // = 128) die Einblende-Rampe laenger als der ganze Puffer.
+    const int desiredFade = (int) (scopePlaybackShotFadeSeconds * juce::jmax (1.0, currentSampleRate));
+    scopePlaybackShotFadeSamplesCurrent = juce::jlimit (1, juce::jmax (1, n / 2), desiredFade);
+
+    scopePlaybackShotStep  = 1.0 / (double) scopePlaybackShotFadeSamplesCurrent;
+    scopePlaybackShotGain  = 0.0;
+    scopePlaybackShotPhase = ScopeShotPhase::FadingIn;
+}
+
+void DopplerfeldProcessor::renderScopePlayback (juce::AudioBuffer<float>& buffer)
+{
+    // Reines Level-Flag wie motorGateEnabled - kein Flankenvergleich noetig,
+    // die Rampe auf modeTarget im Sample-Loop unten ist ohnehin jeden Block
+    // idempotent (sie tut nur etwas, wenn scopeReplaceGain noch nicht dort
+    // steht, egal ob sich modeOn gerade eben geaendert hat oder schon
+    // laenger so steht).
+    const bool modeOn = scopePlaybackModeEnabled.load();
+
+    if (scopePlaybackStartRequest.exchange (false) && modeOn)
+    {
+        if (scopePlaybackShotPhase == ScopeShotPhase::Idle)
+        {
+            startStagedScopePlayback();
+        }
+        else
+        {
+            // Es spielt noch etwas: erst sauber ausblenden (kurze eigene
+            // Rampe, hoechstens so lang wie noch Puffer uebrig ist), danach
+            // uebernimmt der Sample-Loop unten den wartenden Puffer selbst
+            // (scopePlaybackSwapPending).
+            const int remaining   = juce::jmax (1, scopePlaybackLength - scopePlaybackReadPos);
+            const int fadeSamples = juce::jmin (scopePlaybackShotFadeSamplesCurrent, remaining);
+
+            scopePlaybackShotStep  = 1.0 / (double) juce::jmax (1, fadeSamples);
+            scopePlaybackShotPhase = ScopeShotPhase::FadingOut;
+            scopePlaybackSwapPending = true;
+        }
+    }
+
+    const double modeStep   = 1.0 / std::max (1.0, scopePlaybackModeFadeSeconds * currentSampleRate);
+    const double modeTarget = modeOn ? 1.0 : 0.0;
+
+    const int    numSamples = buffer.getNumSamples();
+    const int    numCh      = buffer.getNumChannels();
+    float* const* data      = buffer.getArrayOfWritePointers();
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        // Doppler <-> Wiedergabe blenden. Diese eine Rampe reicht fuer
+        // klickfreies Ein- UND Ausschalten: der aktive Abspielvorgang
+        // braucht dafuer keine eigene Reaktion, er wird durch die sinkende
+        // Blende einfach unhoerbar (s. Klassenkommentar im Header).
+        if (scopeReplaceGain < modeTarget)
+            scopeReplaceGain = std::min (modeTarget, scopeReplaceGain + modeStep);
+        else if (scopeReplaceGain > modeTarget)
+            scopeReplaceGain = std::max (modeTarget, scopeReplaceGain - modeStep);
+
+        float previewL = 0.0f, previewR = 0.0f;
+
+        if (scopePlaybackShotPhase != ScopeShotPhase::Idle && scopePlaybackLength > 0)
+        {
+            // Ausklang antriggern, kurz vor dem Pufferende - Leseposition
+            // und Rampe laufen dadurch synchron aus: die Rampe erreicht
+            // exakt dann null, wenn die Leseposition das Ende erreicht.
+            if (scopePlaybackShotPhase == ScopeShotPhase::Playing
+                && scopePlaybackReadPos >= scopePlaybackLength - scopePlaybackShotFadeSamplesCurrent)
+            {
+                scopePlaybackShotStep  = 1.0 / (double) juce::jmax (1, scopePlaybackShotFadeSamplesCurrent);
+                scopePlaybackShotPhase = ScopeShotPhase::FadingOut;
+            }
+
+            if (scopePlaybackReadPos < scopePlaybackLength)
+            {
+                previewL = scopePlaybackL[(size_t) scopePlaybackReadPos] * (float) scopePlaybackShotGain;
+                previewR = scopePlaybackR[(size_t) scopePlaybackReadPos] * (float) scopePlaybackShotGain;
+                ++scopePlaybackReadPos;
+            }
+
+            if (scopePlaybackShotPhase == ScopeShotPhase::FadingIn)
+            {
+                scopePlaybackShotGain += scopePlaybackShotStep;
+
+                if (scopePlaybackShotGain >= 1.0)
+                {
+                    scopePlaybackShotGain  = 1.0;
+                    scopePlaybackShotPhase = ScopeShotPhase::Playing;
+                }
+            }
+            else if (scopePlaybackShotPhase == ScopeShotPhase::FadingOut)
+            {
+                scopePlaybackShotGain -= scopePlaybackShotStep;
+
+                if (scopePlaybackShotGain <= 0.0)
+                {
+                    scopePlaybackShotGain = 0.0;
+
+                    if (scopePlaybackSwapPending)
+                    {
+                        scopePlaybackSwapPending = false;
+                        startStagedScopePlayback();
+                    }
+                    else
+                    {
+                        scopePlaybackShotPhase = ScopeShotPhase::Idle;
+                        scopePlaybackLength    = 0;
+                    }
+                }
+            }
+        }
+
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            const float src = (ch == 0 || numCh <= 1) ? previewL : previewR;
+            data[ch][i] = data[ch][i] * (1.0f - (float) scopeReplaceGain) + src * (float) scopeReplaceGain;
+        }
+    }
+
+    const bool audible = modeOn && scopePlaybackShotPhase != ScopeShotPhase::Idle;
+
+    scopePlaybackActiveOut.store (audible, std::memory_order_relaxed);
+    scopePlaybackProgressOut.store (scopePlaybackLength > 0
+        ? (float) scopePlaybackReadPos / (float) scopePlaybackLength : 0.0f,
+        std::memory_order_relaxed);
+}
+
 void DopplerfeldProcessor::applyOutputStage (juce::AudioBuffer<float>& buffer)
 {
     const int numSamples = buffer.getNumSamples();
@@ -1999,6 +2192,11 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
         start += n;
     }
+
+    // Scope-Play-Toggle (s. Header): VOR applyOutputStage(), damit Gain/
+    // Limiter/Levelmeter/Scope-Ringpuffer die Wiedergabe genauso behandeln
+    // wie das normale Dopplersignal.
+    renderScopePlayback (buffer);
 
     applyOutputStage (buffer);
 

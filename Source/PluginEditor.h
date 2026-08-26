@@ -182,6 +182,15 @@ private:
     juce::Label      scopeSaveStatusLabel;
     juce::uint32     scopeSaveStatusUntilMs = 0;
 
+    // Play-Toggle (@dpa: "Play an schalten: es spielt die Scopeansicht von
+    // vorn bis hinten ab und geht dann auf null ... Klick startet an
+    // bestimmten Stellen"). Der An/Aus-Zustand steht in ScopeComponent (wie
+    // bei Freeze/Sync), dieser Knopf spiegelt ihn nur - siehe scopePlayButton
+    // .onClick im Konstruktor: er schaltet BEIDES, scope.setPlaybackEnabled()
+    // fuer Klick-Erkennung/Cursor UND dopplerfeldProcessor.
+    // setScopePlaybackModeEnabled() fuer die eigentliche Audio-Ersetzung.
+    juce::TextButton scopePlayButton;
+
     // Zwischenspeicher fuer das Rohfenster aus dem Processor - Mitgliedsvariable
     // statt Stack-Array im Timer. Groesse folgt der aktuellen Zoomstufe
     // (siehe ScopeComponent::captureWindowSampleCount()), deshalb ein Vektor

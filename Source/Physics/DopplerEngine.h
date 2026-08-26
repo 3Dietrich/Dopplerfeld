@@ -281,7 +281,12 @@ public:
     // gainLinear ist der lineare Faktor aus Params::cloneRealLevel (dB, im
     // Processor via Decibels::decibelsToGain umgerechnet) - anders als frueher
     // KEIN 0..1-Pegel mehr, sondern ein echter Gain, der ueber 1 hinaus darf.
-    void setRealClones (int count, double spreadMetres, double gainLinear);
+    // zAmount: Anteil der Hoehe an der Streuung, derselbe Regler wie beim
+    // Wackler der Quelle (Params::srcJitterZAmount, @dpa 20260826: "Z-Anteil
+    // auch bei Feld/Streuung ... vielleicht gegenseitig ferngesteuert/gleich
+    // geschaltet?"). 1 = die Klone streuen in der Hoehe genauso weit wie in
+    // der Ebene, 0 = sie liegen alle flach auf der Hoehe der Quelle.
+    void setRealClones (int count, double spreadMetres, double zAmount, double gainLinear);
     int  realCloneCount() const { return realClones; }
 
     // Alles außer dem Direktschall aus - die minimale sichere Konfiguration.
@@ -386,7 +391,7 @@ private:
     // gebildet, nicht gewürfelt: derselbe Regelweg muss zweimal dasselbe
     // ergeben, sonst klingt jedes Laden anders und kein Vergleich zweier
     // Durchläufe ist möglich.
-    static Vec3 cloneOffset (int index, double spreadMetres);
+    static Vec3 cloneOffset (int index, double spreadMetres, double zAmount);
 
     struct PathSet
     {
@@ -469,6 +474,10 @@ private:
 
     int    realClones  = 0;
     double cloneSpread = 3.0;
+
+    // Anteil der Hoehe an der Klon-Streuung, siehe setRealClones(). Startwert
+    // wie der Regler selbst (Params.cpp: Default 1).
+    double cloneZAmount = 1.0;
 
     // Gain der Klone (linear), siehe Params::cloneRealLevel - 0dB = 1.0.
     double cloneRealLevel = 1.0;

@@ -229,6 +229,17 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     // Scope (@dpa-Feedback): gross, wegschaltbar, mit Freeze und Sync.
     addAndMakeVisible (scope);
 
+    // Play-Toggle: die Komponente entscheidet selbst, WANN eine Wiedergabe
+    // angestossen wird (Einschalten, oder ein Klick, s. ScopeComponent::
+    // setPlaybackEnabled()/mouseUp()) - hier wird nur noch der angeforderte
+    // Ausschnitt an den Processor weitergereicht. Copy-Ziel dort steht seit
+    // prepareToPlay() fest, die Zeiger muessen also nicht ueber den Aufruf
+    // hinaus gueltig bleiben.
+    scope.onPlaybackRequested = [this] (const float* left, const float* right, int length)
+    {
+        dopplerfeldProcessor.requestScopePlayback (left, right, length);
+    };
+
     scopeToggleButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeToggle));
     scopeToggleButton.setButtonText (Labels::text (scopeVisible ? "Scope ausblenden" : "Scope"));
     scopeToggleButton.onClick = [this]
@@ -347,6 +358,28 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     };
     addAndMakeVisible (scopeSaveButton);
 
+    scopePlayButton.setTooltip (Tooltips::text (Tooltips::Key::ScopePlay));
+    scopePlayButton.onClick = [this]
+    {
+        const bool on = ! scope.isPlaybackEnabled();
+
+        // Beides gehoert zusammen: die Komponente steuert Klick-Erkennung
+        // und Cursor, der Processor die tatsaechliche Audio-Ersetzung (s.
+        // DopplerfeldProcessor::setScopePlaybackModeEnabled()). Reihenfolge
+        // wichtig - der Processor muss den Modus schon kennen, WENN
+        // setPlaybackEnabled(true) unten synchron die erste Wiedergabe
+        // ueber onPlaybackRequested anstoesst.
+        dopplerfeldProcessor.setScopePlaybackModeEnabled (on);
+        scope.setPlaybackEnabled (on);
+
+        scopePlayButton.setButtonText (Labels::text (on ? "Play: An" : "Play"));
+        scopePlayButton.setColour (juce::TextButton::buttonColourId,
+                                   on ? juce::Colours::orangered.withAlpha (0.35f)
+                                      : juce::Colours::transparentBlack);
+    };
+    scopePlayButton.setButtonText (Labels::text ("Play"));
+    addAndMakeVisible (scopePlayButton);
+
     scopeSaveStatusLabel.setJustificationType (juce::Justification::centredLeft);
     scopeSaveStatusLabel.setColour (juce::Label::textColourId, juce::Colours::limegreen);
     scopeSaveStatusLabel.setFont (juce::Font (juce::FontOptions (13.0f)));
@@ -397,6 +430,7 @@ void DopplerfeldEditor::refreshAllTooltips()
                                    + juce::String ((int) DopplerfeldProcessor::scopeMaxDisplaySeconds)
                                    + Tooltips::text (Tooltips::Key::ScopeZoomOutSuffix));
     scopeSaveButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeSave));
+    scopePlayButton.setTooltip (Tooltips::text (Tooltips::Key::ScopePlay));
     scope.refreshTooltips();
 
     // Beschriftungen der Kopfzeile und der Scope-Leiste mit umschalten
@@ -422,6 +456,7 @@ void DopplerfeldEditor::refreshAllTooltips()
     scopeFreezeButton.setButtonText (Labels::text (scope.isFrozen() ? "Freeze: An" : "Freeze"));
     scopeSyncButton.setButtonText (Labels::text (scope.isSyncEnabled() ? "Sync: An" : "Sync"));
     scopeEventButton.setButtonText (Labels::text (scope.isEventTriggerEnabled() ? "Knall: An" : "Knall"));
+    scopePlayButton.setButtonText (Labels::text (scope.isPlaybackEnabled() ? "Play: An" : "Play"));
 
     // Der Quelle-Knopf wird ohnehin im 30-Hz-Timer gesetzt und braucht hier
     // nichts.
@@ -445,6 +480,7 @@ void DopplerfeldEditor::updateScopeVisibility()
     scopeZoomInButton.setVisible (scopeVisible);
     scopeZoomOutButton.setVisible (scopeVisible);
     scopeSaveButton.setVisible (scopeVisible);
+    scopePlayButton.setVisible (scopeVisible);
     scopeSaveStatusLabel.setVisible (scopeVisible);
 
     setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
@@ -553,6 +589,14 @@ void DopplerfeldEditor::refreshDisplay()
         dopplerfeldProcessor.fillScopeWindow (scopeRawLeft.data(), scopeRawRight.data(), captureLen);
         scope.feed (scopeRawLeft.data(), scopeRawRight.data(),
                     dopplerfeldProcessor.scopeWritePosition());
+
+        // Abspielcursor (@dpa: "ein Cursor zeigt, wo die Wiedergabe gerade
+        // steht") - Fortschritt kommt aus dem Audiothread, hier nur
+        // abgeholt und weitergereicht. Laeuft auch im Freeze/History-Modus:
+        // scope.feed() oben steigt dort zwar sofort aus, der Cursor bleibt
+        // davon unabhaengig.
+        scope.setPlaybackProgress (dopplerfeldProcessor.scopePlaybackProgress(),
+                                   dopplerfeldProcessor.isScopePlaybackAudible());
 
         // Bestaetigungstext nach dem Speichern nur ein paar Sekunden stehen
         // lassen, nicht dauerhaft im Toolbar rumstehen.
@@ -812,6 +856,8 @@ void DopplerfeldEditor::resized()
         scopeZoomInButton.setBounds (scopeToolbar.removeFromLeft (28));
         scopeToolbar.removeFromLeft (16);
         scopeSaveButton.setBounds (scopeToolbar.removeFromLeft (90));
+        scopeToolbar.removeFromLeft (8);
+        scopePlayButton.setBounds (scopeToolbar.removeFromLeft (90));
         scopeToolbar.removeFromLeft (8);
         scopeSaveStatusLabel.setBounds (scopeToolbar);
 

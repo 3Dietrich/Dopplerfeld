@@ -269,6 +269,27 @@ private:
     struct SourceMarker { juce::Point<float> px; float radiusPx; };
     SourceMarker perspectiveSourceMarker() const;
 
+    // Grundlage des Anfass-Versatzes (siehe grabOffsetPx). Zwei Punkte, weil
+    // es zwei Fragen sind: hitPx ist die Stelle, gegen die dragTargetAt()
+    // geprueft hat - also die gezeichnete, moeglicherweise gewackelte -, und
+    // an ihr entscheidet sich, ob der Klick das Symbol selbst getroffen hat.
+    // anchorPx ist die Ruhelage, von der aus danach gerechnet wird; nur so
+    // meldet der Klick eine Bewegung von genau null, statt den Wackel-Versatz
+    // des Augenblicks als Zielposition festzuschreiben.
+    //
+    // valid = false heisst: keine anfassbare Stelle, sondern eine Randmarke
+    // oder ein Hinweispunkt - dort ist der Sprung zur geklickten Stelle
+    // ausdruecklich gewollt.
+    struct GrabAnchor
+    {
+        juce::Point<float> hitPx;
+        juce::Point<float> anchorPx;
+        float radiusPx;
+        bool  valid;
+    };
+
+    GrabAnchor grabAnchorPx() const;
+
     // Dieselbe Idee wie perspectiveSourceMarker() oben, nur fuer die
     // Draufsicht: Bildposition von M ueber worldToScreen(), an den Rand
     // geklemmt (6 px Abstand), wenn M ausserhalb des sichtbaren Feldes liegt
@@ -429,6 +450,21 @@ private:
     Vec3 sourceDragWorldOverride;
 
     DragTarget dragTarget = DragTarget::none;
+
+    // Versatz zwischen Mauszeiger und der Stelle, an der das gegriffene
+    // Symbol tatsaechlich steht. Beim Anfassen einmal gemerkt und danach bei
+    // jedem Ziehschritt wieder aufgeschlagen (@dpa 20260826: "wenn man den M
+    // anfasst springt er meist ... es soll sich durchs click 0 bewegen. Erst
+    // dragging zaehlt dann von der Klickposition aus.. ohne sprung, einfach
+    // ein mausversatz"). Ohne ihn setzte schon der blosse Klick die Position
+    // auf den Mauszeiger, und M sprang um bis zu einen Fangradius - beim
+    // Wackeln um mehr, weil man dann ohnehin nie genau auf seine Mitte
+    // trifft.
+    //
+    // Ausgenommen bleiben die Randmarken (M ausserhalb des Bildes oder
+    // hinter der Kamera): dort ist der Sprung zur geklickten Stelle
+    // ausdruecklich der Zweck, s. mouseDown() und handleDragTo().
+    juce::Point<float> grabOffsetPx;
 
     ViewMode viewMode = ViewMode::TopDown;
 

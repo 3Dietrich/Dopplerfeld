@@ -1282,34 +1282,108 @@ void FieldComponent::drawPerspectiveListener (juce::Graphics& g) const
     if (! pr.visible)
         return;
 
-    // Blickrichtung wie in der Draufsicht aus zwei projizierten Punkten, damit
-    // die Perspektive auch den Nasenwinkel uebernimmt statt ihn zu erfinden.
-    const auto nosePr = project (head + listenerNose (snapshot.listener));
+    // Lotlinie und Fusspunkt wie bei der Quelle (@dpa 20260826: "senkrechten
+    // strich zu z=0 (wie bei m)") - erst der Boden, dann der Kopf darueber,
+    // damit die Linie unter ihm endet statt ueber ihn zu laufen.
+    const auto footPr = project (Vec3 { head.x, head.y, 0.0 });
 
-    const float yaw = nosePr.visible ? std::atan2 (nosePr.px.y - pr.px.y, nosePr.px.x - pr.px.x)
-                                     : -1.5707963267948966f;
+    if (footPr.visible)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.35f));
+        g.drawLine (juce::Line<float> (pr.px, footPr.px), 1.0f);
 
-    const float r = juce::jlimit (6.0f, 40.0f, pr.scale * 0.35f);
+        g.setColour (juce::Colours::white.withAlpha (0.30f));
+        g.fillEllipse (juce::Rectangle<float> (7.0f, 3.0f).withCentre (footPr.px));
+    }
+
+    // Dieselbe Zeichnung wie in der Draufsicht, nur perspektivisch verzerrt:
+    // das Symbol liegt flach in der Ebene z = Ohrhoehe, jeder seiner Punkte
+    // geht einzeln durch project() (@dpa 20260826: "ruhig als die gleiche
+    // 2D-Darstellung, aber perspektivisch verzerrt.. quasi auf einer
+    // xy-flaeche in der z-Hoehe"). Aus dem Kopfkreis wird dadurch von selbst
+    // die flach liegende Ellipse, und die Nase zeigt in die Richtung, in die
+    // der Hoerer im RAUM schaut - das bildschirmparallel aufgestellte Symbol
+    // von vorher konnte beides nicht zeigen.
+    const float rPx = juce::jlimit (6.0f, 40.0f, pr.scale * 0.35f);
+
+    // Die Groesse bleibt eine Bildgroesse und wird nur zurueck in Meter
+    // gerechnet, damit die Verzerrung eine Ebene hat, in der sie stattfinden
+    // kann: ein massstaeblicher Kopf (gut 0,1 m) waere bei den ueblichen
+    // Feldgroessen ein unsichtbarer Punkt.
+    const double rMetres = (double) rPx / (double) juce::jmax (1.0e-6f, pr.scale);
+
+    const Vec3 nose  = listenerNose  (snapshot.listener);
+    const Vec3 right = listenerRight (snapshot.listener);
 
     HeadSymbol::Style style;
     style.headColour = juce::Colours::white;
     style.earColour  = juce::Colours::white;
     style.fillColour = juce::Colours::white.withAlpha (0.08f);
 
-    HeadSymbol::draw (g, pr.px, r, yaw, style);
+    HeadSymbol::drawMapped (g,
+                            [&] (float lx, float ly)
+                            {
+                                const Vec3 world = head
+                                                   + nose  * (rMetres * (double) lx)
+                                                   + right * (rMetres * (double) ly);
+                                const auto p = project (world);
 
-    // Lotlinie auch beim Hoerer: seine Ohrhoehe ist ein Regler, und man soll
-    // sehen, dass er ueber dem Boden steht.
-    const auto footPr = project (Vec3 { head.x, head.y, 0.0 });
-
-    if (footPr.visible)
-    {
-        g.setColour (juce::Colours::white.withAlpha (0.22f));
-        g.drawLine (juce::Line<float> (pr.px, footPr.px), 1.0f);
-    }
+                                // Ein Punkt der Kopfebene kann dicht vor der
+                                // Kamera aus dem Bild fallen, waehrend die
+                                // Kopfmitte noch steht; dann faellt er auf
+                                // sie zurueck, statt die Zeichnung an den
+                                // Bildursprung zu reissen.
+                                return p.visible ? p.px : pr.px;
+                            },
+                            style);
 }
 
 // ---- Maus / Drag -------------------------------------------------------------
+
+FieldComponent::GrabAnchor FieldComponent::grabAnchorPx() const
+{
+    if (dragTarget == DragTarget::source)
+    {
+        if (viewMode == ViewMode::Perspective)
+        {
+            const auto drawn  = project (snapshot.sourcePos);   // dagegen hat dragTargetAt() geprueft
+            const auto anchor = project (sourceAnchorWorld);    // davon aus wird gerechnet
+
+            // Nur der frei im Bild stehende Punkt ist anfassbar. Hinter der
+            // Kamera oder ausserhalb des Bildes zeigt die Perspektive
+            // stattdessen eine Randmarke, und ein Klick darauf soll M
+            // ausdruecklich dorthin holen (s. drawPerspectiveSource()).
+            const bool onScreen = drawn.visible
+                                  && drawn.px.x >= 0.0f && drawn.px.x <= (float) getWidth()
+                                  && drawn.px.y >= 0.0f && drawn.px.y <= (float) getHeight();
+
+            return { drawn.px,
+                     anchor.visible ? anchor.px : drawn.px,
+                     perspectiveSourceMarker().radiusPx + sourceDragHitRadiusPx,
+                     onScreen && anchor.visible };
+        }
+
+        // In der Draufsicht prueft dragTargetAt() ohnehin schon am ruhenden
+        // Anker (s. sourceAnchorWorld), beide Punkte fallen also zusammen.
+        // Steht M weit ausserhalb des Feldes, liegt der Klick auf der
+        // Randmarke - und damit weit genug vom Anker weg, dass die
+        // Abstandspruefung in mouseDown() ihn von selbst als Sprung behandelt.
+        const auto px = worldToScreen (sourceAnchorWorld);
+
+        return { px, px, sourceRadiusPx + sourceDragHitRadiusPx, true };
+    }
+
+    if (dragTarget == DragTarget::listenerHead)
+    {
+        const auto px = worldToScreen (snapshot.listener.head);
+
+        return { px, px, headRadiusPx + dragHitRadiusPx * 0.6f, true };
+    }
+
+    // Die Nase dreht den Kopf, sie verschiebt nichts - ein Versatz waere dort
+    // sinnlos, der Winkel zaehlt ab dem ersten Ereignis.
+    return { {}, {}, 0.0f, false };
+}
 
 FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> screenPx) const
 {
@@ -1524,13 +1598,36 @@ void FieldComponent::mouseDown (const juce::MouseEvent& e)
 
     dragTarget = dragTargetAt (e.position);
     haveDragVelocity = false;
+    grabOffsetPx     = {};
 
     if (dragTarget == DragTarget::source && onSourceGrabbed)
         onSourceGrabbed();
 
     if (dragTarget != DragTarget::none)
     {
-        handleDragTo (e.position);
+        // Anfassen bewegt nichts: getroffen wurde das Symbol irgendwo in
+        // seinem Fangradius, und genau dieser Abstand wird gemerkt statt
+        // eingeebnet (s. grabOffsetPx). Erst das Ziehen zaehlt, und zwar als
+        // Mausversatz ab der Klickstelle.
+        const auto anchor = grabAnchorPx();
+
+        if (anchor.valid && e.position.getDistanceFrom (anchor.hitPx) <= anchor.radiusPx)
+        {
+            grabOffsetPx = anchor.anchorPx - e.position;
+
+            // Der gezeichnete Punkt setzt beim Anfassen auf demselben Anker
+            // auf wie die Meldung. Optisch ist das der einzige Sprung, den es
+            // noch gibt - vom gewackelten Punkt auf seine Ruhelage (@dpa:
+            // "Das kann er optisch gerne tun") - gehoert bleibt keiner.
+            if (dragTarget == DragTarget::source)
+                sourceDragWorldOverride = sourceAnchorWorld;
+        }
+        else
+        {
+            // Randmarke oder Hinweispunkt: hier ist der Sprung der Zweck -
+            // ein Klick darauf holt M an die geklickte Stelle zurueck.
+            handleDragTo (e.position);
+        }
 
         // Startpunkt der Nachlauf-Geschwindigkeitsschaetzung (s. mouseDrag()).
         // listenerHead ist in der Perspektive ohnehin nie das Ziel (s.
@@ -1538,7 +1635,7 @@ void FieldComponent::mouseDown (const juce::MouseEvent& e)
         // trotzdem selbst je nach viewMode.
         if (dragTarget == DragTarget::source || dragTarget == DragTarget::listenerHead)
         {
-            lastDragWorldPos = dragScreenToWorld (e.position);
+            lastDragWorldPos = dragScreenToWorld (e.position + grabOffsetPx);
             lastDragTimeMs   = juce::Time::getMillisecondCounterHiRes();
         }
     }
@@ -1581,6 +1678,11 @@ void FieldComponent::mouseDrag (const juce::MouseEvent& e)
     if (dragTarget == DragTarget::none)
         return;
 
+    // Ab hier zaehlt nicht die Mausposition, sondern die Stelle, an der das
+    // gegriffene Symbol unter ihr liegt (s. grabOffsetPx) - eine reine
+    // Verschiebung, alles Weitere rechnet unveraendert damit weiter.
+    const auto dragPx = e.position + grabOffsetPx;
+
     if (mouseFrameSmoothing)
     {
         // Nur merken: gemeldet wird auf dem Bildtakt (timerCallback). Sonst
@@ -1588,16 +1690,16 @@ void FieldComponent::mouseDrag (const juce::MouseEvent& e)
         // damit im Doppler.
         if (! havePendingDrag)
         {
-            smoothedDragScreen = e.position;
+            smoothedDragScreen = dragPx;
             havePendingDrag    = true;
             startTimerHz (mouseFrameHz);
         }
 
-        pendingDragScreen = e.position;
+        pendingDragScreen = dragPx;
     }
     else
     {
-        handleDragTo (e.position);
+        handleDragTo (dragPx);
     }
 
     // Geschwindigkeit nur fuer die Ziele schaetzen, die der Nachlauf ueberhaupt
@@ -1610,7 +1712,7 @@ void FieldComponent::mouseDrag (const juce::MouseEvent& e)
     if (dragTarget != DragTarget::source && dragTarget != DragTarget::listenerHead)
         return;
 
-    const Vec3   pos = dragScreenToWorld (e.position);
+    const Vec3   pos = dragScreenToWorld (dragPx);
     const double now = juce::Time::getMillisecondCounterHiRes();
     const double dt  = (now - lastDragTimeMs) * 0.001;
 

@@ -160,6 +160,121 @@ Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
 per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
 projektweit abgeschaltet.
 
+## Stand 2026-08-26 (Z-Anteil gemeinsam, Kopf in der Perspektive, Anfassen ohne Sprung, RPM)
+
+### Ein Z-Anteil für Wackler UND Klon-Streuung
+
+Die Höhe der Klon-Streuung hing an einem festen Bruchteil (0,35) mitten in
+`DopplerEngine::cloneOffset()`. Sie hat jetzt denselben Regler wie das Wackeln
+der Quelle: `Params::srcJitterZAmount`, ein Parameter, zwei Räder im UI
+(Bewegung und Schwarm). Zwei `SliderAttachment` auf denselben Parameter sind
+die Gleichschaltung, die @dpa vorgeschlagen hat ("zwei mal den Control scheint
+zuviel, aber in beiden ist er wichtig.. vielleicht gegenseitig
+ferngesteuert/gleich geschaltet?") - niemand muss sie synchron halten.
+
+1 heißt jetzt in beiden Fällen dasselbe: die Höhe zählt so weit wie die Ebene.
+Für die Klone ist das mehr als die alten 0,35; der Regler steht auf 1, weil
+das schon vorher der Default des Wacklers war.
+
+**Neu geprüft:** `Tests/swarm_probe.cpp` gibt die Höhenspanne des Schwarms aus.
+Streuung 10 m, Wackler aus: bei Z-Anteil 0 liegt die Spanne bei **0,000 m**,
+bei Z-Anteil 1 bei **6,479 m** - der größte Versatz in der Ebene bleibt in
+beiden Fällen 4,472 m, die Streuung selbst ändert sich also nicht.
+
+### Der Hörer liegt in der Perspektive flach in seiner Ohrhöhe
+
+Das Kopfsymbol stand in der Perspektive bildschirmparallel auf und war nur
+gedreht - es zeigte weder die Höhe noch die Blickrichtung im Raum. Jetzt ist
+es dieselbe Zeichnung wie in der Draufsicht, aber Punkt für Punkt durch
+`project()` gelegt, flach in der Ebene z = Ohrhöhe (@dpa: "ruhig als die
+gleiche 2D-Darstellung, aber perspektivisch verzerrt.. quasi auf einer
+xy-fläche in der z-Höhe. senkrechten strich zu z=0 (wie bei m)"). Aus dem
+Kopfkreis wird von selbst die liegende Ellipse; Lotlinie und Fußpunkt sind
+jetzt dieselben wie bei M.
+
+Dafür kennt `HeadSymbol` neben `draw()` ein `drawMapped()`, das jeden Punkt
+der Kopfebene durch eine übergebene Abbildung schickt. `draw()` ist derselbe
+Aufruf mit "drehen und skalieren" als Abbildung - eine zweite Geometrie gäbe
+es nur, damit beide auseinanderlaufen können. Der Kopfkreis ist deshalb ein
+48-Eck: das Bild eines Kreises ist unter einer perspektivischen Abbildung
+keine achsenparallele Ellipse mehr, und `juce::Graphics` kennt nur die.
+
+Die Größe bleibt eine Bildgröße (6..40 px) und wird nur in Meter
+zurückgerechnet, damit die Verzerrung eine Ebene hat, in der sie stattfinden
+kann. Ein maßstäblicher Kopf wäre bei den üblichen Feldgrößen ein Punkt.
+
+**Neu geprüft:** `Tests/field_shot.cpp` rendert die Perspektive jetzt mit
+Blick von der Kamera weg, quer und zur Kamera hin sowie mit erhöhtem Hörer
+(`build-ui/field_persp_listener_*.png`, headless, kein Fenster). Was die
+wörtliche Umsetzung mitbringt: mit der Nase zur Kamera oder von ihr weg ist
+die Blickrichtung stark verkürzt und schwerer abzulesen als seitlich - das
+ist die ehrliche Perspektive einer flach liegenden Zeichnung.
+
+Neu dazu `Tests/editor_shot.cpp`: nimmt das komplette Editor-Fenster und das
+Schwarm-Panel headless auf (`build-ui/editor_full.png`,
+`build-ui/panel_swarm.png`) - dafür gab es bisher nur den Weg über ein echtes
+Fenster.
+
+### Anfassen bewegt M nicht mehr
+
+Ein Klick auf M setzte seine Position auf den Mauszeiger. Weil der Fangradius
+großzügig ist (28 px, plus Wackeln), sprang M dabei fast immer - hörbar.
+Jetzt merkt sich `mouseDown()` den Versatz zwischen Zeiger und Ruhelage
+(`grabOffsetPx`) und meldet selbst nichts; jeder folgende Ziehschritt rechnet
+ab der Ruhelage plus Mausversatz (@dpa: "es soll sich durchs click 0 bewegen.
+Erst dragging zählt dann von der Klickposition aus.. ohne sprung").
+
+Zwei Punkte gehören dazu, nicht einer (`GrabAnchor`): geprüft wird am
+gezeichneten, möglicherweise gewackelten Punkt - dagegen hat `dragTargetAt()`
+gefangen -, gerechnet wird ab der jitterfreien Ruhelage. Die Randmarken
+bleiben ausgenommen: dort ist der Sprung zur geklickten Stelle der Zweck.
+
+**Neu geprüft:** `Tests/grab_probe.cpp` simuliert Mausereignisse auf der
+`FieldComponent` und misst, was nach außen gemeldet wird. Klick auf M, 2 m
+neben seiner Ruhelage: **0 Meldungen**. Zug um 70 px (10 m): gemeldet wird
+0,60059 der Feldbreite, also die Ruhelage plus genau diese 10 m, nicht die
+Mausposition.
+
+### Play-Knopf am Scope
+
+Der sichtbare Scope-Ausschnitt lässt sich anhören: "Play" ist ein Umschalter,
+Einschalten spielt das Bild einmal von vorn bis hinten und geht danach auf
+null; solange er an bleibt, startet ein Klick ins Scope die Wiedergabe an der
+geklickten Stelle bis zum rechten Rand (@dpa: "wieder bis hinten").
+
+Wörtlich heißt "auf null", dass die Wiedergabe den Ausgang **ersetzt**,
+solange der Knopf an ist - das Dopplersignal ist dann stumm, sonst wäre
+zwischen zwei Abspielvorgängen nichts still. Der Weg dorthin sind zwei
+getrennte Signale, wie sonst auch hier (siehe Record/Play): ein Level-Flag für
+den Ein/Aus-Zustand und ein diskretes Anfrage-Flag für "genau diesen Puffer
+jetzt". Der Puffer wird im Message-Thread gefüllt, bevor das Flag ihn
+ankündigt; die Kapazität steht seit `prepareToPlay()` fest
+(`scopeMaxDisplaySeconds`), der Audiothread allokiert nichts.
+
+Zwei Rampen, weil sie zwei verschiedene Klicks verhindern: eine blendet
+zwischen Doppler und Wiedergabe (8 ms, Ein/Aus des Knopfs), die andere gehört
+einem einzelnen Abspielvorgang (3 ms, an einer angeklickten Stelle steht eine
+beliebige Amplitude). Ein Klick mitten in eine laufende Wiedergabe blendet die
+alte erst aus und übernimmt dann - kein Überblenden zweier verschiedener
+Ausschnitte.
+
+`renderScopePlayback()` läuft **vor** `applyOutputStage()`: Gain, Begrenzer,
+Pegelanzeige und Scope-Ringpuffer behandeln die Wiedergabe damit wie normales
+Ausgangssignal.
+
+**Neu geprüft:** `Tests/scope_play_probe.cpp` misst am Ausgang des Processors.
+Bezugspegel (Motor läuft) 0,95117. Play an mit einem 0,1-s-Ausschnitt (links
+0,50): während der Wiedergabe **0,50000**, danach **0,00000** bei weiterhin
+eingeschaltetem Knopf. Klick auf die Mitte: wieder 0,50000, danach 0,00000.
+Zweiter Start mitten hinein: 0,50000, kein Überschlag. Nach dem Ausschalten
+steht der Dopplerausgang wieder da.
+
+### RPM-Bereich
+
+`Params::rpm` geht bis 96000 statt 12000 (drei Oktaven, @dpa: "erweitere es um
+2-3 Oktaven"). Der Skew bleibt bei 1000, der brauchbare Bereich liegt
+weiterhin unten.
+
 ## Stand 2026-08-25 mittags-2 (Startknall: Runde, Länge, Regelweg)
 
 Berichtigung einer eigenen Fehlentscheidung von wenigen Stunden zuvor, plus

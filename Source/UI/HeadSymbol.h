@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_graphics/juce_graphics.h>
+#include <functional>
 
 // Freie Zeichenfunktion(en) fuer das Hoerer-Symbol (Plan 3.13), nach der
 // Vorlage "Kopf von oben mit Nase und Ohren.jpg": Kreis fuer den Kopf, ein
@@ -29,6 +30,25 @@ namespace HeadSymbol
     // (siehe Konvention oben, vom Aufrufer aus lisYaw + worldToScreen gebildet).
     void draw (juce::Graphics& g, juce::Point<float> centre, float radiusPx,
                float angleRadians, const Style& style = {});
+
+    // Abbildung eines Punktes der KOPFEBENE auf den Bildschirm: lx/ly in
+    // Vielfachen des Kopfradius, Ursprung = Kopfmitte, +lx = Blickrichtung,
+    // +ly ihre rechte Senkrechte (dieselbe Drehrichtung wie oben, also im
+    // Uhrzeigersinn in Pixelkoordinaten).
+    using PointMapper = std::function<juce::Point<float> (float lx, float ly)>;
+
+    // Dasselbe Symbol, aber Punkt fuer Punkt durch eine beliebige Abbildung
+    // gelegt statt starr in die Bildebene gezeichnet. Damit kann der Aufrufer
+    // den Kopf flach in eine Ebene des Raumes legen und perspektivisch
+    // verzerren lassen (siehe FieldComponent::drawPerspectiveListener) - die
+    // Zeichnung bleibt dieselbe, nur die Abbildung ist eine andere. draw()
+    // oben ist genau dieser Fall mit Drehung und Skalierung als Abbildung.
+    //
+    // Der Kopfkreis wird deshalb als Vieleck gezeichnet und nicht als
+    // Ellipse: unter einer perspektivischen Abbildung ist das Bild eines
+    // Kreises keine achsenparallele Ellipse mehr, und juce::Graphics kennt
+    // nur die.
+    void drawMapped (juce::Graphics& g, const PointMapper& map, const Style& style = {});
 
     // Position der Nasenspitze in Pixeln - fuer den Hit-Test beim Ziehen
     // (Plan 3.13: "Ziehen an der Nase dreht ihn"), damit FieldComponent die

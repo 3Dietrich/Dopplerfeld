@@ -3,6 +3,7 @@
 #include "Tooltips.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_core/juce_core.h>
+#include <functional>
 #include <vector>
 
 // Oszilloskop fuer den Ausgang (@dpa-Feedback, "Scope einbauen ... gross
@@ -128,10 +129,45 @@ public:
     // sampleRateHint als Samplerate, damit Tonhoehe/Tempo stimmen.
     bool exportVisibleWindow (const juce::File& file) const;
 
+    //------------------------------------------------------------------
+    // Play-Toggle (@dpa: "Play an schalten: es spielt die Scopeansicht von
+    // vorn bis hinten ... wenn Play an bleibt, kann man ... an bestimmten
+    // Stellen starten"). Die Komponente kennt nur die Anfrage-Seite - WAS
+    // mit den Samples passiert (Puffer fuellen, an den Audiothread
+    // uebergeben, Anti-Klick-Rampen), liegt beim Processor, s. dortigen
+    // Kommentar zu requestScopePlayback(). Hier wird nur entschieden, WANN
+    // eine Wiedergabe angestossen wird und WOMIT (welcher Ausschnitt des
+    // gerade sichtbaren Bilds).
+    //
+    // Einschalten spielt sofort das GANZE sichtbare Fenster von vorn.
+    // Danach startet nur noch ein echter Klick (kein Ziehen, s. mouseUp())
+    // eine neue Wiedergabe, ab der geklickten Stelle bis zum rechten Rand.
+    void setPlaybackEnabled (bool shouldEnable);
+    bool isPlaybackEnabled() const { return playbackEnabled; }
+
+    // Fortschritt der gerade laufenden Wiedergabe fuer den Cursor in
+    // paint(): progressFraction 0..1 relativ zum ABGESPIELTEN Puffer (der
+    // bei einem Klick kuerzer ist als das ganze Fenster, s.o.), active =
+    // false blendet den Cursor aus. Vom Editor bei jedem Timer-Tick aus
+    // DopplerfeldProcessor::scopePlaybackProgress()/isScopePlaybackAudible()
+    // nachgefuehrt - die Komponente fragt den Processor nie selbst.
+    void setPlaybackProgress (float progressFraction, bool active);
+
+    // Feuert, sobald eine neue Wiedergabe angestossen werden soll (s.o.).
+    // left/right zeigen in visibleLeft()/visibleRight() (nur fuer die Dauer
+    // des Aufrufs gueltig - der Empfaenger kopiert sofort, s. Processor).
+    std::function<void (const float* left, const float* right, int length)> onPlaybackRequested;
+
     void paint (juce::Graphics& g) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
+
+    // Klick-Erkennung fuer den Play-Toggle (s.o.) - nur wenn playbackEnabled
+    // UND die Maus sich seit mouseDown() kaum bewegt hat (sonst war es ein
+    // Ziehen zum Pannen, s. mouseDrag()). Der ganz normale Panning-Zug bleibt
+    // dadurch unangetastet, egal ob Play gerade an ist oder nicht.
+    void mouseUp (const juce::MouseEvent&) override;
 
     // Pinch-Geste auf dem Trackpad (@dpa-Feedback: "fuer Mac mit Touchpad") -
     // die naheliegendste Zoom-Geste auf dem Mac, unabhaengig davon, ob/wie
@@ -331,9 +367,29 @@ private:
     // oder ohne erkannte Periode ist das displaySamples selbst.
     int shownSampleCount = 0;
 
-    // Klick-Ziehen zum Pannen (nur History-Modus, s. mouseDown/mouseDrag).
+    // Klick-Ziehen zum Pannen (nur History-Modus, s. mouseDown/mouseDrag) UND
+    // Klick-Erkennung fuer den Play-Toggle (jeder Modus, s. mouseUp) - beide
+    // messen denselben Weg seit mouseDown() und teilen sich darum dragStartX.
     int dragStartX          = 0;
     int dragStartPanOffset  = 0;
+
+    // Play-Toggle, siehe setPlaybackEnabled()/setPlaybackProgress() im
+    // Header. playbackStartFraction ist die Stelle im sichtbaren Fenster
+    // (0 = linker, 1 = rechter Rand), ab der zuletzt losgespielt wurde -
+    // der Cursor in paint() setzt sich daraus UND aus playbackProgress
+    // zusammen: cursorFraction = start + progress * (1 - start). Als
+    // FRAKTION statt als Sample-Index, weil sich die Fraktion 1:1 auf die
+    // Bildbreite abbildet, egal wie seither ge-/entzoomt wurde - ein reiner
+    // Sample-Index waere nach einem Zoomschritt an der falschen Stelle.
+    bool  playbackEnabled        = false;
+    float playbackStartFraction  = 0.0f;
+    float playbackProgress       = 0.0f;
+    bool  playbackCursorActive   = false;
+
+    // Toleranz fuer die Klick-vs-Zieh-Unterscheidung in mouseUp() - kleine
+    // Zittertoleranz, damit ein leicht wackeliger Klick nicht faelschlich als
+    // Drag zaehlt (JUCEs eigene Klick-Toleranz liegt in derselben Groessenordnung).
+    static constexpr int clickDragThresholdPixels = 4;
 
     // Achsen-Lock fuer zwei-Finger-Wheel-Gesten, wie im Vorbild (@dpa:
     // ~/hass/sensor-archive/mac/index.html, gesturePlugin()): die Achse

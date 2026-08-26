@@ -597,7 +597,7 @@ void DopplerEngine::setShadowTailSeconds (double seconds)
             p.setShadowTailSeconds (seconds);
 }
 
-Vec3 DopplerEngine::cloneOffset (int index, double spreadMetres)
+Vec3 DopplerEngine::cloneOffset (int index, double spreadMetres, double zAmount)
 {
     // Drei zueinander irrationale Winkelschritte (goldener Schnitt und
     // Verwandte) verteilen die Klone gleichmäßig, ohne sich je zu wiederholen
@@ -610,15 +610,19 @@ Vec3 DopplerEngine::cloneOffset (int index, double spreadMetres)
     const double a2 = u * 1.89654;
     const double r  = spreadMetres * std::sqrt (u / (double) maxRealClones);
 
+    // Die Hoehe traegt nicht mehr mit einem festen Bruchteil bei, sondern mit
+    // dem Anteil, den der Regler vorgibt (siehe setRealClones()): 1 = so weit
+    // wie in der Ebene, 0 = flach.
     return { r * std::cos (a1),
              r * std::sin (a1),
-             r * 0.35 * std::sin (a2) };
+             r * zAmount * std::sin (a2) };
 }
 
-void DopplerEngine::setRealClones (int count, double spreadMetres, double gainLinear)
+void DopplerEngine::setRealClones (int count, double spreadMetres, double zAmount, double gainLinear)
 {
     realClones     = std::min (maxRealClones, std::max (0, count));
     cloneSpread    = std::max (0.0, spreadMetres);
+    cloneZAmount   = std::max (0.0, zAmount);
     // Kein oberer Deckel mehr: gainLinear kommt aus einem dB-Regler
     // (-36..+36dB), der ausdruecklich ueber 0dB (=1.0) hinaus darf.
     cloneRealLevel = std::max (0.0, gainLinear);
@@ -705,7 +709,7 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
         // Teil stehen alle Klone starr zueinander, und was als Schwarm gedacht
         // ist, klingt wie ein einziger breiter Ton.
         PathTransform t;
-        t.offset = -(cloneOffset (r.clone, cloneSpread)
+        t.offset = -(cloneOffset (r.clone, cloneSpread, cloneZAmount)
                      + cloneJitterOffset[(size_t) r.clone]);
 
         // Eigener Pegel, wie bei den Waenden in der Abbildung: ohne ihn kommt
@@ -1059,7 +1063,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
     s.clonePositionCount = std::min (realClones, FieldSnapshot::maxShownClones);
 
     for (int i = 0; i < s.clonePositionCount; ++i)
-        s.clonePositions[(size_t) i] = set.lastPos + cloneOffset (i, cloneSpread)
+        s.clonePositions[(size_t) i] = set.lastPos + cloneOffset (i, cloneSpread, cloneZAmount)
                                      + cloneJitterOffset[(size_t) i];
 
     // Zweig-Todesmessung über ALLE gerechneten Pfade, auch die oben aus der

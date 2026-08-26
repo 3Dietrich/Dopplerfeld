@@ -183,6 +183,43 @@ void ScopeComponent::setEventTriggerEnabled (bool shouldTrigger)
     repaint();
 }
 
+void ScopeComponent::setPlaybackEnabled (bool shouldEnable)
+{
+    if (playbackEnabled == shouldEnable)
+        return;
+
+    playbackEnabled = shouldEnable;
+
+    if (playbackEnabled)
+    {
+        // Einschalten spielt sofort das GANZE sichtbare Fenster von vorn
+        // (@dpa: "es spielt die Scopeansicht von vorn bis hinten").
+        playbackStartFraction = 0.0f;
+
+        if (onPlaybackRequested)
+            onPlaybackRequested (visibleLeft(), visibleRight(), shownSampleCountForTest());
+    }
+    else
+    {
+        playbackCursorActive = false;
+    }
+
+    repaint();
+}
+
+void ScopeComponent::setPlaybackProgress (float progressFraction, bool active)
+{
+    const bool wasActive = playbackCursorActive;
+
+    playbackCursorActive = active;
+    playbackProgress     = juce::jlimit (0.0f, 1.0f, progressFraction);
+
+    // Auch beim Ausblenden einmal neu zeichnen, sonst bliebe der Cursor an
+    // seiner letzten Stelle stehen.
+    if (active || wasActive)
+        repaint();
+}
+
 int ScopeComponent::findLevelRise (const float* left, const float* right,
                                    int searchLo, int searchHi) const
 {
@@ -378,6 +415,32 @@ void ScopeComponent::mouseDrag (const juce::MouseEvent& e)
     const int maxOffset = juce::jmax (0, frozenLength - displaySamples);
     panOffset = juce::jlimit (0, maxOffset, dragStartPanOffset + deltaSamples);
     repaint();
+}
+
+void ScopeComponent::mouseUp (const juce::MouseEvent& e)
+{
+    if (! playbackEnabled || getWidth() <= 0)
+        return;
+
+    // Nur ein echter Klick startet die Wiedergabe - ein Ziehen zum Pannen
+    // (History-Modus) darf dadurch nicht zusaetzlich jedes Mal neu starten.
+    const int movedPixels = e.x - dragStartX;
+
+    if (movedPixels > clickDragThresholdPixels || movedPixels < -clickDragThresholdPixels)
+        return;
+
+    const int total = shownSampleCountForTest();
+
+    if (total <= 0)
+        return;
+
+    const float fraction = juce::jlimit (0.0f, 1.0f, (float) e.x / (float) getWidth());
+    const int   start    = juce::jlimit (0, total - 1, (int) std::lround ((double) fraction * (double) total));
+
+    playbackStartFraction = (float) start / (float) total;
+
+    if (onPlaybackRequested)
+        onPlaybackRequested (visibleLeft() + start, visibleRight() + start, total - start);
 }
 
 void ScopeComponent::feed (const float* rawLeft, const float* rawRight, std::uint32_t windowEndSample)
@@ -625,6 +688,20 @@ void ScopeComponent::paint (juce::Graphics& g)
     {
         g.setColour (juce::Colours::yellow.withAlpha (0.35f));
         g.drawLine (triggerX, area.getY(), triggerX, area.getBottom(), 1.0f);
+    }
+
+    // Abspielcursor (@dpa: "ein Cursor zeigt, wo die Wiedergabe gerade
+    // steht"). playbackStartFraction/playbackProgress sind FRAKTIONEN der
+    // Bildbreite (s. Header) - die Position stimmt darum auch dann noch,
+    // wenn seit dem Start der Wiedergabe ge- oder rausgezoomt wurde.
+    if (playbackEnabled && playbackCursorActive)
+    {
+        const float cursorFraction = playbackStartFraction
+                                    + playbackProgress * (1.0f - playbackStartFraction);
+        const float cursorX = area.getX() + cursorFraction * area.getWidth();
+
+        g.setColour (juce::Colours::white.withAlpha (0.85f));
+        g.drawLine (cursorX, area.getY(), cursorX, area.getBottom(), 1.5f);
     }
 
     // Zustand des Ereignis-Triggers. Ohne ihn waere nicht zu unterscheiden,
