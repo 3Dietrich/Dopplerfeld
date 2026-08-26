@@ -407,6 +407,14 @@ private:
     static constexpr float headRadiusPx = 13.0f; // rein symbolische Groesse, nicht massstabsgetreu
     static constexpr float sourceRadiusPx = 6.0f;
 
+    // Bildgroesse je Tiefe in der Perspektive: Radius = scale * dieser Wert,
+    // also Pixel je Meter mal Meter. Gilt fuer M (perspectiveSourceMarker());
+    // der Hoererkopf nimmt denselben Wert im selben Verhaeltnis, in dem er
+    // auch in der Draufsicht groesser ist als M (headRadiusPx zu
+    // sourceRadiusPx) - sonst waere ausgerechnet das groesste Symbol der
+    // Draufsicht in der Perspektive das kleinste.
+    static constexpr float perspectiveSourceScale = 0.4f;
+
     // Oberer Randabstand eigens fuer die Randmarke der Draufsicht
     // (topDownSourceMarker()) - deutlich mehr als der uebliche 6px-Rand
     // (rechts/links/unten), weil oben die Tempo-/Entfernungsanzeige liegt

@@ -199,9 +199,14 @@ es nur, damit beide auseinanderlaufen können. Der Kopfkreis ist deshalb ein
 48-Eck: das Bild eines Kreises ist unter einer perspektivischen Abbildung
 keine achsenparallele Ellipse mehr, und `juce::Graphics` kennt nur die.
 
-Die Größe bleibt eine Bildgröße (6..40 px) und wird nur in Meter
-zurückgerechnet, damit die Verzerrung eine Ebene hat, in der sie stattfinden
-kann. Ein maßstäblicher Kopf wäre bei den üblichen Feldgrößen ein Punkt.
+Die Größe bleibt eine Bildgröße und wird nur in Meter zurückgerechnet, damit
+die Verzerrung eine Ebene hat, in der sie stattfinden kann. Ein maßstäblicher
+Kopf wäre bei den üblichen Feldgrößen ein Punkt. Sie folgt jetzt derselben
+Regel wie M (`perspectiveSourceScale`), im selben Verhältnis, in dem der Kopf
+auch in der Draufsicht größer ist als M - vorher war ausgerechnet das größte
+Symbol der Draufsicht in der Perspektive das kleinste (@dpa: "L in perspektive
+zu klein"). Nach unten begrenzt ihn `headRadiusPx`, also die Größe, die er in
+der Draufsicht hat.
 
 **Neu geprüft:** `Tests/field_shot.cpp` rendert die Perspektive jetzt mit
 Blick von der Kamera weg, quer und zur Kamera hin sowie mit erhöhtem Hörer

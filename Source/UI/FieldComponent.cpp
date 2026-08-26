@@ -903,7 +903,7 @@ FieldComponent::SourceMarker FieldComponent::perspectiveSourceMarker() const
         return { edge, 4.5f };
     }
 
-    return { pr.px, juce::jlimit (2.5f, 22.0f, pr.scale * 0.4f) };
+    return { pr.px, juce::jlimit (2.5f, 22.0f, pr.scale * perspectiveSourceScale) };
 }
 
 void FieldComponent::strokeWorldPath (juce::Graphics& g, const std::vector<Vec3>& points,
@@ -1304,7 +1304,13 @@ void FieldComponent::drawPerspectiveListener (juce::Graphics& g) const
     // die flach liegende Ellipse, und die Nase zeigt in die Richtung, in die
     // der Hoerer im RAUM schaut - das bildschirmparallel aufgestellte Symbol
     // von vorher konnte beides nicht zeigen.
-    const float rPx = juce::jlimit (6.0f, 40.0f, pr.scale * 0.35f);
+    // Nie kleiner als in der Draufsicht und im selben Verhaeltnis zu M wie
+    // dort (@dpa 20260826: "L in perspektive zu klein"). Die Stauchung durch
+    // die flache Lage macht ihn ohnehin schmaler, als seine Breite vermuten
+    // laesst - eine zusaetzliche Verkleinerung vertraegt er nicht.
+    const float rPx = juce::jlimit (headRadiusPx, 48.0f,
+                                    pr.scale * perspectiveSourceScale
+                                        * (headRadiusPx / sourceRadiusPx));
 
     // Die Groesse bleibt eine Bildgroesse und wird nur zurueck in Meter
     // gerechnet, damit die Verzerrung eine Ebene hat, in der sie stattfinden
