@@ -6426,6 +6426,7 @@ int main()
         setParam (proc, Params::nWaveOn,        1.0f);
         setParam (proc, Params::nWavePressure,  0.0f);
         setParam (proc, Params::shockDuckAmount, 1.0f);
+        setParam (proc, Params::extraPathGainDb, -60.0f);   // HOERPROBE
 
         juce::AudioBuffer<float> duckCap (2, (int) (8.0 * sampleRate) + blockSize);
         duckCap.clear();
@@ -6469,6 +6470,7 @@ int main()
         mute.setRateAndBufferSizeDetails (sampleRate, blockSize);
         applyCircle (mute, -80.0f);
         setParam (mute, Params::nWavePressure, 0.0f);
+        setParam (mute, Params::extraPathGainDb, -60.0f);   // HOERPROBE
         mute.prepareToPlay (sampleRate, blockSize);
 
         {
@@ -6700,6 +6702,13 @@ int main()
         setParam (proc, Params::srcY,        0.5f);
         setParam (proc, Params::srcZ,        5.0f);
 
+        // Hoerbares Quellsignal: ohne eines waere die Gegenprobe weiter unten
+        // ("Nach dem Zug") wertlos - ein stummes Plugin und eine stumme
+        // Quelle sehen in den Zahlen gleich aus.
+        setParam (proc, Params::engineKind,    1.0f);
+        setParam (proc, Params::rpm,           2400.0f);
+        setParam (proc, Params::engineLevelDb, 20.0f);
+
         proc.prepareToPlay (sampleRate, blockSize);
 
         Stats settle;
@@ -6761,6 +6770,23 @@ int main()
 
         drag.report ("Feldgroesse gezogen");
 
+        // Der Zug legt den Ausgang still (Schnittblende, siehe
+        // DopplerfeldProcessor::fieldCutPending). Das ist gewollt - aber nur,
+        // wenn er danach auch zurueckkommt. Ohne diese Gegenprobe waere ein
+        // Fehler im stillen Fenster ein dauerhaft stummes Plugin, und keine
+        // der Lastzahlen wuerde es zeigen.
+        Stats afterDrag;
+        render (proc, buffer, 1.0, afterDrag, [] (double) {});
+
+        afterDrag.report ("Nach dem Zug");
+
+        if (afterDrag.peak < 1.0e-4)
+        {
+            std::printf ("  FEHLER: nach dem Feldgroessen-Zug bleibt der Ausgang stumm "
+                         "(Spitze %.6f).\n", afterDrag.peak);
+            failed = true;
+        }
+
         const double quietAvg = quiet.blocks > 0
                                   ? (double) quiet.solverEvals / (double) quiet.blocks
                                   : 0.0;
@@ -6789,7 +6815,17 @@ int main()
         // Ausgangsgroesse: sie soll auffallen, wenn sie waechst, und den Tag
         // vorbereiten, an dem es jemand angeht.
         //
-        // Stand der Diagnose (20260827): die Last haengt an den ABSOLUTEN
+        // GELOEST am 20260827 nach @dpas Vorschlag: der Wechsel laeuft jetzt
+        // durch das stille Fenster des Schnitts (siehe
+        // DopplerfeldProcessor::fieldCutPending). Waehrend des Zuges steht die
+        // Geometrie still, am Ende steht EIN Umbau statt einer Kette von
+        // Ueberblendungen - gemessen das 1,00-fache der Ruhelast statt des
+        // 28-fachen. Die drei Bezugsgroessen bleiben stehen: sie sollen
+        // auffallen, wenn die Zahl je wieder waechst.
+        //
+        // Die Diagnose davor, weil sie erklaert, WARUM es vorher so teuer war
+        // und warum die naheliegenden Wege alle scheiterten: die Last haengt
+        // an den ABSOLUTEN
         // Koordinaten, nicht am Umschaltmechanismus.
         //
         // Die drei Zahlen oben sagen es zusammen: Quelle und Hoerer im selben

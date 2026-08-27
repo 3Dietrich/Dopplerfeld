@@ -429,6 +429,10 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
 
     currentSampleRate = sampleRate;
 
+    // Der Massstab, in dem die Geometrie aufgesetzt wird. Muss vor
+    // applyParameters() stehen: alle Meterkoordinaten haengen daran.
+    appliedFieldMetres = (double) pp.fieldMetres->load();
+
     monoScratch.setSize (1, maxBlock, false, true, true);
 
     // Scope (@dpa-Feedback: Zoom bis ~3s Zeitbasis): der Ringpuffer muss das
@@ -543,6 +547,13 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     cutRewindsPlayer  = false;
     cutStartsFlyBy    = false;
     cutTargetMetres   = smoothedSourcePos;
+    cutFadeActive     = cutFadeSeconds;
+
+    // Kein Feldwechsel offen: der Neustart steht bereits im aktuellen
+    // Massstab.
+    fieldCutPending      = false;
+    cutWaitsForField     = false;
+    fieldSettleRemaining = 0.0;
     cutPreVelocity    = Vec3{};
     cutHoldMetres     = smoothedSourcePos;
 }
@@ -590,8 +601,12 @@ Vec3 DopplerfeldProcessor::metresFromNormalised (double normX, double normY, dou
     // durch, während x/y am Feldmaßstab hängen. Ein Feldgrößenwechsel
     // verschiebt deshalb die Höhen nicht - genau das ist gewollt, sonst würde
     // ein größeres Feld den Hörer wachsen lassen.
-    return { normX * fieldMetresValue,
-             normY * fieldMetresValue * fieldAspect,
+    // appliedFieldMetres, nicht der Reglerwert: waehrend ein
+    // Feldgroessenwechsel auf Ruhe wartet, steht die Geometrie noch im alten
+    // Massstab, und die Positionen muessen dazu passen (siehe
+    // appliedFieldMetres im Header).
+    return { normX * appliedFieldMetres,
+             normY * appliedFieldMetres * fieldAspect,
              zMetres };
 }
 
@@ -696,29 +711,42 @@ void DopplerfeldProcessor::applyParameters()
         j.setZFactor   (jitterZAmount);
     }
 
+    // Feldgroesse: nicht anwenden, sondern in die Stille legen (siehe
+    // appliedFieldMetres im Header). Angewendet wird sie erst im stillen
+    // Fenster des Schnitts, und erst, wenn der Regler zur Ruhe gekommen ist.
     const bool fieldJustChanged = std::abs (fieldMetresValue - lastFieldMetres) > 1.0e-9;
 
     if (fieldJustChanged)
     {
         lastFieldMetres = fieldMetresValue;
 
-        dopplerEngine.setFieldMetres (fieldMetresValue);
+        // "Dann von vorne": jede weitere Aenderung setzt die Ruhezeit zurueck.
+        fieldSettleRemaining = fieldSettleSeconds;
 
-        // Neuer Massstab: die nach einem Flug gehaltene Position gehoert zum
-        // alten und wuerde jetzt an einer anderen Stelle im Feld liegen.
-        sourceTargetHeld   = false;
-        sourceTargetMetres = metresFromNormalised ((double) pp.srcX->load(), (double) pp.srcY->load(),
-                                                   (double) pp.srcZ->load());
+        if (! fieldCutPending)
+        {
+            fieldCutPending  = true;
+            cutWaitsForField = true;
+            cutFadeActive    = fieldFadeSeconds;
 
-        // Positionen sind normiert gespeichert (Plan 2.1), ein neuer Maßstab
-        // ist deshalb ein reiner Geometriesprung. Die Glätter dürfen ihn nicht
-        // nachfahren, sonst hörte man ihn als rasende Bewegung statt als
-        // überblendeten Sprung - die Engine blendet ihn selbst ab.
-        sourceSmoothers.reset (sourceTargetMetres);
-        listenerSmoothers.reset (listenerTargetMetres);
+            // Ziel vorlaeufig die aktuelle Stelle - die endgueltige steht erst
+            // fest, wenn der neue Massstab uebernommen ist
+            // (handlePendingRequests).
+            beginCut (smoothedSourcePos, false);
+        }
+    }
 
-        smoothedSourcePos  = sourceTargetMetres;
-        listenerState.head = listenerTargetMetres;
+    if (fieldCutPending)
+    {
+        fieldSettleRemaining -= (double) currentBlockSamples / std::max (1.0, currentSampleRate);
+
+        // Erst wenn der Regler steht UND die Blende unten ist. Beides muss
+        // stimmen: umgebaut wird nur in der Stille, und nur einmal.
+        if (fieldSettleRemaining <= 0.0 && cutGain <= 0.0)
+        {
+            cutWaitsForField  = false;
+            cutExecutePending = true;
+        }
     }
 
     // --- Bewegungsglättung ---
@@ -1048,6 +1076,11 @@ void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer, bool 
     // sich bis zum Schnitt gar nicht mehr bewegen.
     cutHoldMetres = smoothedSourcePos;
     cutState      = CutState::FadingOut;
+
+    // Ein gewoehnlicher Schnitt blendet kurz. Der Feldwechsel setzt seine
+    // laengere Dauer direkt danach selbst (siehe fieldCutPending).
+    if (! cutWaitsForField)
+        cutFadeActive = cutFadeSeconds;
 }
 
 void DopplerfeldProcessor::handlePendingRequests()
@@ -1058,6 +1091,37 @@ void DopplerfeldProcessor::handlePendingRequests()
     if (cutExecutePending)
     {
         cutExecutePending = false;
+
+        // Der neue Massstab wird hier uebernommen, im stillen Fenster und vor
+        // allem anderen: die Ziele darunter sollen ihn schon sehen. Danach ist
+        // eine Feldgroessenaenderung nur noch ein gewoehnlicher Schnitt an
+        // eine andere Stelle.
+        if (fieldCutPending)
+        {
+            fieldCutPending = false;
+
+            appliedFieldMetres = fieldMetresValue;
+
+            // Die nach einem Flug gehaltene Position gehoert zum alten
+            // Massstab und laege jetzt woanders im Feld.
+            sourceTargetHeld     = false;
+            sourceTargetMetres   = metresFromNormalised ((double) pp.srcX->load(),
+                                                         (double) pp.srcY->load(),
+                                                         (double) pp.srcZ->load());
+            listenerTargetMetres = metresFromNormalised ((double) pp.lisX->load(),
+                                                         (double) pp.lisY->load(),
+                                                         (double) pp.lisZ->load());
+
+            listenerSmoothers.reset (listenerTargetMetres);
+            listenerState.head = listenerTargetMetres;
+
+            cutTargetMetres = sourceTargetMetres;
+
+            // Die Engine braucht den Wert fuer die Anzeige der Wellenfronten.
+            // Die Ueberblendung, die er sonst anmeldet, nimmt cutTo() gleich
+            // wieder zurueck - umgebaut wird geschnitten, nicht geblendet.
+            dopplerEngine.setFieldMetres (fieldMetresValue);
+        }
 
         if (cutRewindsPlayer)
             motionPlayer.restartRound();
@@ -2140,6 +2204,8 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     // zu langsam, nicht nur ein abstrakter Prozentwert.
     const auto blockStartTicks = juce::Time::getHighResolutionTicks();
 
+    currentBlockSamples = numSamples;
+
     applyParameters();
     handlePendingRequests();
 
@@ -2211,7 +2277,7 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     // bei 12 ms Blende waere eine Blockgrenze als Stufe hoerbar.
     if (cutState != CutState::Idle)
     {
-        const double step  = 1.0 / std::max (1.0, cutFadeSeconds * sr);
+        const double step  = 1.0 / std::max (1.0, cutFadeActive * sr);
         const int    numCh = buffer.getNumChannels();
 
         float* const* data = buffer.getArrayOfWritePointers();
@@ -2226,7 +2292,10 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
                 // Blocks anmelden (handlePendingRequests). Der Rest dieses
                 // Blocks laeuft dabei auf null weiter - genau die Luecke, in
                 // der nichts zu hoeren ist.
-                if (cutGain <= 0.0)
+                // Wartet ein Feldgroessenwechsel auf Ruhe, bleibt die
+                // Blende unten liegen - ausgeloest wird dort (siehe
+                // fieldCutPending in applyParameters).
+                if (cutGain <= 0.0 && ! cutWaitsForField)
                     cutExecutePending = true;
             }
             else

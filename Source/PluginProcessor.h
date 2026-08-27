@@ -617,6 +617,18 @@ private:
     // lang genug, dass keine Flanke knackt.
     static constexpr double cutFadeSeconds = 0.012;
 
+    // Der Feldgroessenwechsel ist der eine Fall, der KEIN Schnitt sein soll:
+    // er wird nicht durch ein Ereignis im Stueck ausgeloest, sondern dadurch,
+    // dass jemand am Regler zieht, und dann gehoert eine hoerbare Blende dazu
+    // (@dpa 20260827: "dass sich der Gesamtsound ausfaedet ... alles in Ruhe
+    // doppelter Hinsicht: ausfaden, ruhe"). 12 ms waeren dort ein Abriss.
+    static constexpr double fieldFadeSeconds = 0.080;
+
+    // Die Blendendauer des LAUFENDEN Schnitts. Steht beim Anmelden fest,
+    // damit ein Feldwechsel langsamer blendet als ein Rundenwechsel, ohne
+    // dass beide dieselbe Konstante teilen muessten.
+    double cutFadeActive = cutFadeSeconds;
+
     CutState cutState = CutState::Idle;
     double   cutGain  = 1.0;
 
@@ -642,6 +654,61 @@ private:
     // Die Ausblende ist durch, der Umbau steht am Anfang des naechsten
     // Blocks an. Nur vom Audiothread beschrieben und gelesen.
     bool cutExecutePending = false;
+
+    //------------------------------------------------------------------
+    // Feldgroesse im stillen Fenster (@dpa 20260827: "sobald das Feld sich
+    // aendert faedet sich der Gesamtsound aus, richtet sich auf die neue
+    // Groesse in aller Ruhe ein, und wenn sich noch mal was veraendert - was
+    // beim Regler ja passieren kann - dann von vorne ... erst wenn sich nichts
+    // mehr aendert wird alles auf Anfang gesetzt, und wieder eingefadet").
+    //
+    // Ein Feldgroessenwechsel lief bisher als Geometrie-Ueberblendung, und
+    // beim ZIEHEN am Regler heisst das: jeden Block eine neue, die vorige
+    // ueberholt nie. Gemessen das 28-fache der Ruhelast (load_check,
+    // "Feldgroesse gezogen"), davon rund vier Fuenftel allein dadurch, dass
+    // Quelle und Hoerer waehrenddessen durch den Meterraum wandern und dem
+    // Loeser die geschlossene Loesung fuer die gerade Bahn nehmen.
+    //
+    // Der Schnitt loest das, weil er beides zugleich abschaltet: waehrend der
+    // Stille steht die Geometrie still (metresFromNormalised rechnet mit
+    // appliedFieldMetres, nicht mit dem Reglerwert), und am Ende steht EIN
+    // Umbau statt einer Kette von Ueberblendungen.
+    //
+    // Genau daran war der frueher geprueffte Debounce gescheitert: er liess
+    // die Positionen sofort mit dem neuen Massstab rechnen, waehrend die
+    // Geometrie noch am alten hing - hoerbar und teurer als vorher. Der
+    // Unterschied ist nicht das Warten, sondern dass hier waehrend des
+    // Wartens nichts zu hoeren ist UND nichts weiterlaeuft.
+
+    // Der Massstab, in dem die Geometrie GERADE steht. Alle Meterkoordinaten
+    // haengen an ihm, nicht am Reglerwert - sonst liefen Position und
+    // Geometrie waehrend des Wartens auseinander.
+    double appliedFieldMetres = 100.0;
+
+    // Ein Feldgroessenwechsel wartet auf Ruhe.
+    bool fieldCutPending = false;
+
+    // Wie lange der Reglerwert noch stillstehen muss. Jede Aenderung setzt
+    // ihn zurueck - das ist @dpas "dann von vorne".
+    double fieldSettleRemaining = 0.0;
+
+    // Ruhezeit vor dem Umbau. Lang genug, dass eine gezogene Maus nicht
+    // zwischen zwei Bewegungen hindurch einen Umbau ausloest (ein Host
+    // liefert Reglerwerte in Blockabstaenden, also alle paar Millisekunden),
+    // kurz genug, dass ein einzelner Klick nicht wie ein Aussetzer wirkt.
+    static constexpr double fieldSettleSeconds = 0.20;
+
+    // Haelt die Ausblende unten, bis die Ruhezeit durch ist. Ohne das wuerde
+    // der Schnitt am Ende der Blende sofort umbauen und beim naechsten
+    // Reglerschritt wieder von vorn anfangen - eine Kette halber Blenden
+    // statt eines stillen Fensters.
+    bool cutWaitsForField = false;
+
+    // Laenge des laufenden Blocks in Samples, vom processBlock() gesetzt.
+    // Gebraucht wird sie in applyParameters() fuer die Ruhezeit oben - der
+    // Host darf jeden Block eine andere Groesse schicken, getBlockSize() ist
+    // nur seine Obergrenze.
+    int currentBlockSamples = 0;
 
     // Nach dem Umbau die Wiedergabe an den Rundenanfang setzen. Trennt den
     // Rundenwechsel vom Zustandsladen, die sonst denselben Weg gehen.

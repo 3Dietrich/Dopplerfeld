@@ -384,6 +384,11 @@ void DopplerEngine::cutTo (Vec3 posMetres, Vec3 preVelocity)
     // Eine laufende oder angemeldete Ueberblendung gehoert zum alten Ort.
     geometry.reset();
 
+    // Und ein angemeldeter Feldgroessenwechsel ebenfalls: der Schnitt setzt
+    // beide Saetze gleich im neuen Massstab auf, eine Ueberblendung darauf
+    // haette nichts mehr zu blenden und liefe nur doppelt.
+    fieldChangeArmed = false;
+
     configureSet (geometry.active(),  posMetres, preVelocity);
     configureSet (geometry.pending(), posMetres, preVelocity);
 
