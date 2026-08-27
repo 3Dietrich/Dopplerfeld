@@ -16,6 +16,7 @@
 // synthetischen Puffern gefüttert, wie es ein Host täte.
 
 #include "PluginProcessor.h"
+#include "UI/PresetBar.h"
 #include "PluginEditor.h"
 #include "Params.h"
 #include "UI/RoundedSlider.h"
@@ -503,6 +504,13 @@ namespace
     // führt, und läuft dabei über alle Kinder.
     void collectVisibleText (juce::Component& c, std::vector<std::pair<juce::String, juce::String>>& out)
     {
+        // Benutzerdaten auslassen: der Zustandsstreifen zeigt DATEINAMEN
+        // (siehe PresetBar::userTextComponentId). Die sind nicht zu
+        // uebersetzen und duerfen Umlaute tragen - eine Pruefung darauf
+        // meldete sonst @dpas eigene Presetnamen als fehlende Uebersetzung.
+        if (c.getComponentID() == PresetBar::userTextComponentId)
+            return;
+
         const auto where = c.getName().isNotEmpty() ? c.getName() : juce::String (typeid (c).name());
 
         if (auto* tooltipClient = dynamic_cast<juce::TooltipClient*> (&c))

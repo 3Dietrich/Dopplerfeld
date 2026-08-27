@@ -45,6 +45,14 @@ PresetBar::PresetBar()
             loadSelected();
     };
 
+    // Der Inhalt dieser Liste sind DATEINAMEN, keine Beschriftungen: sie
+    // werden nicht uebersetzt und duerfen im EN-Betrieb deutsch sein und
+    // Umlaute tragen. Die Sprachpruefung in Tests/load_check.cpp laeuft ueber
+    // jeden sichtbaren Text im Editor und muss das auslassen koennen - die
+    // Kennung sagt ihr, dass hier Benutzerdaten stehen.
+    list.setComponentID (userTextComponentId);
+    status.setComponentID (userTextComponentId);
+
     addAndMakeVisible (list);
 
     prevButton.onClick = [this] { step (-1); };

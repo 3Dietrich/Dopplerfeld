@@ -2497,6 +2497,13 @@ void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
+bool DopplerfeldProcessor::stateBlockIsOurs (const void* data, int sizeInBytes) const
+{
+    auto xml = getXmlFromBinary (data, sizeInBytes);
+
+    return xml != nullptr && xml->hasTagName (apvts.state.getType());
+}
+
 void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     auto xml = getXmlFromBinary (data, sizeInBytes);
@@ -2704,6 +2711,55 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
     // eingefuehrten Properties.
     if (tree.hasProperty (motorGateId))
         setMotorGateEnabled ((bool) tree.getProperty (motorGateId, false));
+
+    // Was der Zustand NICHT enthaelt, geht auf seinen Grundwert zurueck.
+    //
+    // apvts.replaceState() setzt nur, was im Baum steht; jeder Parameter ohne
+    // Eintrag behaelt seinen aktuellen Wert. Ein Preset aus einer aelteren
+    // Fassung erbt damit alles, was seither dazugekommen ist, von dem Preset,
+    // das vorher geladen war - und klingt beim zweiten Laden anders als beim
+    // ersten (@dpa 20260827: "zu leise und ich kann einfach nirgends finden,
+    // warum ... schalte 'MachChaos' ein und dann nochmal das erste ... nach
+    // Minuten wurde ein anderes Beispiel ploetzlich wieder laut").
+    //
+    // Wie gross das ist: von 144 in den Presets vorkommenden Parametern
+    // fehlen "woanders Vorbeiflug" 50, "spacerocket flyby" 45, "pick & move
+    // it" und "record - fastest slaps" je 44. Neun der Presets tragen weder
+    // die Fahne (extraPathGainDb, 0 bis -60 dB) noch die Druckwelle
+    // (nWavePressure) - beides entscheidet ueber den Pegel.
+    //
+    // Ergaenzt wird VOR dem Uebernehmen, nicht danach: so steht der
+    // vollstaendige Satz auch in apvts.state, und wer das Preset danach
+    // sichert, schreibt es vollstaendig zurueck.
+    {
+        for (auto* parameter : getParameters())
+        {
+            auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (parameter);
+
+            if (ranged == nullptr)
+                continue;
+
+            const juce::String id = ranged->paramID;
+            bool found = false;
+
+            for (int i = 0; i < tree.getNumChildren(); ++i)
+                if (tree.getChild (i).getProperty ("id").toString() == id)
+                {
+                    found = true;
+                    break;
+                }
+
+            if (found)
+                continue;
+
+            juce::ValueTree node ("PARAM");
+            node.setProperty ("id", id, nullptr);
+            node.setProperty ("value",
+                              ranged->convertFrom0to1 (ranged->getDefaultValue()),
+                              nullptr);
+            tree.appendChild (node, nullptr);
+        }
+    }
 
     apvts.replaceState (tree);
 

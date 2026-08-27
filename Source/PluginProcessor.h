@@ -322,6 +322,15 @@ public:
     // nebeneinander liegen (siehe PresetBar).
     bool stateLoadStillPending() const { return motionLoadRequest.load(); }
 
+    // Ob dieser Block ueberhaupt ein Zustand DIESES Plugins ist.
+    //
+    // setStateInformation() steigt bei allem anderen still aus - richtig so,
+    // ein Host darf damit nicht abstuerzen. Fuer den Zustandsstreifen ist
+    // "still ausgestiegen" aber die falsche Auskunft: er meldete "geladen",
+    // waehrend in Wahrheit das vorige Preset weiterlief. Aufgefallen an einer
+    // MP3, die im Preset-Ordner lag.
+    bool stateBlockIsOurs (const void* data, int sizeInBytes) const;
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:

@@ -389,6 +389,13 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         if (! f.loadFileAsData (block) || block.getSize() < 8)
             return false;
 
+        // Erst pruefen, dann laden: setStateInformation() steigt bei allem
+        // aus, was kein Zustand dieses Plugins ist, und zwar still - der
+        // Streifen meldete sonst "geladen", waehrend das vorige Preset
+        // weiterlaeuft.
+        if (! dopplerfeldProcessor.stateBlockIsOurs (block.getData(), (int) block.getSize()))
+            return false;
+
         dopplerfeldProcessor.setStateInformation (block.getData(), (int) block.getSize());
 
         // Die Oberflaeche haengt an Parametern (Attachments) und aktualisiert

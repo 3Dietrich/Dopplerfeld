@@ -189,6 +189,21 @@ target_compile_definitions(coast_probe PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(coast_probe PRIVATE cxx_std_20)
 
+# Messprogramm zu "manchmal zu leise" (Tests/preset_probe.cpp), kein Test.
+add_executable(preset_probe EXCLUDE_FROM_ALL Tests/preset_probe.cpp)
+target_link_libraries(preset_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(preset_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(preset_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(preset_probe PRIVATE cxx_std_20)
+
 # Layout-Bilder des Bewegungs-Panels (Tests/panel_shot.cpp), kein Test.
 add_executable(panel_shot EXCLUDE_FROM_ALL Tests/panel_shot.cpp)
 target_link_libraries(panel_shot

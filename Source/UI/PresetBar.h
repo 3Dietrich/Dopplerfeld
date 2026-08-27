@@ -30,6 +30,11 @@
 class PresetBar : public juce::Component
 {
 public:
+    // Kennung fuer Komponenten, deren Text vom Benutzer stammt (Dateinamen)
+    // und deshalb nicht uebersetzt wird. Siehe Konstruktor und die
+    // Sprachpruefung in Tests/load_check.cpp.
+    static constexpr const char* userTextComponentId = "userText";
+
     PresetBar();
 
     void resized() override;
