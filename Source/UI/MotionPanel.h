@@ -22,8 +22,17 @@ public:
 
     // Beschriftung des Play-Knopfs auf "Play"/"Stop" umschalten - der Aufrufer
     // kennt den tatsaechlichen Wiedergabezustand (MotionPlayer gehoert dem
-    // Audiothread), hier wird nur die Anzeige nachgefuehrt.
+    // Audiothread), hier wird nur die Anzeige nachgefuehrt. Faerbt den Knopf
+    // zusaetzlich auffaellig ein, solange abgespielt wird (@dpa: "sollten
+    // zeigen dass sie Aktiv sind") - selbes buttonColourId-Muster wie die
+    // Scope-Umschalter im Editor (scopeFreezeButton/scopeSyncButton).
     void setPlaying (bool isPlaying);
+
+    // Wie setPlaying(), nur fuer den Record-Knopf: Beschriftung "Record"/
+    // "Stop" plus Einfaerbung, solange aufgenommen wird. Der Aufrufer kennt
+    // den tatsaechlichen Aufnahmezustand (MotionRecorder gehoert dem
+    // Audiothread), hier wird nur nachgefuehrt.
+    void setRecording (bool isRecording);
 
     std::function<void()> onRecordClicked;
     std::function<void()> onPlayClicked;   // Aufrufer entscheidet: je nach Zustand trigger() oder stop()

@@ -525,6 +525,7 @@ void DopplerfeldEditor::refreshDisplay()
         }
     }
     motionPanel.setPlaying (dopplerfeldProcessor.isPlayingMotion());
+    motionPanel.setRecording (dopplerfeldProcessor.isRecording());
     motionPanel.setFlying (dopplerfeldProcessor.isFlyingBy());
 
     // Nach einem Preset-/State-Load muss der Schalter den geladenen Zustand
@@ -801,8 +802,8 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
 
     // Statuszeile selbst (Tempo/L-M/Reflexionen/...) faerbt sich seit dem
     // Auslagern der CPU-Last nicht mehr rot - diese Warnung sitzt jetzt
-    // ausschliesslich im Balken darueber.
-    g.setColour (juce::Colours::white.withAlpha (0.6f));
+    // ausschliesslich im Balken darueber. (Die Farbe wird weiter unten kurz
+    // vor drawText() gesetzt, nachdem die LED links davon gezeichnet ist.)
     // Monospace statt Proportionalschrift: nur bei fester Zeichenbreite pro
     // Glyphe hält das Zahlen-Padding in statusText() die Spalten auch
     // tatsaechlich stabil (siehe Kommentar dort). drawText() statt
@@ -813,9 +814,33 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     // gesetzten Groesse und schneidet im Zweifel einfach ab.
     const int statusTop = getHeight() - statusHeight;
 
+    // LED vor dem Text statt einer weiteren grauen Zahl darin (@dpa-Auftrag,
+    // s. Kommentar bei statusStateDotDiameter im Header): rot waehrend der
+    // Aufnahme, gruen waehrend der Wiedergabe, sonst unsichtbar. Dieselben
+    // zwei Farben wie am Record-/Play-Knopf im Bewegung-Panel (siehe
+    // MotionPanel::setRecording()/setPlaying()) - Statuszeile und Knopf
+    // zeigen also denselben Zustand in derselben Farbe.
+    const bool motionRecording = dopplerfeldProcessor.isRecording();
+    const bool motionPlaying   = dopplerfeldProcessor.isPlayingMotion();
+
+    const juce::Colour stateDotColour = motionRecording ? juce::Colours::red
+                                       : motionPlaying   ? juce::Colours::limegreen
+                                                          : juce::Colours::transparentBlack;
+
+    const auto stateDotBounds = juce::Rectangle<float> ((float) margin,
+                                                         (float) (statusTop + (statusHeight - statusStateDotDiameter) / 2),
+                                                         (float) statusStateDotDiameter,
+                                                         (float) statusStateDotDiameter);
+    g.setColour (stateDotColour);
+    g.fillEllipse (stateDotBounds);
+
+    const int textLeft  = margin + statusStateDotDiameter + statusStateDotGap;
+    const int textWidth = fieldWidth - statusStateDotDiameter - statusStateDotGap;
+
+    g.setColour (juce::Colours::white.withAlpha (0.6f));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 16.0f, juce::Font::plain)));
     g.drawText (statusText(),
-                margin, statusTop, fieldWidth, statusHeight,
+                textLeft, statusTop, textWidth, statusHeight,
                 juce::Justification::centredLeft, false);
 }
 

@@ -341,6 +341,26 @@ void MotionPanel::updateSlewControlsVisibility()
 void MotionPanel::setPlaying (bool isPlaying)
 {
     playButton.setButtonText (isPlaying ? "Stop" : "Play");
+
+    // Gruen wie der "gut"-Zustand des CPU-Balkens im Editor (limegreen) -
+    // derselbe Ton steht dort schon fuer "laeuft, alles in Ordnung". Ohne
+    // Faerbung sah der Knopf im Debug-Fenster kaum anders aus, ob gerade
+    // abgespielt wird oder nicht (@dpa-Auftrag).
+    playButton.setColour (juce::TextButton::buttonColourId,
+                           isPlaying ? juce::Colours::limegreen.withAlpha (0.4f)
+                                     : juce::Colours::transparentBlack);
+}
+
+void MotionPanel::setRecording (bool isRecording)
+{
+    recordButton.setButtonText (isRecording ? "Stop" : "Record");
+
+    // Rot wie die Clip-LED im Pegelmeter (siehe LevelMeter.cpp) - im Projekt
+    // schon die Farbe fuer "hier passiert gerade etwas, das Aufmerksamkeit
+    // verlangt".
+    recordButton.setColour (juce::TextButton::buttonColourId,
+                             isRecording ? juce::Colours::red.withAlpha (0.45f)
+                                         : juce::Colours::transparentBlack);
 }
 
 void MotionPanel::setFlying (bool isFlying)

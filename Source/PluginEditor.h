@@ -330,6 +330,15 @@ private:
 
     static constexpr int statusHeight = 44;
 
+    // LED vor der Statuszeile, die Aufnahme/Wiedergabe farbig anzeigt (@dpa:
+    // "sollten ... auffaelliger dargestellt werden als der uebrige Text") -
+    // statusText() bleibt ein reiner String, die Farbe kommt separat in
+    // paint() dazu (siehe dort). Immer gezeichnet, nur die Farbe wechselt -
+    // sonst wanderte der nachfolgende Text je nach Zustand um die LED-Breite
+    // (vgl. Kommentar zu statusText() ueber feste Spaltenbreiten).
+    static constexpr int statusStateDotDiameter = 10;
+    static constexpr int statusStateDotGap      = 6;
+
     // Scope-Block zwischen Feld und Statuszeile: Toolbar (Freeze/Sync) +
     // Scope-Flaeche, volle Feldbreite. scopeBlockHeight ist der Platz, den
     // updateScopeVisibility() der Fensterhoehe hinzufuegt/entzieht.
