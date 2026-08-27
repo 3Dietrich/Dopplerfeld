@@ -350,10 +350,6 @@ double PropagationPath::shockDuckAt (double listenerTime) const
     return 1.0 - shockDuckAmount * shockDuckStrength * g;
 }
 
-void PropagationPath::setReverseGain (double gainLinear)
-{
-    reverseGain = std::max (0.0, gainLinear);
-}
 
 void PropagationPath::setExtraPathGain (double gainLinear)
 {
@@ -1280,16 +1276,6 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // Uebergang ein Pegelsprung mitten im Signal.
                 const double dTauNow = b.dTau + (dTau1 - b.dTau) * u;
 
-                double reverseFactor = 1.0;
-
-                if (reverseGain != 1.0)
-                {
-                    const double blend = std::min (1.0, std::max (0.0,
-                                            (dTauNow - 1.0) / reverseBlendWidth));
-
-                    reverseFactor = 1.0 + (reverseGain - 1.0) * blend;
-                }
-
                 // Die Absenkung trifft NUR den Zweiginhalt, nicht die N-Welle
                 // darunter: gedaempft werden soll der Motor waehrend der
                 // Stossfront, nicht der Knall selbst.
@@ -1302,7 +1288,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                                          ? extraPathGain
                                          : 1.0;
 
-                double outSample = y * b.env * reverseFactor * extraFactor
+                double outSample = y * b.env * extraFactor
                                  * (duck0 + (duck1 - duck0) * u);
 
                 if (b.nPhase >= 0.0)

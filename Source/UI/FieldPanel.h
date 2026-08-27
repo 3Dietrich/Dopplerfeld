@@ -99,7 +99,7 @@ private:
     // der Knall-Kante, weil beide dieselbe Welle formen - die eine ihre
     // Fronten, die andere den Teil dazwischen.
     Knob nWavePressureKnob;
-    Knob reverseGainKnob, shockDuckKnob, shockDuckRangeKnob;
+    Knob shockDuckRangeKnob;
 
     // Pegel der zusaetzlichen Hoerwege (Params::extraPathGainDb) - der
     // Nachlauf nach einem Ueberschall-Vorbeiflug, den @dpa "Fahne" nennt.

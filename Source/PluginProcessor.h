@@ -496,9 +496,7 @@ private:
         std::atomic<float>* rocketTone      = nullptr;
         std::atomic<float>* rocketShockSize = nullptr;
         std::atomic<float>* rocketShockRate = nullptr;
-        std::atomic<float>* reverseGainDb   = nullptr;
         std::atomic<float>* extraPathGainDb = nullptr;
-        std::atomic<float>* shockDuckAmount = nullptr;
         std::atomic<float>* shockDuckRange  = nullptr;
         std::atomic<float>* jumpBoom        = nullptr;
         std::atomic<float>* jumpBoomSize    = nullptr;
@@ -832,10 +830,14 @@ private:
     // Dieselbe Wiedervorlage wie bei der N-Welle: die drei Setter laufen ueber
     // alle Pfade beider Geometriesaetze und werden darum nur bei einer echten
     // Aenderung angestossen.
-    double lastReverseGainDb   = 0.0;
     double lastExtraPathGainDb = 0.0;
     double lastShockDuckRange  = -1.0;
     double lastShockDuckAmount = 1.0;
+
+    // Tiefe der Absenkung waehrend einer Stossfront. Keine Einstellung mehr:
+    // sie stand immer auf voller Tiefe, und alles darunter liess waehrend des
+    // Knalls Motorton durch, den es dort nicht geben soll.
+    static constexpr double shockDuckFixedAmount = 1.0;
     double lastJumpBoom        = 0.0;
     double lastJumpBoomSize    = -1.0;
 

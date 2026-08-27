@@ -608,10 +608,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // voreingestellt. Die Absenkung steht voll aufgedreht, weil waehrend einer
     // N-Welle nichts anderes zu hoeren sein soll - auch nicht zwischen Bug- und
     // Heckstoss (@dpa 20260823).
+    // OHNE WIRKUNG, nur noch fuer gespeicherte Presets registriert. Die
+    // Blende dahinter oeffnete erst ueber dTau = 1 und traf damit genau den
+    // Anteil nicht, den man hoert - gemessen kam der lauteste Beitrag des
+    // Nachlaufs bei dTau = -0,271. Was er senken sollte, senkt jetzt der
+    // Regler "Fahne" (Params::extraPathGainDb), und der trifft es.
     layout.add (floatParam (reverseGainDb, "Reverse Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
 
     // 0 dB laesst alles wie bisher; bis -60 dB ist die Fahne praktisch weg.
     layout.add (floatParam (extraPathGainDb, "Extra Paths", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+    // OHNE WIRKUNG, nur noch fuer gespeicherte Presets registriert. Die Tiefe
+    // steht fest auf 1: waehrend eine Stossfront ueber den Hoerweg laeuft,
+    // kommt nichts anderes durch, und alles darunter liess Motorton mitten im
+    // Knall durch (@dpa 20260827: "Front-Duck (=1) kann weg").
     layout.add (floatParam (shockDuckAmount, "Shock Duck", unitRange(), 1.0f));
     {
         // Reichweite der Absenkung, siehe Params.h. Skew auf 300 m, damit der

@@ -132,9 +132,6 @@ public:
     void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
                    double edge01, double pressure);
 
-    // Pegel der zeitverkehrt gehoerten Zweige, siehe
-    // PropagationPath::setReverseGain().
-    void setReverseGain (double gainLinear);
 
     // Pegel der zusaetzlichen Hoerwege, siehe
     // PropagationPath::setExtraPathGain().
@@ -559,7 +556,6 @@ private:
     double extraPathGain = 1.0;
 
     // Siehe setReverseGain() / setShockDuck().
-    double reverseGain      = 1.0;
     double shockDuckAmount = 0.0;
     double shockDuckRange  = 0.0;
     double jumpBoom        = 0.0;

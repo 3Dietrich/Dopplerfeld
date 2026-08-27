@@ -81,8 +81,6 @@ namespace Tooltips
         SrcJitterOn,
         EngineSine,
         EngineOscOn,
-        ReverseGain,
-        ShockDuck,
         ShockDuckRange,
         JumpBoom,
         JumpBoomSize,
@@ -835,49 +833,6 @@ namespace Tooltips
                           "core, two sines for the clean overtones above. Switching crossfades, "
                           "and the sine comes from the same phase as the sawtooth - no click, "
                           "no jump in pitch.";
-                case Key::ReverseGain:
-                    return lang == Language::De
-                        ? "Pegel des RÜCKWÄRTS gehörten Anteils in dB. Bei Überschall gibt es "
-                          "mehr als einen Hörweg (Schallpfad von der Quelle zum Ohr): einer läuft "
-                          "vorwärts, ein zweiter rückwärts - was die Quelle zuletzt gesendet hat, "
-                          "trifft zuerst ein. Beide sind physikalisch da, im Modell stehen sie "
-                          "aber gleich laut nebeneinander, und dann drängt sich der rückwärts "
-                          "laufende vor. Hier lässt er sich zurücknehmen, ohne den "
-                          "Vorwärtsanteil anzufassen. 0 dB = unverändert. Der Knall selbst (die "
-                          "N-Welle, der kurze Druckstoß mit steilem Auf- und Abfall beim "
-                          "Überschallknall) bleibt unberührt, er ist eine eigene Schicht."
-                        : "Level of the REVERSED part in dB. Above Mach 1 there is more than one "
-                          "path to the ear: one runs forward, a second one backwards - what the "
-                          "source emitted last arrives first. Both are physically there, but in "
-                          "the model they stand side by side at equal level, and then the "
-                          "reversed one pushes to the front. This takes it back without touching "
-                          "the forward part. 0 dB = unchanged. The boom itself (the N-wave, the "
-                          "short pressure pulse with a steep rise and fall that makes the sonic "
-                          "boom) is not affected, it is a separate layer.";
-                case Key::ShockDuck:
-                    return lang == Language::De
-                        ? "Wie stark der übrige Schall abgesenkt wird, solange eine Stoßfront "
-                          "über den Hörweg läuft. 0 = aus (unverändert), 1 = während des "
-                          "Knalls ganz still. Eine Stoßfront lässt neben sich nichts durch - "
-                          "während der N-Welle darf kein Motorgeräusch dazukommen. Gilt für den "
-                          "ganzen Weg, nicht nur für den Zweig (einen von mehreren parallelen "
-                          "Schallpfaden, etwa den Vorwärts- oder Rückwärts-Hörweg), der den Puls "
-                          "trägt, sonst liefe der Motorton über den Nachbarzweig weiter. Der "
-                          "Knall selbst wird nicht "
-                          "abgesenkt. Gemeint ist die ganze Welle, auch die Strecke zwischen "
-                          "Bug- und Heckstoß - dort darf ebenso wenig durchkommen. Danach "
-                          "kommt der Ton in gut zehn Millisekunden zurück; diese Zeit ist fest "
-                          "und kein Regler, sie soll nur die Kante entschärfen."
-                        : "How far everything else is ducked while a shock front passes the path "
-                          "to the ear. 0 = off (unchanged), 1 = fully silent during the boom. A "
-                          "shock front lets nothing through beside it - no engine noise may join "
-                          "in during the N-wave. Applies to the whole path, not just the branch "
-                          "(one of several parallel sound paths, e.g. the forward or backward "
-                          "path) carrying the pulse, otherwise the engine tone would continue on "
-                          "the neighbouring branch, and that includes the stretch between bow and "
-                          "tail shock. Afterwards the sound returns within about ten "
-                          "milliseconds; that time is fixed and not a control, it only takes "
-                          "the edge off. The boom itself is not ducked.";
                 case Key::ShockDuckRange:
                     return lang == Language::De
                         ? "Ab welcher Entfernung die Absenkung nachlässt. Nah an der "

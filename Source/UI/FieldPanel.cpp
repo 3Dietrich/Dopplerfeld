@@ -53,9 +53,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",       Tooltips::Key::Panning);
     setupKnob (airTempKnob,     apvts, Params::airTempC,        "Luft °C", Tooltips::Key::AirTemperature);
 
-    setupKnob (reverseGainKnob, apvts, Params::reverseGainDb,   "Rückwärts", Tooltips::Key::ReverseGain);
     setupKnob (extraPathKnob,   apvts, Params::extraPathGainDb, "Fahne",     Tooltips::Key::ExtraPaths);
-    setupKnob (shockDuckKnob,   apvts, Params::shockDuckAmount, "Front-Duck",  Tooltips::Key::ShockDuck);
     setupKnob (shockDuckRangeKnob, apvts, Params::shockDuckRange, "Duck-Reichw.", Tooltips::Key::ShockDuckRange);
     setupKnob (nWaveEdgeKnob,   apvts, Params::nWaveEdge,       "Knall-Kante", Tooltips::Key::NWaveEdge);
     setupKnob (nWavePressureKnob, apvts, Params::nWavePressure,  "Druckwelle",  Tooltips::Key::NWavePressure);
@@ -83,8 +81,8 @@ void FieldPanel::refreshTooltips()
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
                       &airTempKnob, &airAltitudeKnob,
-                      &nWaveEdgeKnob, &nWavePressureKnob, &reverseGainKnob, &extraPathKnob,
-                      &shockDuckKnob, &shockDuckRangeKnob })
+                      &nWaveEdgeKnob, &nWavePressureKnob, &extraPathKnob,
+                      &shockDuckRangeKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -170,7 +168,7 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto boomRow = area.removeFromTop (knobH);
-    for (auto* k : { &reverseGainKnob, &extraPathKnob, &shockDuckKnob, &shockDuckRangeKnob })
+    for (auto* k : { &extraPathKnob, &shockDuckRangeKnob })
     {
         layoutKnob (*k, boomRow.removeFromLeft (knobW));
         boomRow.removeFromLeft (4);

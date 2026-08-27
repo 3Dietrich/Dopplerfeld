@@ -320,6 +320,7 @@ namespace Params
     constexpr const char* rocketFarColour = "rocketFarColour";
     constexpr const char* rocketShockRate = "rocketShockRate";
 
+    // OHNE WIRKUNG - siehe Params.cpp. Ersetzt durch extraPathGainDb.
     constexpr const char* reverseGainDb = "reverseGainDb";
 
     // Pegel der ZUSAETZLICHEN Hoerwege in dB - der "Fahne" nach dem
@@ -342,6 +343,7 @@ namespace Params
     // Gemeint ist die ganze Welle, auch die Strecke zwischen Bug- und
     // Heckstoss: "es ist immer was zu hoeren zwischen den zwei knallen.. das
     // soll weg". Deshalb voll aufgedreht als Voreinstellung.
+    // OHNE WIRKUNG - siehe Params.cpp, die Tiefe steht fest auf 1.
     constexpr const char* shockDuckAmount = "shockDuckAmount";
 
     // Entfernung, ab der die Absenkung nachlaesst (@dpa 20260824: "wir muessen

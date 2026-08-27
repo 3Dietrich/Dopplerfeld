@@ -174,20 +174,6 @@ public:
     void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
                    double edge01, double pressure);
 
-    // Pegel der ZEITVERKEHRT gehoerten Zweige, linear (0.5 = 6 dB leiser).
-    //
-    // Bei Ueberschall liefert der Loeser mehrere Wurzeln: einen Zweig, dessen
-    // Leseposition vorwaerts laeuft, und einen, dessen Leseposition rueckwaerts
-    // laeuft - was die Quelle zuletzt gesendet hat, trifft zuerst ein. Beide
-    // sind physikalisch da. Real geht der rueckwaerts laufende Anteil neben dem
-    // vorwaerts laufenden weitgehend unter (@dpa 20260821: "es muss neben dem
-    // Rueckwaerts irgend etwas lauteres geben, sonst waere es hoerbar, und wenn
-    // hoerbar, gibt's auch Aufnahmen"); im Modell steht er gleichberechtigt
-    // daneben und draengt sich vor. Dieser Regler ist der Griff dafuer.
-    //
-    // 1.0 laesst alles wie bisher. Die N-Welle bleibt unberuehrt - der Knall
-    // ist eine eigene Schicht, kein Zweiginhalt.
-    void setReverseGain (double gainLinear);
 
     // Pegel der zusaetzlichen Hoerwege, linear (siehe Params::extraPathGainDb).
     //
@@ -800,8 +786,6 @@ private:
     // Regelbarer Pegel des Knalls, linear (siehe Params::nWaveGainDb).
     double nWaveGain      = 1.0;
 
-    // Siehe setReverseGain(). 1.0 = unveraendert.
-    double reverseGain = 1.0;
 
     // Siehe setExtraPathGain(). 1.0 = unveraendert.
     double extraPathGain = 1.0;
@@ -812,11 +796,6 @@ private:
     // gegeneinander ausspielen.
     static constexpr double extraPathMinDelay = 0.002;
 
-    // Breite der Blende zwischen vorwaerts und rueckwaerts gehoertem Zweig,
-    // gemessen in dTau/dt. Die Leseposition eines Zweigs wandert mit
-    // (1 - dTau): unter 1 vorwaerts, ueber 1 rueckwaerts. Ohne Blende waere
-    // der Uebergang ein Pegelsprung mitten im Signal.
-    static constexpr double reverseBlendWidth = 0.25;
 
     // Siehe setShockDuck(). Default 0 = aus, damit bestehende Presets
     // unveraendert klingen.

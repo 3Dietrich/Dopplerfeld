@@ -284,9 +284,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.rocketShockSize = raw (Params::rocketShockSize);
     pp.rocketFarColour = raw (Params::rocketFarColour);
     pp.rocketShockRate = raw (Params::rocketShockRate);
-    pp.reverseGainDb   = raw (Params::reverseGainDb);
     pp.extraPathGainDb = raw (Params::extraPathGainDb);
-    pp.shockDuckAmount = raw (Params::shockDuckAmount);
     pp.shockDuckRange  = raw (Params::shockDuckRange);
     pp.jumpBoom        = raw (Params::jumpBoom);
     pp.jumpBoomSize    = raw (Params::jumpBoomSize);
@@ -771,7 +769,7 @@ void DopplerfeldProcessor::applyParameters()
     // als Kegelankunft, deshalb kam "Duck-Reichw." dort bisher gar nicht an
     // (@dpa 20260825: "ich habe bei Rakete noch keinen Unterschied zwischen
     // den Druckreichweiten gehoert").
-    engineGenerator.setRocketShockDuck (pp.shockDuckAmount->load(),
+    engineGenerator.setRocketShockDuck ((float) shockDuckFixedAmount,
                                         pp.shockDuckRange->load());
 
     for (int i = 0; i < 4; ++i)
@@ -900,17 +898,14 @@ void DopplerfeldProcessor::applyParameters()
     // Rueckwaerts-Pegel, Stossfront-Absenkung und Schattenausklang: dieselbe
     // Wiedervorlage wie bei der N-Welle, denn auch diese Setter laufen ueber
     // alle Pfade beider Geometriesaetze.
-    const double reverseGainDb   = (double) pp.reverseGainDb->load();
     const double extraPathGainDb = (double) pp.extraPathGainDb->load();
-    const double shockDuckAmount = (double) pp.shockDuckAmount->load();
+    // Fest auf voller Tiefe: waehrend eine Stossfront ueber den Hoerweg
+    // laeuft, kommt nichts anderes durch (@dpa 20260827: "Front-Duck (=1)
+    // kann weg" - er stand ohnehin immer dort).
+    const double shockDuckAmount = shockDuckFixedAmount;
     const double shockDuckRange  = (double) pp.shockDuckRange->load();
     const double jumpBoom        = (double) pp.jumpBoom->load();
 
-    if (std::abs (reverseGainDb - lastReverseGainDb) > 1.0e-9)
-    {
-        lastReverseGainDb = reverseGainDb;
-        dopplerEngine.setReverseGain (juce::Decibels::decibelsToGain (reverseGainDb));
-    }
 
     if (std::abs (extraPathGainDb - lastExtraPathGainDb) > 1.0e-9)
     {
