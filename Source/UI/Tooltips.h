@@ -835,18 +835,17 @@ namespace Tooltips
                           "no jump in pitch.";
                 case Key::ShockDuckRange:
                     return lang == Language::De
-                        ? "Ab welcher Entfernung die Absenkung nachlässt. Nah an der "
-                          "Quelle ist die Stoßfront eine echte Unstetigkeit und nimmt "
-                          "alles andere mit; weiter weg ist sie längst zerfallen, und "
-                          "was ankommt, ist Grollen samt allem drumherum. Bei genau "
-                          "dieser Entfernung wirkt die Absenkung noch halb. 0 = gilt "
-                          "überall gleich."
-                        : "The distance at which the ducking starts to fade. Close to "
-                          "the source the shock front is a real discontinuity and takes "
-                          "everything else with it; further away it has long since "
-                          "decayed, and what arrives is a rumble along with everything "
-                          "around it. At exactly this distance the ducking is at half "
-                          "depth. 0 = applies everywhere equally.";
+                        ? "Bis zu welcher Entfernung die Absenkung voll wirkt. Näher "
+                          "als das ist die Stoßfront eine echte Unstetigkeit und nimmt "
+                          "alles andere mit - zwischen den beiden Knallen bleibt es "
+                          "still. Doppelt so weit wirkt sie noch halb, dahinter kommt "
+                          "das Grollen samt allem drumherum. 0 = gilt überall gleich."
+                        : "The distance up to which the ducking works at full depth. "
+                          "Closer than that the shock front is a real discontinuity and "
+                          "takes everything else with it - between the two bangs it "
+                          "stays silent. At twice the distance it is at half depth, "
+                          "beyond that the rumble arrives along with everything around "
+                          "it. 0 = applies everywhere equally.";
                 case Key::JumpBoomSize:
                     return lang == Language::De
                         ? "Länge des Startknalls in Metern - kurz knallt, lang wummert. "

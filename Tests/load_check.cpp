@@ -31,6 +31,8 @@
 #include <cmath>
 #include <cstdio>
 #include <vector>
+#include <algorithm>
+#include <utility>
 
 namespace
 {
@@ -6214,49 +6216,53 @@ int main()
     // am Boden, Boom Limit 19,9 dB, N-Welle an mit 17 m, Front-Duck voll,
     // Schattenausklang auf der Untergrenze von 1 ms.
     {
-        DopplerfeldProcessor proc;
-
-        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
-
         constexpr double field  = 6000.0;
         constexpr double radius = 500.0;    // m, Kreisbahn
         constexpr double offset = 420.0;    // m, um die der Hoerer neben dem
                                             // Kreismittelpunkt steht
         constexpr double speed  = 857.5;    // m/s = Mach 2,5
 
-        setParam (proc, Params::fieldMetres,     (float) field);
-        setParam (proc, Params::lisX,            0.5f);
-        setParam (proc, Params::lisY,            0.5f);
-        setParam (proc, Params::lisZ,            1.926f);
-        setParam (proc, Params::srcZ,            166.5f);
-        setParam (proc, Params::boomLimitDb,     19.9f);
-        setParam (proc, Params::nWaveOn,         1.0f);
-        setParam (proc, Params::nWaveSize,       17.05f);
-        setParam (proc, Params::shockDuckAmount, 1.0f);
-        setParam (proc, Params::shockDuckRange,  1345.0f);
-        setParam (proc, Params::shadowTailMs,    1.0f);
+        // Dieselbe Einstellung wird von zwei Processoren gebraucht (siehe
+        // Motoranteil weiter unten), deshalb einmal als Lambda.
+        auto applyCircle = [&] (DopplerfeldProcessor& p, float engineDb)
+        {
+        setParam (p, Params::fieldMetres,     (float) field);
+        setParam (p, Params::lisX,            0.5f);
+        setParam (p, Params::lisY,            0.5f);
+        setParam (p, Params::lisZ,            1.926f);
+        setParam (p, Params::srcZ,            166.5f);
+        setParam (p, Params::boomLimitDb,     19.9f);
+        setParam (p, Params::nWaveOn,         1.0f);
+        setParam (p, Params::nWaveSize,       17.05f);
+        setParam (p, Params::shockDuckAmount, 1.0f);
+        setParam (p, Params::shockDuckRange,  1345.0f);
+        setParam (p, Params::shadowTailMs,    1.0f);
         // Kurz geglaettet: bei @dpas 1,06 s zoege der Glaetter die Bahn so weit
         // zusammen, dass die Quelle die eingestellte Geschwindigkeit gar nicht
         // erreicht - gemessen blieb |M_r| dann bei 0,27, es gaebe keinen Kegel
         // zu pruefen. Seine aufgezeichnete Bewegung liefert die Geschwindigkeit
         // dagegen direkt.
-        setParam (proc, Params::smootherTau,     0.05f);
+        setParam (p, Params::smootherTau,     0.05f);
 
         // Motor wie im Preset. Ohne ihn gibt es die "Fahne" gar nicht, um die
         // es @dpa geht: den Motorton, der ueber den zeitverkehrt gehoerten
         // Zweig ankommt, dabei immer hoeher wird und dann abreisst. Ohne
         // Quellsignal im Hoerbereich misst das Szenario nur die Knalle.
-        setParam (proc, Params::engineKind,      1.0f);
-        setParam (proc, Params::rpm,             9924.0f);
-        setParam (proc, Params::engineLevelDb,   34.1f);
-        setParam (proc, Params::harmRatio1,      10.72f);
-        setParam (proc, Params::harmLevel1,      -56.8f);
-        setParam (proc, Params::harmRatio4,      14.91f);
-        setParam (proc, Params::harmLevel4,      -19.2f);
-        setParam (proc, Params::reverseGainDb,   0.0f);
-        setParam (proc, Params::globalMaxSpeed,  2000.0f);
-        setParam (proc, Params::slewVmax,        2000.0f);
+        setParam (p, Params::engineKind,      1.0f);
+        setParam (p, Params::rpm,             9924.0f);
+        setParam (p, Params::engineLevelDb,   engineDb);
+        setParam (p, Params::harmRatio1,      10.72f);
+        setParam (p, Params::harmLevel1,      -56.8f);
+        setParam (p, Params::harmRatio4,      14.91f);
+        setParam (p, Params::harmLevel4,      -19.2f);
+        setParam (p, Params::reverseGainDb,   0.0f);
+        setParam (p, Params::globalMaxSpeed,  2000.0f);
+        setParam (p, Params::slewVmax,        2000.0f);
+        };
 
+        DopplerfeldProcessor proc;
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+        applyCircle (proc, 34.1f);
         proc.prepareToPlay (sampleRate, blockSize);
 
         // Die Quelle steht zu Beginn auf der Bahn und laeuft dann los - so
@@ -6407,6 +6413,260 @@ int main()
         });
 
         noWave.report ("Kreis ohne N-Welle");
+
+        // Vierte Gegenprobe, und die einzige, die die ABSENKUNG selbst misst:
+        // N-Welle an, aber Druckwelle auf 0. Damit bleibt von der Welle nur
+        // ihr Bug- und ihr Heckstoss uebrig - zwei kurze Impulse. Alles, was
+        // DAZWISCHEN steht, ist durchgekommener Motorton, also genau das, was
+        // laut @dpa nicht da sein darf ("es ist immer was zu hoeren zwischen
+        // den zwei knallen.. das soll weg"). Bei voller Druckwelle laesst sich
+        // das nicht messen: dann fuellt die Auslenkung der Nulllinie den Raum
+        // zwischen den Stoessen selbst aus, und Leck und Nutzsignal sind
+        // nicht mehr auseinanderzuhalten.
+        setParam (proc, Params::nWaveOn,        1.0f);
+        setParam (proc, Params::nWavePressure,  0.0f);
+        setParam (proc, Params::shockDuckAmount, 1.0f);
+
+        juce::AudioBuffer<float> duckCap (2, (int) (8.0 * sampleRate) + blockSize);
+        duckCap.clear();
+        int duckAt = 0;
+
+        Stats duckProbe;
+        render (proc, buffer, 8.0, duckProbe, [&] (double t)
+        {
+            float x = 0.0f, y = 0.0f;
+            circleAt (t + 32.0, x, y);
+            setParam (proc, Params::srcX, x);
+            setParam (proc, Params::srcY, y);
+        }, &duckCap, &duckAt);
+
+        duckProbe.report ("Kreis, Druckwelle 0");
+
+        {
+            juce::File out ("/tmp/dopplerfeld_kreis_druck0.wav");
+            out.deleteFile();
+
+            juce::WavAudioFormat fmt;
+
+            if (auto* stream = out.createOutputStream().release())
+                if (auto* writer = fmt.createWriterFor (stream, sampleRate, 2, 16, {}, 0))
+                {
+                    writer->writeFromAudioSampleBuffer (duckCap, 0, duckAt);
+                    delete writer;
+                    std::printf ("%-22s Mitschnitt: %s (%.2f s)\n", "",
+                                 out.getFullPathName().toRawUTF8(),
+                                 (double) duckAt / sampleRate);
+                }
+        }
+
+        // Derselbe Flug ein zweites Mal, nur mit stummem Motor. Die Differenz
+        // der beiden Mitschnitte IST der Motoranteil: die N-Welle haengt nicht
+        // am Motorpegel, sie faellt beim Abziehen also weg, und was uebrig
+        // bleibt, ist genau der Ton, der waehrend der Welle nicht zu hoeren
+        // sein soll. Ohne diese Trennung misst man den Nachschwinger der
+        // Hochpaesse, der zur Welle gehoert, als waere er das Leck.
+        DopplerfeldProcessor mute;
+        mute.setRateAndBufferSizeDetails (sampleRate, blockSize);
+        applyCircle (mute, -80.0f);
+        setParam (mute, Params::nWavePressure, 0.0f);
+        mute.prepareToPlay (sampleRate, blockSize);
+
+        {
+            float x = 0.0f, y = 0.0f;
+            circleAt (32.0, x, y);
+            setParam (mute, Params::srcX, x);
+            setParam (mute, Params::srcY, y);
+        }
+
+        juce::AudioBuffer<float> muteCap (2, (int) (8.0 * sampleRate) + blockSize);
+        muteCap.clear();
+        int muteAt = 0;
+
+        Stats muteSettle;
+        render (mute, buffer, 0.5, muteSettle, [&] (double t)
+        {
+            float x = 0.0f, y = 0.0f;
+            circleAt (t + 32.0 - 0.5, x, y);
+            setParam (mute, Params::srcX, x);
+            setParam (mute, Params::srcY, y);
+        });
+
+        Stats muteRun;
+        render (mute, buffer, 8.0, muteRun, [&] (double t)
+        {
+            float x = 0.0f, y = 0.0f;
+            circleAt (t + 32.0, x, y);
+            setParam (mute, Params::srcX, x);
+            setParam (mute, Params::srcY, y);
+        }, &muteCap, &muteAt);
+
+        // Das Leck als Zahl, sonst laesst sich keine Aenderung daran pruefen.
+        // Gesucht ist der lauteste Punkt ZWISCHEN Bug- und Heckstoss: die
+        // ersten 6 ms nach einer Front gehoeren noch ihr selbst (Tiefpass-
+        // ausklang), danach bis zur naechsten Front - hoechstens 120 ms - darf
+        // bei dichter Absenkung nur noch der Grundpegel stehen.
+        {
+            const int blockLen = (int) (0.002 * sampleRate);
+            const int numEnv   = duckAt / blockLen;
+
+            std::vector<double> env  ((size_t) std::max (numEnv, 0), 0.0);
+            std::vector<double> wave ((size_t) std::max (numEnv, 0), 0.0);
+
+            const float* left   = duckCap.getReadPointer (0);
+            const float* waveL  = muteCap.getReadPointer (0);
+            const int    numWave = std::min (numEnv, muteAt / blockLen);
+
+            for (int i = 0; i < numEnv; ++i)
+            {
+                double m = 0.0;
+
+                for (int k = 0; k < blockLen; ++k)
+                    m = std::max (m, (double) std::abs (left[i * blockLen + k]));
+
+                env[(size_t) i] = m;
+            }
+
+            // Die Fronten werden im MOTORLOSEN Lauf gesucht, nicht im vollen.
+            // Im vollen ist der Motor genauso laut wie ein Knall (gemessen
+            // 0,41 gegen 0,43), eine Schwelle trennt die beiden dort nicht -
+            // die Messung fand dann Motorspitzen und erklaerte den Ton danach
+            // zum Leck. Ohne Motor steht die Welle allein.
+            for (int i = 0; i < numWave; ++i)
+            {
+                double m = 0.0;
+
+                for (int k = 0; k < blockLen; ++k)
+                    m = std::max (m, (double) std::abs (waveL[i * blockLen + k]));
+
+                wave[(size_t) i] = m;
+            }
+
+            double envPeak = 0.0;
+
+            for (double e : wave)
+                envPeak = std::max (envPeak, e);
+
+            // Grundpegel: das zehnte Perzentil. Der Mittelwert waere von den
+            // Knallen selbst hochgezogen, das Minimum von einer einzelnen
+            // Nullstelle nach unten.
+            std::vector<double> sorted = env;
+            std::sort (sorted.begin(), sorted.end());
+            const double floorLevel = sorted.empty() ? 0.0
+                                                     : sorted[sorted.size() / 10];
+
+            // Fronten als EREIGNISSE, nicht als einzelne Bloecke: eine
+            // Stossfront steht ueber mehrere 2-ms-Bloecke ueber der Schwelle
+            // und darf zwischendrin kurz darunter tauchen, ohne dass daraus
+            // zwei Fronten werden. Ohne dieses Zusammenfassen faellt die
+            // zweite Haelfte einer Front in das Fenster der ersten, und
+            // gemessen wird die Front selbst statt des Lecks.
+            const double thr      = 0.25 * envPeak;
+            const int    mergeGap = (int) (0.016 / 0.002);
+
+            std::vector<std::pair<int, int>> fronts;   // [erster, letzter] Block
+
+            for (int i = 0; i < numWave; ++i)
+            {
+                if (wave[(size_t) i] <= thr)
+                    continue;
+
+                if (! fronts.empty() && i - fronts.back().second <= mergeGap)
+                    fronts.back().second = i;
+                else
+                    fronts.push_back ({ i, i });
+            }
+
+            const int skipBlocks = (int) (0.006 / 0.002);
+
+            // Das Fenster endet, wo die Welle endet - nicht spaeter. Die Dauer
+            // steht fest: PropagationPath::triggerNWave setzt sie auf
+            // 2 * Koerperlaenge / c, hier also 2 * 17,05 m / 343 m/s = 99 ms,
+            // und die Absenkung laeuft genau so lange. Ein groesszuegigeres
+            // Fenster misst den Motorton NACH der Welle mit, und der darf da
+            // sein - das hat die Messung anfangs als Leck ausgewiesen.
+            const int maxBlocks  = (int) (2.0 * 17.05 / 343.0 / 0.002);
+
+            // Motoranteil je Block: Differenz der beiden Mitschnitte.
+            const float* muteL   = muteCap.getReadPointer (0);
+            const int    common  = std::min (duckAt, muteAt) / blockLen;
+
+            std::vector<double> motor ((size_t) std::max (common, 0), 0.0);
+
+            for (int i = 0; i < common; ++i)
+            {
+                double m = 0.0;
+
+                for (int k = 0; k < blockLen; ++k)
+                    m = std::max (m, (double) std::abs (left[i * blockLen + k]
+                                                        - muteL[i * blockLen + k]));
+
+                motor[(size_t) i] = m;
+            }
+
+            double worstLeak = 0.0, worstAt = 0.0;
+            double worstMotor = 0.0, motorAt = 0.0;
+            int    windows   = 0;
+
+            for (size_t f = 0; f + 1 < fronts.size(); ++f)
+            {
+                // Nur Bug- und Heckstoss DERSELBEN Welle bilden ein Fenster.
+                // Liegt die naechste Front weiter auseinander als die Welle
+                // dauert, ist die vorige laengst vorbei und was dazwischen
+                // steht, ist gewoehnlicher Motorton - der darf da sein.
+                if (fronts[f + 1].first - fronts[f].first > maxBlocks)
+                    continue;
+
+                const int from = fronts[f].second + skipBlocks;
+                const int to   = fronts[f + 1].first;
+
+                if (to - from < 5)
+                    continue;
+
+                ++windows;
+
+                for (int i = from; i < to; ++i)
+                {
+                    if (env[(size_t) i] > worstLeak)
+                    {
+                        worstLeak = env[(size_t) i];
+                        worstAt   = i * 0.002;
+                    }
+
+                    if (i < common && motor[(size_t) i] > worstMotor)
+                    {
+                        worstMotor = motor[(size_t) i];
+                        motorAt    = i * 0.002;
+                    }
+                }
+            }
+
+            // Vergleichsmass fuer den Motoranteil: seine Spitze AUSSERHALB der
+            // Wellenfenster. Nur so sagt die Zahl etwas - 0,01 waere bei einem
+            // leisen Motor viel und bei einem lauten nichts.
+            double motorOutside = 0.0;
+            {
+                std::vector<bool> inside ((size_t) std::max (common, 0), false);
+
+                for (size_t f = 0; f < fronts.size(); ++f)
+                    for (int i = fronts[f].first;
+                         i <= std::min (fronts[f].first + maxBlocks, common - 1); ++i)
+                        if (i >= 0)
+                            inside[(size_t) i] = true;
+
+                for (int i = 0; i < common; ++i)
+                    if (! inside[(size_t) i])
+                        motorOutside = std::max (motorOutside, motor[(size_t) i]);
+            }
+
+            std::printf ("%-22s Zwischen den Fronten: alles %.4f (t=%.3f s) | "
+                         "davon MOTOR %.4f (t=%.3f s) | Motor sonst %.4f"
+                         " (%.1f %%) | Grundpegel %.4f | %d Fronten, %d Fenster\n", "",
+                         worstLeak, worstAt, worstMotor, motorAt, motorOutside,
+                         motorOutside > 0.0 ? 100.0 * worstMotor / motorOutside : 0.0,
+                         floorLevel, (int) fronts.size(), windows);
+        }
+
+        setParam (proc, Params::nWavePressure, 1.0f);
     }
 
     //==================================================================

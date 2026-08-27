@@ -202,13 +202,20 @@ public:
     // kommt der Ton ueber shockDuckRelease zurueck, kurz genug, dass es kein
     // Nachklappen gibt, und lang genug, dass es nicht knackt.
     //
-    // rangeMetres ist die Entfernung, ab der die Absenkung nachlaesst
+    // rangeMetres ist die Entfernung, BIS ZU DER die Absenkung voll wirkt
     // (@dpa 20260824: "wir muessen also bestimmen ab welcher entfernung die
     // N-Wave noch 'echt' ist"). Nah an der Quelle ist die Stossfront eine
     // echte Diskontinuitaet und nimmt alles andere mit; weiter weg ist sie
     // laengst zerfallen, und was ankommt, ist Grollen SAMT allem drumherum.
-    // Der Faktor faellt stetig mit range / (range + R), bei R = range also auf
-    // die Haelfte. 0 heisst "gilt ueberall gleich".
+    // Innerhalb von range steht der Faktor auf 1, dahinter faellt er mit
+    // range / R, bei doppelter Entfernung also auf die Haelfte. 0 heisst
+    // "gilt ueberall gleich".
+    //
+    // Ohne das Plateau lief der Abfall schon ab dem ersten Meter, und volle
+    // Stille zwischen den Stossfronten war ueberhaupt nicht erreichbar:
+    // gemessen ("Kreis, Druckwelle 0") stand der Motorton bei Reichweite
+    // 1345 m und rund 245 m Abstand noch bei 49 % seines sonstigen Pegels,
+    // mit Plateau bei 1 %.
     void setShockDuck (double amount01, double rangeMetres);
 
 

@@ -315,8 +315,19 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // Tiefe aus der Entfernung: nah ist die Front eine echte Diskontinuitaet
     // und nimmt alles mit, weit weg ist sie zerfallen und laesst das
     // Drumherum stehen (siehe setShockDuck).
+    //
+    // INNERHALB der eingestellten Reichweite ist die Absenkung voll - dort
+    // ist die Front noch eine, und dann kommt zwischen Bug- und Heckstoss
+    // wirklich nichts durch. Erst DAHINTER laesst sie nach, mit range / R.
+    // Gemessen im Szenario "Kreis, Druckwelle 0": bei Reichweite 1345 m und
+    // rund 190 m Abstand kam vorher, als der Abfall schon ab dem ersten Meter
+    // lief, nie mehr als 87,6 % Absenkung zustande - 12,4 % Motorton standen
+    // dauerhaft zwischen den Knallen (@dpa 20260827). Wer den Ton auch bei
+    // nahen Fronten stehen lassen will, dreht die Reichweite herunter.
+    const double beyond = std::max (0.0, radius - shockDuckRange);
+
     const double reach = shockDuckRange > 0.0
-                       ? shockDuckRange / (shockDuckRange + std::max (0.0, radius))
+                       ? shockDuckRange / (shockDuckRange + beyond)
                        : 1.0;
 
     // Der staerkere Wert gilt nur, SOLANGE das Fenster laeuft - dann darf eine
