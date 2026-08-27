@@ -154,7 +154,22 @@ public:
     // sizeMetres ist die Ausdehnung des Körpers und bestimmt sowohl die
     // Pulsdauer (größer = tiefer und länger, kleiner = kürzer und knackiger)
     // als auch die Amplitude (größer = lauter, siehe triggerNWave()).
-    void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear);
+    //
+    // edge01 ist die SCHÄRFE der beiden Stoßfronten (@dpa 20260827: "mir sind
+    // die Überschallecken meist zu zahm, zu tiefgepasst, zu weich ... ich will
+    // den echten knall"). Sie greift an der Anstiegszeit nRise, also an genau
+    // der Größe, die über Peitschenschlag oder Wusch entscheidet - und zwar an
+    // BEIDEN Anteilen, dem körpereigenen und dem, der aus der Entfernung
+    // kommt. Sonst bliebe ein Knall aus 3 km auch am Anschlag weich, und
+    // gerade der ist gemeint.
+    //
+    // 0,5 lässt die Fronten so, wie sie ohne Regler wären; nach oben werden
+    // sie steiler, nach unten weicher, je Hälfte um den Faktor
+    // 2^nWaveEdgeOctaves. Kein Deckel am oberen Ende außer dem Sample-Raster
+    // selbst: eine senkrechte Kante ist genau das, was ein Knall ist, und ob
+    // sie aliast, entscheidet der Hörer am Regler.
+    void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
+                   double edge01);
 
     // Pegel der ZEITVERKEHRT gehoerten Zweige, linear (0.5 = 6 dB leiser).
     //
@@ -712,6 +727,10 @@ private:
     bool   nWaveOn        = false;
     double nWaveSizeM     = 15.0;
 
+    // Schaerfe der Stossfronten, 0..1 (siehe setNWave). 0,5 ist die Mitte und
+    // heisst "wie ohne Regler".
+    double nWaveEdge      = 0.5;
+
     // Laenge des Startknalls in Metern, siehe setJumpSize(). Eigene Groesse,
     // weil er eine Beschleunigung abbildet und keinen Koerper.
     double jumpSizeM      = 1.5;
@@ -748,8 +767,13 @@ private:
     // fortschreiben, ein gemeinsamer Zeitpunkt schon.
     double shockEndTime = -1.0e18;
 
-    // Siehe setShadowTailSeconds(). Default 1 ms = bisheriges Verhalten.
-    double shadowTailSeconds = 1.0e-3;
+    // Siehe setShadowTailSeconds(). 30 ms als Default, weil die rechnerische
+    // Dauer bei schnellen Vorbeifluegen praktisch immer auf die Untergrenze
+    // faellt und dann allein sie entscheidet, ob der Zweig ausklingt oder
+    // abreisst - gemessen an @dpas Aufnahme vom 20260827 ein Pegelsturz von
+    // 17 dB in 2 ms genau auf dem Hoehepunkt des Zweigs. Derselbe Wert ist der
+    // Skew-Mittelpunkt des Reglers (Params.cpp).
+    double shadowTailSeconds = 0.03;
 
     // Siehe setJumpBoom().
     double jumpBoom   = 0.0;
@@ -817,6 +841,14 @@ private:
     // mittlerer Reglerstellung unverändert - kein Presets-Sprung.
     static constexpr double nWaveSizeRefMetres = 15.0;
     static constexpr double nWaveSizeExponent  = 0.75;
+
+    // Reichweite des Schaerfereglers, in Oktaven JE REGLERHAELFTE (siehe
+    // setNWave). Fuenf Oktaven sind Faktor 32: aus 6 ms Anstieg - der Wert, den
+    // ein 17-m-Koerper in 2 km Entfernung erzeugt - werden am oberen Anschlag
+    // 0,19 ms. Das ist bei 48 kHz eine Flanke ueber neun Samples, also eine
+    // hoerbare Kante und kein weicher Uebergang mehr; nach unten wird derselbe
+    // Knall zum Grollen von knapp 0,2 s Anstieg.
+    static constexpr double nWaveEdgeOctaves = 5.0;
 
     pathdetail::DisplayValue<int>    dispBranches;
     pathdetail::DisplayValue<double> dispDelay;

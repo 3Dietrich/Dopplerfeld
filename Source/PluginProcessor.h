@@ -518,6 +518,7 @@ private:
 
         std::atomic<float>* nWaveOn   = nullptr;
         std::atomic<float>* nWaveSize  = nullptr;
+        std::atomic<float>* nWaveEdge  = nullptr;
 
         std::atomic<float>* cloneTotal  = nullptr;
         std::atomic<float>* cloneRealLevel = nullptr;
@@ -818,6 +819,7 @@ private:
     bool   lastNWaveOn         = false;
     double lastNWaveSize       = 15.0;
     double lastNWaveGainDb     = 0.0;
+    double lastNWaveEdge       = 0.5;
 
     // Dieselbe Wiedervorlage wie bei der N-Welle: die drei Setter laufen ueber
     // alle Pfade beider Geometriesaetze und werden darum nur bei einer echten

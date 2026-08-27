@@ -113,7 +113,8 @@ void PropagationPath::setTrajectoryGridSeconds (double seconds)
     trajGridSeconds = std::max (1.0e-6, seconds);
 }
 
-void PropagationPath::setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear)
+void PropagationPath::setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
+                                double edge01)
 {
     nWaveOn    = shouldBeEnabled;
     nWaveSizeM = std::max (0.01, sizeMetres);
@@ -121,6 +122,8 @@ void PropagationPath::setNWave (bool shouldBeEnabled, double sizeMetres, double 
     // Nach oben bewusst ohne Deckel: ein Knall darf uebersteuern, dafuer gibt
     // es den sichtbaren Limiter.
     nWaveGain  = std::max (0.0, gainLinear);
+
+    nWaveEdge  = std::clamp (edge01, 0.0, 1.0);
 }
 
 double PropagationPath::nWaveAt (const Branch& b)
@@ -203,10 +206,22 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // aus, denn er entscheidet ueber den Charakter - bei 5 % der Pulsdauer sind
     // es auf 87 ms Dauer schon 4,4 ms Anstieg, und was so weich einsetzt, klingt
     // nach Wusch statt nach Schlag. Mit 2 % bleiben 1,7 ms, die Front kommt als
-    // Kante. Die Verbreiterung mit der Entfernung (zweiter Term) bleibt
-    // unangetastet, sie ist die eigentliche Physik dahinter: in 100 m ein
-    // Peitschenknall, in 3 km ein dumpfes Grollen.
-    b.nRise = 0.02 * b.nDuration + 2.0e-6 * radius;
+    // Kante. Die Verbreiterung mit der Entfernung (zweiter Term) ist die
+    // eigentliche Physik dahinter: in 100 m ein Peitschenknall, in 3 km ein
+    // dumpfes Grollen.
+    //
+    // Der Schaerferegler (siehe setNWave) sitzt als Faktor VOR beiden Termen
+    // und nicht nur vor dem ersten. Wer den echten Knall will, meint auch den
+    // aus der Entfernung, und dort macht der zweite Term den Loewenanteil: bei
+    // 2 km sind es 4 ms gegenueber 1,7 ms aus dem Koerper. Ein Regler, der nur
+    // den koerpereigenen Anteil traefe, wuerde am weit entfernten Jaeger - dem
+    // Fall, um den es geht - fast nichts aendern.
+    //
+    // Die Mitte (0,5) ergibt exakt den Wert ohne Regler, die Enden jeweils
+    // Faktor 2^nWaveEdgeOctaves darueber und darunter.
+    const double riseScale = std::pow (2.0, (0.5 - nWaveEdge) * 2.0 * nWaveEdgeOctaves);
+
+    b.nRise = riseScale * (0.02 * b.nDuration + 2.0e-6 * radius);
 
     // Eigenes Abstandsgesetz statt des regularisierten Fokussierungsfaktors:
     // die Druckwelle ist eine separate Schicht und soll nicht an demselben
@@ -953,6 +968,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const double deathDecay = (! alive && b.deathTau > 0.0)
                                      ? std::exp (-1.0 / std::max (1.0, b.deathTau * sr))
                                      : 0.0;
+
 
             // Verschwundener Zweig: mit der zuletzt bekannten Steigung
             // weiterlaufen lassen, während der Envelope auf 0 fährt. Ein

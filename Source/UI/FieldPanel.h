@@ -85,10 +85,15 @@ private:
     Knob nWaveSizeKnob;
     Knob nWaveGainKnob;
 
-    // Vierte Reihe: was nach dem Knall passiert. Der Pegel des zeitverkehrt
-    // gehoerten Anteils, die Absenkung des uebrigen Schalls waehrend der
-    // Stossfront samt ihrer Rueckkehrzeit, und wie weich ein Hoerweg an der
-    // Kaustik ausklingt.
+    // Vierte Reihe: die Form des Knalls und was nach ihm passiert. Die
+    // Schaerfe seiner Stossfronten, der Pegel des zeitverkehrt gehoerten
+    // Anteils, die Absenkung des uebrigen Schalls waehrend der Stossfront samt
+    // ihrer Rueckkehrzeit, und wie weich ein Hoerweg an der Kaustik ausklingt.
+    //
+    // Die Schaerfe steht hier und nicht neben nWaveSizeKnob, obwohl sie
+    // thematisch dort hingehoert: die dritte Reihe ist mit fuenf Reglern auf
+    // der Breite der Panelspalte (PluginEditor::panelColumnWidth) voll.
+    Knob nWaveEdgeKnob;
     Knob reverseGainKnob, shockDuckKnob, shockDuckRangeKnob, shadowTailKnob;
 
     // Kante eines Bewegungssprungs durchlassen statt interpolieren - der

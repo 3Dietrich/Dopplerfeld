@@ -221,7 +221,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setBoomLimitDb (boomLimitDb);
     setAirAbsorptionAmount (airAbsorbAmount);
     setDistanceCurve (distanceCurve);
-    setNWave (nWaveOn, nWaveSizeM, nWaveGain);
+    setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge);
     setReverseGain (reverseGain);
     setShockDuck (shockDuckAmount, shockDuckRange);
     setShadowTailSeconds (shadowTailSeconds);
@@ -328,7 +328,7 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
         p.setBoomLimitDb (boomLimitDb);
         p.setAirAbsorptionAmount (airAbsorbAmount);
         p.setDistanceCurve (distanceCurve);
-        p.setNWave (nWaveOn, nWaveSizeM, nWaveGain);
+        p.setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge);
         p.setReverseGain (reverseGain);
         p.setShockDuck (shockDuckAmount, shockDuckRange);
         p.setShadowTailSeconds (shadowTailSeconds);
@@ -539,15 +539,17 @@ void DopplerEngine::setWall (int index, bool enabled, Vec3 anchorMetres,
     s.transform.gain = (float) gainLinear;
 }
 
-void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear)
+void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
+                              double edge01)
 {
     nWaveOn    = shouldBeEnabled;
     nWaveSizeM = sizeMetres;
     nWaveGain  = gainLinear;
+    nWaveEdge  = edge01;
 
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
-            p.setNWave (shouldBeEnabled, sizeMetres, gainLinear);
+            p.setNWave (shouldBeEnabled, sizeMetres, gainLinear, edge01);
 }
 
 void DopplerEngine::setReverseGain (double gainLinear)

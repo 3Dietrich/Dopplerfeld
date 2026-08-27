@@ -100,6 +100,7 @@ namespace Labels
             { "Schatten",       "Shadow"      },
             { "Startknall",     "Start Boom"  },
             { "Knall-Länge",    "Boom Size"   },
+            { "Knall-Kante",    "Boom Edge"   },
             { "N-Welle",        "N-Wave"      },
             { "Bodenreflexion", "Ground Reflection" },
             { "Notaus: minimale Konfiguration", "Panic: minimal setup" },

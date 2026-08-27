@@ -236,6 +236,14 @@ namespace Params
     // oder gar nur Lautheit erinnert").
     constexpr const char* nWaveGainDb = "nWaveGainDb";
 
+    // Schaerfe der beiden Stossfronten (@dpa 20260827: "mir sind die
+    // Ueberschallecken meist zu zahm, zu tiefgepasst, zu weich ... ich will
+    // den echten knall"). Getrennt von nWaveSize, denn Groesse und Schaerfe
+    // sind zwei Dinge: die Groesse macht die Welle laenger und tiefer, die
+    // Schaerfe entscheidet, ob ihr Einsatz eine Kante ist oder ein Wusch.
+    // 0,5 = Mitte, siehe PropagationPath::setNWave().
+    constexpr const char* nWaveEdge = "nWaveEdge";
+
     // Pegel des ZEITVERKEHRT gehoerten Anteils in dB (siehe
     // PropagationPath::setReverseGain). Bei Ueberschall liefert der Loeser
     // mehrere Hoerwege; einer davon laeuft rueckwaerts. Real geht der neben dem

@@ -94,6 +94,7 @@ namespace Tooltips
         GroundReflection,
         NWaveSize,
         NWaveGain,
+        NWaveEdge,
         NWave,
         LimiterOn,
         LevelMeter,
@@ -1005,6 +1006,16 @@ namespace Tooltips
                         : "Loudness of the sonic boom in dB. It may clip - a boom heard from "
                           "close by IS deafening; that is caught by the limiter, not by a "
                           "silent brake inside the calculation.";
+                case Key::NWaveEdge:
+                    return lang == Language::De
+                        ? "Schärfe der beiden Stoßfronten: links Grollen, rechts Peitschenknall. "
+                          "Mitte = physikalische Anstiegszeit, die mit der Entfernung von "
+                          "selbst weicher wird. Wirkt auf Nah- und Fernanteil zugleich, damit "
+                          "auch der Knall aus mehreren Kilometern eine Kante bekommen kann."
+                        : "Sharpness of the two shock fronts: rumble on the left, whipcrack on "
+                          "the right. Centre = the physical rise time, which softens with "
+                          "distance by itself. Acts on the near and far part at once, so even "
+                          "a boom from several kilometres away can be given an edge.";
                 case Key::NWaveSize:
                     return lang == Language::De
                         ? "Größe/Masse des Körpers in Metern, 0 bis 200 - sie bestimmt die "

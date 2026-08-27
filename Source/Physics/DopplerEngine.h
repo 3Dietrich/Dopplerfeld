@@ -128,7 +128,9 @@ public:
     void setDistanceCurve (double curve);
 
     // Druckwellen-/N-Wellen-Schicht, siehe PropagationPath::setNWave().
-    void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear);
+    // edge01 ist die Schaerfe der Stossfronten, 0,5 = Mitte.
+    void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
+                   double edge01);
 
     // Pegel der zeitverkehrt gehoerten Zweige, siehe
     // PropagationPath::setReverseGain().
@@ -522,6 +524,9 @@ private:
 
     // Regelbarer Knall-Pegel, linear (siehe Params::nWaveGainDb).
     double nWaveGain  = 1.0;
+
+    // Schaerfe der Stossfronten (siehe Params::nWaveEdge).
+    double nWaveEdge  = 0.5;
 
     // Siehe setReverseGain() / setShockDuck().
     double reverseGain      = 1.0;

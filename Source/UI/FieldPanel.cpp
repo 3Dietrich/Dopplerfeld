@@ -57,6 +57,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (shockDuckKnob,   apvts, Params::shockDuckAmount, "Front-Duck",  Tooltips::Key::ShockDuck);
     setupKnob (shockDuckRangeKnob, apvts, Params::shockDuckRange, "Duck-Reichw.", Tooltips::Key::ShockDuckRange);
     setupKnob (shadowTailKnob,  apvts, Params::shadowTailMs,    "Schatten",    Tooltips::Key::ShadowTail);
+    setupKnob (nWaveEdgeKnob,   apvts, Params::nWaveEdge,       "Knall-Kante", Tooltips::Key::NWaveEdge);
 
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
     addAndMakeVisible (nWaveButton);
@@ -81,7 +82,8 @@ void FieldPanel::refreshTooltips()
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
                       &airTempKnob, &airAltitudeKnob,
-                      &reverseGainKnob, &shockDuckKnob, &shockDuckRangeKnob, &shadowTailKnob })
+                      &nWaveEdgeKnob, &reverseGainKnob, &shockDuckKnob, &shockDuckRangeKnob,
+                      &shadowTailKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -167,7 +169,8 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto boomRow = area.removeFromTop (knobH);
-    for (auto* k : { &reverseGainKnob, &shockDuckKnob, &shockDuckRangeKnob, &shadowTailKnob })
+    for (auto* k : { &nWaveEdgeKnob, &reverseGainKnob, &shockDuckKnob, &shockDuckRangeKnob,
+                     &shadowTailKnob })
     {
         layoutKnob (*k, boomRow.removeFromLeft (knobW));
         boomRow.removeFromLeft (4);

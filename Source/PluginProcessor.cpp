@@ -300,6 +300,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.nWaveOn   = raw (Params::nWaveOn);
     pp.nWaveSize = raw (Params::nWaveSize);
+    pp.nWaveEdge = raw (Params::nWaveEdge);
 
     pp.cloneTotal  = raw (Params::cloneTotal);
     pp.cloneRealLevel = raw (Params::cloneRealLevel);
@@ -877,15 +878,19 @@ void DopplerfeldProcessor::applyParameters()
     const bool   nWaveEnabled = pp.nWaveOn->load() > 0.5f;
     const double nWaveSize    = (double) pp.nWaveSize->load();
     const double nWaveGainDb  = (double) pp.nWaveGainDb->load();
+    const double nWaveEdge    = (double) pp.nWaveEdge->load();
 
     if (nWaveEnabled != lastNWaveOn || std::abs (nWaveSize - lastNWaveSize) > 1.0e-9
-        || std::abs (nWaveGainDb - lastNWaveGainDb) > 1.0e-9)
+        || std::abs (nWaveGainDb - lastNWaveGainDb) > 1.0e-9
+        || std::abs (nWaveEdge - lastNWaveEdge) > 1.0e-9)
     {
         lastNWaveOn     = nWaveEnabled;
         lastNWaveSize   = nWaveSize;
         lastNWaveGainDb = nWaveGainDb;
+        lastNWaveEdge   = nWaveEdge;
         dopplerEngine.setNWave (nWaveEnabled, nWaveSize,
-                                juce::Decibels::decibelsToGain (nWaveGainDb));
+                                juce::Decibels::decibelsToGain (nWaveGainDb),
+                                nWaveEdge);
     }
 
     // Rueckwaerts-Pegel, Stossfront-Absenkung und Schattenausklang: dieselbe

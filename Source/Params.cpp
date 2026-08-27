@@ -423,6 +423,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // es den sichtbaren Limiter. 0 dB ist die eingemessene Voreinstellung.
         layout.add (floatParam (nWaveGainDb, "N-Wave Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
     }
+    {
+        // Schaerfe der Stossfronten. Die Mitte (0,5) ist der Wert, den die
+        // Fronten ohne Regler haetten - bestehende Presets, die den Parameter
+        // nicht kennen, klingen damit unveraendert. Nach beiden Seiten je fuenf
+        // Oktaven Anstiegszeit, siehe PropagationPath::nWaveEdgeOctaves.
+        layout.add (floatParam (nWaveEdge, "N-Wave Edge", { 0.0f, 1.0f, 0.01f }, 0.5f, ""));
+    }
 
     // Sinus statt Saegezahn fuer die vier Motor-Teiltoene, Default aus =
     // bisheriges Verhalten.
@@ -652,12 +659,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (jumpBoomSize, "Jump Boom Size", range, 1.5f, "m"));
     }
     {
-        // Ab 1 ms (heutiges Verhalten) bis 1 s. Skew unten, denn der
-        // interessante Bereich liegt bei wenigen bis einigen zehn
-        // Millisekunden.
+        // Ab 1 ms bis 1 s. Skew unten, denn der interessante Bereich liegt bei
+        // wenigen bis einigen zehn Millisekunden.
+        //
+        // Default 30 ms und nicht die Untergrenze: die rechnerische Dauer
+        // faellt bei schnellen Vorbeifluegen praktisch immer auf sie zurueck,
+        // und dann entscheidet allein dieser Wert, ob ein Hoerweg ausklingt
+        // oder auf seinem Hoehepunkt abreisst - in @dpas Aufnahme vom
+        // 20260827 ein Pegelsturz von 17 dB in 2 ms.
         auto range = juce::NormalisableRange<float> (1.0f, 1000.0f);
         range.setSkewForCentre (30.0f);
-        layout.add (floatParam (shadowTailMs, "Shadow Tail", range, 1.0f, "ms"));
+        layout.add (floatParam (shadowTailMs, "Shadow Tail", range, 30.0f, "ms"));
     }
 
     // --- Klone ("Schrot") ---
