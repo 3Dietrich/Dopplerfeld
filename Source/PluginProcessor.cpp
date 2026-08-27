@@ -1202,7 +1202,37 @@ void DopplerfeldProcessor::handlePendingRequests()
         coastVelocityStage1 = v;
         coastVelocityStage2 = v;
 
-        coastActive = v.length() > coastRestSpeed;
+        const double speed = v.length();
+
+        // Restweg bis zum Loslasspunkt, PROJIZIERT auf die Fahrtrichtung: nur
+        // der Anteil, den der Nachlauf ueberhaupt zuruecklegen kann. Was quer
+        // dazu fehlt, bleibt liegen - die Richtung zu drehen waere der Knick,
+        // den die zwei Stufen gerade vermeiden sollen.
+        //
+        // Ein negativer Anteil heisst, die Quelle ist schon ueber den Punkt
+        // hinaus; dann gilt die Untergrenze und sie kommt zuegig zur Ruhe.
+        if (speed > coastRestSpeed)
+        {
+            const Vec3   toTarget = sourceTargetMetres - smoothedSourcePos;
+            const double along    = toTarget.dot (v) / speed;
+
+            coastTau = juce::jlimit (coastTauMin, coastTauMax,
+                                     along / (2.0 * speed));
+        }
+        else
+            coastTau = coastTauSeconds;
+
+        coastActive = speed > coastRestSpeed;
+
+        // Das Ziel bleibt der LOSLASSPUNKT, nicht die Stelle, an der der
+        // Nachlauf gerade steht. Das ist der zweite Teil derselben Sache:
+        // schafft der Nachlauf den Rueckstand nicht ganz, laeuft die Quelle
+        // danach mit dem gewohnten Glaetter dorthin weiter, statt vorher
+        // stehenzubleiben. Gehalten wird es, damit ein Griff an den Regler
+        // den Nachlauf weiterhin beendet (siehe knobsUntouched in
+        // applyParameters) - ohne das Halten waere er nach einem Block vorbei.
+        if (coastActive)
+            holdSourceTargetAt (sourceTargetMetres);
     }
 
     if (sourceSwitchRequest.exchange (false))
@@ -1583,7 +1613,7 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // Auslaufen nach dem Loslassen: die Geschwindigkeit laeuft durch
             // zwei Ein-Pol-Stufen gegen null, die Position ist ihr Integral
             // (Herleitung und Kurve stehen bei coastVelocityStage1 im Header).
-            const double coeff = 1.0 - std::exp (-tickDt / coastTauSeconds);
+            const double coeff = 1.0 - std::exp (-tickDt / coastTau);
 
             coastVelocityStage1 -= coastVelocityStage1 * coeff;
             coastVelocityStage2 += (coastVelocityStage1 - coastVelocityStage2) * coeff;
@@ -1601,12 +1631,12 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             target          = coastPos;
             positionIsFinal = true;
 
-            // Das Ziel mitfuehren, statt es am Ende einmal zu setzen: damit
-            // steht die Quelle auch dann an der richtigen Stelle, wenn der
-            // Nachlauf unterbrochen wird - und ein Regler- oder Mausgriff
-            // beendet ihn ueber denselben Weg, auf dem er auch einen
-            // gehaltenen Vorbeiflug-Endpunkt beendet (applyParameters).
-            holdSourceTargetAt (coastPos);
+            // Das Ziel wird hier NICHT mitgefuehrt: es steht auf dem
+            // Loslasspunkt (gesetzt beim Start des Nachlaufs) und bleibt
+            // dort. Endet der Nachlauf davor, uebernimmt der Glaetter den
+            // Rest - genau das, was ohne Nachlauf von selbst passiert waere.
+            // Wuerde das Ziel mitwandern, waere der Rueckstand des Glaetters
+            // beim Loslassen endgueltig verloren.
 
             if (coastVelocityStage2.length() < coastRestSpeed)
                 coastActive = false;

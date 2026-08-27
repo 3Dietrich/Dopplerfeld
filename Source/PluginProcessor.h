@@ -772,8 +772,46 @@ private:
     // Wie lang ausgelaufen wird. Der Weg haengt linear daran (s.o.), das
     // Ende ist trotzdem weich: unter coastRestSpeed gilt die Quelle als
     // stehend, und was dann noch fehlt, ist unter einem Millimeter je Tick.
+    //
+    // NICHT mehr fest, sondern je Nachlauf aus dem Restweg gerechnet - siehe
+    // coastTau. Der Wert hier ist nur noch der Rueckfall, wenn kein Restweg
+    // bekannt ist.
     static constexpr double coastTauSeconds  = 0.45;
     static constexpr double coastRestSpeed   = 0.05;   // m/s
+
+    // Die Zeitkonstante DIESES Nachlaufs (@dpa 20260827: "bei Critically
+    // Damped Spring und slew limiter bremst es direkt ab dort wo es gerade
+    // ist ... koennen wir versuchen wie es ist wenn es (ungefaehr!) bis zum
+    // Mouserelease punkt laeuft?").
+    //
+    // Beim Loslassen steht die Quelle nicht dort, wo die Maus war: sie haengt
+    // um den Rueckstand des Glaetters hinterher. Der Nachlauf lief bisher mit
+    // fester Zeitkonstante ab dieser Stelle, der Rueckstand war damit
+    // verloren - je traeger der Glaetter, desto weiter blieb die Quelle vor
+    // dem Loslasspunkt stehen. Gemessen mit Tests/coast_probe.cpp bei
+    // Glaettung 1 s und abgebremster Geste: die Feder blieb 15,2 m davor
+    // stehen (34 % des Rueckstands aufgeholt), waehrend One-Pole mit 1,8 m
+    // praktisch traf - genau der Unterschied, den @dpa hoert.
+    //
+    // Der Weg des Nachlaufs ist v0 * 2 * tau (s.o.). Aufgeloest nach tau
+    // trifft er den Loslasspunkt: tau = Restweg / (2 * v0). Die
+    // Anfangsgeschwindigkeit bleibt dabei unangetastet, die Naht ist also
+    // weiterhin knickfrei - gestreckt wird die ZEIT, nicht das Tempo.
+    double coastTau = coastTauSeconds;
+
+    // Grenzen dafuer. Unten, damit ein winziger Restweg bei hohem Tempo nicht
+    // zum Abriss wird; oben, damit ein grosser Rueckstand bei kleinem Tempo
+    // nicht in ein minutenlanges Kriechen laeuft. Wer die Obergrenze
+    // erreicht, kommt nicht ganz an - "ungefaehr" ist ausdruecklich gewollt.
+    // Unten, damit ein winziger Restweg bei hohem Tempo nicht zum Abriss
+    // wird. Oben nicht viel groesser als die alte feste Zeitkonstante: der
+    // Weg des Nachlaufs ist v0 * 2 * tau, die ZEIT bis dorthin aber ein
+    // Vielfaches von tau - bei 1,3 s waeren 90 % des Weges erst nach fuenf
+    // Sekunden zurueckgelegt, und das ist kein Auslaufen mehr, sondern
+    // Kriechen. Was der Nachlauf in dieser Zeit nicht schafft, uebernimmt
+    // danach der Glaetter (siehe coastRequest in handlePendingRequests).
+    static constexpr double coastTauMin = 0.06;
+    static constexpr double coastTauMax = 0.60;
 
     // Additive Mikrobewegung der Quelle M, vor sourceSmoothers eingehakt
     // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.

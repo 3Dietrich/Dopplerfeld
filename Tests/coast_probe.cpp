@@ -29,7 +29,8 @@ void setParam (DopplerfeldProcessor& proc, const char* id, float value)
         p->setValueNotifyingHost (p->convertTo0to1 (value));
 }
 
-void run (const char* label, double dragSpeed, int smootherType)
+void run (const char* label, double dragSpeed, int smootherType,
+          double tauSeconds = 0.15, double brakeSeconds = 0.0)
 {
     DopplerfeldProcessor proc;
     proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
@@ -39,6 +40,7 @@ void run (const char* label, double dragSpeed, int smootherType)
 
     setParam (proc, Params::fieldMetres,   (float) fieldMetres);
     setParam (proc, Params::smootherType,  (float) smootherType);
+    setParam (proc, Params::smootherTau,   (float) tauSeconds);
     setParam (proc, Params::srcJitterOn,   0.0f);
     setParam (proc, Params::srcX,          0.2f);
     setParam (proc, Params::srcY,          0.5f);
@@ -69,9 +71,21 @@ void run (const char* label, double dragSpeed, int smootherType)
 
     double dragMeasured = 0.0;
 
-    for (int block = 0; block < (int) (1.5 / blockSeconds); ++block)
+    const int dragBlocks  = (int) (1.5 / blockSeconds);
+    const int brakeBlocks  = (int) (brakeSeconds / blockSeconds);
+
+    for (int block = 0; block < dragBlocks; ++block)
     {
-        normX += dragSpeed * blockSeconds / fieldMetres;
+        // Eine echte Geste endet nicht auf voller Fahrt: die Hand wird
+        // langsamer, bevor die Taste losgeht. Genau darin unterscheiden sich
+        // die Glaetter - ein traeger haengt beim Abbremsen noch zurueck,
+        // waehrend seine eigene Geschwindigkeit schon faellt.
+        const int left  = dragBlocks - block;
+        const double f  = brakeBlocks > 0 && left <= brakeBlocks
+                        ? (double) left / (double) brakeBlocks
+                        : 1.0;
+
+        normX += f * dragSpeed * blockSeconds / fieldMetres;
         setParam (proc, Params::srcX, (float) juce::jlimit (0.0, 1.0, normX));
 
         buffer.clear();
@@ -89,6 +103,15 @@ void run (const char* label, double dragSpeed, int smootherType)
         }
     }
 
+    // Wo die Maus beim Loslassen stand, und wo die Quelle stattdessen steht.
+    // Genau diese Luecke ist der Punkt (@dpa 20260827: "bei Critically Damped
+    // Spring und Slew Limiter bremst es direkt ab dort wo es gerade ist ...
+    // koennen wir versuchen wie es ist wenn es (ungefaehr!) bis zum
+    // Mouserelease punkt laeuft?").
+    const double releaseTargetX = juce::jlimit (0.0, 1.0, normX) * fieldMetres;
+    const double atReleaseX     = snap.sourcePos.x;
+    const double gapAtRelease   = releaseTargetX - atReleaseX;
+
     // Loslassen.
     proc.startSourceCoast();
 
@@ -98,7 +121,10 @@ void run (const char* label, double dragSpeed, int smootherType)
     double stopTime = -1.0;
     double elapsed  = 0.0;
 
-    for (int block = 0; block < 200; ++block)
+    // Lang genug, dass auch ein traeger Glaetter fertig wird: der Nachlauf
+    // uebergibt ihm den Rest des Rueckstands, und bei einer Sekunde
+    // Glaettungszeit dauert dessen Anfahrt mehrere Sekunden.
+    for (int block = 0; block < 700; ++block)
     {
         buffer.clear();
         proc.processBlock (buffer, midi);
@@ -145,6 +171,12 @@ void run (const char* label, double dragSpeed, int smootherType)
     std::printf ("    Weg %.2f m, Stillstand nach %.2f s\n",
                  total, stopTime < 0.0 ? (double) speeds.size() * blockSeconds : stopTime);
 
+    std::printf ("    Rueckstand beim Loslassen %.2f m | am Ende %+.2f m vom "
+                 "Loslasspunkt (%.0f %% aufgeholt)\n",
+                 gapAtRelease, last.x - releaseTargetX,
+                 std::abs (gapAtRelease) > 1.0e-9
+                     ? 100.0 * (last.x - atReleaseX) / gapAtRelease : 0.0);
+
     std::printf ("    Tempo (m/s) je 0,1 s:");
 
     double nextMark = 0.0;
@@ -169,11 +201,16 @@ int main()
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
 
-    run ("langsam gezogen",        5.0, 1);
-    run ("zuegig gezogen",        20.0, 1);
-    run ("schnell gezogen",       80.0, 1);
-    run ("zuegig, Slew Limiter",  20.0, 2);
-    run ("zuegig, One-Pole",      20.0, 0);
+    // Ohne Abbremsen, kurze Glaettung - der Fall, den die Probe bisher hatte.
+    run ("glatt, One-Pole",        20.0, 0);
+    run ("glatt, Feder",           20.0, 1);
+    run ("glatt, Slew Limiter",    20.0, 2);
+
+    // Mit Abbremsen und @dpas Glaettungszeit (rund 1 s): die echte Geste.
+    run ("Bremse tau1, One-Pole",  20.0, 0, 1.0, 0.15);
+    run ("Bremse tau1, Feder",     20.0, 1, 1.0, 0.15);
+    run ("Bremse tau1, Slew",      20.0, 2, 1.0, 0.15);
+    run ("Bremse tau1, One-Euro",  20.0, 3, 1.0, 0.15);
 
     return 0;
 }
