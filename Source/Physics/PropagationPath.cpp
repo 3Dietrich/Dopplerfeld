@@ -968,15 +968,40 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 const bool   diedAtCaustic  = (distanceToCone < causticWidths * eps);
 
                 if (diedAtCaustic)
-                    // Untergrenze ist der eingestellte Schattenausklang (siehe
-                    // setShadowTailSeconds), nicht mehr die blosse
-                    // Anti-Klick-Rampe: die rechnerische Dauer faellt bei
-                    // schnellen Vorbeifluegen immer auf diese Untergrenze, und
-                    // dann entscheidet allein sie, ob der Zweig ausklingt oder
-                    // abreisst. Der Deckel nach oben bleibt.
+                {
+                    // Wie lange der Uebergang in den Schatten dauert, ist KEINE
+                    // Einstellungsfrage - es ist Beugung, und die hat eine
+                    // eigene Zeitskala:
+                    //
+                    //     t_diff ~ (R/c)^(1/3) * f^(-2/3)
+                    //
+                    // (Airy-Skala an einer Kaustik, siehe shadowRefHz im
+                    // Header). Fuer 1 kHz und ein paar hundert Meter sind das
+                    // rund 10 ms, fuer 100 Hz das Vierfache. Unter diese Zeit
+                    // kann ein Hoerweg nicht verschwinden, egal wie schnell die
+                    // Geometrie durch die Front laeuft und egal, was auf dem
+                    // Regler steht.
+                    //
+                    // Genau daran lag es, dass der Regler "Schatten" das
+                    // Problem nie loesen konnte: die rechnerische Dauer
+                    // (eps / dM_r/dt) faellt bei schnellen Durchgaengen gegen
+                    // null, und dann entschied allein die Reglerstellung. Stand
+                    // sie auf ihrer Untergrenze von 1 ms, riss der Zweig bei
+                    // vollem Pegel ab - gemessen im Kreisflug-Szenario des
+                    // load_check ein Sturz von 43,9 dB in 2 ms, bei acht von
+                    // acht Zweigtoden mit Huellkurve 1,0.
+                    //
+                    // Der Regler bleibt, was er war: er kann den Ausklang
+                    // VERLAENGERN. Nur kuerzer als die Physik geht nicht mehr.
+                    const double diffractionTau = std::pow (std::max (b.R, 1.0) / c, 1.0 / 3.0)
+                                                * std::pow (shadowRefHz, -2.0 / 3.0);
+
+                    const double geometric = eps / std::max (b.machRate, 1.0e-9);
+
                     b.deathTau = std::min (std::max (maxDeathTailSeconds, shadowTailSeconds),
-                                           std::max (shadowTailSeconds,
-                                                     eps / std::max (b.machRate, 1.0e-9)));
+                                           std::max (std::max (shadowTailSeconds, diffractionTau),
+                                                     geometric));
+                }
                 else if (b.env >= lostBranchMinEnv)
                     b.deathTau = lostBranchTailSeconds;
                 else

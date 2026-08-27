@@ -80,6 +80,7 @@ struct Stats
     // (Laufzeit!) zählt nicht mit.
     double worstSilenceSeconds = 0.0;
     double silenceRun          = 0.0;
+
     bool   heardAnything       = false;
 
     // Zweig-Todesmessung (@dpa 20260819): mit welchem Hüllkurvenwert stirbt ein
@@ -234,7 +235,8 @@ struct Stats
 
         silenceRun         += dt;
         worstSilenceSeconds = std::max (worstSilenceSeconds, silenceRun);
-    }
+    
+}
 
     void report (const char* title) const
     {
@@ -312,7 +314,8 @@ struct Stats
 // Benutzer, der an M zieht, oder ein Host, der automatisiert.
 template <typename MoveFn>
 void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
-             double seconds, Stats& stats, MoveFn&& moveSource)
+             double seconds, Stats& stats, MoveFn&& moveSource,
+             juce::AudioBuffer<float>* capture = nullptr, int* captureAt = nullptr)
 {
     juce::MidiBuffer midi;
     FieldSnapshot    snapshot;
@@ -332,6 +335,18 @@ void render (DopplerfeldProcessor& proc, juce::AudioBuffer<float>& buffer,
 
         const auto start = std::chrono::steady_clock::now();
         proc.processBlock (buffer, midi);
+        
+        // Optionaler Mitschnitt, siehe capture-Parameter.
+        if (capture != nullptr && captureAt != nullptr)
+        {
+            const int room = std::min (blockSize, capture->getNumSamples() - *captureAt);
+        
+            for (int ch = 0; ch < std::min (2, buffer.getNumChannels()) && room > 0; ++ch)
+                capture->copyFrom (ch, *captureAt, buffer, ch, 0, room);
+        
+            if (room > 0)
+                *captureAt += room;
+        }
         const auto stop  = std::chrono::steady_clock::now();
 
         const double micros = std::chrono::duration<double, std::micro> (stop - start).count();
@@ -6177,6 +6192,171 @@ int main()
                          "(%.2f statt %.2f).\n", freeRate, expectedFree);
             failed = true;
         }
+    }
+
+    //==================================================================
+    // Ueberschall auf der Kreisbahn (@dpa 20260827, Preset
+    // "Mach2,5 im Kreis - unnatuerlich" und Aufnahme 140958).
+    //
+    // Der Fall, den KEIN anderes Szenario dieser Datei trifft: die Quelle
+    // fliegt nicht an einem Punkt vorbei, sondern immer wieder um ihn herum.
+    // Der Machkegel streicht damit nicht einmal ueber den Hoerer, sondern in
+    // jeder Runde neu, und jedes Mal entstehen und vergehen Hoerwege.
+    //
+    // Gemessen wird die KANTE - der staerkste Pegelsturz in 2 ms (siehe
+    // worstDropDb in Stats). @dpa hoert an dieser Stelle seit langem einen
+    // harten Abriss ("da ist oft eine richtiggehende Kante!"), und an seiner
+    // Aufnahme sind es 31 dB in 2 ms. Ohne ein Szenario, das das nachstellt,
+    // laesst sich weder pruefen noch belegen, ob eine Aenderung daran etwas
+    // verbessert.
+    //
+    // Werte aus seinem Preset: Feld 6000 m, Quelle in 166 m Hoehe, Hoerer fast
+    // am Boden, Boom Limit 19,9 dB, N-Welle an mit 17 m, Front-Duck voll,
+    // Schattenausklang auf der Untergrenze von 1 ms.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        constexpr double field  = 6000.0;
+        constexpr double radius = 500.0;    // m, Kreisbahn
+        constexpr double offset = 420.0;    // m, um die der Hoerer neben dem
+                                            // Kreismittelpunkt steht
+        constexpr double speed  = 857.5;    // m/s = Mach 2,5
+
+        setParam (proc, Params::fieldMetres,     (float) field);
+        setParam (proc, Params::lisX,            0.5f);
+        setParam (proc, Params::lisY,            0.5f);
+        setParam (proc, Params::lisZ,            1.926f);
+        setParam (proc, Params::srcZ,            166.5f);
+        setParam (proc, Params::boomLimitDb,     19.9f);
+        setParam (proc, Params::nWaveOn,         1.0f);
+        setParam (proc, Params::nWaveSize,       17.05f);
+        setParam (proc, Params::shockDuckAmount, 1.0f);
+        setParam (proc, Params::shockDuckRange,  1345.0f);
+        setParam (proc, Params::shadowTailMs,    1.0f);
+        // Kurz geglaettet: bei @dpas 1,06 s zoege der Glaetter die Bahn so weit
+        // zusammen, dass die Quelle die eingestellte Geschwindigkeit gar nicht
+        // erreicht - gemessen blieb |M_r| dann bei 0,27, es gaebe keinen Kegel
+        // zu pruefen. Seine aufgezeichnete Bewegung liefert die Geschwindigkeit
+        // dagegen direkt.
+        setParam (proc, Params::smootherTau,     0.05f);
+        setParam (proc, Params::globalMaxSpeed,  2000.0f);
+        setParam (proc, Params::slewVmax,        2000.0f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        // Die Quelle steht zu Beginn auf der Bahn und laeuft dann los - so
+        // gibt es keinen Sprung aus der Feldmitte heraus, der selbst eine
+        // Kante waere.
+        const double omega = speed / radius;
+
+        // Der Hoerer steht NEBEN dem Kreismittelpunkt, nicht in ihm: auf einer
+        // Bahn um den Hoerer herum bewegt sich die Quelle rein tangential, die
+        // radiale Machzahl bliebe null und es gaebe nie eine Kegelankunft.
+        // Versetzt streicht der Kegel in jeder Runde einmal ueber ihn.
+        auto circleAt = [&] (double t, float& x, float& y)
+        {
+            x = (float) (0.5 + (offset + radius * std::cos (omega * t)) / field);
+            y = (float) (0.5 + radius * std::sin (omega * t) / field);
+        };
+
+        {
+            float x = 0.0f, y = 0.0f;
+            circleAt (0.0, x, y);
+            setParam (proc, Params::srcX, x);
+            setParam (proc, Params::srcY, y);
+        }
+
+        Stats settle;
+        render (proc, buffer, 0.5, settle, [] (double) {});
+
+        // Der Lauf wird zusaetzlich als WAV mitgeschrieben. Die Kennzahlen
+        // sagen, WIE STEIL es faellt, aber nicht, was um den Sturz herum
+        // passiert - und genau daran haengt, ob die Ursache im Ausklang, im
+        // Zweigwechsel oder in der Amplitudenformel sitzt.
+        juce::AudioBuffer<float> capture (2, (int) (8.0 * sampleRate) + blockSize);
+        capture.clear();
+        int captureAt = 0;
+
+        Stats circle;
+        render (proc, buffer, 8.0, circle, [&] (double t)
+        {
+            float x = 0.0f, y = 0.0f;
+            circleAt (t, x, y);
+            setParam (proc, Params::srcX, x);
+            setParam (proc, Params::srcY, y);
+        }, &capture, &captureAt);
+
+        circle.report ("Mach 2,5 im Kreis");
+
+        {
+            juce::File out ("/tmp/dopplerfeld_kreis.wav");
+            out.deleteFile();
+
+            juce::WavAudioFormat fmt;
+
+            if (auto* stream = out.createOutputStream().release())
+                if (auto* writer = fmt.createWriterFor (stream, sampleRate, 2, 16, {}, 0))
+                {
+                    writer->writeFromAudioSampleBuffer (capture, 0, captureAt);
+                    delete writer;
+                    std::printf ("%-22s Mitschnitt: %s (%.2f s)\n", "",
+                                 out.getFullPathName().toRawUTF8(),
+                                 (double) captureAt / sampleRate);
+                }
+        }
+
+        // Gegenprobe: derselbe Flug ohne Front-Duck. Sein Einsatz ist ein
+        // Sprung - er schaltet den uebrigen Schall ab, sobald eine Stossfront
+        // ueber den Weg laeuft. Bleibt die Kante ohne ihn weg, gehoert sie ihm.
+        setParam (proc, Params::shockDuckAmount, 0.0f);
+
+        Stats noDuck;
+        render (proc, buffer, 8.0, noDuck, [&] (double t)
+        {
+            float x = 0.0f, y = 0.0f;
+            circleAt (t + 8.0, x, y);
+            setParam (proc, Params::srcX, x);
+            setParam (proc, Params::srcY, y);
+        });
+
+        noDuck.report ("Kreis ohne Front-Duck");
+
+        // Zweite Gegenprobe: Fokussierung stark gedeckelt. Der Zweig wird an
+        // der Front um bis zu 1/eps verstaerkt, und wer da hinausfaellt,
+        // verliert genau diese Verstaerkung wieder. Bleibt die Kante auch bei
+        // 6 dB Deckel, gehoert sie nicht der Fokussierung.
+        setParam (proc, Params::shockDuckAmount, 0.0f);
+        setParam (proc, Params::boomLimitDb,     6.0f);
+
+        Stats lowBoom;
+        render (proc, buffer, 8.0, lowBoom, [&] (double t)
+        {
+            float x = 0.0f, y = 0.0f;
+            circleAt (t + 16.0, x, y);
+            setParam (proc, Params::srcX, x);
+            setParam (proc, Params::srcY, y);
+        });
+
+        lowBoom.report ("Kreis, Boom Limit 6 dB");
+
+        // Dritte Gegenprobe: ohne N-Welle. Sie ist die einzige Schicht, die
+        // additiv oben drauf kommt und weder durch Huellkurve noch Filter
+        // laeuft - wenn die Kante ihr gehoert, faellt sie hier weg.
+        setParam (proc, Params::boomLimitDb, 19.9f);
+        setParam (proc, Params::nWaveOn,     0.0f);
+
+        Stats noWave;
+        render (proc, buffer, 8.0, noWave, [&] (double t)
+        {
+            float x = 0.0f, y = 0.0f;
+            circleAt (t + 24.0, x, y);
+            setParam (proc, Params::srcX, x);
+            setParam (proc, Params::srcY, y);
+        });
+
+        noWave.report ("Kreis ohne N-Welle");
     }
 
     //==================================================================
