@@ -6,6 +6,40 @@
 namespace
 {
     constexpr double kTwoPi = 6.283185307179586;
+
+    // Vec3 hat kein Kreuzprodukt (das ist reine Physik-Geometrie, gehoert
+    // nicht in den allgemeinen Wertetyp) - hier lokal, nur fuer die
+    // Drehachsen-Bestimmung unten.
+    Vec3 crossProduct (const Vec3& a, const Vec3& b)
+    {
+        return { a.y * b.z - a.z * b.y,
+                 a.z * b.x - a.x * b.z,
+                 a.x * b.y - a.y * b.x };
+    }
+
+    // Die Drehachse, die "from" auf kuerzestem Weg zu "to" dreht (beide
+    // Einheitsvektoren). Normalfall: das Kreuzprodukt, senkrecht auf beiden.
+    // Bei (fast) parallelen Vektoren ist die Achse egal (der Drehwinkel ist
+    // ~0, sin(0)=0 macht sie wirkungslos). Bei (fast) entgegengesetzten
+    // Vektoren verschwindet das Kreuzprodukt trotzdem (Winkel ~180 Grad hat
+    // unendlich viele gueltige Achsen) - dann irgendeine zu "from" senkrechte
+    // Achse ueber eine Hilfsrichtung konstruieren.
+    Vec3 pickTurnAxis (const Vec3& from, const Vec3& to)
+    {
+        const Vec3   axis      = crossProduct (from, to);
+        const double axisLenSq = axis.lengthSquared();
+
+        if (axisLenSq > 1.0e-12)
+            return axis * (1.0 / std::sqrt (axisLenSq));
+
+        const Vec3 helper = std::fabs (from.z) < 0.9 ? Vec3 { 0.0, 0.0, 1.0 }
+                                                      : Vec3 { 1.0, 0.0, 0.0 };
+        const Vec3   fallback      = crossProduct (from, helper);
+        const double fallbackLenSq = fallback.lengthSquared();
+
+        return fallbackLenSq > 1.0e-18 ? fallback * (1.0 / std::sqrt (fallbackLenSq))
+                                        : Vec3 { 0.0, 1.0, 0.0 };
+    }
 }
 
 float PositionJitter::nextRandom01 (std::uint32_t& state)
@@ -46,7 +80,6 @@ void PositionJitter::prepare (double tickRateHz)
 {
     tickRate = tickRateHz > 0.0 ? tickRateHz : 1000.0;
 
-    headingSmoother.prepare (tickRateHz);
     reset();
 }
 
@@ -63,12 +96,20 @@ void PositionJitter::reset()
     offset   = pickWaypoint();
     waypoint = pickWaypoint();
 
-    const Vec3 toGo    = waypoint - offset;
-    const Vec3 heading = toGo.lengthSquared() > 1.0e-18 ? toGo.normalised()
-                                                        : Vec3 { 1.0, 0.0, 0.0 };
+    const Vec3 toGo         = waypoint - offset;
+    const Vec3 startHeading = toGo.lengthSquared() > 1.0e-18 ? toGo.normalised()
+                                                             : Vec3 { 1.0, 0.0, 0.0 };
 
-    headingSmoother.reset (heading);
-    headingSmoother.setTarget (heading);
+    // Direkt gesetzt statt gedreht: beim (Neu-)Start gibt es keine
+    // Vorgaenger-Richtung, die einen Knick bilden koennte.
+    legHeading = startHeading;
+    heading    = startHeading;
+
+    turnStartHeading = startHeading;
+    turnAxis         = { 0.0, 0.0, 1.0 };
+    turnTotalAngle   = 0.0;
+    turnAngle        = 0.0;
+    turnAngleVel     = 0.0;
 }
 
 void PositionJitter::setAmount (double metres)
@@ -169,38 +210,92 @@ Vec3 PositionJitter::tick (double dt)
         return offset;
     }
 
+    // Ein neues Bein beginnen: naechsten Wegpunkt wuerfeln, die feste
+    // Flugrichtung fuer dieses Bein daraus ableiten, und eine neue Drehung
+    // AB DER AKTUELLEN RICHTUNG (heading) mit Geschwindigkeit 0 ansetzen -
+    // "kritisch gedaempft = kein Ueberschwingen" gilt nur aus der Ruhe
+    // heraus, siehe unten bei den beiden Aufrufstellen.
+    const auto beginNewLeg = [this]
+    {
+        waypoint = pickWaypoint();
+
+        const Vec3 freshToGo = waypoint - offset;
+        legHeading = freshToGo.lengthSquared() > 1.0e-18 ? freshToGo.normalised() : legHeading;
+
+        turnStartHeading = heading;
+        turnAxis         = pickTurnAxis (turnStartHeading, legHeading);
+        turnTotalAngle   = std::acos (std::clamp (dot (turnStartHeading, legHeading), -1.0, 1.0));
+        turnAngle        = 0.0;
+        turnAngleVel     = 0.0;
+    };
+
     // Ist der Zielpunkt erreicht (oder liegt er nach einer Reglerbewegung
-    // ausserhalb des Bereichs), wird der naechste gewuerfelt.
+    // ausserhalb des Bereichs), wird der naechste gewuerfelt. "Erreicht"
+    // heisst hier: in Flugrichtung liegt der Wegpunkt nicht mehr vor uns
+    // (Projektion auf legHeading <= 0) - ein Abstandsgrenzwert in Metern
+    // waere je nach Tempo/Ausschlag falsch skaliert und wurde bei dieser
+    // Kombination (grosser Ausschlag, hohes Tempo) nur selten unterschritten,
+    // weil die Fliege den Punkt oft seitlich passiert statt ihn zu treffen.
+    // Die Projektion erkennt das "Passiert" trotzdem zuverlaessig, unabhaengig
+    // vom seitlichen Vorbeiflug-Abstand.
     const Vec3   toGo     = waypoint - offset;
     const double distance = toGo.length();
 
-    if (distance <= speed * dt * 2.0 || waypoint.length() > amount * 1.5)
-    {
-        waypoint = pickWaypoint();
-        headingSmoother.setTarget ((waypoint - offset).normalised());
-    }
-    else
-    {
-        headingSmoother.setTarget (toGo * (1.0 / distance));
-    }
+    if (dot (toGo, legHeading) <= 0.0 || waypoint.length() > amount * 1.5 || distance <= 1.0e-9)
+        beginNewLeg();
+    // Kein "sonst"-Zweig, der jeden Tick neu auf den (jetzt naeheren)
+    // Wegpunkt nachzielt: das waere keine Gerade mehr, sondern eine
+    // Verfolgungskurve, die sich - je nach Geometrie - beliebig eng um den
+    // Zielpunkt herumziehen kann, bevor die Drehung unten ueberhaupt
+    // hinterherkommt. Genau das erzeugte die Kreisbahn-artigen Ausreisser
+    // (empirisch mit dem Testprogramm nachgewiesen: die Fliege blieb dabei
+    // auf Dauer im Orbit um einen Punkt haengen, statt ihn zu erreichen).
+    // Das Bein bleibt stattdessen fuer seine gesamte Dauer eine echte Gerade
+    // in legHeading - "geradlinig angeflogen", wie im Klassenkommentar oben
+    // beschrieben. Der Knick beim Wegpunktwechsel ist dann der EINZIGE Ort,
+    // an dem sich die Richtung regulaer aendert.
 
-    // Der Knick am Zielpunkt laeuft ueber einen kurzen Ein-Pol, statt die
-    // Richtung umzuschalten. Ein harter Richtungswechsel waere ein Sprung in
-    // der Geschwindigkeit und damit ein Klick im Doppler; ueber ein paar
-    // Millisekunden gezogen bleibt er sichtbar ein Knick und ist trotzdem
-    // stetig. Die Zeitkonstante haengt an der Zeit, die ein Weg quer durch den
+    // Der Knick am Zielpunkt laeuft ueber eine kritisch gedaempfte DREHUNG,
+    // nicht ueber geglaettete Vektor-Komponenten. Der Unterschied ist nicht
+    // nur akademisch: zwei nahezu entgegengesetzte Einheitsvektoren
+    // komponentenweise ueberblendet (egal ob per Ein-Pol oder per Feder)
+    // durchlaufen zwangslaeufig einen Punkt nahe dem Nullvektor - und dort
+    // ist die Richtung (der Vektor geteilt durch seine eigene, fast
+    // verschwindende Laenge) numerisch hinfaellig. Das wurde mit dem
+    // Testprogramm nachgewiesen: |heading| fiel bis auf ~0.001, und direkt
+    // danach sprang ein einzelner Tick um mehrere zehn Zentimeter in eine
+    // fast beliebige Richtung - das gemessene Krickseln.
+    //
+    // Hier wird stattdessen der DREHWINKEL selbst kritisch gedaempft (eine
+    // Zahl von 0 bis turnTotalAngle, aus der Ruhe startend) und heading per
+    // Rodrigues-Drehformel direkt aus turnStartHeading, turnAxis und diesem
+    // Winkel rekonstruiert - dadurch bleibt heading fuer JEDEN Winkel
+    // (auch exakt 180 Grad) exakt Einheitslaenge, ohne je durch Null zu
+    // muessen. Ein Sprung in der Geschwindigkeit (harter Richtungswechsel)
+    // waere ein Klick im Doppler; kritisch gedaempft aus der Ruhe gibt es
+    // keinen Sprung in der Winkelgeschwindigkeit am Scheitel (anders als bei
+    // einem Ein-Pol, dessen Steigung genau am Scheitel am groessten ist -
+    // das erzeugte die "sehr spitzen Kurven", siehe Klassenkommentar oben).
+    // Die Zeitkonstante haengt an der Zeit, die ein Weg quer durch den
     // Bereich dauert - bei gemaechlichem Wackeln darf der Bogen laenger sein.
-    const double crossingSeconds = amount / speed;
+    {
+        const double crossingSeconds = amount / speed;
+        const double tau   = std::clamp (0.15 * crossingSeconds, 4.0 / tickRate, 0.25);
+        const double omega = 1.0 / tau;
 
-    headingSmoother.setTau (std::clamp (0.15 * crossingSeconds, 4.0 / tickRate, 0.25));
+        const double accel = omega * omega * (turnTotalAngle - turnAngle) - 2.0 * omega * turnAngleVel;
+        turnAngleVel += accel * dt;
+        turnAngle    += turnAngleVel * dt;
+        turnAngle     = std::clamp (turnAngle, 0.0, turnTotalAngle);
 
-    Vec3 heading, headingVel;
-    headingSmoother.tick (heading, headingVel);
+        const double c = std::cos (turnAngle);
+        const double s = std::sin (turnAngle);
+        const Vec3   perp = crossProduct (turnAxis, turnStartHeading);
 
-    const double headingLength = heading.length();
+        heading = turnStartHeading * c + perp * s;
+    }
 
-    if (headingLength > 1.0e-12)
-        offset += heading * (speed * dt / headingLength);
+    offset += heading * (speed * dt);
 
     // Sicherheitsnetz und zugleich der Weg, auf dem ein kleiner werdender
     // Ausschlag die Fliege hereinholt: der Versatz bleibt in der Ebene
@@ -208,12 +303,42 @@ Vec3 PositionJitter::tick (double dt)
     // dieselbe Trennung wie bei den Zielpunkten. Weil der Ausschlag selbst nur
     // mit dem eingestellten Tempo schrumpft (siehe oben), ist auch dieses
     // Hereinholen nie schneller als die Bewegung selbst.
+    //
+    // Dass die Klemmung ueberhaupt greift, ist bei einem Bein nahe am Rand
+    // normal (der Wegpunkt selbst darf bis zu 100% des Ausschlags liegen, ein
+    // Kurvenscheitel direkt danach kann knapp darueber hinauswollen). Weich
+    // statt hart: eine harte Klemmung (Position sofort auf amount
+    // zurueckgesetzt) aendert die radiale Geschwindigkeit in EINEM Tick von
+    // "wie eingestellt" auf 0 - genau das war der zweite gemessene
+    // Krickseln-Mechanismus (Testprogramm: exakt an der Beruehrung ein
+    // einzelner Ausreisser im Schrittwinkel).
+    //
+    // Die Weichfeder unten ist STETIG UND GLATT (C1) an der Grenze: innerhalb
+    // von amount/zReach ist sie exakt die Identitaet (der Ausschlag bleibt
+    // exakt der eingestellte, wie gefordert), und erst jenseits der Grenze
+    // biegt sie glatt in eine Asymptote bei amount+knee bzw. zReach+knee ab -
+    // Wert UND Steigung stimmen an der Grenze exakt mit der Identitaet
+    // ueberein (Ableitung der Asymptote bei Ueberschuss=0 ist 1), es gibt
+    // also keinen Tick, an dem sich die radiale Geschwindigkeit sprunghaft
+    // aendert. knee ist grosszuegig (10% des Ausschlags, mindestens ein paar
+    // Schrittlaengen): ein zu enger Knick wuerde die Bewegung im Ueberschuss-
+    // Bereich fast einfrieren (die Ableitung der Asymptote faellt dort
+    // exponentiell), das war beim Ausprobieren mit engerem Knick als erneutes
+    // Krickseln sichtbar - grosszuegig bleibt die Ableitung nahe genug an 1,
+    // dass sich der Versatz auch jenseits der Grenze noch spuerbar weiterdreht
+    // (der Ausschlag selbst wird dadurch nur um bis zu ~1% ueberschritten,
+    // in seltenen Randfaellen - kein verstecktes Limit, sondern das
+    // ausdrueckliche Sicherheitsnetz aus dem Klassenkommentar).
     {
+        const double knee = std::max (amount * 0.10, speed * dt * 4.0);
+
         const double flat = std::sqrt (offset.x * offset.x + offset.y * offset.y);
 
         if (flat > amount && flat > 1.0e-12)
         {
-            const double scale = amount / flat;
+            const double excess = flat - amount;
+            const double softened = amount + knee * (1.0 - std::exp (-excess / knee));
+            const double scale = softened / flat;
 
             offset.x *= scale;
             offset.y *= scale;
@@ -221,7 +346,35 @@ Vec3 PositionJitter::tick (double dt)
 
         const double zReach = amount * zFactor;
 
-        offset.z = std::clamp (offset.z, -zReach, zReach);
+        // Die Aufweichung gehoert zu DER Grenze, die sie aufweicht, und darum
+        // haengt sie hier an zReach und nicht an amount: an amount gekoppelt
+        // stuende sie bei Hoehenanteil 0 als fester Betrag ueber der Hoehe
+        // null, und "aus" waere nicht aus. Halber Anteil muss halbe Hoehe
+        // heissen, ganz aus muss ganz aus heissen.
+        const double zKnee = zReach * 0.10;
+
+        // Ist die Hoehe so eng, dass ihre Aufweichung unter einer Schrittlaenge
+        // laege, wird hart geklemmt. Der weiche Uebergang soll ein Rattern
+        // vermeiden, das aus dem Anlaufen gegen die Grenze entsteht - auf
+        // einer Hoehe, die kuerzer ist als ein einzelner Schritt, gibt es
+        // dieses Anlaufen nicht.
+        if (zKnee > speed * dt)
+        {
+            if (offset.z > zReach)
+            {
+                const double excess = offset.z - zReach;
+                offset.z = zReach + zKnee * (1.0 - std::exp (-excess / zKnee));
+            }
+            else if (offset.z < -zReach)
+            {
+                const double excess = -zReach - offset.z;
+                offset.z = -zReach - zKnee * (1.0 - std::exp (-excess / zKnee));
+            }
+        }
+        else
+        {
+            offset.z = std::clamp (offset.z, -zReach, zReach);
+        }
     }
 
     return offset;

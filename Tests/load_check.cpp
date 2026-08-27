@@ -6030,13 +6030,16 @@ int main()
         // Die Ebene darf sich davon nicht beeindrucken lassen - der Regler
         // gilt nur der Hoehe.
         //
-        // Ein halbes Prozent Toleranz, kein Millimeter: der Wackler fliegt
+        // Ein Prozent Toleranz, kein Millimeter: der Wackler fliegt
         // gewuerfelte Zielpunkte an (siehe PositionJitter), der groesste
         // Ausschlag in einem Messfenster ist damit ein statistischer Wert und
-        // nicht auf die Nachkommastelle wiederholbar. Gemeint ist "der
-        // Hoehenanteil verschiebt den Ausschlag in der Ebene nicht", und das
-        // faengt diese Schranke.
-        if (std::abs (none.first - full.first) > 0.005 * 50.0)
+        // nicht auf die Nachkommastelle wiederholbar. Dazu kommt, dass die
+        // Bahn ihre Grenze nicht mehr exakt erreicht, sondern weich in sie
+        // hineinlaeuft - der gemessene Groesstwert streut damit staerker als
+        // zu der Zeit, als jede Beruehrung hart auf den Ausschlag
+        // zurueckgesetzt wurde. Gemeint ist "der Hoehenanteil verschiebt den
+        // Ausschlag in der Ebene nicht", und das faengt diese Schranke.
+        if (std::abs (none.first - full.first) > 0.01 * 50.0)
         {
             std::printf ("  FEHLER: der Z-Anteil aendert auch den Ausschlag in der Ebene "
                          "(%.3f gegen %.3f).\n", none.first, full.first);

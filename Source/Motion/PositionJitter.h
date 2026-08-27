@@ -1,6 +1,6 @@
 #pragma once
 
-#include "OnePoleSmoother.h"
+#include "../Physics/Vec3.h"
 
 #include <cstdint>
 
@@ -26,12 +26,13 @@
 // Geschwindigkeit.
 //
 // Der Trick gegen Klicks: die Richtung wird nicht umgeschaltet, sondern ueber
-// einen kurzen Ein-Pol auf die neue Zielrichtung gezogen. Ein harter
-// Richtungswechsel waere ein Sprung in der Geschwindigkeit - fuer den Doppler
-// dieselbe Kante wie ein Positionssprung. Ueber ein paar Millisekunden gezogen
-// bleibt der Knick sichtbar und ist trotzdem stetig. OnePoleSmoother
-// (Baustein aus diesem Ordner) wird dafuer zweckentfremdet: er glaettet keine
-// Position, sondern die Flugrichtung.
+// eine kurze, kritisch gedaempfte Drehung auf die neue Zielrichtung gezogen.
+// Ein harter Richtungswechsel waere ein Sprung in der Geschwindigkeit - fuer
+// den Doppler dieselbe Kante wie ein Positionssprung. Ueber ein paar
+// Millisekunden gezogen bleibt der Knick sichtbar und ist trotzdem stetig.
+// Gedaempft wird dabei der DREHWINKEL (eine Zahl von 0 bis zum Gesamtwinkel
+// der Kurve), nicht die drei Vektor-Komponenten der Richtung einzeln - siehe
+// die Felder turnAngle/turnAxis weiter unten fuer den Grund.
 //
 // Ausschlag und Tempo bleiben dabei genau das, was auf den Reglern steht: der
 // Schritt ist Richtung mal Tempo mal dt (also exakt die eingestellte
@@ -140,14 +141,42 @@ private:
     // ein Sample-Raster jeder Wellenform setzt.
     double tickRate = 1000.0;
 
-    // Zweckentfremdet: glaettet die Flugrichtung, nicht eine Position - siehe
-    // Klassenkommentar.
-    OnePoleSmoother headingSmoother { 1.0 };
-
     // Aktueller Versatz zum Ankerpunkt und der Punkt, der gerade angeflogen
     // wird - beide in Metern, beide relativ zum Anker.
     Vec3 offset;
     Vec3 waypoint;
+
+    // Die Flugrichtung fuer das AKTUELLE Bein, einmal beim Wegpunktwechsel
+    // berechnet und dann fest, bis das naechste Bein beginnt - siehe tick().
+    Vec3 legHeading { 1.0, 0.0, 0.0 };
+
+    // --- Der Knick als Drehung, nicht als geglaetteter Vektor ---
+    //
+    // heading ist die tatsaechlich geflogene Richtung, IMMER exakt
+    // Einheitslaenge - garantiert durch Konstruktion (Rodrigues-Drehformel
+    // unten), nicht durch Nachnormieren. Ein Knick wird nicht durch
+    // Glaetten der drei Vektor-Komponenten einzeln erzeugt (das war der
+    // fruehere Ansatz ueber OnePoleSmoother/CriticallyDampedSpring): zwei
+    // nahezu entgegengesetzte Einheitsvektoren komponentenweise
+    // ueberblendet durchlaufen zwangslaeufig einen Punkt nahe dem
+    // Nullvektor - und die Richtung eines fast-Null-Vektors ist numerisch
+    // hinfaellig (durch seine eigene, fast verschwindende Laenge geteilt).
+    // Das war der tatsaechliche Mechanismus hinter dem gemessenen
+    // Krickseln (Testprogramm: |heading| faellt auf ~0.001, danach ein
+    // einzelner Ausreisser von mehreren zehn cm Schrittlaenge).
+    //
+    // Stattdessen wird eine DREHUNG um eine feste Achse gefahren: heading
+    // startet bei turnStartHeading und dreht sich um turnAngle (Radiant) um
+    // turnAxis - das ist fuer jeden Winkel (auch exakt 180 Grad) exakt
+    // Einheitslaenge, ohne je durch Null zu muessen. turnAngle selbst ist
+    // nur eine SKALARE kritisch gedaempfte Groesse (0 bis turnTotalAngle),
+    // fuer die es die Nullvektor-Problematik gar nicht geben kann.
+    Vec3   heading { 1.0, 0.0, 0.0 };
+    Vec3   turnStartHeading { 1.0, 0.0, 0.0 };
+    Vec3   turnAxis { 0.0, 0.0, 1.0 };
+    double turnTotalAngle = 0.0;
+    double turnAngle      = 0.0;
+    double turnAngleVel   = 0.0;
 
     // Fester Startwert statt Uhrzeit-Aussaat (wie EngineGenerator::prepare) -
     // derselbe Regelweg muss zweimal dasselbe ergeben.
