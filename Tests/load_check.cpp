@@ -6722,6 +6722,29 @@ int main()
             setParam (proc, Params::fieldMetres, 100.0f + 150.0f * (float) t);
         });
 
+        // Dritter Bezug: beide Punkte im Koordinatenursprung. Normiert 0
+        // heisst in Metern 0, und zwar bei JEDER Feldgroesse - der Regler
+        // verschiebt hier also gar nichts, weder relativ noch absolut. Bleibt
+        // die Last hier stehen, gehoert sie nicht dem Umschalten der
+        // Geometrie, sondern der Bewegung, die es ausloest.
+        setParam (proc, Params::srcX, 0.0f);
+        setParam (proc, Params::srcY, 0.0f);
+        setParam (proc, Params::lisX, 0.0f);
+        setParam (proc, Params::lisY, 0.0f);
+        setParam (proc, Params::fieldMetres, 200.0f);
+
+        Stats originSettle;
+        render (proc, buffer, 0.3, originSettle, [] (double) {});
+
+        Stats dragOrigin;
+        render (proc, buffer, 2.0, dragOrigin, [&proc] (double t)
+        {
+            setParam (proc, Params::fieldMetres, 100.0f + 150.0f * (float) t);
+        });
+
+        setParam (proc, Params::lisX, 0.5f);
+        setParam (proc, Params::lisY, 0.5f);
+        setParam (proc, Params::srcY, 0.5f);
         setParam (proc, Params::srcX, 0.65f);
         setParam (proc, Params::fieldMetres, 200.0f);
 
@@ -6750,29 +6773,67 @@ int main()
                                       ? (double) dragSamePoint.solverEvals / (double) dragSamePoint.blocks
                                       : 0.0;
 
+        const double originAvg = dragOrigin.blocks > 0
+                                   ? (double) dragOrigin.solverEvals / (double) dragOrigin.blocks
+                                   : 0.0;
+
         std::printf ("%-22s Feldgroessen-Zug: %.0f Auswertungen je Block gegen %.0f in Ruhe "
-                     "(%.2f x) | ohne Positionsverschiebung %.0f (%.2f x)\n",
+                     "(%.2f x) | ohne Positionsverschiebung %.0f (%.2f x) | im Ursprung "
+                     "%.0f (%.2f x)\n",
                      "", dragAvg, quietAvg, factor, samePointAvg,
-                     quietAvg > 0.0 ? samePointAvg / quietAvg : 0.0);
+                     quietAvg > 0.0 ? samePointAvg / quietAvg : 0.0,
+                     originAvg, quietAvg > 0.0 ? originAvg / quietAvg : 0.0);
 
         // BEKANNTES OFFENES THEMA, laesst den Lauf nicht fehlschlagen - wie
         // beim Kaustik-Fall weiter oben. Die Zahl steht hier als
         // Ausgangsgroesse: sie soll auffallen, wenn sie waechst, und den Tag
         // vorbereiten, an dem es jemand angeht.
         //
-        // Stand der Diagnose: die Last gehoert dem Feldwechsel selbst, nicht
-        // der Positionsverschiebung, die er ausloest - liegen Quelle und
-        // Hoerer im selben Punkt der normierten Flaeche, aendert sich ihr
-        // Abstand in Metern gar nicht, und die Last bleibt trotzdem beim
-        // 25-fachen. Was wandert, sind die ABSOLUTEN Koordinaten beider
-        // Punkte, und mit ihnen die Trajektorie, auf der der Loeser sucht.
+        // Stand der Diagnose (20260827): die Last haengt an den ABSOLUTEN
+        // Koordinaten, nicht am Umschaltmechanismus.
         //
-        // GEPRUEFT UND VERWORFEN: den Wechsel erst nach einer Ruhezeit
-        // ausfuehren (Debounce in setFieldMetres/applyArmedFieldChange). Das
-        // macht es schlimmer, nicht besser - gemessen 34 statt 26 - weil
-        // Position und Geometrie dabei auseinanderlaufen: der Processor
-        // rechnet die Positionen sofort mit dem neuen Massstab, waehrend die
-        // Geometrie noch am alten haengt.
+        // Die drei Zahlen oben sagen es zusammen: Quelle und Hoerer im selben
+        // normierten Punkt aendern ihren Abstand nie und kosten trotzdem noch
+        // das 25-fache - beide wandern aber weiterhin durch den Meterraum,
+        // weil normiert 0,5 bei jeder Feldgroesse woanders liegt. Setzt man
+        // beide in den URSPRUNG, wo normiert 0 immer 0 m heisst, faellt die
+        // Last auf das 4,5-fache. Rund vier Fuenftel der Last gehoeren also
+        // der Wanderung durch den Meterraum, nicht dem Geometriewechsel.
+        //
+        // Der Grund dafuer steht in DopplerfeldProcessor::metresFromNormalised:
+        // der Ursprung liegt in der ECKE des Feldes. Ein Punkt bei normiert
+        // 0,5 sitzt damit bei n/2 Metern und faehrt beim Ziehen mit halber
+        // Feldaenderungsrate durch die Welt - im Zug hier 75 m/s. Ein
+        // schnell bewegter Empfaenger ist genau der Fall, in dem der Loeser
+        // seine geschlossene Loesung fuer die gerade Bahn nicht nutzen kann
+        // und die Retarded-Time-Gleichung wieder abtasten muss.
+        //
+        // Der Hebel waere also, den Ursprung in die MITTE des Feldes zu legen.
+        // Akustisch aendert das nichts (alle Abstaende sind Differenzen), aber
+        // es ist kein Einzeiler: die Meterkoordinaten stehen so auch im
+        // FieldSnapshot, den die Anzeige zeichnet, und in den aufgezeichneten
+        // Bewegungen (MotionRecorder speichert Meter) - gespeicherte
+        // Aufnahmen laegen nach einer Umstellung um ein halbes Feld daneben.
+        //
+        // DREI WEGE GEPRUEFT UND VERWORFEN, alle gemessen:
+        //   1. Debounce in setFieldMetres/applyArmedFieldChange, den Wechsel
+        //      erst nach einer Ruhezeit ausfuehren: 34 statt 26. Position und
+        //      Geometrie laufen dabei auseinander - der Processor rechnet die
+        //      Positionen sofort mit dem neuen Massstab, die Geometrie haengt
+        //      noch am alten.
+        //   2. Die Vorgeschichte mitstrecken statt die Geometrie zu wechseln
+        //      (SourceTrajectory::scaleBy um n_neu/n_alt): 45793 statt 10236
+        //      Auswertungen je Block, also VIER Mal so teuer. Eine Streckung
+        //      um den Ursprung bewegt weit zurueckliegende Bahnpunkte am
+        //      staerksten; gemessen sprang |M_r| dabei von 0 auf 1,10 - die
+        //      Streckung erfindet Ueberschall in der Vorgeschichte.
+        //   3. Kleine Aenderungen einfach als Bewegung durchlaufen lassen,
+        //      ganz ohne Wechsel: 12616 statt 10236, und |M_r| auf 4,33. Was
+        //      der Wechsel bisher einfriert, wird dabei zur echten Bewegung -
+        //      und die ist teurer als das Umschalten.
+        // Was alle drei gemeinsam haben: sie legen die Wanderung durch den
+        // Meterraum offen, statt sie zu vermeiden. Nur der Ursprung vermeidet
+        // sie.
         if (factor > 1.5)
             std::printf ("  OFFEN (kein Fehlschlag): das Ziehen an der Feldgroesse kostet das "
                          "%.2f-fache der Ruhelast.\n", factor);
