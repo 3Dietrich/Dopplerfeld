@@ -262,12 +262,35 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // werden leiser, groessere lauter. Kein Deckel noetig: das Potenzgesetz
     // ist ueber den ganzen Reglerbereich (0,5 bis 200 m) von selbst monoton
     // und endlich.
+    // Ausgleich fuer die Anstiegszeit (@dpa 20260827 zur Knall-Kante: "Unter 1
+    // ist sie direkt wieder leiser! Das ist falsch! Sie soll nicht leiser
+    // werden sondern nur dumpfer! Den Gain haben wir ja extra").
+    //
+    // Die Rampe schneidet die Spitze der Welle ab: der Rumpf faellt waehrend
+    // des Anstiegs ja schon, also trifft die aufsteigende Flanke ihn nicht mehr
+    // bei 1. Aus shape(t) = (1 - 2t/T) * t/rise folgt die erreichte Spitze
+    //
+    //     rise <= T/4 :  1 - 2*rise/T      (Maximum am Ende der Rampe)
+    //     rise >  T/4 :  T / (8*rise)      (Maximum bei t = T/4, mitten drin)
+    //
+    // Bei der Klemmung von nWaveAt (rise <= 0,4*T) sind das 0,3125 - also
+    // 10 dB allein durch die Flankenform. Dieser Faktor nimmt sie wieder
+    // heraus, damit der Regler tut, was sein Name sagt: die Kante formen. Fuer
+    // die Lautstaerke ist nWaveGain zustaendig.
+    const double riseForPeak = std::min (b.nRise, 0.4 * b.nDuration);
+    const double peakFactor  = b.nDuration > 0.0 && riseForPeak > 0.0
+                             ? (riseForPeak <= 0.25 * b.nDuration
+                                  ? 1.0 - 2.0 * riseForPeak / b.nDuration
+                                  : b.nDuration / (8.0 * riseForPeak))
+                             : 1.0;
+
     b.nAmp = (nWaveLevel / nWaveRefMetres)
            * std::pow (nWaveRefMetres / std::max (radius, minRadius), nWaveDistanceExponent)
            * std::pow (sizeOverride > 0.0 ? 1.0 : sizeM / nWaveSizeRefMetres,
                        nWaveSizeExponent)
            * nWaveGain
-           * levelScale;
+           * levelScale
+           / std::max (peakFactor, 1.0e-3);
 
     b.nPhase = 0.0;
 
@@ -278,17 +301,33 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // ueber diesen Weg laeuft, kommt nichts anderes durch (siehe
     // setShockDuck). Es wird nur verlaengert, nie verkuerzt - eine zweite,
     // kuerzere Front darf ein noch laufendes Fenster nicht abschneiden.
+    // Ob das vorige Fenster schon durch war, muss VOR dem Verlaengern
+    // feststehen - danach liegt shockEndTime immer in der Zukunft.
+    const bool windowWasOver = listenerTimeNow > shockEndTime;
+
     shockEndTime = std::max (shockEndTime, listenerTimeNow + b.nDuration);
 
     // Tiefe aus der Entfernung: nah ist die Front eine echte Diskontinuitaet
     // und nimmt alles mit, weit weg ist sie zerfallen und laesst das
-    // Drumherum stehen (siehe setShockDuck). Wie beim Fenster gilt der
-    // staerkere Wert, damit eine ferne Front eine nahe nicht aufweicht.
+    // Drumherum stehen (siehe setShockDuck).
     const double reach = shockDuckRange > 0.0
                        ? shockDuckRange / (shockDuckRange + std::max (0.0, radius))
                        : 1.0;
 
-    shockDuckStrength = std::max (shockDuckStrength, reach);
+    // Der staerkere Wert gilt nur, SOLANGE das Fenster laeuft - dann darf eine
+    // ferne Front eine nahe nicht aufweichen. Ist das vorige Fenster durch,
+    // faengt die neue Front bei ihrer eigenen Tiefe an.
+    //
+    // Ohne diese Unterscheidung war die Tiefe ein Maximum ueber ALLE je
+    // ausgeloesten Wellen: einmal nah vorbeigeflogen, und jede spaetere Front
+    // senkte den Ton wieder voll ab, egal aus welcher Entfernung sie kam.
+    // Zusammen mit dem Fenster, das jede Welle um ihre volle Dauer verlaengert,
+    // blieb bei dicht aufeinanderfolgenden Wellen - etwa einem Kreisflug im
+    // Ueberschall, bei dem der Kegel immer wieder ueber den Hoerer streicht -
+    // dauerhaft alles abgesenkt (@dpa 20260827: "der Front-Druck unterdrueckt
+    // manchmal den gesamten Sound. das darf nicht passieren!").
+    shockDuckStrength = windowWasOver ? reach
+                                      : std::max (shockDuckStrength, reach);
 }
 
 double PropagationPath::shockDuckAt (double listenerTime) const
@@ -962,12 +1001,6 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
             b.wasAlive = alive;
 
-            // Ein Faktor je Sample für den Kaustik-Ausklang. Exponentiell statt
-            // linear, weil ein Schattenausläufer so aussieht und weil eine
-            // lineare Rampe an ihrem Ende wieder eine Ecke hätte.
-            const double deathDecay = (! alive && b.deathTau > 0.0)
-                                     ? std::exp (-1.0 / std::max (1.0, b.deathTau * sr))
-                                     : 0.0;
 
 
             // Verschwundener Zweig: mit der zuletzt bekannten Steigung
@@ -1148,15 +1181,47 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // der Ausklang folgt der Kaustik, aus der der Zweig
                 // verschwindet - siehe maxDeathTailSeconds im Header.
                 if (alive)
-                    b.env = std::min (1.0, b.env + envInc);
+                {
+                    b.env    = std::min (1.0, b.env + envInc);
+                    b.shadowZ = y;   // Filter mitlaufen lassen, damit er beim Tod nicht springt
+                }
                 else
                 {
                     ++b.deathSampleCount;
 
                     if (b.deathTau > 0.0)
-                        b.env *= deathDecay;
+                    {
+                        // Schattenausklang nach der Airy-Asymptotik, siehe
+                        // shadowRefHz im Header. Absolut gerechnet statt Faktor
+                        // je Sample: die Form steckt im Exponenten, und die
+                        // liesse sich als fester Faktor nicht nachbilden.
+                        const double shadowU = (double) b.deathSampleCount
+                                             / std::max (1.0, b.deathTau * sr);
+
+                        b.env = b.deathEnvValue * std::exp (-shadowU * std::sqrt (shadowU));
+
+                        // Und die Hoehen zuerst: die Frequenz, die gerade noch
+                        // durchkommt, faellt mit u^-3 - das ist dieselbe
+                        // Huellkurve, nur nach f statt nach t aufgeloest.
+                        const double shadowFc = shadowRefHz
+                                              / std::max (shadowU * shadowU * shadowU, 1.0e-6);
+
+                        if (shadowFc < 0.45 * sr)
+                        {
+                            const double shadowCoeff = 1.0 - std::exp (-2.0 * 3.14159265358979323846
+                                                                       * shadowFc / sr);
+
+                            b.shadowZ += shadowCoeff * (y - b.shadowZ);
+                            y = b.shadowZ;
+                        }
+                        else
+                            b.shadowZ = y;
+                    }
                     else
-                        b.env = std::max (0.0, b.env - envInc);
+                    {
+                        b.env     = std::max (0.0, b.env - envInc);
+                        b.shadowZ = y;
+                    }
                 }
 
                 // Die N-Welle kommt ADDITIV oben drauf und läuft bewusst NICHT

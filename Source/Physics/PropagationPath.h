@@ -432,6 +432,13 @@ private:
 
         double lpCoeff = 1.0;   // Luftdämpfung, pro Solver-Punkt aktualisiert
         double lpZ     = 0.0;   // Filterzustand - gehört zum Zweig (Plan 2.9)
+
+        // Zustand des Schatten-Tiefpasses, siehe shadowRefHz. Eigener Zustand
+        // neben lpZ: die Luftdaempfung beschreibt die geflogene Strecke, der
+        // Schatten die Beugung an der Kaustik - zwei verschiedene Dinge, und
+        // ein gemeinsamer Filterzustand liesse das eine im anderen
+        // nachklingen.
+        double shadowZ = 0.0;
         double refZ    = 0.0;   // Reflexionsdämpfung, ebenfalls je Zweig
         double env     = 0.0;   // Anti-Klick-Rampe, 0..1
 
@@ -667,6 +674,48 @@ private:
     // bis ein neu ankommender Zweig sie hart hinauswarf. Das hätte den
     // abgeschnittenen Zweig nur an eine andere Stelle verschoben.
     static constexpr double causticWidths = 4.0;
+
+    // --- Form des Schattenausklangs ---
+    //
+    // Hinter einer Faltungskaustik hoert das Feld nicht auf, es geht gebeugt
+    // weiter, und die Beugung ist FREQUENZABHAENGIG. Die geschlossene Loesung
+    // dafuer ist die Airy-Funktion; fuer den Schattenbereich gilt
+    //
+    //     Ai(x) ~ exp(-2/3 * x^(3/2)),   x ~ s * f^(1/3)
+    //
+    // (s = Abstand hinter der Schattengrenze, f = Frequenz). Setzt man s
+    // proportional zur Zeit, die der Hoerweg seit dem Uebergang im Schatten
+    // liegt, folgt daraus die Huellkurve
+    //
+    //     A(f, t) = exp( -(t/tau)^(3/2) * (f/f_ref)^(1/2) )
+    //
+    // Daran haengen die beiden Eigenschaften, die ein blosses exp(-t/tau)
+    // nicht hat und die @dpa wiederholt als falsch gehoert hat
+    // (20260827: "da ist oft eine richtiggehende Kante ... bei Schatten 1ms
+    // macht es halblaut 'Bum-hhaupt!' direkt danach '..entfernt Leise'"):
+    //
+    //   Der Exponent 3/2 laesst den Abfall mit Steigung NULL beginnen. Ein
+    //   Ein-Pol faellt vom ersten Moment an mit voller Rate - das ist der
+    //   Knick, den man als Kante hoert, und er bleibt einer, egal wie lang
+    //   man tau stellt.
+    //
+    //   Der Faktor f^(1/2) nimmt die Hoehen zuerst. Gemessen an @dpas
+    //   Aufnahme vom 20260827 fiel bisher das GANZE Spektrum gleichzeitig
+    //   (30-60 Hz um 38 dB, 1-2 kHz um 30 dB, 4-8 kHz um 29 dB) - ein
+    //   Schnitt durchs Band, kein Schatten. Etwas, das hinter einer Ecke
+    //   verschwindet, wird dumpf, bevor es leise wird.
+    //
+    // shadowRefHz ist die Frequenz, deren Abklingzeit genau tau ist; darueber
+    // geht es schneller, darunter langsamer. Der Wert ist eine Modell-
+    // konstante - der echte Bezug haengt am Kruemmungsradius der Kaustik, den
+    // das Modell nicht fuehrt. 1 kHz liegt dort, wo das Ohr am genauesten
+    // hinhoert, und macht damit die Zeitkonstante tau zu dem, was der Regler
+    // verspricht.
+    static constexpr double shadowRefHz     = 1000.0;
+
+    // Exponent der Zeit in der Huellkurve oben. Steht als benannte Groesse
+    // hier und nicht als 1.5 im Code, weil er die Form des Ausklangs IST.
+    static constexpr double shadowTimeExponent = 1.5;
 
     // Ausklang fuer einen Zweig, der NICHT an der Kaustik stirbt, sondern weil
     // der Loeser seine Wurzel verloren hat.
