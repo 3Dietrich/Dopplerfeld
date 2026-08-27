@@ -11,10 +11,6 @@
 // Loeserphysik (@dpa: "nur echte Klones, alles andere weg, keine 'billigen',
 // die bringen nichts" - eine billige Nachbildung gibt es deshalb nicht mehr).
 //
-// Dieses Panel traegt bewusst den Notaus: die Loeserlast waechst linear mit
-// der Zahl der Klone, und wer hier die Zahl hochdreht, soll im selben
-// Blickfeld einen Weg zurueck haben, ohne das Plugin neu zu laden.
-//
 // Den CPU-Balken zeigt dieses Panel NICHT (mehr) - er sitzt in der
 // Statuszeile am unteren Fensterrand (PluginEditor::paint()). Die Auslastung
 // ist die Warnung vor hoerbaren Aussetzern und muss deshalb sichtbar bleiben,
@@ -27,8 +23,6 @@ public:
 
     void resized() override;
 
-    // Notaus. Kein Parameter, weil er mehrere auf einmal zurueckstellt.
-    std::function<void()> onPanic;
     std::function<void (bool)> onShowClonesToggled;
 
     // Setzt die Tooltips aller Regler/Schalter dieses Panels neu, in der
@@ -77,8 +71,6 @@ private:
 
     // Klon-Schwarm im Feld anzeigen, siehe FieldComponent::setShowClones().
     juce::ToggleButton showButton { "Zeigen" };
-
-    juce::TextButton panicButton { "Notaus: minimale Konfiguration" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SwarmPanel)
 };

@@ -103,7 +103,6 @@ namespace Labels
             { "Knall-Kante",    "Boom Edge"   },
             { "N-Welle",        "N-Wave"      },
             { "Bodenreflexion", "Ground Reflection" },
-            { "Notaus: minimale Konfiguration", "Panic: minimal setup" },
 
             // --- Waende / Schwarm ---
             { "Wand ",          "Wall "       },

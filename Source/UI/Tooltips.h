@@ -152,7 +152,6 @@ namespace Tooltips
         CloneSpread,
         CloneRealLevel,
         CloneShow,
-        Panic,
 
         // --- PluginEditor (Kopfzeile, Scope-Toolbar) ---
         SourceButton,
@@ -1427,21 +1426,6 @@ namespace Tooltips
                         : "Shows where the real clones sit in the field: small, faint dots around "
                           "the source. This makes their spread visible, and that each one wobbles "
                           "on its own. Display only, it costs no audio processing time.";
-
-                case Key::Panic:
-                    return lang == Language::De
-                        ? "Sofort zurück auf die minimale sichere Konfiguration: nur der Direktpfad pro Ohr, "
-                          "keine Bodenreflexion, keine Wände, keine Mehrfachreflexion, keine Klone. Wirkt im "
-                          "Audiothread beim nächsten Block und hängt nicht daran, dass die Oberfläche noch "
-                          "durchkommt. Gedacht für den Fall, dass die Auslastung hochgeht und der Ton "
-                          "wegbleibt - dann muss ein Weg zurück da sein, ohne das Plugin neu zu laden."
-                        : "Immediately back to the minimal safe configuration: only the "
-                          "direct path per ear, no ground reflection, no walls, no "
-                          "multiple reflections, no clones. Takes effect in the audio "
-                          "thread at the next block and does not depend on the UI still "
-                          "getting through. Meant for the case where load spikes and "
-                          "sound cuts out - there needs to be a way back without "
-                          "reloading the plugin.";
 
                 // --- PluginEditor ---
                 case Key::SourceButton:

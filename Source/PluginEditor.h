@@ -265,7 +265,7 @@ private:
     juce::TextButton speedUnitButton;
 
     // "Audiomotor neu anlassen" (@dpa-Feedback): allgemeiner Reset der
-    // Engine, nicht nur des Schwarms (siehe SwarmPanel fuer dessen Notaus).
+    // Engine.
     // In der Kopfzeile statt in einem einklappbaren Panel, weil er genau
     // dann gebraucht wird, wenn der Ton schon weg ist - auffindbar muss er
     // sein, ohne erst ein Panel aufzuklappen.

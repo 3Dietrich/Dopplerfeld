@@ -43,10 +43,6 @@ SwarmPanel::SwarmPanel (juce::AudioProcessorValueTreeState& apvts)
     showButton.onClick = [this] { if (onShowClonesToggled != nullptr) onShowClonesToggled (showButton.getToggleState()); };
     addAndMakeVisible (showButton);
 
-    panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));
-    panicButton.onClick = [this] { if (onPanic) onPanic(); };
-    addAndMakeVisible (panicButton);
-
     updateEnabledState();
 }
 
@@ -70,7 +66,6 @@ void SwarmPanel::refreshTooltips()
 
     // Beschriftungen mit dem Sprachumschalter mitnehmen.
     showButton.setButtonText (Labels::text ("Zeigen"));
-    panicButton.setButtonText (Labels::text ("Notaus: minimale Konfiguration"));
 
     for (auto* k : { &totalKnob, &spreadKnob, &zAmountKnob, &realLevelKnob })
     {
@@ -83,8 +78,6 @@ void SwarmPanel::refreshTooltips()
         // mode auf englisch").
         k->label.setText (Labels::text (k->labelSource), juce::dontSendNotification);
     }
-
-    panicButton.setTooltip (Tooltips::text (Tooltips::Key::Panic));
 }
 
 void SwarmPanel::resized()
@@ -115,9 +108,4 @@ void SwarmPanel::resized()
         auto row = area.removeFromTop (26);
         showButton.setBounds (row.removeFromLeft (110));
     }
-
-    // Kein Platz mehr fuer den CPU-Balken hier reserviert - der sitzt jetzt
-    // in der Statuszeile des Editors (siehe Klassenkommentar in SwarmPanel.h).
-    area.removeFromTop (8);
-    panicButton.setBounds (area.removeFromTop (28).removeFromLeft (240));
 }

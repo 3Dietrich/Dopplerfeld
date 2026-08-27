@@ -89,26 +89,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         dopplerfeldProcessor.loadSampleFile (file);
     };
 
-    // Notaus: zurück auf die minimale sichere Konfiguration - nur der
-    // Direktpfad pro Ohr, keine Reflexionen, keine Klone.
-    //
-    // Zwei Wege, absichtlich beide: der Processor schaltet im Audiothread
-    // sofort ab (das ist der Knopf für den Fall, dass es gerade klemmt und der
-    // Message-Thread nicht durchkommt), und zusätzlich werden die Parameter
-    // zurückgesetzt, damit die Schalter zeigen, was passiert ist, der Host es
-    // mitbekommt und es im gespeicherten Zustand steht.
     swarmPanel.onShowClonesToggled = [this] (bool show) { field.setShowClones (show); };
-
-    swarmPanel.onPanic = [this]
-    {
-        dopplerfeldProcessor.panicToMinimal();
-
-        setParameter (Params::groundReflectionOn, 0.0);
-        setParameter (Params::wall1On, 0.0);
-        setParameter (Params::wall2On, 0.0);
-        setParameter (Params::reflect2ndOn, 0.0);
-        setParameter (Params::cloneTotal, 0.0);
-    };
 
     motionPanel.onFlyClicked = [this]
     {
