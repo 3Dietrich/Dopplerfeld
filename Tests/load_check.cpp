@@ -6176,6 +6176,115 @@ int main()
         }
     }
 
+    //==================================================================
+    // Gezogener Feldgroessen-Regler (@dpa 20260827: "Feldgroesse - sie zu
+    // verstellen hat sehr oft mit heftigen CPU Ausbruechen zu tun").
+    //
+    // Nachgestellt wird, was ein Host waehrend einer Mausbewegung liefert:
+    // JEDEN Block einen neuen, leicht verschobenen Wert. Eine Feldgroessen-
+    // aenderung ist innerhalb der Engine ein Geometriesprung und laeuft
+    // deshalb ueber den PathSet-Doppelpfad - waehrend eines Uebergangs
+    // rechnen also ZWEI vollstaendige Loesersaetze nebeneinander.
+    //
+    // Gemessen wird nicht die Spitze, sondern der SCHNITT gegen denselben
+    // Aufbau in Ruhe: der Ausbruch der Beschwerde ist keine einzelne teure
+    // Stelle, sondern verdoppelte Last ueber die ganze Zugdauer. Und
+    // gemessen wird an den Loeser-Auswertungen, nicht an der Wanduhr - die
+    // schwankt auf einem beschaeftigten Rechner um Faktor zwei (siehe
+    // Kopfkommentar dieser Datei).
+    //
+    // Bewusst UNTERSCHALL: geprueft werden soll der Feldgroessen-Mechanismus
+    // allein, nicht seine Verstaerkung durch die Kaustik.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres, 200.0f);
+        setParam (proc, Params::lisX,        0.5f);
+        setParam (proc, Params::lisY,        0.5f);
+        setParam (proc, Params::srcX,        0.65f);
+        setParam (proc, Params::srcY,        0.5f);
+        setParam (proc, Params::srcZ,        5.0f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        Stats settle;
+        render (proc, buffer, 0.3, settle, [] (double) {});
+
+        // Bezugsgroesse: derselbe Aufbau, nur ohne dass jemand am Regler zieht.
+        Stats quiet;
+        render (proc, buffer, 2.0, quiet, [] (double) {});
+
+        // Zweiter Bezug: dieselbe Reglerbewegung, aber Quelle und Hoerer
+        // liegen im selben Punkt der normierten Flaeche. Dann aendert die
+        // Feldgroesse ihren Abstand in Metern NICHT, und was hier an Last
+        // uebrig bleibt, gehoert dem Feldwechsel selbst - alles darueber
+        // gehoert der Positionsverschiebung, die er ausloest.
+        setParam (proc, Params::srcX, 0.5f);
+
+        Stats dragSamePoint;
+        render (proc, buffer, 2.0, dragSamePoint, [&proc] (double t)
+        {
+            setParam (proc, Params::fieldMetres, 100.0f + 150.0f * (float) t);
+        });
+
+        setParam (proc, Params::srcX, 0.65f);
+        setParam (proc, Params::fieldMetres, 200.0f);
+
+        Stats resettle;
+        render (proc, buffer, 0.3, resettle, [] (double) {});
+
+        Stats drag;
+        render (proc, buffer, 2.0, drag, [&proc] (double t)
+        {
+            // 100 -> 400 m in zwei Sekunden, in Blockschritten: nie zwei
+            // Bloecke lang derselbe Wert, wie bei einer gezogenen Maus.
+            setParam (proc, Params::fieldMetres, 100.0f + 150.0f * (float) t);
+        });
+
+        drag.report ("Feldgroesse gezogen");
+
+        const double quietAvg = quiet.blocks > 0
+                                  ? (double) quiet.solverEvals / (double) quiet.blocks
+                                  : 0.0;
+        const double dragAvg  = drag.blocks > 0
+                                  ? (double) drag.solverEvals / (double) drag.blocks
+                                  : 0.0;
+        const double factor   = quietAvg > 0.0 ? dragAvg / quietAvg : 0.0;
+
+        const double samePointAvg = dragSamePoint.blocks > 0
+                                      ? (double) dragSamePoint.solverEvals / (double) dragSamePoint.blocks
+                                      : 0.0;
+
+        std::printf ("%-22s Feldgroessen-Zug: %.0f Auswertungen je Block gegen %.0f in Ruhe "
+                     "(%.2f x) | ohne Positionsverschiebung %.0f (%.2f x)\n",
+                     "", dragAvg, quietAvg, factor, samePointAvg,
+                     quietAvg > 0.0 ? samePointAvg / quietAvg : 0.0);
+
+        // BEKANNTES OFFENES THEMA, laesst den Lauf nicht fehlschlagen - wie
+        // beim Kaustik-Fall weiter oben. Die Zahl steht hier als
+        // Ausgangsgroesse: sie soll auffallen, wenn sie waechst, und den Tag
+        // vorbereiten, an dem es jemand angeht.
+        //
+        // Stand der Diagnose: die Last gehoert dem Feldwechsel selbst, nicht
+        // der Positionsverschiebung, die er ausloest - liegen Quelle und
+        // Hoerer im selben Punkt der normierten Flaeche, aendert sich ihr
+        // Abstand in Metern gar nicht, und die Last bleibt trotzdem beim
+        // 25-fachen. Was wandert, sind die ABSOLUTEN Koordinaten beider
+        // Punkte, und mit ihnen die Trajektorie, auf der der Loeser sucht.
+        //
+        // GEPRUEFT UND VERWORFEN: den Wechsel erst nach einer Ruhezeit
+        // ausfuehren (Debounce in setFieldMetres/applyArmedFieldChange). Das
+        // macht es schlimmer, nicht besser - gemessen 34 statt 26 - weil
+        // Position und Geometrie dabei auseinanderlaufen: der Processor
+        // rechnet die Positionen sofort mit dem neuen Massstab, waehrend die
+        // Geometrie noch am alten haengt.
+        if (factor > 1.5)
+            std::printf ("  OFFEN (kein Fehlschlag): das Ziehen an der Feldgroesse kostet das "
+                         "%.2f-fache der Ruhelast.\n", factor);
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }
