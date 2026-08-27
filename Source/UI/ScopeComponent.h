@@ -180,13 +180,24 @@ public:
     // umschalter in der Kopfzeile (siehe PluginEditor).
     void refreshTooltips() { setTooltip (Tooltips::text (Tooltips::Key::Scope)); }
 
-    // Fuer load_check: wieviele Samples zuletzt tatsaechlich gezeichnet
-    // wurden und wo sie stehen. Bei aktivem Sync ist das eine ganze Zahl von
-    // Perioden und damit weniger als displaySampleCount() - siehe
-    // shownSampleCount weiter unten.
+    // Fuer load_check UND fuer Play (mouseUp()/setPlaybackEnabled()): wieviele
+    // Samples zuletzt tatsaechlich gezeichnet wurden und wo sie stehen. Bei
+    // aktivem Sync ist das im LIVE-Betrieb eine ganze Zahl von Perioden und
+    // damit weniger als displaySampleCount() - siehe shownSampleCount weiter
+    // unten.
+    //
+    // Im History-Modus gilt das NICHT: paint() zeichnet dort immer die volle
+    // Fensterbreite (siehe traceCount in ScopeComponent.cpp), unabhaengig
+    // davon, was shownSampleCount zufaellig noch vom letzten Live-Sync-Fund
+    // VOR dem Freeze enthaelt (feed() aktualisiert es waehrend frozen == true
+    // ja nicht mehr). Ohne diese Unterscheidung rechnete ein Klick im
+    // gefrorenen Scope mit einer zu kurzen/falschen Gesamtlaenge und landete
+    // dadurch an einer anderen Stelle als der angeklickten (@dpa: "man ist
+    // nicht dort wo man angezeigt kriegt") - dieselbe Formel wie traceCount
+    // behebt das, weil beide dann immer dasselbe meinen.
     int shownSampleCountForTest() const
     {
-        return shownSampleCount > 0 ? shownSampleCount : displaySamples;
+        return (historyMode || shownSampleCount <= 0) ? displaySamples : shownSampleCount;
     }
 
     const float* shownLeftForTest() const { return shownLeft.data(); }
