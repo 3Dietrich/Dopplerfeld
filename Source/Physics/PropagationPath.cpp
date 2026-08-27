@@ -1284,12 +1284,38 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
                 if (b.nPhase >= 0.0)
                 {
-                    outSample += nWaveAt (b);
+                    // Hochpass auf der Druckwellen-Schicht, siehe
+                    // nWaveHighpassHz im Header: was bleibt, sind die beiden
+                    // Stossfronten, was geht, ist die langsame Auslenkung
+                    // dazwischen.
+                    const double raw = nWaveAt (b);
+                    const double a   = 1.0 - std::exp (-2.0 * 3.14159265358979323846
+                                                       * nWaveHighpassHz / sr);
+
+                    b.nHpZ += a * (raw - b.nHpZ);
+
+                    const double stage1 = raw - b.nHpZ;
+
+                    b.nHpZ2 += a * (stage1 - b.nHpZ2);
+
+                    outSample += stage1 - b.nHpZ2;
 
                     b.nPhase += 1.0 / sr;
 
-                    if (b.nPhase > b.nDuration)
+                    // Nach dem Ende der Welle liefert nWaveAt() null, der
+                    // Hochpass schwingt aber noch aus - und dieser Nachschwinger
+                    // GEHOERT zur Welle. Wird er abgeschnitten, ist genau das
+                    // wieder ein Sprung: gemessen ein Samplesprung von 0,246,
+                    // wo vorher 0,004 standen. Deshalb endet die Welle erst,
+                    // wenn auch der Filter zur Ruhe gekommen ist.
+                    if (b.nPhase > b.nDuration
+                        && std::abs (b.nHpZ)  < nWaveTailFloor
+                        && std::abs (b.nHpZ2) < nWaveTailFloor)
+                    {
                         b.nPhase = -1.0;
+                        b.nHpZ   = 0.0;
+                        b.nHpZ2  = 0.0;
+                    }
                 }
 
                 out[n0 + i] += (float) (outSample * gain);

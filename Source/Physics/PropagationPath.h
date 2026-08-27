@@ -493,6 +493,15 @@ private:
         // ueberschreitet - eine unterschallige Beschleunigung schiebt nur eine
         // Verdichtung vor sich her.
         bool   nSingleSided = false;
+
+        // Zustand der beiden Hochpaesse auf der N-Wellen-Schicht, siehe
+        // nWaveHighpassHz. Zwei, weil einer nicht reicht: der Rumpf der Welle
+        // ist eine RAMPE, und ein Hochpass erster Ordnung macht daraus eine
+        // Konstante (er differenziert). Gemessen blieb der Mittelwert dann
+        // ueber 80 ms bei -0,055 stehen statt bei null. Erst die zweite Stufe
+        // laesst auch diese Konstante abklingen.
+        double nHpZ  = 0.0;
+        double nHpZ2 = 0.0;
     };
 
     // Wert der N-Welle zum Phasenzeitpunkt: steiler Anstieg auf +A, linearer
@@ -898,6 +907,38 @@ private:
     // hoerbare Kante und kein weicher Uebergang mehr; nach unten wird derselbe
     // Knall zum Grollen von knapp 0,2 s Anstieg.
     static constexpr double nWaveEdgeOctaves = 5.0;
+
+    // --- Warum die N-Welle hochpassgefiltert wird ---
+    //
+    // Eine N-Welle ist ein DRUCKVERLAUF: Sprung auf +A, linearer Abfall durch
+    // null, Ruecksprung von -A auf 0. Als Audiosignal addiert ist ihr Rumpf
+    // eine einzige langsame Auslenkung - bei einem 17-m-Koerper dauert sie
+    // 99 ms, das entspricht rund 10 Hz. Diese Auslenkung beherrscht den
+    // Pegel, und wenn sie am Heckstoss endet, reisst sie alles mit.
+    //
+    // Genau das war die Kante, die @dpa wiederholt gemeldet hat. Gemessen im
+    // Kreisflug-Szenario des load_check: der Mittelwert des Ausgangs springt
+    // bei t = 2,254 s auf +0,0034 (Bugstoss), laeuft linear durch null auf
+    // -0,0054 und springt bei t = 2,352 s zurueck - 98 ms Dauer, exakt
+    // 2*size/c, und der Pegel faellt dabei um 41 dB in 2 ms.
+    //
+    // Gehoert wird eine N-Welle so nicht. Weder Ohr noch Lautsprecher
+    // uebertragen 10 Hz nennenswert; was ankommt, sind die beiden
+    // Stossfronten - der Doppelknall, den man von Ueberschallflugzeugen
+    // kennt. Der Hochpass bildet genau diesen Weg ab: er laesst die Fronten
+    // stehen und nimmt die Auslenkung dazwischen heraus.
+    //
+    // 20 Hz ist die untere Hoergrenze und zugleich die Gegend, in der jede
+    // Wiedergabekette ohnehin abschneidet. Der Knall selbst bleibt davon
+    // unberuehrt - eine Stossfront ist breitbandig, ihre Energie liegt weit
+    // oberhalb.
+    static constexpr double nWaveHighpassHz = 20.0;
+
+    // Wie klein der Filterzustand sein muss, damit eine Welle als beendet
+    // gilt. Der Nachschwinger der Hochpaesse gehoert zur Welle - wird er
+    // abgeschnitten, ist genau das wieder ein Sprung (gemessen 0,246 statt
+    // 0,004 groesster Samplesprung).
+    static constexpr double nWaveTailFloor = 1.0e-6;
 
     pathdetail::DisplayValue<int>    dispBranches;
     pathdetail::DisplayValue<double> dispDelay;

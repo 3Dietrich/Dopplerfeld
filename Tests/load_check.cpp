@@ -6279,6 +6279,14 @@ int main()
         capture.clear();
         int captureAt = 0;
 
+        // Zeitreihe der Zweig-Lage mitschreiben: die Kennzahlen sagen, DASS
+        // der Pegel faellt, und der Mitschnitt sagt WIE - aber nur die
+        // Zweiglage sagt, WORAN. Ein Sturz bei gleichbleibender Zweigzahl hat
+        // eine andere Ursache als einer, bei dem die Wege gerade verschwinden.
+        struct Trace { double t; int branches; double mach; double delay; };
+        std::vector<Trace> trace;
+        trace.reserve (1024);
+
         Stats circle;
         render (proc, buffer, 8.0, circle, [&] (double t)
         {
@@ -6286,9 +6294,32 @@ int main()
             circleAt (t, x, y);
             setParam (proc, Params::srcX, x);
             setParam (proc, Params::srcY, y);
+
+            FieldSnapshot snap;
+            proc.fillFieldSnapshot (snap);
+
+            if (snap.pathCount > 0)
+                trace.push_back ({ t, snap.paths[0].activeBranches,
+                                   snap.paths[0].machRadial,
+                                   snap.paths[0].delaySeconds });
         }, &capture, &captureAt);
 
         circle.report ("Mach 2,5 im Kreis");
+
+        {
+            juce::File tf ("/tmp/dopplerfeld_kreis_trace.txt");
+            tf.deleteFile();
+            juce::String txt;
+
+            for (const auto& e : trace)
+                txt << juce::String (e.t, 4) << " " << e.branches << " "
+                    << juce::String (e.mach, 4) << " "
+                    << juce::String (e.delay, 5) << "\n";
+
+            tf.replaceWithText (txt);
+            std::printf ("%-22s Zweiglage: %s (%d Punkte)\n", "",
+                         tf.getFullPathName().toRawUTF8(), (int) trace.size());
+        }
 
         {
             juce::File out ("/tmp/dopplerfeld_kreis.wav");
