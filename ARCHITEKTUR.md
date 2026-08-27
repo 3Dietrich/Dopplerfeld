@@ -15,7 +15,7 @@ reale Modellgröße n Meter darstellt. Ton entsteht aus echter Laufzeit
 
 ![Dopplerfeld-UI: Feldanzeige links, Regler-Panels rechts](docs/screenshot.png)
 
-Baubar mit CMake (siehe `granular/` als Schwesterprojekt für dasselbe Muster,
+Baubar mit CMake (siehe `../granular/` als Schwesterprojekt für dasselbe Muster,
 JUCE liegt unter `~/Documents/JUCE`, `add_subdirectory` statt Kopie).
 
 ## Schichtenmodell
@@ -24,18 +24,29 @@ JUCE liegt unter `~/Documents/JUCE`, `add_subdirectory` statt Kopie).
 Source/Physics/    - JUCE-frei, reines C++. Retarded-Time-Löser, Ausbreitung,
                       Trajektorien-/Signalpuffer. Offline testbar
                       (solver_check), unabhängig vom Audio-Framework.
-Source/Motion/     - JUCE-frei. Bewegungsglättung (4 Verfahren), Aufnahme/
-                      Wiedergabe.
-Source/Sources/    - Klangquellen (Motor-Generator, Sample-Player) + deren
-                      Crossfade. Nutzt JUCE-DSP, aber kein JUCE-Audio-Framework
-                      (kein AudioProcessor-Wissen).
-Source/Util/       - Crossfade-Engine (generisch), FieldSnapshot-Datenformat.
+Source/Motion/     - JUCE-frei. Bewegungsglättung (4 Verfahren:
+                      CriticallyDampedSpring, OneEuroSmoother, OnePoleSmoother,
+                      SlewLimiter hinter dem Interface MotionSmoother),
+                      Aufnahme/Wiedergabe (MotionRecorder/MotionPlayer), dazu
+                      die beiden Bewegungsquellen FlyByGenerator (Vorbeiflug)
+                      und PositionJitter (Wackler).
+Source/Sources/    - Klangquellen (Motor-Generator, Sample-Player, Live-
+                      Audioeingang) + deren Crossfade. Nutzt JUCE-DSP, aber
+                      kein JUCE-Audio-Framework (kein AudioProcessor-Wissen).
+Source/Util/       - Crossfade-Engine (generisch), FieldSnapshot-Datenformat,
+                      ScopeRingBuffer (SPSC-Ring für das Oszilloskop),
+                      Utf8 (Umlaute sicher an JUCE übergeben).
 Source/UI/         - JUCE-Component-Schicht: Feldanzeige, Regler-Panels,
-                      Kopf-/Quellen-Symbole.
+                      Kopf-/Quellen-Symbole, Oszilloskop, Pegelmesser,
+                      Begrüßungsfenster; alle Bedientexte zentral in
+                      Labels.h/Tooltips.h.
 Source/*.cpp (Wurzel) - PluginProcessor/PluginEditor: Zusammenbau, kennt alle
                       Schichten, enthält selbst möglichst wenig Logik.
 Tests/             - solver_check (Physik-Löser gegen geschlossene Lösung),
-                      load_check (Lasttest inkl. Extremfälle, offline).
+                      load_check (Lasttest inkl. Extremfälle, offline). Beide
+                      sind die einzigen ctest-Tests; daneben liegen hier neun
+                      Messprogramme, die bewusst KEIN Test sind (siehe
+                      Build & Test).
 ```
 
 Prinzip: je tiefer die Schicht, desto weniger weiß sie von JUCE/Audio-Threading
@@ -91,8 +102,12 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   gegeneinander gecrossfadet (`DualPathCrossfader<PathSet>`, Member
   `geometry`). `fillSnapshot()` liefert per Seqlock-Doppelpufferung Anzeige-
   daten an den GUI-Thread.
-- **`SoundSourceHolder`** (Sources/) - crossfadet zwischen `EngineGenerator`
-  und `SampleSource`, ist selbst eine `SoundSource`.
+- **`SoundSourceHolder`** (Sources/) - crossfadet beim Wechsel der Klangquelle
+  (`SourceKind`: `EngineGenerator`, `SampleSource`, `AudioInSource`), ist
+  selbst eine `SoundSource` und von außen nicht als Doppelpfad sichtbar.
+  `AudioInSource` fällt aus dem Pull-Muster heraus: der Host liefert den
+  Eingang einmal je `processBlock()`, der Processor schiebt ihn mit
+  `pushBlock()` hinein, bevor die Blockverarbeitung beginnt.
 - **`DopplerfeldProcessor`** (PluginProcessor) - hält alle Instanzen, liest
   Parameter pro Block über gecachte Rohzeiger (`raw()`-Helper, kein APVTS-
   Listener - alle Setter laufen dadurch ausschließlich im Audiothread),
@@ -101,16 +116,34 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   über eine volle Kommandoqueue (bewusste Vereinfachung, siehe Kommentar
   dort).
 - **`DopplerfeldEditor`** (PluginEditor) - `FieldComponent` (700x400) links,
-  die `CollapsiblePanel` mit den `XyzPanel`s rechts in einem Viewport
-  (Motorsteuerung, Motor, Sample, Bewegung, Feld/Physik/Ausgang, Reflexionen/
-  Wände, Schwarm/Klone) - alle standardmäßig zugeklappt. 30-Hz-Timer holt
-  `FieldSnapshot` ab, aktualisiert Statuszeile/Button-Texte.
+  rechts in einem Viewport sieben `CollapsiblePanel`, jedes mit genau einer
+  Panel-Klasse als Inhalt: `EngineControlPanel` (Motorsteuerung),
+  `EnginePanel` (Motor), `SamplePanel` (Sample), `MotionPanel` (Bewegung),
+  `FieldPanel` (Feld/Physik/Ausgang), `WallPanel` (Reflexionen/Wände),
+  `SwarmPanel` (Schwarm/Klone) - alle standardmäßig zugeklappt
+  (`CollapsiblePanel::expanded` startet auf `false`). Unter dem Feld sitzt
+  das Oszilloskop (`ScopeComponent` + Werkzeugleiste aus Ein/Aus, Freeze,
+  Sync, Play; wegschaltbar, dann schrumpft das Fenster mit), darunter
+  CPU-Balken und Statuszeile. Der Pegelmesser (`LevelMeter`) gehört dem
+  `FieldPanel` und trägt zugleich die Clip-Marke des Master-Begrenzers.
+  Als letztes Kind über allem liegt das `WelcomeOverlay`, das nur beim
+  allerersten Start erscheint (`hasBeenSeen()`/`markAsSeen()`). 30-Hz-Timer
+  holt `FieldSnapshot` ab, aktualisiert Statuszeile/Button-Texte.
 
 ## Parameter
 
 Alle IDs zentral in `Source/Params.h` (`namespace Params`), Layout in
 `Params.cpp::createParameterLayout()`. Jeder Regler dort eine Zeile - min/max/
 step ändern heißt: diese eine Zeile ändern, nicht durchs UI suchen.
+
+Dasselbe Muster für die Texte: **Beschriftungen** stehen in
+`Source/UI/Labels.h`, **Hilfehinweise** in `Source/UI/Tooltips.h`, beide
+zweisprachig (deutsch/englisch) und über einen Schlüssel angesprochen - kein
+Text-Literal direkt am Regler. Die Sprache ist globaler Zustand in Tooltips
+(`setLanguage()`/`toggleLanguage()`); die Hinweise selbst sind per
+`ToggleableTooltipWindow` ganz abschaltbar. Umlaute gehen nie als nacktes
+`const char*` an JUCE, sondern über `Source/Util/Utf8.h` - sonst liest JUCE
+sie als Latin-1.
 
 Eine Ausnahme in der Einheitenwahl: `srcX/srcY/lisX/lisY` sind auf die
 Feldfläche normiert (0..1) und werden erst im Processor mit dem Feldmaßstab
@@ -151,6 +184,28 @@ nichts scheitert an ihnen.
 Zu bauen ist die komplette Konfiguration, nicht nur die Standalone: die
 Testbinaries hängen an denselben Quellen, `--target Dopplerfeld_Standalone`
 lässt sie stehen und `ctest` liefe danach gegen den alten Stand.
+
+**Messprogramme neben den Tests.** In `Tests/` liegen ausser den beiden
+ctest-Tests neun Diagnose-Programme, die absichtlich keine Tests sind: sie
+messen oder zeichnen etwas, statt ein Kriterium zu prüfen, und würden eine
+grüne Testsuite nur verwässern. Acht davon stehen als
+`EXCLUDE_FROM_ALL`-Targets in `CMakeLists.txt` und werden gezielt gebaut
+(`cmake --build build --target <name>`):
+
+| Target | misst / zeigt |
+|---|---|
+| `loop_peak` | Rundenpunkt einer Wiedergabe |
+| `swarm_probe` | Klon-Schwarm |
+| `coast_probe` | Nachlauf |
+| `grab_probe` | Anfassen von M |
+| `scope_play_probe` | Play-Knopf am Scope |
+| `panel_shot` | Layout-Bilder des Bewegungs-Panels |
+| `field_shot` | Feldanzeige, Randmarke |
+| `editor_shot` | Bilder von Editor und Schwarm-Panel |
+
+Das neunte, `Tests/reverse_probe.cpp` (zeitverkehrt gehörter Zweig im
+Überschall), steht gar nicht in CMake - es braucht nur Löser und Trajektorie
+und wird direkt übersetzt, die Zeile dafür steht in seinem Dateikopf.
 
 **Wichtig:** dieses Projekt hat bislang durchgehend warnungsfrei gebaut
 (volle JUCE-Warnschärfe: `-Wall -Wextra -Wshadow-all -Wconversion

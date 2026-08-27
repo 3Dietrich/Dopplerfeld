@@ -33,10 +33,10 @@ xattr -dr com.apple.quarantine /Pfad/zur/Dopplerfeld.app
 - Zwei Vorbeiflug-Generatoren (geradlinig durch die Tiefe / waagerecht
   querend) mit einstellbarem Tempo und zwei Startarten
 - Bewegungsaufzeichnung und -wiedergabe, mehrere Glättungsverfahren
-- Bis zu 3 unabhängige Klangquellen plus bis zu 20 günstige Klone
-  ("Schrot"-Schwarm) mit CPU-Meter, Automatik und Notaus
+- Bis zu 20 Klone der Quelle ("Schrot"-Schwarm), alle mit voller
+  Löserphysik gerechnet, mit CPU-Balken und Notaus
 - Optionale N-Wellen-Synthese für den Überschallknall
-- Motor-Generator und Sample-Player als Klangquelle
+- Motor-Generator, Sample-Player und Live-Audioeingang als Klangquelle
 
 ## Bauen aus dem Quellcode
 
@@ -48,7 +48,7 @@ git clone https://github.com/3Dietrich/JUCE.git ~/Documents/JUCE   # oder eigene
 git clone <dieses-repo>
 cd Dopplerfeld
 cmake -B build -DJUCE_DIR=~/Documents/JUCE
-cmake --build build --config Release --target Dopplerfeld_Standalone -j 4
+cmake --build build --config Release -j 4
 cd build && ctest --output-on-failure     # solver_check + load_check
 ```
 
