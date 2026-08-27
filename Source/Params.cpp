@@ -669,6 +669,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // 20260827 ein Pegelsturz von 17 dB in 2 ms.
         auto range = juce::NormalisableRange<float> (1.0f, 1000.0f);
         range.setSkewForCentre (30.0f);
+        // OHNE WIRKUNG, nur noch da, damit gespeicherte Presets ihren Wert
+        // behalten und beim Laden nicht auffallen. Wie lange ein Hoerweg in
+        // den Schatten hinein ausklingt, ist Beugung und keine Einstellung -
+        // die Zeit folgt jetzt aus (R/c)^(1/3) * f^(-2/3), siehe
+        // PropagationPath::shadowRefHz. @dpa 20260827: "mach das scheiss
+        // Schatten weg. Der Regler ist der Beweis und betont den falschen
+        // Pfad! ob kurz (bricht die Fahne KURZ ab) oder lang (nach der Fahne
+        // eine sinnlose, laute Noise phase) es ist der falsche Ansatz!"
         layout.add (floatParam (shadowTailMs, "Shadow Tail", range, 30.0f, "ms"));
     }
 

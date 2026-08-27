@@ -86,7 +86,6 @@ namespace Tooltips
         ShockDuckRange,
         JumpBoom,
         JumpBoomSize,
-        ShadowTail,
         SrcJitterZAmount,
         MasterOn,
         GroundGain,
@@ -907,31 +906,6 @@ namespace Tooltips
                           "Startvariante 'Knall-Start'. 0 = aus."
                         : "Loudness of the bang when the fly-by starts. Only has an effect "
                           "with start mode 'Bang Start'. 0 = off.";
-                case Key::ShadowTail:
-                    return lang == Language::De
-                        ? "Wie weich ein Hörweg ausklingt, der an der Kaustik verschwindet (der "
-                          "Grenzfläche, hinter der ein Hörweg abrupt in die akustische "
-                          "Schattenzone kippt). "
-                          "Rechnerisch folgt diese Dauer aus der Physik (wie schnell der Weg "
-                          "durch die Front läuft), praktisch fällt sie bei schnellen "
-                          "Vorbeiflügen immer auf die Untergrenze von 1 ms - und ein voll "
-                          "ausgesteuerter Hörweg, der in einer Millisekunde weg ist, reißt "
-                          "hörbar ab. Genau daran hört man den rückwärts laufenden Anteil "
-                          "'plötzlich aufhören'. Hinter der Kaustik liegt in Wirklichkeit eine "
-                          "Schattenzone, in die gebeugter Schall weiterläuft; wie lang, hängt "
-                          "an Geometrie und Frequenz - deshalb ein Regler und keine erfundene "
-                          "Konstante. 1 ms = bisheriges Verhalten."
-                        : "How softly a path to the ear fades out when it disappears at the "
-                          "caustic (the boundary beyond which a path abruptly drops into the "
-                          "acoustic shadow zone). On paper this duration follows from physics "
-                          "(how fast the path crosses the front), in practice it always drops "
-                          "to the 1 ms floor "
-                          "on fast fly-bys - and a fully loud path that is gone within a "
-                          "millisecond tears off audibly. That is exactly what makes the reversed "
-                          "part 'stop all of a sudden'. Behind the caustic there is in fact a "
-                          "shadow zone that diffracted sound keeps travelling into; how long "
-                          "depends on geometry and frequency - hence a control instead of an "
-                          "invented constant. 1 ms = previous behaviour.";
                 case Key::SrcJitterZAmount:
                     return lang == Language::De
                         ? "Wie weit die Höhe mitwackelt, als Anteil am eingestellten "

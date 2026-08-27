@@ -495,7 +495,6 @@ private:
         std::atomic<float>* shockDuckRange  = nullptr;
         std::atomic<float>* jumpBoom        = nullptr;
         std::atomic<float>* jumpBoomSize    = nullptr;
-        std::atomic<float>* shadowTailMs    = nullptr;
         std::atomic<float>* airAbsorbAmount = nullptr;
         std::atomic<float>* distanceCurve   = nullptr;
 
@@ -829,7 +828,6 @@ private:
     double lastShockDuckAmount = 1.0;
     double lastJumpBoom        = 0.0;
     double lastJumpBoomSize    = -1.0;
-    double lastShadowTailMs    = 1.0;
 
     // Wie viele Klone gerade WIRKLICH mit Loeserphysik laufen - seit der
     // entfernten Automatik immer genau min(Regler, maxRealClones), aber der

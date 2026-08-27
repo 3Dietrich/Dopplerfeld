@@ -6241,6 +6241,19 @@ int main()
         // zu pruefen. Seine aufgezeichnete Bewegung liefert die Geschwindigkeit
         // dagegen direkt.
         setParam (proc, Params::smootherTau,     0.05f);
+
+        // Motor wie im Preset. Ohne ihn gibt es die "Fahne" gar nicht, um die
+        // es @dpa geht: den Motorton, der ueber den zeitverkehrt gehoerten
+        // Zweig ankommt, dabei immer hoeher wird und dann abreisst. Ohne
+        // Quellsignal im Hoerbereich misst das Szenario nur die Knalle.
+        setParam (proc, Params::engineKind,      1.0f);
+        setParam (proc, Params::rpm,             9924.0f);
+        setParam (proc, Params::engineLevelDb,   34.1f);
+        setParam (proc, Params::harmRatio1,      10.72f);
+        setParam (proc, Params::harmLevel1,      -56.8f);
+        setParam (proc, Params::harmRatio4,      14.91f);
+        setParam (proc, Params::harmLevel4,      -19.2f);
+        setParam (proc, Params::reverseGainDb,   -60.0f);
         setParam (proc, Params::globalMaxSpeed,  2000.0f);
         setParam (proc, Params::slewVmax,        2000.0f);
 

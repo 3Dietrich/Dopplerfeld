@@ -210,24 +210,6 @@ public:
     // die Haelfte. 0 heisst "gilt ueberall gleich".
     void setShockDuck (double amount01, double rangeMetres);
 
-    // Mindestdauer des Ausklangs, wenn ein Zweig AN DER KAUSTIK verschwindet,
-    // in Sekunden.
-    //
-    // Rechnerisch folgt diese Dauer aus der Physik (eps / dM_r/dt: wie schnell
-    // der Hoerweg durch die Front laeuft), praktisch faellt sie bei schnellen
-    // Vorbeifluegen immer auf die Untergrenze rampSeconds von 1 ms - gemessen
-    // im load_check: alle Kaustik-Tode mit Ausklang 1,000 ms bei einem
-    // Todespegel von 1,000, also volle Lautstaerke. Ein voll ausgesteuerter
-    // Zweig, der in einer Millisekunde weg ist, ist genau das, was @dpa am
-    // rueckwaerts laufenden Anteil hoert: "klingt so als waere das schon
-    // korrekt, nur dass es ploetzlich aufhoert".
-    //
-    // Physikalisch endet ein Hoerweg an der Kaustik nicht schlagartig: dahinter
-    // liegt eine Schattenzone, in die hinein gebeugter Schall weiterlaeuft. Wie
-    // lang dieser Ausklang ist, haengt an Geometrie und Frequenz - deshalb ein
-    // Regler statt einer erfundenen Konstante. Default ist rampSeconds, also
-    // exakt das bisherige Verhalten.
-    void setShadowTailSeconds (double seconds);
 
     // Was ein BEWEGUNGSSPRUNG hoerbar macht (@dpa 20260823: "der Vorbeiflug
     // 'Knall-Start' muesste ja mindestens subsonic zu hoeren sein ... Bisher
@@ -825,13 +807,6 @@ private:
     // fortschreiben, ein gemeinsamer Zeitpunkt schon.
     double shockEndTime = -1.0e18;
 
-    // Siehe setShadowTailSeconds(). 30 ms als Default, weil die rechnerische
-    // Dauer bei schnellen Vorbeifluegen praktisch immer auf die Untergrenze
-    // faellt und dann allein sie entscheidet, ob der Zweig ausklingt oder
-    // abreisst - gemessen an @dpas Aufnahme vom 20260827 ein Pegelsturz von
-    // 17 dB in 2 ms genau auf dem Hoehepunkt des Zweigs. Derselbe Wert ist der
-    // Skew-Mittelpunkt des Reglers (Params.cpp).
-    double shadowTailSeconds = 0.03;
 
     // Siehe setJumpBoom().
     double jumpBoom   = 0.0;

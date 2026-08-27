@@ -224,7 +224,6 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge);
     setReverseGain (reverseGain);
     setShockDuck (shockDuckAmount, shockDuckRange);
-    setShadowTailSeconds (shadowTailSeconds);
     setJumpBoom (jumpBoom);
     setJumpSize (jumpSizeM);
 
@@ -331,7 +330,6 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
         p.setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge);
         p.setReverseGain (reverseGain);
         p.setShockDuck (shockDuckAmount, shockDuckRange);
-        p.setShadowTailSeconds (shadowTailSeconds);
         p.setJumpBoom (jumpBoom);
         p.setJumpSize (jumpSizeM);
     }
@@ -590,14 +588,6 @@ void DopplerEngine::setJumpSize (double metres)
             p.setJumpSize (metres);
 }
 
-void DopplerEngine::setShadowTailSeconds (double seconds)
-{
-    shadowTailSeconds = seconds;
-
-    for (auto* s : { &geometry.active(), &geometry.pending() })
-        for (auto& p : s->paths)
-            p.setShadowTailSeconds (seconds);
-}
 
 Vec3 DopplerEngine::cloneOffset (int index, double spreadMetres, double zAmount)
 {

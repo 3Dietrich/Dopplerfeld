@@ -341,6 +341,8 @@ namespace Params
     // 1 ms - und ein voll ausgesteuerter Zweig, der in einer Millisekunde weg
     // ist, reisst hoerbar ab (@dpa zum rueckwaerts laufenden Anteil: "nur dass
     // es ploetzlich aufhoert"). Default 1 ms = bisheriges Verhalten.
+    // OHNE WIRKUNG - siehe Params.cpp. Der Wert bleibt nur registriert, damit
+    // gespeicherte Presets ihn behalten.
     constexpr const char* shadowTailMs = "shadowTailMs";
 
     // "Schrot"-Muster: Klone der Quelle. cloneTotal ist die Gesamtzahl, und alle

@@ -289,7 +289,6 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.shockDuckRange  = raw (Params::shockDuckRange);
     pp.jumpBoom        = raw (Params::jumpBoom);
     pp.jumpBoomSize    = raw (Params::jumpBoomSize);
-    pp.shadowTailMs    = raw (Params::shadowTailMs);
     pp.airAbsorbAmount = raw (Params::airAbsorbAmount);
     pp.distanceCurve   = raw (Params::distanceCurve);
     pp.airTempC        = raw (Params::airTempC);
@@ -899,7 +898,6 @@ void DopplerfeldProcessor::applyParameters()
     const double reverseGainDb   = (double) pp.reverseGainDb->load();
     const double shockDuckAmount = (double) pp.shockDuckAmount->load();
     const double shockDuckRange  = (double) pp.shockDuckRange->load();
-    const double shadowTailMs    = (double) pp.shadowTailMs->load();
     const double jumpBoom        = (double) pp.jumpBoom->load();
 
     if (std::abs (reverseGainDb - lastReverseGainDb) > 1.0e-9)
@@ -931,11 +929,6 @@ void DopplerfeldProcessor::applyParameters()
         dopplerEngine.setJumpSize (jumpBoomSize);
     }
 
-    if (std::abs (shadowTailMs - lastShadowTailMs) > 1.0e-9)
-    {
-        lastShadowTailMs = shadowTailMs;
-        dopplerEngine.setShadowTailSeconds (shadowTailMs * 0.001);
-    }
 
     // Beides ist inzwischen billig: die Engine legt Schalter und Dämpfung an
     // ihrer Fläche ab und reicht sie vor jedem Block an die Pfade durch, statt

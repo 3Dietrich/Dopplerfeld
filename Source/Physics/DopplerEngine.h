@@ -155,8 +155,6 @@ public:
     void markSourceJump (double speedStepMps);
 
     // Mindestdauer des Ausklangs an der Kaustik, siehe
-    // PropagationPath::setShadowTailSeconds().
-    void setShadowTailSeconds (double seconds);
 
     // Anteil des gewoehnlichen Pegel-Pannings, 0..1 (siehe
     // PropagationPath::setPanning). Wird pro Block an die Pfade gereicht, weil
@@ -534,7 +532,6 @@ private:
     double shockDuckRange  = 0.0;
     double jumpBoom        = 0.0;
     double jumpSizeM       = 1.5;
-    double shadowTailSeconds = 1.0e-3;
 
     // Eckfrequenz der Bodendämpfung bei voller Stärke. Rund ein Kilohertz ist
     // die Gegend, in der eine streifende Reflexion an Gras/Erde ihre Höhen

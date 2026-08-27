@@ -350,12 +350,6 @@ void PropagationPath::setReverseGain (double gainLinear)
     reverseGain = std::max (0.0, gainLinear);
 }
 
-void PropagationPath::setShadowTailSeconds (double seconds)
-{
-    // Nie kuerzer als die Anti-Klick-Rampe - darunter waere der Ausklang
-    // selbst wieder ein Knacks.
-    shadowTailSeconds = std::max (rampSeconds, seconds);
-}
 
 
 void PropagationPath::setJumpBoom (double amount01)
@@ -998,9 +992,8 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
                     const double geometric = eps / std::max (b.machRate, 1.0e-9);
 
-                    b.deathTau = std::min (std::max (maxDeathTailSeconds, shadowTailSeconds),
-                                           std::max (std::max (shadowTailSeconds, diffractionTau),
-                                                     geometric));
+                    b.deathTau = std::min (maxDeathTailSeconds,
+                                           std::max (diffractionTau, geometric));
                 }
                 else if (b.env >= lostBranchMinEnv)
                     b.deathTau = lostBranchTailSeconds;
