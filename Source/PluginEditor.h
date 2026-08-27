@@ -15,6 +15,8 @@
 #include "UI/ToggleableTooltipWindow.h"
 #include "UI/Tooltips.h"
 #include "UI/WelcomeOverlay.h"
+#include "UI/PresetBar.h"
+
 
 #include "Util/FieldSnapshot.h"
 
@@ -271,6 +273,11 @@ private:
     // sein, ohne erst ein Panel aufzuklappen.
     juce::TextButton engineResetButton;
 
+    // Zustaende laden/sichern ohne den Dateidialog der Standalone-App (siehe
+    // PresetBar.h). Der Streifen kennt nur Dateien; das Uebersetzen in
+    // get-/setStateInformation() steht im Konstruktor.
+    PresetBar presetBar;
+
     // Inhaltshöhen der vier Panels: was ihr resized() an Reihen und Reglern
     // unterbringt. Steht hier, weil nur der Aufrufer die Gesamthöhe eines
     // CollapsiblePanel setzen kann.
@@ -314,6 +321,12 @@ private:
 
     static constexpr int margin       = 10;
     static constexpr int topBarHeight = 26;
+
+    // Zweite, schmale Zeile unter der Kopfzeile: die Kopfzeile ist voll
+    // (Schriftzug, Hauptschalter und sieben Knoepfe reichen bis an den Rand),
+    // und der Zustandsstreifen soll auf einen Blick als eigene Sache lesbar
+    // sein.
+    static constexpr int presetBarHeight = 24;
     // Zeitbasis, mit der der Scope startet (@dpa: "default auf 10s").
     static constexpr double scopeDefaultSeconds = 10.0;
 

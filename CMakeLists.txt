@@ -71,7 +71,8 @@ target_sources(Dopplerfeld
         Source/Sources/SoundSourceHolder.cpp
         Source/UI/LevelMeter.cpp
         Source/UI/ScopeComponent.cpp
-        Source/UI/WelcomeOverlay.cpp)
+        Source/UI/WelcomeOverlay.cpp
+        Source/UI/PresetBar.cpp)
 
 target_include_directories(Dopplerfeld PRIVATE Source)
 

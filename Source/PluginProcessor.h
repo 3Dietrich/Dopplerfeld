@@ -311,6 +311,17 @@ public:
     // nicht in f' springen").
     void startSourceCoast() { coastRequest.store (true); }
 
+    // Ob ein gerade geladener Zustand noch auf den Audiothread wartet.
+    //
+    // Wozu: setStateInformation() legt die Bewegungsaufzeichnung nur ab
+    // (stagedMotionFrames) - uebernommen wird sie im naechsten Block. Wer in
+    // diesem Fenster getStateInformation() aufruft, bekommt die Parameter des
+    // NEUEN Zustands, aber die Aufzeichnung des vorigen. Beim Host faellt das
+    // nicht auf, der laedt und speichert nicht in derselben Millisekunde; der
+    // Zustandsstreifen in der Oberflaeche hat Laden und Sichern dagegen
+    // nebeneinander liegen (siehe PresetBar).
+    bool stateLoadStillPending() const { return motionLoadRequest.load(); }
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:

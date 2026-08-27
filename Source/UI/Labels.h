@@ -42,6 +42,21 @@ namespace Labels
     {
         static const Entry entries[] =
         {
+            // --- Zustandsleiste ---
+            { "Sichern",                    "Save"          },
+            { "Neu...",                     "New..."        },
+            { "Ordner...",                  "Folder..."     },
+            { "Abbrechen",                  "Cancel"        },
+            { "kein Zustand gewählt",       "no state"      },
+            { "Ordner ist leer",            "folder empty"  },
+            { "gesichert",                  "saved"         },
+            { "konnte nicht schreiben",     "write failed"  },
+            { "kein lesbarer Zustand",      "not a state"   },
+            { "gerade geladen, noch nicht bereit", "just loaded, not ready" },
+            { "Zustand sichern",            "Save state"    },
+            { "Name für den neuen Zustand:", "Name for the new state:" },
+            { "Ordner mit Zuständen",       "Folder with states" },
+
             // --- Motor ---
             { "Blätter",        "Blades"      },
             { "Blattlänge",     "Blade Len"   },

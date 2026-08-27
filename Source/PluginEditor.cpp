@@ -377,6 +377,52 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     // setzen. Die Knoepfe tragen im Quelltext ihren deutschen Text; wird der
     // Editor im EN-Betrieb geoeffnet, stuenden sie sonst bis zum ersten
     // Sprachwechsel deutsch da.
+    // Zustandsstreifen: er kennt nur Dateien, das Uebersetzen in den
+    // Zustandsblock steht hier. Es ist derselbe Block, den die
+    // Standalone-App ueber ihr Optionen-Menue schreibt und liest
+    // (copyXmlToBinary/getStateInformation) - die vorhandenen Presets bleiben
+    // also unveraendert brauchbar.
+    presetBar.onLoad = [this] (const juce::File& f)
+    {
+        juce::MemoryBlock block;
+
+        if (! f.loadFileAsData (block) || block.getSize() < 8)
+            return false;
+
+        dopplerfeldProcessor.setStateInformation (block.getData(), (int) block.getSize());
+
+        // Die Oberflaeche haengt an Parametern (Attachments) und aktualisiert
+        // sich selbst; was NICHT am APVTS haengt - Quellwahl, Ansicht - holt
+        // der 30-Hz-Timer ohnehin ab.
+        return true;
+    };
+
+    presetBar.onSave = [this] (const juce::File& f) -> juce::String
+    {
+        // Nicht sichern, solange ein gerade geladener Zustand noch nicht
+        // uebernommen ist: die Parameter waeren schon die neuen, die
+        // Bewegungsaufzeichnung noch die alte, und das Ergebnis stuende
+        // danach in der Datei (siehe stateLoadStillPending im Processor).
+        // Der Audiothread braucht dafuer einen Block, von Hand ist dieses
+        // Fenster nicht zu treffen - aber es kostet nichts, es zuzumachen,
+        // und es geht um @dpas Aufnahmen.
+        if (dopplerfeldProcessor.stateLoadStillPending())
+            return Labels::text ("gerade geladen, noch nicht bereit");
+
+        juce::MemoryBlock block;
+        dopplerfeldProcessor.getStateInformation (block);
+
+        if (block.getSize() == 0)
+            return Labels::text ("konnte nicht schreiben");
+
+        if (! f.replaceWithData (block.getData(), block.getSize()))
+            return Labels::text ("konnte nicht schreiben");
+
+        return {};
+    };
+
+    addAndMakeVisible (presetBar);
+
     refreshAllTooltips();
 
     // 30 Hz: schnell genug, dass eine gezogene Quelle nicht ruckelt, und
@@ -397,6 +443,8 @@ void DopplerfeldEditor::refreshAllTooltips()
     engineResetButton.setTooltip (Tooltips::text (Tooltips::Key::EngineReset));
     tooltipsButton.setTooltip (Tooltips::text (Tooltips::Key::TooltipsToggle));
     languageButton.setTooltip (Tooltips::text (Tooltips::Key::LanguageToggle));
+
+    presetBar.refreshTexts();
 
     scopeToggleButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeToggle));
     scopeFreezeButton.setTooltip (Tooltips::text (Tooltips::Key::ScopeFreeze));
@@ -470,7 +518,7 @@ void DopplerfeldEditor::updateScopeVisibility()
     scopeSaveStatusLabel.setVisible (scopeVisible);
 
     setSize (margin * 2 + fieldWidth + margin + panelColumnWidth,
-             margin * 2 + topBarHeight + 6 + fieldHeight
+             margin * 2 + topBarHeight + 4 + presetBarHeight + 6 + fieldHeight
                  + (scopeVisible ? scopeBlockHeight : 0) + cpuMeterBlockHeight + statusHeight);
 }
 
@@ -854,6 +902,8 @@ void DopplerfeldEditor::resized()
     // Sprachumschalter DE/EN, bewusst schmal (Kompaktheit auf dem Panel).
     languageButton.setBounds (topBar.removeFromLeft (40));
 
+    area.removeFromTop (4);
+    presetBar.setBounds (area.removeFromTop (presetBarHeight));
     area.removeFromTop (6);
 
     auto fieldArea = area.removeFromLeft (fieldWidth);

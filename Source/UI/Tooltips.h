@@ -98,6 +98,13 @@ namespace Tooltips
         LimiterOn,
         LevelMeter,
 
+        // --- Zustandsleiste (PresetBar) ---
+        PresetList,
+        PresetStep,
+        PresetSave,
+        PresetSaveAs,
+        PresetFolder,
+
         // --- WallPanel ---
         WallOn,
         WallX,
@@ -833,6 +840,39 @@ namespace Tooltips
                           "core, two sines for the clean overtones above. Switching crossfades, "
                           "and the sine comes from the same phase as the sawtooth - no click, "
                           "no jump in pitch.";
+                case Key::PresetList:
+                    return lang == Language::De
+                        ? "Gespeicherte Zustände aus dem gewählten Ordner. Auswählen "
+                          "lädt sofort - es sind dieselben Dateien, die die "
+                          "Standalone-App über ihr Optionen-Menü schreibt, nur ohne "
+                          "dessen Dateidialog."
+                        : "Saved states from the chosen folder. Selecting loads "
+                          "immediately - these are the same files the standalone app "
+                          "writes from its options menu, just without its file dialog.";
+                case Key::PresetStep:
+                    return lang == Language::De
+                        ? "Einen Zustand zurück oder vor, direkt geladen. Damit lässt "
+                          "sich eine Sammlung durchhören, ohne die Liste zu öffnen."
+                        : "One state back or forward, loaded straight away. Lets you "
+                          "listen through a collection without opening the list.";
+                case Key::PresetSave:
+                    return lang == Language::De
+                        ? "Überschreibt den gewählten Zustand mit dem aktuellen Stand. "
+                          "Ist keiner gewählt, wird nach einem Namen gefragt."
+                        : "Overwrites the selected state with the current settings. If "
+                          "none is selected, asks for a name instead.";
+                case Key::PresetSaveAs:
+                    return lang == Language::De
+                        ? "Sichert den aktuellen Stand unter einem neuen Namen im "
+                          "gewählten Ordner. Nur eine Namensabfrage, kein Dateidialog."
+                        : "Saves the current settings under a new name in the chosen "
+                          "folder. Just a name prompt, no file dialog.";
+                case Key::PresetFolder:
+                    return lang == Language::De
+                        ? "Ordner mit den Zuständen wählen. Wird gemerkt - das ist der "
+                          "einzige Dateidialog, der hier noch vorkommt."
+                        : "Choose the folder holding the states. It is remembered - the "
+                          "only file dialog left here.";
                 case Key::ShockDuckRange:
                     return lang == Language::De
                         ? "Bis zu welcher Entfernung die Absenkung voll wirkt. Näher "
