@@ -292,7 +292,7 @@ public:
     // 28 + 6 + 44 + 6 + 26 + 6 + 67 = 183, Abstand 6, gemeinsame Zeile 67,
     // dazu oben und unten je 8 Rand.
     static constexpr int motionContentHeight = 274;
-    static constexpr int fieldContentHeight  = 352;   // vier Reglerreihen, die vierte ist Rueckwaerts/Front-Duck/Schatten (s. FieldPanel::resized())
+    static constexpr int fieldContentHeight  = 425;   // fuenf Reglerreihen, die fuenfte formt die Druckwelle (s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // 226 minus die 40px, die frueher fuer den CPU-Balken reserviert waren -
     // der sitzt jetzt in der eigenen Zeile am unteren Fensterrand statt hier

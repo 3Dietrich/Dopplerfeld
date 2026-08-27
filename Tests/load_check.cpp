@@ -6253,7 +6253,7 @@ int main()
         setParam (proc, Params::harmLevel1,      -56.8f);
         setParam (proc, Params::harmRatio4,      14.91f);
         setParam (proc, Params::harmLevel4,      -19.2f);
-        setParam (proc, Params::reverseGainDb,   -60.0f);
+        setParam (proc, Params::reverseGainDb,   0.0f);
         setParam (proc, Params::globalMaxSpeed,  2000.0f);
         setParam (proc, Params::slewVmax,        2000.0f);
 
@@ -6318,6 +6318,12 @@ int main()
         }, &capture, &captureAt);
 
         circle.report ("Mach 2,5 im Kreis");
+
+        std::printf ("%-22s Lesen ueber den Pufferrand: alt %llu | neu %llu | "
+                     "lautester Beitrag bei dTau = %.3f\n", "",
+                     (unsigned long long) proc.signalMissesOld(),
+                     (unsigned long long) proc.signalMissesNew(),
+                     proc.loudestSampleDTau());
 
         {
             juce::File tf ("/tmp/dopplerfeld_kreis_trace.txt");

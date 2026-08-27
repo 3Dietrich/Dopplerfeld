@@ -42,6 +42,9 @@ void PropagationPath::reset()
     abruptCount.store (0);
     handoverCount.store (0);
 
+    loudestContribution.store (0.0);
+    loudestDTau.store (0.0);
+
     nWavePairBirthCount.store (0);
     nWaveRisingCount.store (0);
     nWaveFallingCount.store (0);
@@ -114,7 +117,7 @@ void PropagationPath::setTrajectoryGridSeconds (double seconds)
 }
 
 void PropagationPath::setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
-                                double edge01)
+                                double edge01, double pressure)
 {
     nWaveOn    = shouldBeEnabled;
     nWaveSizeM = std::max (0.01, sizeMetres);
@@ -124,6 +127,8 @@ void PropagationPath::setNWave (bool shouldBeEnabled, double sizeMetres, double 
     nWaveGain  = std::max (0.0, gainLinear);
 
     nWaveEdge  = std::clamp (edge01, 0.0, 1.0);
+
+    nWavePressure = std::max (0.0, pressure);
 }
 
 double PropagationPath::nWaveAt (const Branch& b)
@@ -348,6 +353,11 @@ double PropagationPath::shockDuckAt (double listenerTime) const
 void PropagationPath::setReverseGain (double gainLinear)
 {
     reverseGain = std::max (0.0, gainLinear);
+}
+
+void PropagationPath::setExtraPathGain (double gainLinear)
+{
+    extraPathGain = std::max (0.0, gainLinear);
 }
 
 
@@ -908,6 +918,16 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             }
         }
 
+        // Der juengste Hoerweg dieses Segments: der mit der kleinsten
+        // Verzoegerung. Ueber ihn hoert man, was die Quelle zuletzt gesendet
+        // hat; alle anderen tragen Aelteres nach und bilden zusammen den
+        // Nachlauf (siehe setExtraPathGain).
+        double youngestTau = 1.0e18;
+
+        for (int s = 0; s < maxBranchSlots; ++s)
+            if (branches[s].used)
+                youngestTau = std::min (youngestTau, branches[s].tau);
+
         for (int s = 0; s < maxBranchSlots; ++s)
         {
             Branch& b = branches[s];
@@ -1258,13 +1278,14 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // Leseposition wandert mit (1 - dTau), ueber dTau = 1 also
                 // rueckwaerts. Geblendet statt geschaltet, sonst waere der
                 // Uebergang ein Pegelsprung mitten im Signal.
+                const double dTauNow = b.dTau + (dTau1 - b.dTau) * u;
+
                 double reverseFactor = 1.0;
 
                 if (reverseGain != 1.0)
                 {
-                    const double dTauNow = b.dTau + (dTau1 - b.dTau) * u;
-                    const double blend   = std::min (1.0, std::max (0.0,
-                                              (dTauNow - 1.0) / reverseBlendWidth));
+                    const double blend = std::min (1.0, std::max (0.0,
+                                            (dTauNow - 1.0) / reverseBlendWidth));
 
                     reverseFactor = 1.0 + (reverseGain - 1.0) * blend;
                 }
@@ -1272,7 +1293,16 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // Die Absenkung trifft NUR den Zweiginhalt, nicht die N-Welle
                 // darunter: gedaempft werden soll der Motor waehrend der
                 // Stossfront, nicht der Knall selbst.
-                double outSample = y * b.env * reverseFactor
+                // Zusaetzlicher Hoerweg? Dann greift sein eigener Pegel
+                // (siehe setExtraPathGain). Die Entscheidung faellt ueber die
+                // Verzoegerung, nicht ueber die Laufrichtung: die Fahne kann
+                // vorwaerts laufen, und ein Kriterium nach Laufrichtung faengt
+                // sie dann nicht.
+                const double extraFactor = (b.tau > youngestTau + extraPathMinDelay)
+                                         ? extraPathGain
+                                         : 1.0;
+
+                double outSample = y * b.env * reverseFactor * extraFactor
                                  * (duck0 + (duck1 - duck0) * u);
 
                 if (b.nPhase >= 0.0)
@@ -1291,7 +1321,20 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
                     b.nHpZ2 += a * (stage1 - b.nHpZ2);
 
-                    outSample += stage1 - b.nHpZ2;
+                    // Die Hochpaesse trennen die Welle in ihre zwei Anteile:
+                    // was durchkommt, sind die beiden Stossfronten - der
+                    // Doppelknall. Was haengen bleibt, ist die langsame
+                    // Auslenkung der Nulllinie dazwischen, und genau die ist
+                    // die DRUCKWELLE, auf der der uebrige Sound reitet
+                    // (@dpa-Skizze "Druckwelle - 1").
+                    //
+                    // Beide wieder zusammenzusetzen ergibt exakt die
+                    // urspruengliche Welle; der Regler bestimmt nur, wieviel
+                    // von der Auslenkung dabei ist.
+                    const double edges = stage1 - b.nHpZ2;
+                    const double body  = raw - edges;
+
+                    outSample += edges + nWavePressure * body;
 
                     b.nPhase += 1.0 / sr;
 
@@ -1312,6 +1355,17 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 }
 
                 out[n0 + i] += (float) (outSample * gain);
+
+                // Messung, siehe loudestContribution im Header.
+                {
+                    const double contrib = std::abs (outSample * gain);
+
+                    if (contrib > loudestContribution.load())
+                    {
+                        loudestContribution.store (contrib);
+                        loudestDTau.store (dTauNow);
+                    }
+                }
             }
 
             b.tau     = tau1;

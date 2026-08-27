@@ -1,5 +1,8 @@
 #pragma once
 
+#include <atomic>
+#include <cstdint>
+
 #include <cstdint>
 #include <vector>
 
@@ -41,6 +44,15 @@ private:
     std::vector<float> ring;
     int    capacity = 0;
     double currentSampleRate = 48000.0;
+
+public:
+    // Messung, nicht Betrieb: wie oft readAt() ausserhalb des gefuellten
+    // Bereichs gefragt wurde und dort eine harte Null geliefert hat - getrennt
+    // nach altem und neuem Rand. Ein Hoerweg, dessen Leseposition dagegen
+    // laeuft, verliert sein Signal schlagartig, waehrend seine Huellkurve
+    // noch steht. mutable, weil readAt() const ist.
+    mutable std::atomic<std::uint64_t> missesOld { 0 };
+    mutable std::atomic<std::uint64_t> missesNew { 0 };
 
     // Fortlaufend, nie gewrappt - Anzahl insgesamt geschriebener Samples.
     // Gültiger Lesebereich ist [writePos - capacity, writePos - 1].

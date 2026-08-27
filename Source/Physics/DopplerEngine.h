@@ -130,11 +130,15 @@ public:
     // Druckwellen-/N-Wellen-Schicht, siehe PropagationPath::setNWave().
     // edge01 ist die Schaerfe der Stossfronten, 0,5 = Mitte.
     void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
-                   double edge01);
+                   double edge01, double pressure);
 
     // Pegel der zeitverkehrt gehoerten Zweige, siehe
     // PropagationPath::setReverseGain().
     void setReverseGain (double gainLinear);
+
+    // Pegel der zusaetzlichen Hoerwege, siehe
+    // PropagationPath::setExtraPathGain().
+    void setExtraPathGain (double gainLinear);
 
     // Absenkung des uebrigen Schalls waehrend einer Stossfront, siehe
     // PropagationPath::setShockDuck().
@@ -319,6 +323,29 @@ public:
     // Wanduhr allein taugt dafür nicht: sie schwankt auf einem beschäftigten
     // Rechner um Faktor zwei.
     std::uint64_t solverEvaluations() const;
+
+    // Messung: wie oft ein Hoerweg ueber den Rand des Signalpuffers hinaus
+    // gelesen hat und dort eine harte Null bekam - getrennt nach altem und
+    // neuem Rand. Siehe SourceSignalBuffer::missesOld/missesNew.
+    std::uint64_t signalMissesOld() const { return signal.missesOld.load(); }
+    std::uint64_t signalMissesNew() const { return signal.missesNew.load(); }
+
+    // Siehe PropagationPath::loudestSampleDTau(): das dTau, mit dem der
+    // lauteste Beitrag ueberhaupt kam, ueber alle Pfade.
+    double loudestSampleDTau() const
+    {
+        double best = 0.0, level = 0.0;
+
+        for (const auto* s : { &geometry.active(), &geometry.pending() })
+            for (const auto& p : s->paths)
+                if (p.loudestSampleLevel() > level)
+                {
+                    level = p.loudestSampleLevel();
+                    best  = p.loudestSampleDTau();
+                }
+
+        return best;
+    }
 
     // Sekunden seit prepare()/reset(), gemeinsame Zeitbasis von Signalpuffer,
     // Trajektorie und Löser.
@@ -525,6 +552,11 @@ private:
 
     // Schaerfe der Stossfronten (siehe Params::nWaveEdge).
     double nWaveEdge  = 0.5;
+
+    // Staerke der Nulllinien-Auslenkung (siehe Params::nWavePressure).
+    double nWavePressure = 1.0;
+
+    double extraPathGain = 1.0;
 
     // Siehe setReverseGain() / setShockDuck().
     double reverseGain      = 1.0;

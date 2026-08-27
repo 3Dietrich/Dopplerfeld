@@ -94,6 +94,8 @@ namespace Tooltips
         NWaveSize,
         NWaveGain,
         NWaveEdge,
+        NWavePressure,
+        ExtraPaths,
         NWave,
         LimiterOn,
         LevelMeter,
@@ -979,6 +981,28 @@ namespace Tooltips
                         : "Loudness of the sonic boom in dB. It may clip - a boom heard from "
                           "close by IS deafening; that is caught by the limiter, not by a "
                           "silent brake inside the calculation.";
+                case Key::ExtraPaths:
+                    return lang == Language::De
+                        ? "Pegel der zusätzlichen Hörwege - des Nachlaufs nach einem "
+                          "Überschall-Vorbeiflug. Bei Überschall trifft Schall von mehreren "
+                          "Emissionszeitpunkten gleichzeitig ein; der jüngste Weg trägt, was "
+                          "die Quelle zuletzt gesendet hat, die übrigen tragen Älteres nach. "
+                          "Ganz nach links ist der Nachlauf weg, der Rest bleibt."
+                        : "Level of the additional listening paths - the trail after a "
+                          "supersonic fly-by. In supersonic flight, sound from several emission "
+                          "times arrives at once; the youngest path carries what the source "
+                          "sent last, the others carry older material. Fully left removes the "
+                          "trail and leaves the rest.";
+                case Key::NWavePressure:
+                    return lang == Language::De
+                        ? "Stärke der Druckwelle: der langsamen Auslenkung der Nulllinie "
+                          "zwischen den beiden Stoßfronten, auf der der übrige Sound reitet. "
+                          "0 lässt nur den Doppelknall stehen, 1 ist die vollständige N-Welle, "
+                          "darüber wird die Auslenkung betont."
+                        : "Strength of the pressure wave: the slow displacement of the zero "
+                          "line between the two shock fronts, which the rest of the sound rides "
+                          "on. 0 leaves only the double bang, 1 is the complete N-wave, above "
+                          "that the displacement is emphasised.";
                 case Key::NWaveEdge:
                     return lang == Language::De
                         ? "Schärfe der beiden Stoßfronten: links Grollen, rechts Peitschenknall. "

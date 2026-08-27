@@ -285,6 +285,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.rocketFarColour = raw (Params::rocketFarColour);
     pp.rocketShockRate = raw (Params::rocketShockRate);
     pp.reverseGainDb   = raw (Params::reverseGainDb);
+    pp.extraPathGainDb = raw (Params::extraPathGainDb);
     pp.shockDuckAmount = raw (Params::shockDuckAmount);
     pp.shockDuckRange  = raw (Params::shockDuckRange);
     pp.jumpBoom        = raw (Params::jumpBoom);
@@ -300,6 +301,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.nWaveOn   = raw (Params::nWaveOn);
     pp.nWaveSize = raw (Params::nWaveSize);
     pp.nWaveEdge = raw (Params::nWaveEdge);
+    pp.nWavePressure = raw (Params::nWavePressure);
 
     pp.cloneTotal  = raw (Params::cloneTotal);
     pp.cloneRealLevel = raw (Params::cloneRealLevel);
@@ -878,24 +880,28 @@ void DopplerfeldProcessor::applyParameters()
     const double nWaveSize    = (double) pp.nWaveSize->load();
     const double nWaveGainDb  = (double) pp.nWaveGainDb->load();
     const double nWaveEdge    = (double) pp.nWaveEdge->load();
+    const double nWavePressure = (double) pp.nWavePressure->load();
 
     if (nWaveEnabled != lastNWaveOn || std::abs (nWaveSize - lastNWaveSize) > 1.0e-9
         || std::abs (nWaveGainDb - lastNWaveGainDb) > 1.0e-9
-        || std::abs (nWaveEdge - lastNWaveEdge) > 1.0e-9)
+        || std::abs (nWaveEdge - lastNWaveEdge) > 1.0e-9
+        || std::abs (nWavePressure - lastNWavePressure) > 1.0e-9)
     {
         lastNWaveOn     = nWaveEnabled;
         lastNWaveSize   = nWaveSize;
         lastNWaveGainDb = nWaveGainDb;
         lastNWaveEdge   = nWaveEdge;
+        lastNWavePressure = nWavePressure;
         dopplerEngine.setNWave (nWaveEnabled, nWaveSize,
                                 juce::Decibels::decibelsToGain (nWaveGainDb),
-                                nWaveEdge);
+                                nWaveEdge, nWavePressure);
     }
 
     // Rueckwaerts-Pegel, Stossfront-Absenkung und Schattenausklang: dieselbe
     // Wiedervorlage wie bei der N-Welle, denn auch diese Setter laufen ueber
     // alle Pfade beider Geometriesaetze.
     const double reverseGainDb   = (double) pp.reverseGainDb->load();
+    const double extraPathGainDb = (double) pp.extraPathGainDb->load();
     const double shockDuckAmount = (double) pp.shockDuckAmount->load();
     const double shockDuckRange  = (double) pp.shockDuckRange->load();
     const double jumpBoom        = (double) pp.jumpBoom->load();
@@ -904,6 +910,12 @@ void DopplerfeldProcessor::applyParameters()
     {
         lastReverseGainDb = reverseGainDb;
         dopplerEngine.setReverseGain (juce::Decibels::decibelsToGain (reverseGainDb));
+    }
+
+    if (std::abs (extraPathGainDb - lastExtraPathGainDb) > 1.0e-9)
+    {
+        lastExtraPathGainDb = extraPathGainDb;
+        dopplerEngine.setExtraPathGain (juce::Decibels::decibelsToGain (extraPathGainDb));
     }
 
     if (std::abs (shockDuckAmount - lastShockDuckAmount) > 1.0e-9

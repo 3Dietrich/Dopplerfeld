@@ -221,8 +221,9 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setBoomLimitDb (boomLimitDb);
     setAirAbsorptionAmount (airAbsorbAmount);
     setDistanceCurve (distanceCurve);
-    setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge);
+    setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge, nWavePressure);
     setReverseGain (reverseGain);
+    setExtraPathGain (extraPathGain);
     setShockDuck (shockDuckAmount, shockDuckRange);
     setJumpBoom (jumpBoom);
     setJumpSize (jumpSizeM);
@@ -327,8 +328,9 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
         p.setBoomLimitDb (boomLimitDb);
         p.setAirAbsorptionAmount (airAbsorbAmount);
         p.setDistanceCurve (distanceCurve);
-        p.setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge);
+        p.setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge, nWavePressure);
         p.setReverseGain (reverseGain);
+        p.setExtraPathGain (extraPathGain);
         p.setShockDuck (shockDuckAmount, shockDuckRange);
         p.setJumpBoom (jumpBoom);
         p.setJumpSize (jumpSizeM);
@@ -538,16 +540,17 @@ void DopplerEngine::setWall (int index, bool enabled, Vec3 anchorMetres,
 }
 
 void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
-                              double edge01)
+                              double edge01, double pressure)
 {
     nWaveOn    = shouldBeEnabled;
     nWaveSizeM = sizeMetres;
     nWaveGain  = gainLinear;
     nWaveEdge  = edge01;
+    nWavePressure = pressure;
 
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
-            p.setNWave (shouldBeEnabled, sizeMetres, gainLinear, edge01);
+            p.setNWave (shouldBeEnabled, sizeMetres, gainLinear, edge01, pressure);
 }
 
 void DopplerEngine::setReverseGain (double gainLinear)
@@ -557,6 +560,15 @@ void DopplerEngine::setReverseGain (double gainLinear)
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
             p.setReverseGain (gainLinear);
+}
+
+void DopplerEngine::setExtraPathGain (double gainLinear)
+{
+    extraPathGain = gainLinear;
+
+    for (auto* s : { &geometry.active(), &geometry.pending() })
+        for (auto& p : s->paths)
+            p.setExtraPathGain (gainLinear);
 }
 
 void DopplerEngine::setShockDuck (double amount01, double rangeMetres)

@@ -253,6 +253,12 @@ public:
     // siehe DopplerEngine::solverEvaluations().
     std::uint64_t solverEvaluations() const { return dopplerEngine.solverEvaluations(); }
 
+    // Siehe DopplerEngine::signalMissesOld/New.
+    std::uint64_t signalMissesOld() const { return dopplerEngine.signalMissesOld(); }
+    std::uint64_t signalMissesNew() const { return dopplerEngine.signalMissesNew(); }
+
+    double loudestSampleDTau() const { return dopplerEngine.loudestSampleDTau(); }
+
     // Lädt die Datei im Message-Thread (Pflicht, siehe SampleSource) und
     // schaltet bei Erfolg weich auf die Sample-Quelle um.
     bool loadSampleFile (const juce::File& file);
@@ -491,6 +497,7 @@ private:
         std::atomic<float>* rocketShockSize = nullptr;
         std::atomic<float>* rocketShockRate = nullptr;
         std::atomic<float>* reverseGainDb   = nullptr;
+        std::atomic<float>* extraPathGainDb = nullptr;
         std::atomic<float>* shockDuckAmount = nullptr;
         std::atomic<float>* shockDuckRange  = nullptr;
         std::atomic<float>* jumpBoom        = nullptr;
@@ -518,6 +525,7 @@ private:
         std::atomic<float>* nWaveOn   = nullptr;
         std::atomic<float>* nWaveSize  = nullptr;
         std::atomic<float>* nWaveEdge  = nullptr;
+        std::atomic<float>* nWavePressure = nullptr;
 
         std::atomic<float>* cloneTotal  = nullptr;
         std::atomic<float>* cloneRealLevel = nullptr;
@@ -819,11 +827,13 @@ private:
     double lastNWaveSize       = 15.0;
     double lastNWaveGainDb     = 0.0;
     double lastNWaveEdge       = 0.5;
+    double lastNWavePressure   = 1.0;
 
     // Dieselbe Wiedervorlage wie bei der N-Welle: die drei Setter laufen ueber
     // alle Pfade beider Geometriesaetze und werden darum nur bei einer echten
     // Aenderung angestossen.
     double lastReverseGainDb   = 0.0;
+    double lastExtraPathGainDb = 0.0;
     double lastShockDuckRange  = -1.0;
     double lastShockDuckAmount = 1.0;
     double lastJumpBoom        = 0.0;

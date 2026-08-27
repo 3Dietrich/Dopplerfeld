@@ -244,6 +244,18 @@ namespace Params
     // 0,5 = Mitte, siehe PropagationPath::setNWave().
     constexpr const char* nWaveEdge = "nWaveEdge";
 
+    // Staerke der DRUCKWELLE - der langsamen Auslenkung der Nulllinie, auf
+    // der der uebrige Sound reitet (@dpa-Skizze "Druckwelle - 1", 20260827:
+    // "die Druckwelle ist mir fast zu wenig! sie soll einen Regler kriegen
+    // fuer lauter ... Aber das hat nichts mit der Fahne zu tun").
+    //
+    // Getrennt von nWaveGainDb, weil es zwei verschiedene Dinge sind: der
+    // Pegel regelt den ganzen Knall, dieser hier nur den Anteil zwischen den
+    // beiden Stossfronten. 0 laesst allein die Fronten stehen (den
+    // Doppelknall), 1 ist die vollstaendige N-Welle, darueber wird die
+    // Auslenkung betont.
+    constexpr const char* nWavePressure = "nWavePressure";
+
     // Pegel des ZEITVERKEHRT gehoerten Anteils in dB (siehe
     // PropagationPath::setReverseGain). Bei Ueberschall liefert der Loeser
     // mehrere Hoerwege; einer davon laeuft rueckwaerts. Real geht der neben dem
@@ -309,6 +321,21 @@ namespace Params
     constexpr const char* rocketShockRate = "rocketShockRate";
 
     constexpr const char* reverseGainDb = "reverseGainDb";
+
+    // Pegel der ZUSAETZLICHEN Hoerwege in dB - der "Fahne" nach dem
+    // Vorbeiflug (@dpa 20260827: "ich will die Fahne weg haben!").
+    //
+    // Bei Ueberschall trifft Schall von mehreren Emissionszeitpunkten
+    // gleichzeitig ein. Einer davon ist der juengste - der Weg, ueber den man
+    // die Quelle dort hoert, wo sie gerade ist. Die anderen tragen aeltere
+    // Emissionen nach und bilden zusammen den Nachlauf.
+    //
+    // Warum ein eigener Regler neben reverseGainDb: der dortige greift nur
+    // ueber dTau = 1, also nur bei zeitverkehrt gelesenen Wegen. Gemessen im
+    // Kreisflug-Szenario kommt der lauteste Beitrag der Fahne aber bei
+    // dTau = -0,271 - er laeuft VORWAERTS und wurde von jener Blende nie
+    // erfasst, auch am Anschlag nicht (-60 dB eingestellt, 2,3 dB gemessen).
+    constexpr const char* extraPathGainDb = "extraPathGainDb";
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber den
     // Hoerweg laeuft (@dpa: "keine Noise vom Motor" waehrend der N-Welle).

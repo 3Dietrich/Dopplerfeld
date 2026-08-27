@@ -94,7 +94,18 @@ private:
     // thematisch dort hingehoert: die dritte Reihe ist mit fuenf Reglern auf
     // der Breite der Panelspalte (PluginEditor::panelColumnWidth) voll.
     Knob nWaveEdgeKnob;
+
+    // Staerke der Nulllinien-Auslenkung (Params::nWavePressure). Steht neben
+    // der Knall-Kante, weil beide dieselbe Welle formen - die eine ihre
+    // Fronten, die andere den Teil dazwischen.
+    Knob nWavePressureKnob;
     Knob reverseGainKnob, shockDuckKnob, shockDuckRangeKnob;
+
+    // Pegel der zusaetzlichen Hoerwege (Params::extraPathGainDb) - der
+    // Nachlauf nach einem Ueberschall-Vorbeiflug, den @dpa "Fahne" nennt.
+    // Steht neben "Rueckwaerts", weil beide dieselbe Frage stellen: wieviel
+    // von dem, was mehrfach ankommt, will man hoeren.
+    Knob extraPathKnob;
 
     // Kante eines Bewegungssprungs durchlassen statt interpolieren - der
 

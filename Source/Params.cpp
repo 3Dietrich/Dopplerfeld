@@ -430,6 +430,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // Oktaven Anstiegszeit, siehe PropagationPath::nWaveEdgeOctaves.
         layout.add (floatParam (nWaveEdge, "N-Wave Edge", { 0.0f, 1.0f, 0.01f }, 0.5f, ""));
     }
+    {
+        // Nach oben bis 4, damit die Auslenkung auch betont werden kann - sie
+        // ist der Teil der Welle, den man mehr spuert als hoert. 1 ist die
+        // physikalische N-Welle.
+        layout.add (floatParam (nWavePressure, "Pressure", { 0.0f, 4.0f, 0.01f }, 1.0f, ""));
+    }
 
     // Sinus statt Saegezahn fuer die vier Motor-Teiltoene, Default aus =
     // bisheriges Verhalten.
@@ -603,6 +609,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // N-Welle nichts anderes zu hoeren sein soll - auch nicht zwischen Bug- und
     // Heckstoss (@dpa 20260823).
     layout.add (floatParam (reverseGainDb, "Reverse Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+
+    // 0 dB laesst alles wie bisher; bis -60 dB ist die Fahne praktisch weg.
+    layout.add (floatParam (extraPathGainDb, "Extra Paths", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
     layout.add (floatParam (shockDuckAmount, "Shock Duck", unitRange(), 1.0f));
     {
         // Reichweite der Absenkung, siehe Params.h. Skew auf 300 m, damit der

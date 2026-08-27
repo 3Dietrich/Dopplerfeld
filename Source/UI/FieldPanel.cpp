@@ -54,9 +54,11 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (airTempKnob,     apvts, Params::airTempC,        "Luft °C", Tooltips::Key::AirTemperature);
 
     setupKnob (reverseGainKnob, apvts, Params::reverseGainDb,   "Rückwärts", Tooltips::Key::ReverseGain);
+    setupKnob (extraPathKnob,   apvts, Params::extraPathGainDb, "Fahne",     Tooltips::Key::ExtraPaths);
     setupKnob (shockDuckKnob,   apvts, Params::shockDuckAmount, "Front-Duck",  Tooltips::Key::ShockDuck);
     setupKnob (shockDuckRangeKnob, apvts, Params::shockDuckRange, "Duck-Reichw.", Tooltips::Key::ShockDuckRange);
     setupKnob (nWaveEdgeKnob,   apvts, Params::nWaveEdge,       "Knall-Kante", Tooltips::Key::NWaveEdge);
+    setupKnob (nWavePressureKnob, apvts, Params::nWavePressure,  "Druckwelle",  Tooltips::Key::NWavePressure);
 
     nWaveButton.setTooltip (Tooltips::text (Tooltips::Key::NWave));
     addAndMakeVisible (nWaveButton);
@@ -81,7 +83,8 @@ void FieldPanel::refreshTooltips()
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
                       &airTempKnob, &airAltitudeKnob,
-                      &nWaveEdgeKnob, &reverseGainKnob, &shockDuckKnob, &shockDuckRangeKnob })
+                      &nWaveEdgeKnob, &nWavePressureKnob, &reverseGainKnob, &extraPathKnob,
+                      &shockDuckKnob, &shockDuckRangeKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -167,9 +170,21 @@ void FieldPanel::resized()
     area.removeFromTop (6);
 
     auto boomRow = area.removeFromTop (knobH);
-    for (auto* k : { &nWaveEdgeKnob, &reverseGainKnob, &shockDuckKnob, &shockDuckRangeKnob })
+    for (auto* k : { &reverseGainKnob, &extraPathKnob, &shockDuckKnob, &shockDuckRangeKnob })
     {
         layoutKnob (*k, boomRow.removeFromLeft (knobW));
         boomRow.removeFromLeft (4);
+    }
+
+    // Fuenfte Reihe: die FORM der Druckwelle - wie scharf ihre Stossfronten
+    // sind und wie stark die Auslenkung dazwischen. Eigene Reihe, weil die
+    // vierte auf der Breite der Panelspalte voll ist.
+    area.removeFromTop (6);
+
+    auto shapeRow = area.removeFromTop (knobH);
+    for (auto* k : { &nWaveEdgeKnob, &nWavePressureKnob })
+    {
+        layoutKnob (*k, shapeRow.removeFromLeft (knobW));
+        shapeRow.removeFromLeft (4);
     }
 }

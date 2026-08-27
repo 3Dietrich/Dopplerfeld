@@ -48,7 +48,14 @@ float SourceSignalBuffer::readAt (double absoluteSampleIndex) const
     const std::int64_t upper = writePos - 1;
 
     if (i0 < lower || i3 > upper)
+    {
+        if (i0 < lower)
+            missesOld.fetch_add (1, std::memory_order_relaxed);
+        else
+            missesNew.fetch_add (1, std::memory_order_relaxed);
+
         return 0.0f;
+    }
 
     const float y0 = ring[(size_t) ringSlot (i0)];
     const float y1 = ring[(size_t) ringSlot (i0 + 1)];

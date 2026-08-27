@@ -168,8 +168,11 @@ public:
     // 2^nWaveEdgeOctaves. Kein Deckel am oberen Ende außer dem Sample-Raster
     // selbst: eine senkrechte Kante ist genau das, was ein Knall ist, und ob
     // sie aliast, entscheidet der Hörer am Regler.
+    // pressure ist die Staerke der Auslenkung ZWISCHEN den beiden Fronten -
+    // der Druckwelle, auf der der uebrige Sound reitet. 0 laesst nur die
+    // Fronten stehen, 1 ist die vollstaendige N-Welle, darueber betont.
     void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
-                   double edge01);
+                   double edge01, double pressure);
 
     // Pegel der ZEITVERKEHRT gehoerten Zweige, linear (0.5 = 6 dB leiser).
     //
@@ -185,6 +188,18 @@ public:
     // 1.0 laesst alles wie bisher. Die N-Welle bleibt unberuehrt - der Knall
     // ist eine eigene Schicht, kein Zweiginhalt.
     void setReverseGain (double gainLinear);
+
+    // Pegel der zusaetzlichen Hoerwege, linear (siehe Params::extraPathGainDb).
+    //
+    // "Zusaetzlich" heisst: alle Zweige ausser dem mit der KLEINSTEN
+    // Verzoegerung. Der juengste Weg traegt, was die Quelle zuletzt gesendet
+    // hat; die uebrigen tragen Aelteres nach. Genau die bilden nach einem
+    // Ueberschall-Vorbeiflug den Nachlauf, den @dpa als "Fahne" hoert.
+    //
+    // Die Unterscheidung laeuft ueber die Verzoegerung und nicht ueber die
+    // Laufrichtung: die Fahne kann vorwaerts laufen (gemessen dTau = -0,271),
+    // ein Kriterium nach Laufrichtung faengt sie deshalb nicht.
+    void setExtraPathGain (double gainLinear);
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber diesen
     // Weg laeuft (@dpa 20260821: "waehrend der N-Wave darf kein zusaetzlicher
@@ -297,6 +312,10 @@ public:
     // Nur für die Anzeige (Plan 3.12), lock-frei gelesen.
     int    numActiveBranches() const { return dispBranches.load(); }
     double lastDelaySeconds() const  { return dispDelay.load(); }
+
+    // Siehe loudestContribution/loudestDTau.
+    double loudestSampleDTau() const  { return loudestDTau.load(); }
+    double loudestSampleLevel() const { return loudestContribution.load(); }
     double lastMachRadial() const    { return dispMach.load(); }
 
     // Messung zur Frage "mit welchem Hüllkurvenwert stirbt ein Zweig?"
@@ -771,6 +790,9 @@ private:
     // heisst "wie ohne Regler".
     double nWaveEdge      = 0.5;
 
+    // Staerke der Nulllinien-Auslenkung, siehe Params::nWavePressure.
+    double nWavePressure  = 1.0;
+
     // Laenge des Startknalls in Metern, siehe setJumpSize(). Eigene Groesse,
     // weil er eine Beschleunigung abbildet und keinen Koerper.
     double jumpSizeM      = 1.5;
@@ -780,6 +802,15 @@ private:
 
     // Siehe setReverseGain(). 1.0 = unveraendert.
     double reverseGain = 1.0;
+
+    // Siehe setExtraPathGain(). 1.0 = unveraendert.
+    double extraPathGain = 1.0;
+
+    // Wieviel spaeter ein Zweig eintreffen muss, um als ZUSAETZLICHER Weg zu
+    // gelten. Zwei Zweige, die praktisch gleichzeitig ankommen, sind derselbe
+    // Hoerweg kurz vor oder nach einer Falte - die darf der Regler nicht
+    // gegeneinander ausspielen.
+    static constexpr double extraPathMinDelay = 0.002;
 
     // Breite der Blende zwischen vorwaerts und rueckwaerts gehoertem Zweig,
     // gemessen in dTau/dt. Die Leseposition eines Zweigs wandert mit
@@ -934,6 +965,12 @@ private:
     pathdetail::DisplayValue<std::uint64_t> handoverCount;
 
     // Auslöserichtung der N-Welle, siehe BranchDeathStats weiter oben.
+    // Messung zur "Fahne" (@dpa 20260827): mit welchem dTau kommt der
+    // LAUTESTE Beitrag? Davon haengt ab, ob der Regler "Rueckwaerts" ihn
+    // ueberhaupt fassen kann - seine Blende oeffnet erst ueber dTau = 1.
+    pathdetail::DisplayValue<double> loudestContribution;
+    pathdetail::DisplayValue<double> loudestDTau;
+
     pathdetail::DisplayValue<std::uint64_t> nWavePairBirthCount;
     pathdetail::DisplayValue<std::uint64_t> nWaveRisingCount;
     pathdetail::DisplayValue<std::uint64_t> nWaveFallingCount;
