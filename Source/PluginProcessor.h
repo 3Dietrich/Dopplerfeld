@@ -86,6 +86,17 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    // Startzustand beim allerersten Oeffnen auf diesem Rechner (@dpa
+    // 20260828), nur in der Standalone-App. Danach zaehlt wieder, was zuletzt
+    // offen war: die
+    // Standalone-App legt ihren Zustand selbst ab und spielt ihn nach dem
+    // Konstruktor ein, ueberschreibt das Preset also von sich aus. Der
+    // Merkposten liegt in derselben Einstellungsdatei wie die uebrigen
+    // Oberflaechen-Merker (WelcomeOverlay, PresetBar, FieldComponent), das
+    // Preset selbst als Kopie in der Programmdatei - so ist es auch da, wo
+    // noch kein Preset-Ordner existiert (siehe CMakeLists.txt).
+    void loadStartPresetOnFirstRun();
+
     //==================================================================
     // Schnittstelle zum Editor (alles Message-Thread).
 

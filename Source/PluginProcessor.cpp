@@ -2,6 +2,10 @@
 #include "PluginEditor.h"
 #include "Params.h"
 
+// Die eingebettete Kopie des Startzustands (siehe loadStartPresetOnFirstRun()
+// und den Abschnitt zum Startzustand in CMakeLists.txt).
+#include <BinaryData.h>
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -31,6 +35,10 @@ constexpr const char* sourceKindId  = "sourceKind";
 constexpr const char* samplePathId  = "samplePath";
 constexpr const char* motorGateId   = "motorGateEnabled";
 constexpr const char* panelOpenId   = "panelsOpen";
+
+// Merkposten in der Einstellungsdatei (nicht im Zustand): steht er, ist der
+// Startzustand auf diesem Rechner schon einmal eingespielt worden.
+constexpr const char* startPresetKey = "startPresetLoaded";
 
 // Fester Anker für relative Sample-Pfade (@dpa 20260818: "relativ zum
 // Presets-Ordner!"). JUCE teilt getStateInformation()/setStateInformation()
@@ -351,6 +359,10 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     // Datei geladen werden muss.
     sourceHolder.setSource (&engineGenerator);
     dopplerEngine.setSource (&sourceHolder);
+
+    // Zuletzt, wenn alles verdrahtet ist: beim allerersten Oeffnen steht hier
+    // nicht der Grundzustand, sondern das Start-Preset.
+    loadStartPresetOnFirstRun();
 }
 
 SoundSource* DopplerfeldProcessor::sourceForKind (SourceKind kind)
@@ -2633,6 +2645,56 @@ void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
+}
+
+void DopplerfeldProcessor::loadStartPresetOnFirstRun()
+{
+    // Nur die Standalone-App. Sie ist die einzige, bei der "was zuletzt
+    // aufgerufen war" ueberhaupt eine Bedeutung hat - sie legt ihren Zustand
+    // selbst ab. Ein Host haelt den Zustand im Projekt, und ein Testprogramm
+    // haelt gar keinen: liefe der Merker auch dort, waere das erste Oeffnen
+    // schon von einem ctest-Lauf verbraucht.
+    //
+    // isStandaloneApp() haengt an START_JUCE_APPLICATION und steht damit
+    // unabhaengig vom Konstruktionszeitpunkt fest - anders als
+    // StandalonePluginHolder::getInstance(), das waehrend createPlugin() noch
+    // leer sein kann, und genau dort stehen wir hier.
+    if (! juce::JUCEApplicationBase::isStandaloneApp())
+        return;
+
+    // Eigene ApplicationProperties, dieselbe Datei wie fuer die uebrigen
+    // Merkposten der Oberflaeche. Function-lokales static: die
+    // Storage-Parameter stehen genau einmal fest, bevor irgendein Zugriff
+    // stattfindet (ApplicationProperties liefert erst nach
+    // setStorageParameters() eine echte PropertiesFile zurueck).
+    static juce::ApplicationProperties properties;
+    static bool initialised = false;
+
+    if (! initialised)
+    {
+        juce::PropertiesFile::Options options;
+        options.applicationName     = "Dopplerfeld";
+        options.filenameSuffix      = ".settings";
+        options.folderName          = "Dopplerfeld";
+        options.osxLibrarySubFolder = "Application Support";
+
+        properties.setStorageParameters (options);
+        initialised = true;
+    }
+
+    auto* settings = properties.getUserSettings();
+
+    if (settings == nullptr || settings->getBoolValue (startPresetKey, false))
+        return;
+
+    // Der Merker faellt VOR dem Laden, nicht danach: bricht das Einspielen
+    // aus irgendeinem Grund ab, soll es beim naechsten Start trotzdem beim
+    // gewohnten Verhalten bleiben statt jedes Mal erneut zu versuchen.
+    settings->setValue (startPresetKey, true);
+    settings->saveIfNeeded();
+
+    setStateInformation (BinaryData::StartPreset_dopplerfeld,
+                         BinaryData::StartPreset_dopplerfeldSize);
 }
 
 bool DopplerfeldProcessor::stateBlockIsOurs (const void* data, int sizeInBytes) const

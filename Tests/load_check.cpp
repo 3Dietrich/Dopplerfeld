@@ -25,6 +25,7 @@
 #include "UI/MotionPanel.h"
 #include "UI/FieldPanel.h"
 #include "UI/EnginePanel.h"
+#include "Util/Utf8.h"
 #include "Motion/PositionJitter.h"
 #include "Sources/EngineGenerator.h"
 
@@ -7389,6 +7390,70 @@ int main()
             std::printf ("FEHLGESCHLAGEN: ein Preset ohne Maske klappt die Spalte nicht zu "
                          "(%d, Version %d)\n", keptMask, versionAfterOldPreset);
             failed = true;
+        }
+    }
+
+    // Startzustand beim allerersten Oeffnen
+    //
+    // @dpa 20260828: "nur beim ersten oeffnen dieses Preset laden, danach wie
+    // bisher". Zwei Seiten davon lassen sich offline pruefen: die Datei, die
+    // dafuer in die Programmdatei kopiert wird, muss ein gueltiger Zustand
+    // sein - und ein Prozessor ausserhalb der Standalone-App darf sie NICHT
+    // von sich aus laden. Sonst verbraucht schon dieser Testlauf den Merker,
+    // und @dpas erstes Oeffnen faende ihn gesetzt vor.
+    {
+        // Der Dateiname traegt ein "\xc2\xb2" - als nackter const char* laese JUCE
+        // die zwei UTF-8-Bytes als zwei Latin-1-Zeichen, und die Datei waere
+        // nicht zu finden (siehe Util/Utf8.h).
+        const juce::File startPreset (Text::utf8 (DOPPLERFELD_SOURCE_DIR
+                                                 "/presets/600kmh-Drone@600m\xc2\xb2"));
+        juce::MemoryBlock startData;
+
+        if (! startPreset.loadFileAsData (startData))
+        {
+            std::printf ("FEHLER: Startzustand %s nicht ladbar\n",
+                         startPreset.getFullPathName().toRawUTF8());
+            failed = true;
+        }
+        else
+        {
+            DopplerfeldProcessor proc;
+
+            // Der Konstruktor darf hier nichts eingespielt haben: das Feld
+            // steht auf seinem Grundwert (100 m), nicht auf den 1200 m des
+            // Startzustands.
+            const float fieldAfterCtor = *proc.apvts.getRawParameterValue (Params::fieldMetres);
+
+            const bool isOurs = proc.stateBlockIsOurs (startData.getData(),
+                                                       (int) startData.getSize());
+
+            proc.setStateInformation (startData.getData(), (int) startData.getSize());
+            const float fieldAfterLoad = *proc.apvts.getRawParameterValue (Params::fieldMetres);
+
+            std::printf ("%-22s gueltig %d | Feld nach Konstruktion %.0f m, nach Laden %.0f m\n",
+                         "Startzustand", (int) isOurs,
+                         (double) fieldAfterCtor, (double) fieldAfterLoad);
+
+            if (! isOurs)
+            {
+                std::printf ("FEHLGESCHLAGEN: Startzustand ist kein Zustandsblock dieses Plugins\n");
+                failed = true;
+            }
+
+            if (fieldAfterCtor > 200.0f)
+            {
+                std::printf ("FEHLGESCHLAGEN: der Konstruktor hat den Startzustand eingespielt "
+                             "(Feld %.0f m) - ausserhalb der Standalone-App darf er das nicht\n",
+                             (double) fieldAfterCtor);
+                failed = true;
+            }
+
+            if (fieldAfterLoad < 1000.0f)
+            {
+                std::printf ("FEHLGESCHLAGEN: Startzustand geladen, Feld steht aber auf %.0f m\n",
+                             (double) fieldAfterLoad);
+                failed = true;
+            }
         }
     }
 

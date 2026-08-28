@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Dopplerfeld VERSION 0.2.0)
+project(Dopplerfeld VERSION 0.3.0)
 
 # Ohne CMAKE_BUILD_TYPE erzeugt CMake bei Makefile-/Ninja-Generatoren einen
 # Bau ganz ohne -O-Schalter. JUCEs juce_recommended_config_flags hängen ihre
@@ -20,6 +20,19 @@ if(NOT DEFINED JUCE_DIR)
     set(JUCE_DIR "$ENV{HOME}/Documents/JUCE")
 endif()
 add_subdirectory(${JUCE_DIR} JUCE)
+
+# Startzustand beim allerersten Oeffnen (@dpa 20260828): das Preset liegt als
+# Kopie in der Programmdatei selbst, damit es auch auf einem Rechner da ist,
+# auf dem noch kein Preset-Ordner existiert. Quelle bleibt die eine Datei im
+# presets-Ordner - sie wird zur Bauzeit unter einen Namen ohne Sonderzeichen
+# kopiert, weil juce_add_binary_data den Dateinamen zum C++-Bezeichner macht
+# und "@" wie "²" dort nichts zu suchen haben.
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/presets/600kmh-Drone@600m²"
+               "${CMAKE_CURRENT_BINARY_DIR}/StartPreset/StartPreset.dopplerfeld"
+               COPYONLY)
+
+juce_add_binary_data(DopplerfeldStartPreset
+    SOURCES "${CMAKE_CURRENT_BINARY_DIR}/StartPreset/StartPreset.dopplerfeld")
 
 juce_add_plugin(Dopplerfeld
     COMPANY_NAME               "Dietrich Pank"
@@ -84,6 +97,7 @@ target_compile_definitions(Dopplerfeld
 
 target_link_libraries(Dopplerfeld
     PRIVATE
+        DopplerfeldStartPreset
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
