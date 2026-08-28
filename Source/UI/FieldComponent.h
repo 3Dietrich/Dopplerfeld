@@ -334,23 +334,15 @@ private:
     // ihr Schnitt mit mehreren waagerechten Ebenen, gestaffelt nach Hoehe
     // (@dpa: "das kann man farblich oder strichfarb-deckungsmaessig andeuten").
     //
-    // Bei Unterschall gibt es keine Front - dann bleibt auch nichts stehen.
-    struct MachGeometry
-    {
-        bool   valid = false;
-        Vec3   apex;        // Spitze: aktuelle Quellposition
-        Vec3   dir;         // Flugrichtung (Einheitsvektor)
-        Vec3   u, w;        // zwei Achsen senkrecht dazu, fuer den Umlaufwinkel
-        double tanMu = 0.0; // Tangens des halben Oeffnungswinkels asin(c/v)
-        double maxLength = 0.0; // wie weit die Front nach hinten gezeichnet wird
-    };
-
-    MachGeometry machGeometry() const;
-
-    // Schnittkurve der Front mit der Ebene z = height, in Weltkoordinaten.
-    // Mehrere Stuecke, weil die Kurve (eine Hyperbel, sobald die Ebene die
-    // Kegelachse verfehlt) abreisst, wo sie ueber maxLength hinauslaeuft.
-    std::vector<std::vector<Vec3>> machFrontAtHeight (const MachGeometry& geom, double height) const;
+    // Gebaut wird sie NICHT aus einem gedachten Kegel, sondern aus genau den
+    // Kugelwellen, die ohnehin schon als cyane Kreise im Bild stehen: die
+    // Front ist deren gemeinsame aeussere Tangente. Dadurch kann sie
+    // grundsaetzlich nicht weiter reichen als der aeusserste Kreis und nie vor
+    // der Quelle liegen, egal wie krumm die Bahn ist. Liegen zwei Kreise
+    // ineinander, gab es zwischen ihren Emissionszeiten keinen Ueberschall,
+    // und dort ist die Linie unterbrochen - dieselbe Bedingung wie Mach 1,
+    // nur ohne eine Geschwindigkeit zu schaetzen.
+    std::vector<std::vector<Vec3>> machFrontAtHeight (double height) const;
 
     // Welche Hoehen gezeichnet werden und wie kraeftig - an einer Stelle,
     // damit Draufsicht und Perspektive dieselbe Staffelung zeigen.
@@ -359,11 +351,6 @@ private:
 
     void drawMachFronts (juce::Graphics& g) const;
     void drawPerspectiveMachFronts (juce::Graphics& g) const;
-
-    // Abtastung des Umlaufwinkels je Schnittkurve. Reichlich, weil eine
-    // Hyperbel in der Nahe ihrer Asymptote weit auseinanderlaeuft und bei
-    // grober Teilung eckig wird.
-    static constexpr int machFrontSamples = 240;
 
     // Wie viele Hoehenstufen zwischen Boden und Flughoehe liegen (siehe
     // machFrontLayers()).

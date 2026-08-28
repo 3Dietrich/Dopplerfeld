@@ -13,6 +13,7 @@
 
 #include "UI/FieldComponent.h"
 
+#include <cmath>
 #include <cstdio>
 
 namespace
@@ -165,6 +166,50 @@ int main()
         field.setViewMode (FieldComponent::ViewMode::TopDown);
         field.setSnapshot (mach);
         shoot (field, "field_topdown_subsonic");
+
+        // 8) Kurvenflug am Boden (@dpa 20260828, "hier?? niemals!"): die Front
+        // darf auch bei krummer Bahn nirgends VOR der Quelle liegen und nicht
+        // ueber den aeussersten Kreis hinausreichen. Die Bahn ist ein
+        // Kreisbogen, die Wellenfronten sitzen an den Positionen, an denen die
+        // Quelle jeweils war.
+        FieldSnapshot turn;
+
+        turn.speedOfSound  = 343.0;
+        turn.now           = 20.0;
+        turn.listener.head = { 700.0, 400.0, 1.7 };
+        turn.sourceSpeed   = 778.0;   // Mach 2,27 wie im Screenshot
+
+        // Sanfte Rechtskurve: Bogen mit 4 km Radius, die Quelle steht bei
+        // turn.now auf 90 Grad (also mit Flugrichtung +x) im Bild.
+        const double turnRadius = 4000.0;
+        const Vec3   turnCentre { 1200.0, 600.0 - turnRadius, 0.0 };
+        const double omega = turn.sourceSpeed / turnRadius;
+
+        auto onArc = [&] (double t)
+        {
+            const double a = juce::MathConstants<double>::halfPi + omega * (t - turn.now);
+            return Vec3 { turnCentre.x + turnRadius * std::cos (a),
+                          turnCentre.y + turnRadius * std::sin (a),
+                          0.0 };
+        };
+
+        turn.sourcePos = onArc (turn.now);
+
+        turn.trailCount = 64;
+        for (int i = 0; i < turn.trailCount; ++i)
+            turn.trail[(size_t) i] = onArc (turn.now - 4.0 * (double) (turn.trailCount - 1 - i)
+                                                            / (double) (turn.trailCount - 1));
+
+        turn.wavefrontCount = FieldSnapshot::maxWavefronts;
+        for (int i = 0; i < turn.wavefrontCount; ++i)
+        {
+            const double age = (double) (i + 1) * 0.486;
+            turn.wavefrontEmitTimes[(size_t) i] = turn.now - age;
+            turn.wavefrontPositions[(size_t) i] = onArc (turn.now - age);
+        }
+
+        field.setSnapshot (turn);
+        shoot (field, "field_topdown_mach_turn");
     }
 
     return 0;

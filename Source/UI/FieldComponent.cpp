@@ -8,14 +8,6 @@
 
 namespace
 {
-    // Kreuzprodukt - nur fuer die zwei Achsen senkrecht zur Flugrichtung
-    // gebraucht (machGeometry()), deshalb lokal statt in Vec3.h.
-    Vec3 cross3D (const Vec3& a, const Vec3& b)
-    {
-        return { a.y * b.z - a.z * b.y,
-                 a.z * b.x - a.x * b.z,
-                 a.x * b.y - a.y * b.x };
-    }
 
     // "Schoene" Gitterschrittweite (1-2-5-Stufung) fuer ungefaehr
     // targetDivisions Linien ueber die Feldbreite - Standardalgorithmus,
@@ -619,125 +611,99 @@ void FieldComponent::drawReflectionWavefronts (juce::Graphics& g) const
         drawSet (wf, juce::Colours::hotpink, 1.3f);
 }
 
-FieldComponent::MachGeometry FieldComponent::machGeometry() const
-{
-    MachGeometry geom;
-
-    // snapshot.speedOfSound gehoert zum selben Augenblick wie sourceSpeed -
-    // nur aus diesem Paar wird Mach.
-    const double c = snapshot.speedOfSound > 0.0 ? snapshot.speedOfSound : speedOfSound;
-    const double v = snapshot.sourceSpeed;
-
-    // Unterhalb Mach 1 laeuft der Schall der Quelle davon, es bildet sich
-    // keine Front (@dpa: "nur wo er auftaucht, nicht im subsonic").
-    if (c <= 0.0 || v <= c)
-        return geom;
-
-    if (snapshot.wavefrontCount <= 0 || snapshot.trailCount < 2)
-        return geom;
-
-    // Flugrichtung aus den letzten Spurpunkten. Der Rueckgriff faengt ein
-    // Stueck vor dem juengsten Punkt an und geht weiter zurueck, solange zwei
-    // Punkte praktisch aufeinanderliegen - aus denen liesse sich keine
-    // Richtung lesen.
-    const int newest = snapshot.trailCount - 1;
-    Vec3 dir;
-
-    for (int back = juce::jmin (8, newest); back <= newest; ++back)
-    {
-        const Vec3 delta = snapshot.trail[(size_t) newest]
-                         - snapshot.trail[(size_t) (newest - back)];
-
-        if (delta.lengthSquared() > 1.0e-12)
-        {
-            dir = delta.normalised();
-            break;
-        }
-    }
-
-    if (dir.lengthSquared() <= 0.0)
-        return geom;
-
-    // Nach hinten reicht die Front so weit, wie die aelteste gezeichnete
-    // Wellenfront alt ist (die steht am Ende der Liste, publishSnapshot()
-    // zaehlt von der juengsten rueckwaerts). Damit endet die Linie dort, wo
-    // auch der aeusserste cyane Kreis liegt, dessen Einhuellende sie ist.
-    const double age = snapshot.now
-                     - snapshot.wavefrontEmitTimes[(size_t) (snapshot.wavefrontCount - 1)];
-
-    if (age <= 0.0)
-        return geom;
-
-    const double tanMu = std::tan (std::asin (juce::jlimit (-1.0, 1.0, c / v)));
-
-    if (! std::isfinite (tanMu) || tanMu <= 0.0)
-        return geom;
-
-    // Der Hilfsvektor darf nicht parallel zur Flugrichtung liegen, sonst
-    // faellt das Kreuzprodukt zusammen - bei steilem Steig-/Sinkflug
-    // uebernimmt deshalb die x-Achse.
-    const Vec3 helper = std::abs (dir.z) < 0.9 ? Vec3 { 0.0, 0.0, 1.0 }
-                                               : Vec3 { 1.0, 0.0, 0.0 };
-
-    geom.apex      = snapshot.sourcePos;
-    geom.dir       = dir;
-    geom.u         = cross3D (dir, helper).normalised();
-    geom.w         = cross3D (dir, geom.u);   // dir und u stehen senkrecht, also schon Einheitslaenge
-    geom.tanMu     = tanMu;
-    geom.maxLength = v * age;
-    geom.valid     = true;
-
-    return geom;
-}
-
-std::vector<std::vector<Vec3>> FieldComponent::machFrontAtHeight (const MachGeometry& geom,
-                                                                  double height) const
+std::vector<std::vector<Vec3>> FieldComponent::machFrontAtHeight (double height) const
 {
     std::vector<std::vector<Vec3>> segments;
 
-    if (! geom.valid)
-        return segments;
+    // Die Kugelwellen, wie sie drawWavefronts() zeichnet, geschnitten mit der
+    // Ebene z = height: aus jeder Kugel wird ein Kreis, aus einer Kugel die
+    // gar nicht bis hier hoch reicht gar keiner. Index 0 ist die juengste
+    // Welle (publishSnapshot() zaehlt von der juengsten rueckwaerts), die
+    // letzte die aelteste und damit groesste.
+    struct Circle { double x, y, r; };
 
-    // Die Frontflaeche laesst sich als P(s, phi) = Spitze - dir*s +
-    // radial(phi)*s*tan(mü) schreiben (s = Abstand entlang der Achse nach
-    // hinten). Fuer die Schnittkurve mit z = height wird das nach s
-    // aufgeloest, statt die Ebene numerisch zu suchen:
-    //
-    //   P.z = apex.z + s * (radial.z*tan(mü) - dir.z)  =  height
-    //   ->  s = (height - apex.z) / (radial.z*tan(mü) - dir.z)
-    //
-    // Je nach Lage der Ebene kommt dabei eine Hyperbel heraus (Ebene
-    // verfehlt die Achse), eine Ellipse (Ebene schneidet den ganzen Kegel,
-    // also bei Steig-/Sinkflug) oder zwei Geraden (Ebene enthaelt die Achse) -
-    // ohne dass die Faelle einzeln behandelt werden muessten.
-    const double dz = height - geom.apex.z;
+    const double c = snapshot.speedOfSound > 0.0 ? snapshot.speedOfSound : speedOfSound;
 
-    std::vector<Vec3> current;
+    std::vector<Circle> circles;
+    circles.reserve ((size_t) snapshot.wavefrontCount + 1);
 
-    for (int i = 0; i <= machFrontSamples; ++i)
+    // Die Welle, die gerade jetzt abgestrahlt wird: Radius null, an der
+    // Quelle. In der Ebene der Flughoehe ist sie die Spitze der Front - ohne
+    // sie begaenne die Linie erst am juengsten gezeichneten Kreis und liesse
+    // ein Stueck hinter der Quelle frei. In jeder anderen Hoehe kommt sie
+    // nicht vor, dort faengt die Front weiter hinten an.
+    if (std::abs (height - snapshot.sourcePos.z) < 1.0e-9)
+        circles.push_back ({ snapshot.sourcePos.x, snapshot.sourcePos.y, 0.0 });
+
+    for (int i = 0; i < snapshot.wavefrontCount; ++i)
     {
-        const double phi = juce::MathConstants<double>::twoPi * (double) i / (double) machFrontSamples;
-        const Vec3   radial = geom.u * std::cos (phi) + geom.w * std::sin (phi);
+        const double age = snapshot.now - snapshot.wavefrontEmitTimes[(size_t) i];
 
-        const double denom = radial.z * geom.tanMu - geom.dir.z;
-        const double s = std::abs (denom) > 1.0e-9 ? dz / denom : -1.0;
-
-        // s <= 0 heisst: dieser Umlaufwinkel trifft die Ebene vor der Spitze,
-        // also gar nicht. Jenseits von maxLength endet die gezeichnete Front.
-        if (s > 0.0 && s <= geom.maxLength)
-        {
-            current.push_back (geom.apex + (radial * geom.tanMu - geom.dir) * s);
+        if (age <= 0.0)
             continue;
-        }
 
-        if (current.size() >= 2)
-            segments.push_back (current);
+        const Vec3   centre = snapshot.wavefrontPositions[(size_t) i];
+        const double sphere = c * age;
+        const double dz     = height - centre.z;
 
-        current.clear();
+        if (sphere <= std::abs (dz))
+            continue;   // diese Welle ist in dieser Hoehe noch gar nicht angekommen
+
+        circles.push_back ({ centre.x, centre.y, std::sqrt (sphere * sphere - dz * dz) });
     }
 
-    if (current.size() >= 2)
-        segments.push_back (current);
+    if (circles.size() < 2)
+        return segments;
+
+    // Die Front ist die gemeinsame aeussere Tangente aufeinanderfolgender
+    // Kreise - links und rechts der Bahn je eine. Fuer zwei Kreise (A, r_a)
+    // und (B, r_b) hat die aeussere Tangente die Normale n mit
+    // n * (B - A) = r_b - r_a; sie beruehrt bei A - n*r_a und B - n*r_b.
+    //
+    // Ist |r_b - r_a| >= |B - A|, liegt der eine Kreis im anderen: der Schall
+    // war zwischen diesen beiden Emissionen schneller als die Quelle, es gab
+    // dort also keinen Ueberschall und folglich auch keine Front. Genau das
+    // ist die Mach-1-Bedingung, nur aus den gezeichneten Kreisen gelesen statt
+    // aus einer geschaetzten Geschwindigkeit.
+    for (const double side : { -1.0, 1.0 })
+    {
+        std::vector<Vec3> line;
+
+        for (size_t i = 0; i + 1 < circles.size(); ++i)
+        {
+            const auto& a = circles[i];
+            const auto& b = circles[i + 1];
+
+            const double dx = b.x - a.x;
+            const double dy = b.y - a.y;
+            const double distance = std::hypot (dx, dy);
+            const double dr = b.r - a.r;
+
+            if (distance <= 1.0e-9 || std::abs (dr) >= distance)
+            {
+                if (line.size() >= 2)
+                    segments.push_back (line);
+
+                line.clear();
+                continue;
+            }
+
+            const double cosAlpha = dr / distance;
+            const double sinAlpha = side * std::sqrt (juce::jmax (0.0, 1.0 - cosAlpha * cosAlpha));
+
+            // Normale = die um alpha gedrehte Verbindungsrichtung.
+            const double ux = dx / distance;
+            const double uy = dy / distance;
+            const double nx = ux * cosAlpha - uy * sinAlpha;
+            const double ny = ux * sinAlpha + uy * cosAlpha;
+
+            line.push_back ({ a.x - nx * a.r, a.y - ny * a.r, height });
+            line.push_back ({ b.x - nx * b.r, b.y - ny * b.r, height });
+        }
+
+        if (line.size() >= 2)
+            segments.push_back (line);
+    }
 
     return segments;
 }
@@ -759,16 +725,11 @@ std::vector<FieldComponent::MachFrontLayer> FieldComponent::machFrontLayers() co
     }
     else
     {
-        // Die Ebene GENAU auf Flughoehe bleibt aussen vor: sie enthaelt die
-        // Achse der Front, die Schnittkurve entartet dort zu zwei Geraden
-        // durch die Quelle und sagt nichts mehr darueber, wo die Front
-        // weiter unten steht. Die Stufen teilen deshalb den Raum darunter.
         for (int i = 0; i < machFrontHeightSteps; ++i)
         {
-            const double height = top * (double) i / (double) machFrontHeightSteps;
-            const float  fade   = (float) i / (float) (machFrontHeightSteps - 1);
+            const float u = (float) i / (float) (machFrontHeightSteps - 1);
 
-            layers.push_back ({ height, juce::jmap (fade, 0.40f, 0.10f), 1.0f });
+            layers.push_back ({ top * (double) u, juce::jmap (u, 0.40f, 0.10f), 1.0f });
         }
     }
 
@@ -784,14 +745,9 @@ void FieldComponent::drawMachFronts (juce::Graphics& g) const
 {
     // Farblich bei den cyanen Wellenfronten, deren Einhuellende die Front ist,
     // aber klar von ihnen unterscheidbar (Theme::tealgreen).
-    const auto geom = machGeometry();
-
-    if (! geom.valid)
-        return;
-
     for (const auto& layer : machFrontLayers())
     {
-        for (const auto& segment : machFrontAtHeight (geom, layer.height))
+        for (const auto& segment : machFrontAtHeight (layer.height))
         {
             juce::Path path;
             path.startNewSubPath (worldToScreen (segment.front()));
@@ -807,13 +763,8 @@ void FieldComponent::drawMachFronts (juce::Graphics& g) const
 
 void FieldComponent::drawPerspectiveMachFronts (juce::Graphics& g) const
 {
-    const auto geom = machGeometry();
-
-    if (! geom.valid)
-        return;
-
     for (const auto& layer : machFrontLayers())
-        for (const auto& segment : machFrontAtHeight (geom, layer.height))
+        for (const auto& segment : machFrontAtHeight (layer.height))
             strokeWorldPath (g, segment, Theme::tealgreen.withAlpha (layer.alpha), layer.thickness);
 }
 
