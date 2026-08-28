@@ -97,8 +97,8 @@ private:
     // Druckwellen-/N-Wellen-Schicht: eigener Schalter und eigene Groesse,
     // bewusst neben (nicht in) Boom Limit - das eine ist eine Pulsform, das
     // andere eine reine Amplitudendeckelung. Steht (mit distanceCurveKnob und
-    // panAmountKnob) in der dritten Reihe, seit dort Platz frei wurde (Jitter/
-    // Hektik/Jitter An sind ins Bewegungs-Panel gewandert, @dpa-Feedback) -
+    // panAmountKnob) in der dritten Reihe, wo Platz ist, weil Jitter/Hektik/
+    // Jitter An im Bewegungs-Panel liegen (nicht hier) -
     // alle drei sind Amplituden-/Pegelthemen, keine Positionsregler wie Reihe 2.
     Knob nWaveSizeKnob;
     Knob nWaveGainKnob;

@@ -25,8 +25,7 @@ namespace Theme
     //
     // Als ARGB-Zahl geschrieben und NICHT als juce::Colours::white.withAlpha():
     // diese Konstanten entstehen vor main(), juce::Colours::white aber
-    // moeglicherweise erst danach. Aus Weiss mit 9 % wurde so Schwarz mit 9 %,
-    // und die Linien wurden dunkler statt heller als ihr Untergrund.
+    // moeglicherweise erst danach.
     inline const juce::Colour line { 0x17ffffffu };      // Weiss, 9 %
 
     // Trennlinie zwischen Reglergruppen INNERHALB eines Panels. Etwas

@@ -4,10 +4,9 @@
 #include <juce_core/juce_core.h>
 
 // Zentrale Stelle fuer alle Hilfehinweise (Tooltips) der Oberflaeche, deutsch
-// und englisch. Ersetzt die bisher direkt an jedem Regler verstreuten
-// deutschen Text-Literale durch einen Schluessel; die Sprache ist ein
-// einfacher globaler Zustand in dieser Uebersetzungseinheit, umschaltbar per
-// setLanguage()/toggleLanguage().
+// und englisch. Jeder Regler bekommt einen Schluessel statt eines direkten
+// Text-Literals; die Sprache ist ein einfacher globaler Zustand in dieser
+// Uebersetzungseinheit, umschaltbar per setLanguage()/toggleLanguage().
 //
 // Reiner Header (siehe CMakeLists.txt-Regel dieses Projekts: neue .cpp-Dateien
 // muessten dort eingetragen werden, ein Header nicht). Die Texte liegen als
@@ -200,9 +199,7 @@ namespace Tooltips
         }
 
         // Liefert den rohen Text als C-String-Konstante - keine Allokation,
-        // die Zeichenketten liegen als Programmkonstanten im Binary. Wird
-        // WOERTLICH aus den bisherigen setTooltip()-Aufrufen uebernommen
-        // (siehe git log fuer die Herkunft), nicht umformuliert.
+        // die Zeichenketten liegen als Programmkonstanten im Binary.
         inline const char* rawText (Key key, Language lang)
         {
             switch (key)
@@ -1571,12 +1568,12 @@ namespace Tooltips
 
     // Liefert den Hilfetext zu `key` in der aktuell gewaehlten Sprache. Baut
     // erst hier einen juce::String - der Aufrufer setzt das Ergebnis direkt
-    // per Component::setTooltip(), genau wie bisher mit den String-Literalen.
+    // per Component::setTooltip().
     inline juce::String text (Key key)
     {
         // Ueber Text::utf8(), nicht ueber juce::String(const char*): die Texte
         // hier stehen als UTF-8 im Quelltext und enthalten Umlaute. Siehe
-        // Util/Utf8.h - der direkte Weg machte aus "hört" ein "hÃ¶rt".
+        // Util/Utf8.h - der direkte Weg macht aus "hört" ein "hÃ¶rt".
         return Text::utf8 (detail::rawText (key, currentLanguage()));
     }
 }

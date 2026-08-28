@@ -561,14 +561,13 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
 
 void DopplerfeldProcessor::restartEngine()
 {
-    // @dpa-Feedback: ein blosses dopplerEngine.reset() half nicht
-    // zuverlaessig, verlaesslich half bisher nur ein Wechsel der Audio-
-    // Puffergroesse - der loest naemlich einen echten prepareToPlay()-Lauf
-    // aus. suspendProcessing() haelt processBlock() waehrenddessen an (kein
-    // Datenrennen mit dem Audiothread), genau wie es ein Host beim Aendern
-    // der Puffergroesse ohnehin tut - vom Nachrichten-Thread aus, weil
-    // prepareToPlay() allokieren darf (sein Vertrag), im Audiothread waere
-    // das verboten.
+    // @dpa-Feedback: ein blosses dopplerEngine.reset() greift nicht
+    // zuverlaessig - nur ein Wechsel der Audio-Puffergroesse hilft, der loest
+    // naemlich einen echten prepareToPlay()-Lauf aus. suspendProcessing()
+    // haelt processBlock() waehrenddessen an (kein Datenrennen mit dem
+    // Audiothread), genau wie es ein Host beim Aendern der Puffergroesse
+    // ohnehin tut - vom Nachrichten-Thread aus, weil prepareToPlay()
+    // allokieren darf (sein Vertrag), im Audiothread waere das verboten.
     const double sr = getSampleRate();
     const int    bs = getBlockSize();
 
@@ -633,7 +632,7 @@ void DopplerfeldProcessor::holdSourceTargetAt (Vec3 posMetres)
     sourceTargetHeld   = true;
 
     // Der Reglerstand, den dieser Haltezustand meint. Bewegt sich einer davon,
-    // war das ein Benutzereingriff und der Halt ist vorbei (applyParameters).
+    // ist das ein Benutzereingriff und der Halt ist vorbei (applyParameters).
     heldSrcX = pp.srcX->load();
     heldSrcY = pp.srcY->load();
     heldSrcZ = pp.srcZ->load();
@@ -689,9 +688,9 @@ void DopplerfeldProcessor::applyParameters()
     // beschreibt sie die Bewegung vollstaendig; die Frequenz rechnet der
     // Wackler sich daraus selbst aus (siehe PositionJitter::setSpeed).
     //
-    // Der Wackler laeuft weiterhin NICHT durch den harten Schrittdeckel in
-    // advanceMotion - dort wuerde er zerhackt. Er braucht auch keinen
-    // eigenen mehr: schneller als hier eingestellt bewegt er sich nicht.
+    // Der Wackler laeuft NICHT durch den harten Schrittdeckel in
+    // advanceMotion - dort wuerde er zerhackt. Einen eigenen Deckel braucht
+    // er nicht: schneller als hier eingestellt bewegt er sich nicht.
     const double jitterSpeed = (double) pp.srcJitterSpeed->load();
 
     // Anteil der Hoehe am Wackeln (@dpa 20260824). Bei 0 bleibt die Quelle

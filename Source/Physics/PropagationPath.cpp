@@ -29,22 +29,24 @@ void PropagationPath::reset()
     // danach in der Zukunft - und wirkt so lange, wie das Plugin vorher
     // gelaufen ist.
     //
-    // Das war der Stille-Bug (@dpa 20260828: "diese minutenlange Stille muss
-    // weg ... ist gerade wieder nur der Ueberschallknall, aber NICHTS anderes
-    // ... jetzt ist der Sound wieder da. nach 1-2min!"):
+    // Ohne dieses Zuruecksetzen entsteht der Stille-Bug (@dpa 20260828: "diese
+    // minutenlange Stille muss weg ... ist gerade wieder nur der
+    // Ueberschallknall, aber NICHTS anderes ... jetzt ist der Sound wieder da.
+    // nach 1-2min!"):
     //
     //   shockEndTime  - Ende der laufenden Stossfront. Liegt sie in der
     //                   Zukunft, senkt shockDuckAt() den gesamten uebrigen
     //                   Schall auf null ab. Die N-Welle kommt ADDITIV danach
-    //                   dazu und ueberlebt - deshalb blieb genau der Knall
+    //                   dazu und ueberlebt - deshalb bleibt nur der Knall
     //                   hoerbar und sonst nichts.
     //   lastDiscoveryTime - wann zuletzt nach neuen Zweigen gesucht wurde.
     //                   Liegt sie in der Zukunft, sucht der Loeser gar nicht
     //                   mehr, findet also keine Hoerwege und es bleibt still.
     //   jumpMarkerTime/jumpArrivalTime - dasselbe fuer den Startknall.
     //
-    // Fuer den Anzeige-Schnappschuss war derselbe Fall schon bedacht (siehe
-    // lastSnapshotTime in DopplerEngine::reset), fuer diese vier nicht.
+    // Fuer den Anzeige-Schnappschuss ist derselbe Fall bereits bedacht (siehe
+    // lastSnapshotTime in DopplerEngine::reset); diese vier werden hier
+    // zurueckgesetzt.
     lastDiscoveryTime = 0.0;
     shockEndTime      = -1.0e18;
     shockDuckStrength = 0.0;
@@ -274,10 +276,11 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // Unterschied zwischen "in 12 km Höhe unhörbar" und "man hört plötzlich
     // einen lauten Knall".
     //
-    // Bezugsentfernung, damit nWaveLevel weiter dasselbe bedeutet wie bisher:
-    // bei nWaveRefMetres ist das Ergebnis bitgleich zum alten 1/R, näher dran
-    // etwas leiser, weiter weg deutlich lauter. 20 m ist bewusst nah gewählt -
-    // dort war die Schicht eingehört, und dieser Stand soll erhalten bleiben.
+    // Bezugsentfernung, damit nWaveLevel unabhaengig vom Abstandsgesetz
+    // dieselbe Bedeutung behaelt: bei nWaveRefMetres ist das Ergebnis
+    // bitgleich zu einem reinen 1/R, näher dran etwas leiser, weiter weg
+    // deutlich lauter. 20 m ist bewusst nah gewählt - dort ist die Schicht
+    // eingehört, und dieser Klang soll erhalten bleiben.
     //
     // KEINE Groessenkopplung beim Startknall (sizeOverride): sie kommt aus der
     // Koerperlaenge, und er bildet keinen Koerper ab, sondern eine
@@ -401,8 +404,8 @@ void PropagationPath::setExtraPathGain (double gainLinear)
 
 void PropagationPath::setJumpBoom (double amount01)
 {
-    // Nach oben offen bis zum Reglerende (siehe Params::jumpBoom, bis 4).
-    // Der frühere Deckel bei 1 machte den halben Regelweg wirkungslos.
+    // Nach oben offen bis zum Reglerende (siehe Params::jumpBoom, bis 4) -
+    // ein Deckel bei 1 wuerde den halben Regelweg wirkungslos machen.
     jumpBoom = std::max (0.0, amount01);
 }
 

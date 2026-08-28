@@ -77,7 +77,7 @@ public:
     // A_geo = 1/R rechnet der Pfad 1/R^k mit einstellbarem k.
     //
     // curve = 0 ergibt genau k = 1, also das physikalisch richtige
-    // Kugelwellen-Gesetz und damit exakt das bisherige Verhalten. Positive
+    // Kugelwellen-Gesetz. Positive
     // Werte machen k größer (der Pegel fällt schneller mit der Entfernung ab),
     // negative kleiner (er fällt flacher ab und trägt weiter).
     //
@@ -125,10 +125,10 @@ public:
     // eine Kegelankunft bemerkt wird.
     //
     // Der Grund für die Trennung: im Überschall läuft der Löser auf Stride 8,
-    // also alle 167 us bei 48 kHz, und jeder dieser Aufrufe scannte bisher das
-    // komplette Suchfenster neu ab, obwohl in 167 us fast nie ein Zweig
-    // hinzukommt. Der Scan ist dabei der mit Abstand teuerste Posten des
-    // ganzen Plugins.
+    // also alle 167 us bei 48 kHz. Ohne diese Trennung wuerde jeder dieser
+    // Aufrufe das komplette Suchfenster neu abscannen, obwohl in 167 us fast
+    // nie ein Zweig hinzukommt. Der Scan ist dabei der mit Abstand teuerste
+    // Posten des ganzen Plugins.
     void setDiscoveryIntervalSeconds (double seconds);
 
 
@@ -211,8 +211,8 @@ public:
     // range / R, bei doppelter Entfernung also auf die Haelfte. 0 heisst
     // "gilt ueberall gleich".
     //
-    // Ohne das Plateau lief der Abfall schon ab dem ersten Meter, und volle
-    // Stille zwischen den Stossfronten war ueberhaupt nicht erreichbar:
+    // Ohne das Plateau liefe der Abfall schon ab dem ersten Meter, und volle
+    // Stille zwischen den Stossfronten waere ueberhaupt nicht erreichbar:
     // gemessen ("Kreis, Druckwelle 0") stand der Motorton bei Reichweite
     // 1345 m und rund 245 m Abstand noch bei 49 % seines sonstigen Pegels,
     // mit Plateau bei 1 %.
@@ -225,7 +225,7 @@ public:
     //
     // Ein Geschwindigkeitssprung der Quelle - Knall-Start, ein Sprung in der
     // abgespielten Bahn - springt beim Hoerer in Amplitude und Tonhoehe,
-    // sobald die Kante ankommt. Das Modell hat dafuer bisher keine eigene
+    // sobald die Kante ankommt. Das Modell hat dafuer keine eigene
     // Schicht: die N-Welle haengt allein an M_r = 1 und bleibt unterschallig
     // stumm, und der Sprung selbst wird ueber die Laenge eines Solver-Segments
     // interpoliert, wird also zur weichen Rampe statt zur Kante.
@@ -668,14 +668,14 @@ private:
 
     // Wie viele Regularisierungsbreiten um M_r = 1 herum noch als "an der
     // Kaustik" gelten. Nur dort bekommt ein sterbender Zweig den Ausläufer;
-    // ausserhalb ist der Fokussierungsfaktor unauffällig und die alte lineare
-    // Anti-Klick-Rampe bleibt, wie sie war (siehe Auswertung im .cpp).
+    // ausserhalb ist der Fokussierungsfaktor unauffällig und die urspruengliche
+    // lineare Anti-Klick-Rampe gilt weiterhin (siehe Auswertung im .cpp).
     //
-    // Ohne diese Eingrenzung bekamen auch Tode einen langen Ausklang, die gar
-    // nichts mit der Mach-Front zu tun haben (verlorene Nachführung) - gemessen
-    // an den Verdraengungen im load_check hielten die dann Steckplätze besetzt,
-    // bis ein neu ankommender Zweig sie hart hinauswarf. Das hätte den
-    // abgeschnittenen Zweig nur an eine andere Stelle verschoben.
+    // Ohne diese Eingrenzung bekaemen auch Tode einen langen Ausklang, die gar
+    // nichts mit der Mach-Front zu tun haben (verlorene Nachführung) - an den
+    // Verdraengungen im load_check zeigt sich das: sie hielten dann Steckplätze
+    // besetzt, bis ein neu ankommender Zweig sie hart hinauswirft. Das würde den
+    // abgeschnittenen Zweig nur an eine andere Stelle verschieben.
     static constexpr double causticWidths = 4.0;
 
     // --- Form des Schattenausklangs ---
@@ -703,7 +703,7 @@ private:
     //   man tau stellt.
     //
     //   Der Faktor f^(1/2) nimmt die Hoehen zuerst. Gemessen an @dpas
-    //   Aufnahme vom 20260827 fiel bisher das GANZE Spektrum gleichzeitig
+    //   Aufnahme vom 20260827 fiel das GANZE Spektrum gleichzeitig
     //   (30-60 Hz um 38 dB, 1-2 kHz um 30 dB, 4-8 kHz um 29 dB) - ein
     //   Schnitt durchs Band, kein Schatten. Etwas, das hinter einer Ecke
     //   verschwindet, wird dumpf, bevor es leise wird.
@@ -747,9 +747,9 @@ private:
     static constexpr double envFloor = 1.0e-4;
 
     // Ab wann ein Ausklang als "schlagartig" gilt. 2 ms deshalb, weil @dpas
-    // Aufnahme den Abbruch mit ueber 20 dB in 0,75 ms zeigt und die alte feste
-    // Rampe 1 ms lang war - beides liegt klar darunter, ein Ausklang, der der
-    // Kaustik folgt, klar darueber.
+    // Aufnahme den Abbruch mit ueber 20 dB in 0,75 ms zeigt und die
+    // Anti-Klick-Rampe 1 ms lang ist - beides liegt klar darunter, ein
+    // Ausklang, der der Kaustik folgt, klar darueber.
     static constexpr double abruptSeconds = 2.0e-3;
 
     // Wie nah zwei Verzögerungen liegen müssen, damit ein neu gemeldeter Zweig
@@ -840,12 +840,13 @@ private:
     // nur noch abgewartet.
     //
     // Der Grund fuer diesen Umweg (@dpa 20260825: "was ist nur mit dem
-    // KnallStart los.. er ist wieder nicht hoeren"): vorher wurde geprueft, ob
-    // die Emissionszeit eines Zweigs ueber die Marke laeuft. Bei Unterschall
-    // geht das, dort verfolgt ein Zweig die Bahn durchgehend. Bei Ueberschall
+    // KnallStart los.. er ist wieder nicht hoeren"): die Emissionszeit eines
+    // Zweigs direkt gegen die Marke zu pruefen, funktioniert nur bei
+    // Unterschall, wo ein Zweig die Bahn durchgehend verfolgt. Bei Ueberschall
     // werden Zweige neu GEBOREN - ihre Emissionszeit beginnt jenseits der
-    // Marke und laeuft nie darueber. Nachgemessen war der Knall bei Mach 1,5
-    // und Mach 3 nicht nur leise, sondern bitgleich abwesend.
+    // Marke und laeuft nie darueber. Ohne den Umweg ueber die Ankunftszeit
+    // bleibt der Knall bei Mach 1,5 und Mach 3 gemessen nicht nur leise,
+    // sondern bitgleich abwesend.
     //
     // Die Ankunftszeit haengt an nichts davon. Der Knall entsteht am
     // Startpunkt und braucht seine Laufzeit dorthin - mehr ist daran nicht.
@@ -871,13 +872,13 @@ private:
     // Mit 40.0 sind es auf 500 m rund 0,18, also etwa 6 dB ueber der Szene.
     // In der Naehe uebersteuert das und laeuft in den Limiter - das ist kein
     // Versehen: ein Knall aus 20 m IST ohrenbetaeubend, und der Limiter ist
-    // sichtbar und abschaltbar, statt die Welle vorher heimlich klein zu halten.
+    // sichtbar und abschaltbar, statt die Welle heimlich klein zu halten.
     static constexpr double nWaveLevel = 40.0;
 
     // Abstandsgesetz der N-Welle, siehe ausführliche Begründung an der
     // Verwendungsstelle. Der Exponent 3/4 ist der Standardwert für eine
     // nichtlinear alternde N-Welle (gegenüber 1 für gewöhnlichen Kugelschall);
-    // die Bezugsentfernung hält den bisher eingehörten Nahbereich fest.
+    // die Bezugsentfernung hält den eingehörten Nahbereich fest.
     static constexpr double nWaveDistanceExponent = 0.75;
     static constexpr double nWaveRefMetres        = 20.0;
 
@@ -887,7 +888,7 @@ private:
     //
     // nWaveSizeRefMetres ist bewusst dieselbe Zahl wie der Skew-Mittelpunkt
     // und Default des "N-Wave Size"-Reglers (Params.cpp, 15 m): dort ist der
-    // Kopplungsfaktor exakt 1 und der bisher eingehörte Klang bleibt bei
+    // Kopplungsfaktor exakt 1 und der eingehörte Klang bleibt bei
     // mittlerer Reglerstellung unverändert - kein Presets-Sprung.
     static constexpr double nWaveSizeRefMetres = 15.0;
     static constexpr double nWaveSizeExponent  = 0.75;
@@ -908,7 +909,7 @@ private:
     // 99 ms, das entspricht rund 10 Hz. Diese Auslenkung beherrscht den
     // Pegel, und wenn sie am Heckstoss endet, reisst sie alles mit.
     //
-    // Genau das war die Kante, die @dpa wiederholt gemeldet hat. Gemessen im
+    // Ohne Hochpass ist genau das die hoerbare Kante. Gemessen im
     // Kreisflug-Szenario des load_check: der Mittelwert des Ausgangs springt
     // bei t = 2,254 s auf +0,0034 (Bugstoss), laeuft linear durch null auf
     // -0,0054 und springt bei t = 2,352 s zurueck - 98 ms Dauer, exakt

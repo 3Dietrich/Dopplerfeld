@@ -105,9 +105,9 @@ void WallPanel::refreshTooltips()
 
 void WallPanel::resized()
 {
-    // Sechs statt fuenf Regler pro Wandreihe (Gain kam dazu) - schmaler als
-    // die 84px sonst ueblich, damit die Reihe in der Panel-Breite bleibt
-    // (Kompaktheit vor gleicher Knopfbreite ueberall).
+    // Sechs Regler pro Wandreihe - schmaler als die 84px sonst ueblich,
+    // damit die Reihe in der Panel-Breite bleibt (Kompaktheit vor gleicher
+    // Knopfbreite ueberall).
     constexpr int wallKnobW = 70;
     // Nur das DREHRAD auf zwei Drittel (@dpa 20260823, Berichtigung: "NUR die
     // Knobs! Label und Value sollen so bleiben wie zuvor"). Beschriftung

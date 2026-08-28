@@ -41,15 +41,13 @@ namespace Params
 
     // --- Abgeloest, nur noch zum Umrechnen alter Zustaende ---
     //
-    // "Hektik" (eine Frequenz) und "Jit Max" (ein Tempo-Deckel) bildeten
-    // zusammen mit dem Ausschlag ein multiplikatives Dreieck: wer eines
-    // drehte, verschob die Wirkung der beiden anderen (@dpa 20260825: "ist
-    // das mit der Hektik zu kompliziert das 'passende Fenster' zu finden").
-    //
-    // Sie stehen NICHT mehr in der Parameterliste. Die beiden IDs bleiben
-    // hier stehen, weil setStateInformation() sie in einem alten Zustand
-    // wiedererkennen und in das neue Tempo umrechnen muss - sonst wackelten
-    // bestehende Presets nach dem Laden anders als vorher.
+    // "srcJitterRateHz" (Hektik, eine Frequenz) und "srcJitterMaxSpeed"
+    // (Jit Max, ein Tempo-Deckel) sind nicht mehr Teil der Parameterliste.
+    // Die beiden IDs bleiben hier stehen, weil setStateInformation() sie in
+    // einem alten Zustand erkennen und in das neue Tempo (srcJitterSpeed)
+    // umrechnen muss - sonst klingen bestehende Presets nach dem Laden
+    // anders (@dpa 20260825: "ist das mit der Hektik zu kompliziert das
+    // 'passende Fenster' zu finden").
     constexpr const char* srcJitterRateLegacy     = "srcJitterRateHz";
     constexpr const char* srcJitterMaxSpeedLegacy = "srcJitterMaxSpeed";
 
@@ -60,10 +58,6 @@ namespace Params
     constexpr const char* srcJitterOn = "srcJitterOn";
 
     // Anteil der Hoehe am Wackeln, siehe PositionJitter::setZFactor().
-    // Eigener Name statt des frueheren srcJitterZ: der gehoerte zur
-    // Rotoren-Betriebsart und meinte die Neigung der Kreisebene. Ein Preset
-    // von damals wuerde mit seinem alten Wert (meist 0) die Hoehe hier
-    // stillegen, ohne dass jemand daran gedreht haette.
     constexpr const char* srcJitterZAmount = "srcJitterZAmount";
 
 

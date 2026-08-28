@@ -124,10 +124,10 @@ public:
         return true;
     }
 
-    // Mausrad NICHT mehr am Regler verarbeiten (@dpa 20260820): das Fenster ist hoch und
-    // wird staendig gescrollt. Sobald dabei ein Regler unter den Mauszeiger geraet, hat er
-    // bisher das Rad geschluckt - das Scrollen brach ab UND der Reglerwert aenderte sich
-    // dabei unbemerkt. Das ist Datenverlust im laufenden Betrieb, also gilt im Normalfall:
+    // Mausrad wird am Regler NICHT verarbeitet (@dpa 20260820): das Fenster ist hoch und
+    // wird staendig gescrollt. Geraet dabei ein Regler unter den Mauszeiger, wuerde er
+    // sonst das Rad schlucken - das Scrollen braeche ab UND der Reglerwert aenderte sich
+    // dabei unbemerkt. Das waere Datenverlust im laufenden Betrieb, also gilt im Normalfall:
     // das Rad geht immer an die Elternkomponente (den scrollenden Viewport) weiter.
     //
     // Ausnahme bewusst nur mit gehaltener Cmd-Taste (unter Windows/Linux von JUCE auf Ctrl
@@ -174,24 +174,24 @@ private:
             const auto centre  = bounds.getCentre();
             const auto angle   = rotaryStartAngle + sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
 
-            // Strichstaerke: vorher JUCEs Default (kein eigener Wert gesetzt, LookAndFeel_V4
-            // zeichnet dort mit ca. der halben Radius-Breite - dick und weich). Jetzt fest
-            // duenn und an den (unveraenderten) kleinen Regler-Radius gekoppelt.
+            // Strichstaerke fest duenn und an den kleinen Regler-Radius gekoppelt, statt
+            // JUCEs Default (LookAndFeel_V4 zeichnet ohne eigenen Wert mit ca. der halben
+            // Radius-Breite - dick und weich).
             const float lineW     = juce::jmin (2.2f, radius * 0.18f);
             const float arcRadius = radius - lineW * 0.5f;
 
-            // Hintergrund-Bogen: vorher mittelhelles Grau mit wenig Abstand zur Wert-Farbe
-            // (JUCE-Default rotarySliderOutlineColourId). Jetzt deutlich gedaempft (dunkel,
-            // niedrige Deckkraft), damit der Wert-Bogen klar hervorsticht statt im Ring zu
-            // verschwimmen.
+            // Hintergrund-Bogen deutlich gedaempft (dunkel, niedrige Deckkraft), statt
+            // JUCEs mittelhellem Grau mit wenig Abstand zur Wert-Farbe (JUCE-Default
+            // rotarySliderOutlineColourId) - damit der Wert-Bogen klar hervorsticht statt
+            // im Ring zu verschwimmen.
             juce::Path backgroundArc;
             backgroundArc.addCentredArc (centre.x, centre.y, arcRadius, arcRadius, 0.0f,
                                           rotaryStartAngle, rotaryEndAngle, true);
             g.setColour (juce::Colours::white.withAlpha (0.16f));
             g.strokePath (backgroundArc, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-            // Wert-Bogen: vorher blasses Blau/Grau nahe an der Hintergrundfarbe. Jetzt
-            // kraeftiges Weiss mit hoher Deckkraft - der Kontrast zum gedaempften
+            // Wert-Bogen kraeftiges Weiss mit hoher Deckkraft, statt JUCEs blassem
+            // Blau/Grau nahe an der Hintergrundfarbe - der Kontrast zum gedaempften
             // Hintergrund-Bogen ist der eigentliche Hebel gegen den "blassen Klumpen".
             if (sliderPosProportional > 0.0f)
             {
@@ -202,9 +202,9 @@ private:
                 g.strokePath (valueArc, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
             }
 
-            // Zeiger: vorher ein dicker, runder Punkt (thumb). Jetzt eine duenne Linie von
-            // der Mitte zum Rand - passt zum schlankeren Gesamtbild statt einen zusaetzlichen
-            // fetten Klecks in der Mitte zu behalten.
+            // Zeiger eine duenne Linie von der Mitte zum Rand statt eines dicken, runden
+            // Punkts (thumb) - passt zum schlankeren Gesamtbild, ohne einen zusaetzlichen
+            // fetten Klecks in der Mitte.
             juce::Path pointer;
             const float pointerLen = radius * 0.62f;
             pointer.startNewSubPath (centre.x, centre.y);

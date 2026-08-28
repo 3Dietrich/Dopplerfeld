@@ -624,9 +624,9 @@ void DopplerfeldEditor::refreshDisplay()
     if (dopplerfeldProcessor.consumeEngineRestartRequest())
         dopplerfeldProcessor.restartEngine();
 
-    // Die CPU-Zeile braucht kein setLoad() mehr auf ein Panel - sie liest
-    // die Klonzahl direkt im paint() der Editor-Zeile, genau wie die CPU-Last
-    // schon vorher direkt dort gelesen wurde (s. dort).
+    // Die CPU-Zeile liest die Klonzahl direkt im paint() der Editor-Zeile
+    // (s. dort), genau wie die CPU-Last selbst - kein setLoad() auf ein
+    // Panel noetig.
 
     // 30Hz-Timer = ~33ms zwischen zwei Aufrufen (siehe startTimerHz weiter
     // unten) - fest verdrahtet statt gemessen, das Levelmeter braucht nur
@@ -759,25 +759,24 @@ juce::String DopplerfeldEditor::statusText() const
     // fuer das 0.5s-Mittelungsfenster (@dpa-Feedback "Langsamkeit der
     // Anzeigewahrnehmung").
 
-    // Tempo und L-M stehen NICHT mehr hier: beide sind gross und gelb im
+    // Tempo und L-M stehen nicht in dieser Zeile: beide sind gross und gelb im
     // Cockpit-Display im Feld zu sehen (@dpa 20260828: "Die Angaben 2695.8
     // km/h L-M 820.7 m sind doch die, die im Display oben, gelb stehen? Dann
-    // brauchen sie doch nicht auf debug zu sein!?"). Was bleibt, ist das, was
-    // es sonst nirgends gibt - und das ist alles vergaenglich, steht also im
-    // Nachleuchten (siehe updateStatusFlashes).
+    // brauchen sie doch nicht auf debug zu sein!?"). Was hier steht, ist das,
+    // was es sonst nirgends gibt - und das ist alles vergaenglich, steht also
+    // im Nachleuchten (siehe updateStatusFlashes).
 
-    // Die CPU-Last steht nicht mehr in dieser Zeile, sondern in der eigenen
-    // Zeile direkt darueber (siehe paint(), cpuMeterBlockHeight) - dort mit
-    // Balken statt nur als Zahl, und immer sichtbar statt nur, wenn dieser
-    // Text gerade Platz hat.
+    // Die CPU-Last steht in der eigenen Zeile direkt darueber (siehe paint(),
+    // cpuMeterBlockHeight), nicht in dieser Zeile - dort mit Balken statt nur
+    // als Zahl, und immer sichtbar statt nur, wenn dieser Text gerade Platz
+    // hat.
 
     // @dpa-Feedback: Einzelne Pfade (L/R, M_r, Zweige) sind zu klein und zu
     // viel für die Statuszeile - nur die Anzahl aktiver Mehrfachreflexionen
     // bleibt als grobe Andeutung, was gerade gerechnet wird.
-    // Alles Vergaengliche steht nicht mehr hier, sondern im Nachleuchten
-    // (siehe updateStatusFlashes / StatusFlash im Header): Mehrfachreflexionen,
-    // Aufnahme/Wiedergabe und die Zweig-Abrisse. Diese Zeile traegt nur noch,
-    // was immer gilt.
+    // Alles Vergaengliche steht im Nachleuchten (siehe updateStatusFlashes /
+    // StatusFlash im Header): Mehrfachreflexionen, Aufnahme/Wiedergabe und
+    // die Zweig-Abrisse. Diese Zeile traegt nur, was immer gilt.
 
     return text;
 }
@@ -837,10 +836,10 @@ void DopplerfeldEditor::updateStatusFlashes (double deltaSeconds)
     // abgeschnitten, obwohl er noch voll toente, nahe 0 heisst, er war
     // ohnehin ausgeklungen. Zwei Werte: Mittel und schlimmster Fall.
     //
-    // Frueher stand dort "env", und genau danach hat @dpa gefragt ("es
-    // steht dort manchmal etwas mit 'Env'? es kommt zu selten als dass ich
-    // den Sinn begriefen konnte") - zu kurz, um es zu erraten, und zu
-    // fluechtig, um es nachzuschlagen.
+    // Name und Werte muessen selbsterklaerend sein - eine Abkuerzung ist zu
+    // kurz, um sie zu erraten, und zu fluechtig, um sie nachzuschlagen (@dpa:
+    // "es steht dort manchmal etwas mit 'Env'? es kommt zu selten als dass
+    // ich den Sinn begriefen konnte").
     // Aktiv nur, wenn gerade welche DAZUGEKOMMEN sind. Der Zaehler laeuft
     // kumulativ weiter; "groesser als null" liess den Abschnitt dauerhaft
     // hell stehen, und dann sagt er nichts mehr ueber den Moment.
@@ -882,9 +881,8 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
 
     // Bauzeit dieser Fassung, rechts aussen in der Kopfzeile. Ohne sie laesst
     // sich von aussen nicht unterscheiden, ob eine Aenderung nicht wirkt oder ob
-    // schlicht eine aeltere Fassung laeuft - und diese Frage hat schon mehrere
-    // Anlaeufe gekostet. __DATE__/__TIME__ stehen beim Uebersetzen fest, es gibt
-    // also nichts zu pflegen.
+    // schlicht eine aeltere Fassung laeuft. __DATE__/__TIME__ stehen beim
+    // Uebersetzen fest, es gibt also nichts zu pflegen.
     //
     // Rechts und nicht neben dem Schriftzug: links reicht der Platz nur bis zum
     // ersten Knopf der Kopfzeile, dahinter verschwindet die Zeile unter ihm.
@@ -900,9 +898,7 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     // Loeserlast-Zeile: eigener Balken + Zahl, IMMER sichtbar (siehe
     // cpuMeterBlockHeight im Header) - unabhaengig davon, ob ein Panel
     // (insbesondere das Schwarm-Panel) gerade auf- oder zugeklappt ist, denn
-    // sie ist die Warnung vor hoerbaren Aussetzern. Frueher stand dieser
-    // Balken in SwarmPanel::paint und war darum unsichtbar, sobald das Panel
-    // zu war oder @dpa sich gerade nicht fuer Klone interessierte.
+    // sie ist die Warnung vor hoerbaren Aussetzern.
     {
         // Gemittelter Wert wie im Rest der Statuszeile (s. updateDisplayAverages,
         // @dpa-Feedback "Langsamkeit der Anzeigewahrnehmung") - Balken und Zahl
@@ -947,10 +943,10 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
 
     }
 
-    // Statuszeile selbst (Tempo/L-M/Reflexionen/...) faerbt sich seit dem
-    // Auslagern der CPU-Last nicht mehr rot - diese Warnung sitzt jetzt
-    // ausschliesslich im Balken darueber. (Die Farbe wird weiter unten kurz
-    // vor drawText() gesetzt, nachdem die LED links davon gezeichnet ist.)
+    // Statuszeile selbst (Tempo/L-M/Reflexionen/...) faerbt sich nicht rot -
+    // diese CPU-Warnung sitzt ausschliesslich im Balken darueber. (Die Farbe
+    // wird weiter unten kurz vor drawText() gesetzt, nachdem die LED links
+    // davon gezeichnet ist.)
     // Monospace statt Proportionalschrift: nur bei fester Zeichenbreite pro
     // Glyphe hält das Zahlen-Padding in statusText() die Spalten auch
     // tatsaechlich stabil (siehe Kommentar dort). drawText() statt
@@ -984,10 +980,10 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     const int textLeft  = margin + statusStateDotDiameter + statusStateDotGap;
 
     // Ueber die ganze Fensterbreite, nicht nur ueber die des Feldes: unter der
-    // Reglerspalte ist hier nichts mehr, und die verganglichen Abschnitte
-    // dahinter (Zweig-Abriss und Co.) brauchen den Platz. Vorher passte der
-    // laengste von ihnen nicht mehr hinein und wurde deshalb GAR NICHT
-    // gezeichnet - er war nicht zu kurz zu sehen, sondern gar nicht.
+    // Reglerspalte ist hier nichts, und die verganglichen Abschnitte dahinter
+    // (Zweig-Abriss und Co.) brauchen den Platz - sonst passt der laengste
+    // von ihnen nicht hinein und wird GAR NICHT gezeichnet, statt nur zu kurz
+    // sichtbar zu sein.
     const int textWidth = getWidth() - margin - textLeft;
 
     const juce::Font statusFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),

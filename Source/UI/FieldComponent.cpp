@@ -38,8 +38,9 @@ namespace
 
     // Dauerhafter Merker fuer den Nachlauf-Schalter (@dpa-Beschwerde: "immer
     // an", weil coastEnabled bewusst KEIN APVTS-Parameter ist, siehe
-    // PluginProcessor.h - der Zustand wurde bisher also nie gespeichert und
-    // stand nach jedem Laden wieder auf dem Default true). Eigene
+    // PluginProcessor.h - ohne diesen eigenen Merker waere der Zustand
+    // nirgends gespeichert und stuende nach jedem Laden wieder auf dem
+    // Default true). Eigene
     // ApplicationProperties, dieselbe Datei wie WelcomeOverlays
     // "welcomeSeen"-Merker (gleiche Options: Ordner/Name "Dopplerfeld"),
     // nur ein anderer Schluessel - gilt damit fuer Plugin UND Standalone
@@ -304,8 +305,8 @@ void FieldComponent::drawSpeedReadout (juce::Graphics& g) const
 
     // @dpa-Feedback (20260819): Zahlen doppelt so gross, dafuer Rahmen weg und
     // Aussen-/Spaltenabstand deutlich enger - die Anzeige soll dadurch nicht
-    // mehr Platz beanspruchen als vorher. Die Einheit waechst im Verhaeltnis
-    // mit, bleibt aber bewusst klein.
+    // mehr Platz beanspruchen. Die Einheit waechst im Verhaeltnis mit, bleibt
+    // aber bewusst klein.
     const juce::Font numberFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 30.0f, juce::Font::bold));
     const juce::Font unitFont   (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 13.0f, juce::Font::plain));
 
@@ -1502,8 +1503,8 @@ void FieldComponent::drawPerspectiveListener (juce::Graphics& g) const
     // 2D-Darstellung, aber perspektivisch verzerrt.. quasi auf einer
     // xy-flaeche in der z-Hoehe"). Aus dem Kopfkreis wird dadurch von selbst
     // die flach liegende Ellipse, und die Nase zeigt in die Richtung, in die
-    // der Hoerer im RAUM schaut - das bildschirmparallel aufgestellte Symbol
-    // von vorher konnte beides nicht zeigen.
+    // der Hoerer im RAUM schaut - ein bildschirmparallel aufgestelltes
+    // (Billboard-)Symbol koennte beides nicht zeigen.
     // Nie kleiner als in der Draufsicht und im selben Verhaeltnis zu M wie
     // dort (@dpa 20260826: "L in perspektive zu klein"). Die Stauchung durch
     // die flache Lage macht ihn ohnehin schmaler, als seine Breite vermuten
@@ -1973,7 +1974,7 @@ void FieldComponent::mouseUp (const juce::MouseEvent&)
         // - der Gesamtweg des gedachten Abklingens in EINEM Schritt statt ihn
         // hier tickweise nachzubilden (siehe Klassenkommentar in
         // FieldComponent.h, warum ein eigener Timer hier mit dem "Slew
-        // Limiter" kollidierte).
+        // Limiter" kollidieren wuerde).
         const Vec3 projected = lastDragWorldPos
                               + dragVelocityEstimate * (coastHalfLifeSeconds / std::log (2.0));
 
@@ -2108,7 +2109,7 @@ void FieldComponent::mouseWheelMove (const juce::MouseEvent& e, const juce::Mous
 void FieldComponent::mouseMagnify (const juce::MouseEvent&, float scaleFactor)
 {
     // Nur in der Perspektive, s. mouseWheelMove(). Pinch ist auf dem
-    // Touchpad die natuerlichste Zoomgeste und lief bisher ganz ins Leere.
+    // Touchpad die natuerlichste Zoomgeste.
     if (viewMode != ViewMode::Perspective || scaleFactor <= 0.0f)
         return;
 

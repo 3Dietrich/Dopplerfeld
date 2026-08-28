@@ -42,7 +42,7 @@ public:
     // Nur fuer den Test: was der Einheitenschalter gerade zeigt, was im
     // Textfeld von Fly Speed steht, und ein Klick auf den Schalter. Ohne diese
     // drei Griffe laesst sich die Einheitenumschaltung nur mit einem echten
-    // Fenster pruefen, und genau dieser Weg war schon einmal still kaputt.
+    // Fenster pruefen und bleibt damit automatisiert ungetestet.
     juce::String speedUnitLabelForTest() const { return speedUnitButton.getButtonText(); }
     juce::String flySpeedTextForTest() { return motionPanel.flySpeedTextForTest(); }
 
@@ -102,10 +102,10 @@ private:
     // Statuszeile unter dem Feld: Tempo, L-M-Abstand, Reflexions- und
     // Aufnahme/Wiedergabe-Status. Liest die gemittelten Werte aus
     // displayAverages, nicht den rohen 30Hz-Snapshot (s. updateDisplayAverages()).
-    // Die CPU-Last steht NICHT mehr in diesem Text, sondern in der eigenen
-    // Zeile direkt darueber (siehe cpuMeterBlockHeight, gezeichnet in
-    // paint()) - eine einzelne Anzeige statt zweier, die durch
-    // unterschiedliche Mittelung auseinanderlaufen koennten.
+    // Die CPU-Last steht in der eigenen Zeile direkt darueber (siehe
+    // cpuMeterBlockHeight, gezeichnet in paint()), nicht in diesem Text -
+    // eine einzelne Anzeige statt zweier, die durch unterschiedliche
+    // Mittelung auseinanderlaufen koennten.
     juce::String statusText() const;
 
     //------------------------------------------------------------------
@@ -135,12 +135,10 @@ private:
 
     std::vector<StatusFlash> statusFlashes;
 
-    // Kurz halten, dann sichtbar wegblenden. Die erste Fassung hielt sechs
-    // Sekunden und blendete vier lang - dabei stand praktisch alles dauernd da
-    // und man sah nicht mehr, was GERADE passiert (@dpa 20260828: "Das ist
-    // jetzt immer da ... Auf meine Kritik hin hast Du es so umgedreht, dass
-    // man kaum sieht wann es aktiv ist"). Ein Nachleuchten soll lange genug
-    // sein, um es zu lesen, und kurz genug, um es vom Jetzt zu unterscheiden.
+    // Kurz halten, dann sichtbar wegblenden (@dpa 20260828: "Das ist jetzt
+    // immer da ... Auf meine Kritik hin hast Du es so umgedreht, dass man kaum
+    // sieht wann es aktiv ist"). Ein Nachleuchten soll lange genug sein, um es
+    // zu lesen, und kurz genug, um es vom Jetzt zu unterscheiden.
     static constexpr double statusHoldSeconds = 0.8;
     static constexpr double statusFadeSeconds = 2.2;
 
@@ -370,9 +368,8 @@ public:
     static constexpr int motionContentHeight = 274;
     static constexpr int fieldContentHeight  = 564;   // fuenf Gruppen (Raum/Luft/Boden/Knall/Ausgang) mit zusammen sechs Reglerreihen (s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
-    // 226 minus die 40px, die frueher fuer den CPU-Balken reserviert waren -
-    // der sitzt jetzt in der eigenen Zeile am unteren Fensterrand statt hier
-    // (siehe cpuMeterBlockHeight), das Panel braucht darum weniger Hoehe.
+    // Der CPU-Balken sitzt in einer eigenen Zeile am unteren Fensterrand
+    // (siehe cpuMeterBlockHeight), nicht in diesem Panel.
     static constexpr int swarmContentHeight  = 115;   // eine Reglerreihe plus den Zeigen-Schalter, ohne Leerlauf darunter (s. SwarmPanel::resized())
 
     // Breite der Panelspalte - ebenfalls oeffentlich, aus demselben Grund wie
@@ -403,8 +400,7 @@ private:
     // Fenster-Laufzeit hinweg sichtbar - unabhaengig davon, ob ein Panel
     // (insbesondere das Schwarm-Panel) auf- oder zugeklappt ist, denn sie ist
     // die Warnung vor hoerbaren Aussetzern (@dpa 20260820: "auch ohne Klone
-    // immer sichtbar"). Frueher steckte dieser Balken in SwarmPanel::paint
-    // und war darum unsichtbar, sobald das Panel zu war.
+    // immer sichtbar").
     static constexpr int cpuMeterBarHeight   = 8;
     static constexpr int cpuMeterLabelHeight = 16;
     // Balken + kleiner Abstand + Beschriftungszeile + Abstand zur Statuszeile darunter.

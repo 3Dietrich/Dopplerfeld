@@ -391,13 +391,12 @@ private:
 
     // -- Nachlauf nach mouseUp() (@dpa-Feedback, siehe setCoastEnabled) --
     //
-    // KEIN eigener Simulations-Timer (erste Fassung hatte einen, siehe
-    // git-history) - der lief 60x/s neu gegen den jeweils aktiven Smoother
-    // an und kollidierte bei "Slew Limiter" mit dessen EIGENER Bremskurve
-    // (siehe SlewLimiter::tick, sqrt(2*a_max*d)): der Limiter hing dem
-    // ständig neu gesetzten, nahen Nachlauf-Ziel so eng auf den Fersen,
-    // dass beim eigentlichen Stopp kein spuerbarer Restweg mehr uebrig war
-    // - "läuft ein Stück, bremst nicht, bleibt stehen" (@dpa-Repro).
+    // KEIN eigener Simulations-Timer: der liefe 60x/s neu gegen den jeweils
+    // aktiven Smoother an und kollidiert bei "Slew Limiter" mit dessen
+    // EIGENER Bremskurve (siehe SlewLimiter::tick, sqrt(2*a_max*d)) - der
+    // Limiter haengt dem staendig neu gesetzten, nahen Nachlauf-Ziel dann so
+    // eng auf den Fersen, dass beim eigentlichen Stopp kein spuerbarer
+    // Restweg mehr uebrig bleibt.
     //
     // Stattdessen EINMALIG der analytisch integrierte Endpunkt eines
     // exponentiell abklingenden Nachlaufs (Integral von v0*exp(-t/tau) über
@@ -498,9 +497,9 @@ private:
     // jedem Ziehschritt wieder aufgeschlagen (@dpa 20260826: "wenn man den M
     // anfasst springt er meist ... es soll sich durchs click 0 bewegen. Erst
     // dragging zaehlt dann von der Klickposition aus.. ohne sprung, einfach
-    // ein mausversatz"). Ohne ihn setzte schon der blosse Klick die Position
-    // auf den Mauszeiger, und M sprang um bis zu einen Fangradius - beim
-    // Wackeln um mehr, weil man dann ohnehin nie genau auf seine Mitte
+    // ein mausversatz"). Ohne ihn wuerde schon der blosse Klick die Position
+    // auf den Mauszeiger setzen, und M spraenge um bis zu einen Fangradius -
+    // beim Wackeln um mehr, weil man dann ohnehin nie genau auf seine Mitte
     // trifft.
     //
     // Ausgenommen bleiben die Randmarken (M ausserhalb des Bildes oder

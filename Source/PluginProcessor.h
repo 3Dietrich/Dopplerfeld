@@ -164,10 +164,10 @@ public:
 
     // Was gerade tatsaechlich gerechnet wird (@dpa: kein stiller Deckel).
     int realCloneCount()  const { return activeRealClones.load(); }
-    // Billige Klone gibt es seit ihrer Entfernung nicht mehr (@dpa: "nur
-    // echte Klones, alles andere weg") - bleibt als 0-Konstante stehen, weil
-    // der einzige Aufrufer in PluginEditor.cpp sitzt und dort nicht
-    // angefasst werden darf.
+    // Billige Klone existieren nicht (@dpa: "nur echte Klones, alles andere
+    // weg") - die Funktion bleibt als 0-Konstante stehen, weil der einzige
+    // Aufrufer in PluginEditor.cpp sitzt und dort nicht angefasst werden
+    // darf.
     int cheapCloneCount() const { return 0; }
 
     // Notaus: zurueck auf die minimale sichere Konfiguration - nur der
@@ -177,12 +177,11 @@ public:
     void panicToMinimal() { panicRequest.store (true); }
 
     // "Audiomotor neu anlassen" (@dpa-Feedback): ein blosses
-    // dopplerEngine.reset() reichte nachweislich nicht - verlaesslich half
-    // bisher nur ein Wechsel der Audio-Puffergroesse, weil der einen echten
-    // prepareToPlay()-Durchlauf ausloest (setzt zusaetzlich Klangquelle
+    // dopplerEngine.reset() greift nicht weit genug - nur ein echter
+    // prepareToPlay()-Durchlauf setzt zusaetzlich Klangquelle
     // (engineGenerator/sampleSource/sourceHolder) und beide Positions-
-    // glaetter zurueck - Stellen, die dopplerEngine.reset() gar nicht
-    // beruehrt). restartEngine() macht deshalb genau das: haelt processBlock()
+    // glaetter zurueck, Stellen, die dopplerEngine.reset() gar nicht
+    // beruehrt. restartEngine() macht deshalb genau das: haelt processBlock()
     // an (suspendProcessing), ruft prepareToPlay() mit den aktuellen Werten
     // erneut auf, gibt wieder frei - vom Nachrichten-Thread aus, nicht aus
     // handlePendingRequests() heraus, weil prepareToPlay() selbst allokieren
@@ -337,10 +336,10 @@ public:
     // Ob dieser Block ueberhaupt ein Zustand DIESES Plugins ist.
     //
     // setStateInformation() steigt bei allem anderen still aus - richtig so,
-    // ein Host darf damit nicht abstuerzen. Fuer den Zustandsstreifen ist
-    // "still ausgestiegen" aber die falsche Auskunft: er meldete "geladen",
-    // waehrend in Wahrheit das vorige Preset weiterlief. Aufgefallen an einer
-    // MP3, die im Preset-Ordner lag.
+    // ein Host darf damit nicht abstuerzen. Fuer den Zustandsstreifen waere
+    // "still ausgestiegen" aber die falsche Auskunft: er meldete dann
+    // "geladen", waehrend in Wahrheit das vorige Preset weiterlaeuft - etwa
+    // bei einer MP3, die im Preset-Ordner liegt.
     bool stateBlockIsOurs (const void* data, int sizeInBytes) const;
 
     juce::AudioProcessorValueTreeState apvts;
@@ -694,8 +693,8 @@ private:
     // beim Regler ja passieren kann - dann von vorne ... erst wenn sich nichts
     // mehr aendert wird alles auf Anfang gesetzt, und wieder eingefadet").
     //
-    // Ein Feldgroessenwechsel lief bisher als Geometrie-Ueberblendung, und
-    // beim ZIEHEN am Regler heisst das: jeden Block eine neue, die vorige
+    // Ein Feldgroessenwechsel als Geometrie-Ueberblendung waere teuer: beim
+    // ZIEHEN am Regler bedeutet das jeden Block eine neue, die vorige
     // ueberholt nie. Gemessen das 28-fache der Ruhelast (load_check,
     // "Feldgroesse gezogen"), davon rund vier Fuenftel allein dadurch, dass
     // Quelle und Hoerer waehrenddessen durch den Meterraum wandern und dem
@@ -706,11 +705,11 @@ private:
     // appliedFieldMetres, nicht mit dem Reglerwert), und am Ende steht EIN
     // Umbau statt einer Kette von Ueberblendungen.
     //
-    // Genau daran war der frueher geprueffte Debounce gescheitert: er liess
-    // die Positionen sofort mit dem neuen Massstab rechnen, waehrend die
-    // Geometrie noch am alten hing - hoerbar und teurer als vorher. Der
-    // Unterschied ist nicht das Warten, sondern dass hier waehrend des
-    // Wartens nichts zu hoeren ist UND nichts weiterlaeuft.
+    // Ein Debounce allein reicht dafuer nicht: er liesse die Positionen
+    // sofort mit dem neuen Massstab rechnen, waehrend die Geometrie noch am
+    // alten haengt - hoerbar und teurer als noetig. Der Unterschied zum
+    // Schnitt ist nicht das Warten, sondern dass hier waehrend des Wartens
+    // nichts zu hoeren ist UND nichts weiterlaeuft.
 
     // Der Massstab, in dem die Geometrie GERADE steht. Alle Meterkoordinaten
     // haengen an ihm, nicht am Reglerwert - sonst liefen Position und
@@ -820,9 +819,9 @@ private:
     // Ende ist trotzdem weich: unter coastRestSpeed gilt die Quelle als
     // stehend, und was dann noch fehlt, ist unter einem Millimeter je Tick.
     //
-    // NICHT mehr fest, sondern je Nachlauf aus dem Restweg gerechnet - siehe
-    // coastTau. Der Wert hier ist nur noch der Rueckfall, wenn kein Restweg
-    // bekannt ist.
+    // Wird nicht fest verwendet, sondern je Nachlauf aus dem Restweg
+    // gerechnet - siehe coastTau. Der Wert hier ist nur der Rueckfall, wenn
+    // kein Restweg bekannt ist.
     static constexpr double coastTauSeconds  = 0.45;
     static constexpr double coastRestSpeed   = 0.05;   // m/s
 
@@ -832,13 +831,14 @@ private:
     // Mouserelease punkt laeuft?").
     //
     // Beim Loslassen steht die Quelle nicht dort, wo die Maus war: sie haengt
-    // um den Rueckstand des Glaetters hinterher. Der Nachlauf lief bisher mit
-    // fester Zeitkonstante ab dieser Stelle, der Rueckstand war damit
-    // verloren - je traeger der Glaetter, desto weiter blieb die Quelle vor
-    // dem Loslasspunkt stehen. Gemessen mit Tests/coast_probe.cpp bei
-    // Glaettung 1 s und abgebremster Geste: die Feder blieb 15,2 m davor
-    // stehen (34 % des Rueckstands aufgeholt), waehrend One-Pole mit 1,8 m
-    // praktisch traf - genau der Unterschied, den @dpa hoert.
+    // um den Rueckstand des Glaetters hinterher. Mit fester Zeitkonstante ab
+    // dieser Stelle ginge dieser Rueckstand verloren - je traeger der
+    // Glaetter, desto weiter bliebe die Quelle vor dem Loslasspunkt stehen.
+    // Gemessen mit Tests/coast_probe.cpp bei Glaettung 1 s und abgebremster
+    // Geste: eine feste Zeitkonstante liesse die Feder 15,2 m vor dem
+    // Loslasspunkt stehen (nur 34 % des Rueckstands aufgeholt), waehrend
+    // One-Pole mit 1,8 m praktisch traf - genau der Unterschied, den @dpa
+    // hoert.
     //
     // Der Weg des Nachlaufs ist v0 * 2 * tau (s.o.). Aufgeloest nach tau
     // trifft er den Loslasspunkt: tau = Restweg / (2 * v0). Die
@@ -851,7 +851,7 @@ private:
     // nicht in ein minutenlanges Kriechen laeuft. Wer die Obergrenze
     // erreicht, kommt nicht ganz an - "ungefaehr" ist ausdruecklich gewollt.
     // Unten, damit ein winziger Restweg bei hohem Tempo nicht zum Abriss
-    // wird. Oben nicht viel groesser als die alte feste Zeitkonstante: der
+    // wird. Oben nicht viel groesser als coastTauSeconds selbst: der
     // Weg des Nachlaufs ist v0 * 2 * tau, die ZEIT bis dorthin aber ein
     // Vielfaches von tau - bei 1,3 s waeren 90 % des Weges erst nach fuenf
     // Sekunden zurueckgelegt, und das ist kein Auslaufen mehr, sondern
@@ -902,7 +902,7 @@ private:
     // applyParameters - unabhängig davon, ob "Slew Limiter" als Verfahren
     // ausgewählt ist), NICHT der von @dpa gewählte Smoother-Typ: eine
     // Tau-basierte Glättung würde auch legitime grosse Bewegungen abrunden/
-    // verlangsamen (das war der eigentliche Einwand), ein Slew-Limiter mit
+    // verlangsamen (das ist der eigentliche Einwand dagegen), ein Slew-Limiter mit
     // ausreichend hohem Vmax/Amax lässt normales Tempo praktisch unverändert
     // durch und kappt nur den Überschwinger-Spitzenwert.
     bool wasMotionSlewGuardActive = false;
@@ -986,16 +986,16 @@ private:
     double lastShockDuckRange  = -1.0;
     double lastShockDuckAmount = 1.0;
 
-    // Tiefe der Absenkung waehrend einer Stossfront. Keine Einstellung mehr:
-    // sie stand immer auf voller Tiefe, und alles darunter liess waehrend des
-    // Knalls Motorton durch, den es dort nicht geben soll.
+    // Tiefe der Absenkung waehrend einer Stossfront. Keine Einstellung: die
+    // Tiefe steht immer auf voller Absenkung - jede geringere liesse
+    // waehrend des Knalls Motorton durch, den es dort nicht geben soll.
     static constexpr double shockDuckFixedAmount = 1.0;
     double lastJumpBoom        = 0.0;
     double lastJumpBoomSize    = -1.0;
 
-    // Wie viele Klone gerade WIRKLICH mit Loeserphysik laufen - seit der
-    // entfernten Automatik immer genau min(Regler, maxRealClones), aber der
-    // eigene Wert bleibt (Notaus setzt ihn auf 0, ohne den Regler anzufassen).
+    // Wie viele Klone gerade WIRKLICH mit Loeserphysik laufen: immer genau
+    // min(Regler, maxRealClones), aber der eigene Wert bleibt eigenstaendig
+    // (Notaus setzt ihn auf 0, ohne den Regler anzufassen).
     int    effectiveRealClones = 0;
 
     // Geglättete Wandlage. Eine Wand ist eine Spiegelebene; springt sie, dann
@@ -1137,7 +1137,8 @@ private:
     // Ein Zustand wurde geladen (setStateInformation). Anders als der
     // Engine-Restart braucht dieser Weg keinen Editor: der Audiothread holt
     // das Flag am Blockanfang ab und schneidet selbst. Ein Host ohne offenes
-    // Fenster flog sonst die ganze Strecke zur geladenen Position ab.
+    // Fenster wuerde sonst die ganze Strecke zur geladenen Position
+    // abfliegen.
     std::atomic<bool> stateLoadRequest    { false };
 
     std::atomic<bool> motorGateEnabled    { false };
