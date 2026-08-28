@@ -37,6 +37,10 @@ xattr -dr com.apple.quarantine /Pfad/zur/Dopplerfeld.app
   Löserphysik gerechnet, mit CPU-Balken und Notaus
 - Optionale N-Wellen-Synthese für den Überschallknall
 - Motor-Generator, Sample-Player und Live-Audioeingang als Klangquelle
+- Zustandsstreifen über dem Feld: Presets laden, durchhören und sichern ohne
+  Dateidialog; die Klappzustände der Panelspalte reisen im Preset mit
+- Beim allerersten Start lädt ein mitgeliefertes Preset, danach wieder der
+  zuletzt benutzte Zustand
 
 ## Bauen aus dem Quellcode
 

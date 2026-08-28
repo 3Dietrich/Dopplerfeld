@@ -38,13 +38,14 @@ Source/Util/       - Crossfade-Engine (generisch), FieldSnapshot-Datenformat,
                       Utf8 (Umlaute sicher an JUCE übergeben).
 Source/UI/         - JUCE-Component-Schicht: Feldanzeige, Regler-Panels,
                       Kopf-/Quellen-Symbole, Oszilloskop, Pegelmesser,
-                      Begrüßungsfenster; alle Bedientexte zentral in
-                      Labels.h/Tooltips.h.
+                      Begrüßungsfenster, Zustandsstreifen (PresetBar); alle
+                      Bedientexte zentral in Labels.h/Tooltips.h, alle Farben
+                      und Reglermaße in Theme.h.
 Source/*.cpp (Wurzel) - PluginProcessor/PluginEditor: Zusammenbau, kennt alle
                       Schichten, enthält selbst möglichst wenig Logik.
 Tests/             - solver_check (Physik-Löser gegen geschlossene Lösung),
                       load_check (Lasttest inkl. Extremfälle, offline). Beide
-                      sind die einzigen ctest-Tests; daneben liegen hier neun
+                      sind die einzigen ctest-Tests; daneben liegen hier zwölf
                       Messprogramme, die bewusst KEIN Test sind (siehe
                       Build & Test).
 ```
@@ -120,8 +121,12 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   Panel-Klasse als Inhalt: `EngineControlPanel` (Motorsteuerung),
   `EnginePanel` (Motor), `SamplePanel` (Sample), `MotionPanel` (Bewegung),
   `FieldPanel` (Feld/Physik/Ausgang), `WallPanel` (Reflexionen/Wände),
-  `SwarmPanel` (Schwarm/Klone) - alle standardmäßig zugeklappt
-  (`CollapsiblePanel::expanded` startet auf `false`). Unter dem Feld sitzt
+  `SwarmPanel` (Schwarm/Klone). Welche davon offen stehen, gehört zum
+  Zustand: eine Bitmaske (`panelsOpen`) reist im Preset mit, ein Preset ohne
+  die Property klappt alles zu. Über dem Feld liegt der Zustandsstreifen
+  (`PresetBar`): Liste, zwei Pfeile, Sichern/Neu/Ordner - laden und speichern
+  ohne den nativen Dateidialog, dieselben Dateien wie "Save/Load State" der
+  Standalone-App. Unter dem Feld sitzt
   das Oszilloskop (`ScopeComponent` + Werkzeugleiste aus Ein/Aus, Freeze,
   Sync, Play; wegschaltbar, dann schrumpft das Fenster mit), darunter
   CPU-Balken und Statuszeile. Der Pegelmesser (`LevelMeter`) gehört dem
@@ -129,6 +134,9 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   Als letztes Kind über allem liegt das `WelcomeOverlay`, das nur beim
   allerersten Start erscheint (`hasBeenSeen()`/`markAsSeen()`). 30-Hz-Timer
   holt `FieldSnapshot` ab, aktualisiert Statuszeile/Button-Texte.
+  Zum allerersten Start gehört auch der Klang: `loadStartPresetOnFirstRun()`
+  im Processor-Konstruktor spielt einmalig das mitgelieferte Start-Preset ein
+  (siehe Stand-Abschnitt weiter unten).
 
 ## Parameter
 
@@ -186,34 +194,131 @@ Testbinaries hängen an denselben Quellen, `--target Dopplerfeld_Standalone`
 lässt sie stehen und `ctest` liefe danach gegen den alten Stand.
 
 **Messprogramme neben den Tests.** In `Tests/` liegen ausser den beiden
-ctest-Tests neun Diagnose-Programme, die absichtlich keine Tests sind: sie
+ctest-Tests zwölf Diagnose-Programme, die absichtlich keine Tests sind: sie
 messen oder zeichnen etwas, statt ein Kriterium zu prüfen, und würden eine
-grüne Testsuite nur verwässern. Acht davon stehen als
+grüne Testsuite nur verwässern. Zehn davon stehen als
 `EXCLUDE_FROM_ALL`-Targets in `CMakeLists.txt` und werden gezielt gebaut
 (`cmake --build build --target <name>`):
 
 | Target | misst / zeigt |
 |---|---|
 | `loop_peak` | Rundenpunkt einer Wiedergabe |
+| `burst_probe` | lauter Ausbruch nach einem Preset-Wechsel |
 | `swarm_probe` | Klon-Schwarm |
 | `coast_probe` | Nachlauf |
+| `preset_probe` | "manchmal zu leise" nach einem Preset-Wechsel |
 | `grab_probe` | Anfassen von M |
 | `scope_play_probe` | Play-Knopf am Scope |
 | `panel_shot` | Layout-Bilder des Bewegungs-Panels |
 | `field_shot` | Feldanzeige, Randmarke |
 | `editor_shot` | Bilder von Editor und Schwarm-Panel |
 
-Das neunte, `Tests/reverse_probe.cpp` (zeitverkehrt gehörter Zweig im
-Überschall), steht gar nicht in CMake - es braucht nur Löser und Trajektorie
-und wird direkt übersetzt, die Zeile dafür steht in seinem Dateikopf.
+Die restlichen zwei, `Tests/reverse_probe.cpp` (zeitverkehrt gehörter Zweig im
+Überschall) und `Tests/reverse_level_probe.cpp`, stehen gar nicht in CMake -
+sie brauchen nur Löser und Trajektorie und werden direkt übersetzt, die Zeile
+dafür steht jeweils im Dateikopf.
 
-**Wichtig:** dieses Projekt hat bislang durchgehend warnungsfrei gebaut
-(volle JUCE-Warnschärfe: `-Wall -Wextra -Wshadow-all -Wconversion
--Wsign-conversion -Wfloat-equal -Wcast-align -Wshorten-64-to-32`). Neue
-Warnungen sind ernst zu nehmen, nicht zu ignorieren - bewusste Ausnahmen
-(z.B. `-Wfloat-equal` bei absichtlichen Identitätsvergleichen) werden lokal
-per `#pragma clang diagnostic` unterdrückt und im Kommentar begründet, nicht
-projektweit abgeschaltet.
+**Wichtig:** dieses Projekt baut warnungsfrei (volle JUCE-Warnschärfe:
+`-Wall -Wextra -Wshadow-all -Wconversion -Wsign-conversion -Wfloat-equal
+-Wcast-align -Wshorten-64-to-32`). Neue Warnungen sind ernst zu nehmen, nicht
+zu ignorieren - bewusste Ausnahmen (z.B. `-Wfloat-equal` bei absichtlichen
+Identitätsvergleichen) werden lokal per
+`JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE`/`..._END` um genau die eine Zeile
+gelegt und im Kommentar begründet, nicht projektweit abgeschaltet.
+
+Prüfen lässt sich das am ganzen Bau, nicht am inkrementellen: eine Warnung in
+einer Datei, die make gerade nicht anfasst, taucht im Log nicht auf.
+
+## Stand 2026-08-28 (v0.3.0: Zustandsstreifen, Preset ohne Erbe, Farbwelt, Startzustand)
+
+### Laden und Sichern ohne Dateidialog
+
+`Source/UI/PresetBar.cpp` ist eine Zeile über dem Feld: Liste, zwei Pfeile,
+`Sichern`, `Neu...`, `Ordner...`. Sie kennt keine Parameter, nur Dateien - der
+Editor hängt sich über `onLoad`/`onSave`/`onCheck` ein und reicht die Blöcke
+an `setStateInformation()`/`getStateInformation()` weiter. Das Format ist
+dasselbe wie bei "Save/Load State" der Standalone-App, die vorhandenen Presets
+bleiben also unverändert brauchbar. Der Ordner wird einmal gewählt und in
+derselben `.settings`-Datei gemerkt wie die übrigen Merkposten der Oberfläche
+(`WelcomeOverlay`, `FieldComponent`).
+
+Der Dateidialog des Systems braucht beim ersten Öffnen über eine Sekunde -
+daran lässt sich von hier aus nichts ändern, wohl aber daran, dass man ihn
+überhaupt braucht.
+
+Dateinamen sind Benutzertext und werden nicht übersetzt. Damit die
+Sprachprüfung in `load_check` nicht über deutsche Namen im EN-Betrieb
+stolpert, tragen Liste und Statuszeile die Kennung
+`PresetBar::userTextComponentId`.
+
+### Ein Preset erbt nichts mehr vom vorigen
+
+`apvts.replaceState()` setzt nur, was im Baum steht; jeder Parameter ohne
+Eintrag behält seinen aktuellen Wert. Ein Preset aus einer älteren Fassung
+übernahm damit alles, was seither dazugekommen ist, vom zuletzt geladenen
+Preset - und klang beim zweiten Laden anders als beim ersten. Von 144 in den
+Presets vorkommenden Parametern fehlten einzelnen bis zu 50.
+
+`setStateInformation()` ergänzt jetzt **vor** dem Übernehmen jeden fehlenden
+Parameter mit seinem Grundwert. So steht der vollständige Satz auch in
+`apvts.state`, und wer das Preset danach sichert, schreibt es vollständig
+zurück.
+
+### Was sonst noch im Zustand steckt
+
+Neben den Parametern hängen als Properties am Wurzelknoten: die
+Bewegungsaufzeichnung (`motionFrames`/`motionRateHz`/`motionWasPlaying`), die
+Quellwahl (`sourceKind`), der Sample-Pfad (`samplePath`, relativ zu
+`presetsRootDirectory()`, wenn er darunter liegt), der Schalter "Motor bei
+Griff" (`motorGateEnabled`) und **neu** die Klappzustände der Panelspalte
+(`panelsOpen`, Bitmaske). Ein Preset für den Vorbeiflug zeigt damit die
+Bewegung offen, eines für den Motor den Motor; ein Preset ohne die Property
+klappt alles zu.
+
+### Startzustand beim allerersten Öffnen
+
+Beim allerersten Start auf einem Rechner stand bisher der Grundzustand da -
+Motor auf Standardwerten, nichts in Bewegung. Jetzt spielt
+`DopplerfeldProcessor::loadStartPresetOnFirstRun()` am Ende des Konstruktors
+einmalig ein mitgeliefertes Preset ein (`600kmh-Drone@600m²`).
+
+Zwei Dinge machen das unauffällig:
+
+- Der Merkposten (`startPresetLoaded`) liegt in derselben `.settings`-Datei
+  wie `welcomeSeen`. Steht er, passiert nichts mehr.
+- Der Aufruf sitzt im **Konstruktor**, also vor dem Zeitpunkt, an dem die
+  Standalone-App ihren gespeicherten Zustand einspielt. Ab dem zweiten Start
+  überschreibt der gespeicherte Zustand das Preset also von selbst - "danach
+  wie bisher: was zuletzt aufgerufen war" braucht keinen eigenen Code.
+
+Das Preset liegt als Kopie **in der Programmdatei**, nicht als Pfad: auf einem
+frischen Rechner gibt es noch keinen Preset-Ordner. `CMakeLists.txt` kopiert
+die eine Quelldatei aus `presets/` zur Bauzeit unter einen Namen ohne
+Sonderzeichen und gibt sie an `juce_add_binary_data` - `@` und `²` haben in
+einem C++-Bezeichner nichts zu suchen, und eine zweite gepflegte Kopie im
+Quellbaum wäre die schlechtere Antwort darauf.
+
+### Farbwelt und Reglermaße an einer Stelle
+
+`Source/UI/Theme.h` hält Grundflächen, Linien, Textfarben, die sieben
+Bereichsfarben der Panelspalte und die Zellenmaße der Regler
+(`Theme::knobWidth`/`knobHeight`). Die Akzentfarbe färbt nie die Fläche
+selbst, sondern liegt in sehr geringer Deckkraft über dem Panelgrund; Rahmen
+bleiben kontrastarm, Radien klein.
+
+### Überschall-Frontlinien im Feld
+
+Die Feldanzeige zeichnet bei Überschall die Stoßfront nicht als geschätzte
+Kegelachse, sondern aus den Wellenfronten selbst: Tangenten an die
+gezeichneten Kreise, dazwischen Bogenstücke statt Zacken, nach Höhe gestaffelt
+(`FieldComponent`).
+
+### Zerlegter Parameterdurchlauf
+
+`DopplerfeldProcessor::applyParameters()` war eine Methode über mehrere
+hundert Zeilen und ist in thematische Methoden zerlegt (Quelle, Bewegung,
+Feld/Physik, Reflexionen, Schwarm, Ausgang). Reine Umstellung, kein anderer
+Klang - der Aufrufpunkt pro Block bleibt derselbe.
 
 ## Stand 2026-08-26 (Z-Anteil gemeinsam, Kopf in der Perspektive, Anfassen ohne Sprung, RPM)
 
