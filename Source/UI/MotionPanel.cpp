@@ -482,8 +482,9 @@ void MotionPanel::resized()
     // Dieselben Masse ueberall heissen: die Panels sehen aus wie ein Geraet
     // und nicht wie zwei - und die eingesparte Breite ist genau das, was die
     // Jitter-Zeile braucht, um samt Schalter in EINE Reihe zu passen.
-    constexpr int knobW = 84;
-    constexpr int knobH = 67;
+    // Zellenmasse siehe Theme::knobWidth/knobHeight.
+    constexpr int knobW = Theme::knobWidth;
+    constexpr int knobH = Theme::knobHeight;
     auto area = getLocalBounds().reduced (8);
 
     // Reiter oben: immer genau eine der drei Bewegungsquellen sichtbar

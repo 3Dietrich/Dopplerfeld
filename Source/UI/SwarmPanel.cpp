@@ -82,16 +82,9 @@ void SwarmPanel::refreshTooltips()
 
 void SwarmPanel::resized()
 {
-    // Nur das DREHRAD auf zwei Drittel (@dpa 20260823, Berichtigung: "NUR die
-    // Knobs! Label und Value sollen so bleiben wie zuvor"). Beschriftung
-    // (18 px) und Wertefeld (18 px) bleiben unveraendert, die Zellenhoehe
-    // schrumpft genau um das Drittel, das dem Drehrad selbst gehoert: aus
-    // 82 - 18 - 18 = 46 px Rad werden 31, also 31 + 36 = 67 px Zelle. Die
-    // Zellenbreite bleibt ebenfalls, sonst wuerde das Wertefeld beschnitten -
-    // JUCE zeichnet das Rad mit dem kleineren der beiden Masse, die Hoehe
-    // allein macht es also klein.
-    constexpr int knobW = 84;
-    constexpr int knobH = 67;
+    // Zellenmasse siehe Theme::knobWidth/knobHeight.
+    constexpr int knobW = Theme::knobWidth;
+    constexpr int knobH = Theme::knobHeight;
 
     auto area = getLocalBounds().reduced (8);
 

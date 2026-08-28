@@ -36,6 +36,20 @@ namespace Theme
     // Ecken: klein halten, nicht rund.
     inline constexpr float cornerRadius = 3.0f;
 
+    // --- Masse einer Reglerzelle --------------------------------------
+    //
+    // Eine Zelle traegt Beschriftung (18 px), Drehrad und Wertefeld (18 px).
+    // Das Drehrad steht auf zwei Dritteln seiner vollen Groesse (@dpa
+    // 20260823, Berichtigung: "NUR die Knobs! Label und Value sollen so
+    // bleiben wie zuvor"): aus 82 - 18 - 18 = 46 px Rad werden 31, die Zelle
+    // ist damit 31 + 36 = 67 px hoch.
+    //
+    // Die Breite bleibt voll, sonst wird das Wertefeld beschnitten - JUCE
+    // zeichnet das Rad mit dem kleineren der beiden Masse, die Hoehe allein
+    // macht es also klein.
+    inline constexpr int knobWidth  = 84;
+    inline constexpr int knobHeight = 67;
+
     // --- Akzente ------------------------------------------------------
     inline const juce::Colour cyan      { 0xff52d3e6 };
     inline const juce::Colour pink      { 0xffef5fa6 };

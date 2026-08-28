@@ -2,6 +2,7 @@
 
 #include "../Params.h"
 #include "RoundedSlider.h"
+#include "Theme.h"
 #include "Tooltips.h"
 #include "Labels.h"
 #include <juce_audio_processors/juce_audio_processors.h>
