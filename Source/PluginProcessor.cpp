@@ -1146,6 +1146,29 @@ void DopplerfeldProcessor::handlePendingRequests()
             sourceSmoothers.reset (cutTargetMetres);
             wasMotionSlewGuardActive = false;
 
+            // Der HOERER springt mit (@dpa 20260828: "der L schaltet beim
+            // Preset Umschalten nicht sofort um (wie alles andere, wie es
+            // sollte), sondern wird von alt zu neu gesmoothed bewegt, was zu
+            // keinem Preset gehoert, nur im Uebergang vorkommt und falsch
+            // ist").
+            //
+            // Ein Schnitt ist ein Umbau, keine Bewegung - das galt bisher nur
+            // fuer die Quelle. Der Hoerer lief weiter durch seinen Glaetter
+            // und fuhr die Strecke zwischen den beiden Presets ab: eine
+            // Kopfbewegung mit Doppler und Pegelfahrt, die in keinem der
+            // beiden Zustaende vorkommt.
+            //
+            // Der Sprung ist hier unhoerbar, weil er im stillen Fenster
+            // zwischen Aus- und Einblende liegt - dieselbe Ueberlegung wie
+            // bei der Quelle eine Zeile darueber.
+            listenerState.head = listenerTargetMetres;
+            listenerSmoothers.reset (listenerTargetMetres);
+
+            smoothedYawRadians = targetYawRadians;
+            listenerState.yaw  = targetYawRadians;
+
+            dopplerEngine.setListener (listenerState);
+
             dopplerEngine.setSourceTarget (cutTargetMetres);
 
             // Die Vorgeschwindigkeit gehoert zum Ereignis, das den Schnitt

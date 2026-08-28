@@ -6717,6 +6717,87 @@ int main()
     }
 
     //==================================================================
+    // Der Hoerer springt beim Zustandswechsel (@dpa 20260828: "der L schaltet
+    // beim Preset Umschalten nicht sofort um (wie alles andere, wie es
+    // sollte), sondern wird von alt zu neu gesmoothed bewegt, was zu keinem
+    // Preset gehoert, nur im Uebergang vorkommt und falsch ist").
+    //
+    // Nachgestellt wird ein Zustandswechsel, bei dem der HOERER woanders
+    // steht. Gemessen wird, wie viele Bloecke er braucht, bis er dort ist.
+    // Ein Schnitt ist ein Umbau: einer, hoechstens zwei.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres,  1000.0f);
+        setParam (proc, Params::lisX,         0.2f);
+        setParam (proc, Params::lisY,         0.5f);
+        setParam (proc, Params::srcX,         0.5f);
+        setParam (proc, Params::srcY,         0.5f);
+        setParam (proc, Params::smootherTau,  0.5f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        Stats settle;
+        render (proc, buffer, 1.0, settle, [] (double) {});
+
+        FieldSnapshot snap;
+        proc.fillFieldSnapshot (snap);
+
+        const double startX = snap.listener.head.x;
+
+        // Der Zustandswechsel: Zustand sichern, Hoerer verschieben, Zustand
+        // wieder laden. Genau das macht ein Presetwechsel - die Parameter
+        // stehen sofort, und der Schnitt raeumt hinterher auf.
+        juce::MemoryBlock state;
+        setParam (proc, Params::lisX, 0.8f);
+        proc.getStateInformation (state);
+        setParam (proc, Params::lisX, 0.2f);
+
+        Stats back;
+        render (proc, buffer, 0.5, back, [] (double) {});
+
+        proc.setStateInformation (state.getData(), (int) state.getSize());
+
+        // Bloecke zaehlen, bis der Hoerer steht. Der Schnitt braucht seine
+        // Ausblende (cutFadeSeconds), danach muss er da sein.
+        const double targetX = 0.8 * 1000.0;
+
+        int blocksToArrive = -1;
+
+        for (int i = 0; i < 200; ++i)
+        {
+            Stats one;
+            render (proc, buffer, (double) blockSize / sampleRate, one, [] (double) {});
+
+            proc.fillFieldSnapshot (snap);
+
+            if (std::abs (snap.listener.head.x - targetX) < 1.0)
+            {
+                blocksToArrive = i + 1;
+                break;
+            }
+        }
+
+        const double blockMs = 1000.0 * (double) blockSize / sampleRate;
+
+        std::printf ("%-22s Hoerer beim Zustandswechsel: von %.0f m nach %.0f m in %d "
+                     "Bloecken (%.0f ms)\n", "Zustandswechsel L",
+                     startX, targetX, blocksToArrive,
+                     blocksToArrive < 0 ? -1.0 : blocksToArrive * blockMs);
+
+        // Grosszuegig: die Ausblende dauert 12 ms, danach ein Block. Der
+        // Fehler brauchte mit tau 0,5 s ueber eine Sekunde.
+        if (blocksToArrive < 0 || blocksToArrive * blockMs > 60.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Hoerer gleitet beim Zustandswechsel, "
+                         "statt zu springen.\n");
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // Stille nach dem Wiedereinschalten (@dpa 20260828: "diese minutenlange
     // Stille muss weg! Der Stille-Bug ist noch nicht weg!! ... ist gerade
     // wieder nur der Ueberschallknall, aber NICHTS anderes ... jetzt ist der

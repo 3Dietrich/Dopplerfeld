@@ -14,6 +14,7 @@
 #include "Params.h"
 #include "PluginProcessor.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -326,6 +327,161 @@ int main()
         std::printf ("  %s\n", affected == 0
                      ? "keines: jedes Preset laedt unabhaengig davon, was vorher lief."
                      : "ERBLICH BELASTET - siehe oben.");
+    }
+
+    // 2e. Last nach dem Umschalten (@dpa 20260828: "die Umschaltung von
+    //     'mach2.5 vorbei' nach 'MachChaos' endet oft im roten CPU Bereich und
+    //     es erholt sich kaum, aufgrund der starken Bewegungen in 'mach2.5
+    //     vorbei' ... Wenn ich 'Engine Restart'e geht's dann meist").
+    //
+    //     Verglichen wird dieselbe Last dreimal: MachChaos in einem frischen
+    //     Processor, MachChaos nach dem bewegten Vorgaenger, und MachChaos
+    //     nach dem Vorgaenger PLUS Engine-Neustart. Bleibt die mittlere Zahl
+    //     oben und faellt die dritte zurueck, gehoert die Last einem Zustand,
+    //     den das Laden nicht raeumt - und dann steht auch gleich da, was der
+    //     Neustart raeumt und das Laden nicht.
+    {
+        std::printf ("\n=== Last nach dem Umschalten auf %s\n", loud);
+
+        juce::AudioBuffer<float> buffer (2, blockSize);
+        juce::MidiBuffer         midi;
+
+        // Zusaetzlich zur Loeserarbeit die Wanduhr: nur sie sagt, ob es fuer
+        // den roten Bereich reicht. Sie schwankt auf einem beschaeftigten
+        // Rechner, deshalb steht sie NEBEN der Auswertungszahl und nicht
+        // statt ihrer.
+        const double budgetMicros = 1.0e6 * (double) blockSize / sampleRate;
+
+        double lastWorstPercent = 0.0;
+        double lastMeanPercent  = 0.0;
+
+        auto evalsPerBlock = [&] (DopplerfeldProcessor& proc, double seconds)
+        {
+            const std::uint64_t before = proc.solverEvaluations();
+            const int blocks = (int) std::ceil (seconds * sampleRate / blockSize);
+
+            double worst = 0.0, total = 0.0;
+
+            for (int b = 0; b < blocks; ++b)
+            {
+                buffer.clear();
+
+                const auto t0 = std::chrono::steady_clock::now();
+                proc.processBlock (buffer, midi);
+                const double micros = std::chrono::duration<double, std::micro> (
+                                          std::chrono::steady_clock::now() - t0).count();
+
+                worst  = std::max (worst, micros);
+                total += micros;
+            }
+
+            lastWorstPercent = 100.0 * worst / budgetMicros;
+            lastMeanPercent  = 100.0 * (total / blocks) / budgetMicros;
+
+            return (double) (proc.solverEvaluations() - before) / (double) blocks;
+        };
+
+        // Zeitverlauf statt einer Zahl: "erholt sich kaum" ist eine Aussage
+        // ueber den VERLAUF, und eine einzelne Mittelung ueber vier Sekunden
+        // kann ihn nicht zeigen.
+        auto course = [&] (const char* what, bool withPredecessor, bool restart)
+        {
+            DopplerfeldProcessor proc;
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            if (withPredecessor)
+            {
+                if (! loadPreset (proc, quiet))
+                    return;
+
+                evalsPerBlock (proc, 8.0);
+            }
+
+            if (! loadPreset (proc, loud))
+                return;
+
+            if (restart)
+                proc.requestEngineRestart();
+
+            std::printf ("  %-38s", what);
+
+            for (int sec = 0; sec < 10; ++sec)
+                std::printf (" %6.0f", evalsPerBlock (proc, 1.0));
+
+            std::printf ("\n");
+        };
+
+        std::printf ("  %-38s %s\n", "", " je Sekunde ab dem Laden, Auswertungen/Block");
+        course ("frisch",                     false, false);
+        course ("nach 'mach2.5 vorbei'",      true,  false);
+        course ("dito + Engine Restart",      true,  true);
+
+        // a) frisch
+        {
+            DopplerfeldProcessor proc;
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            if (! loadPreset (proc, loud))
+                return 1;
+
+            evalsPerBlock (proc, 2.0);   // einschwingen
+            const double e = evalsPerBlock (proc, 4.0);
+            std::printf ("  %-46s %8.0f Auswertungen je Block | Budget Ø %.0f %%, "
+                         "schlechtester Block %.0f %%\n",
+                         "frisch geladen", e, lastMeanPercent, lastWorstPercent);
+        }
+
+        // b) nach dem bewegten Vorgaenger
+        double afterSwitch = 0.0;
+        {
+            DopplerfeldProcessor proc;
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            if (! loadPreset (proc, quiet))
+                return 1;
+
+            evalsPerBlock (proc, 8.0);   // den Vorgaenger wirklich laufen lassen
+
+            if (! loadPreset (proc, loud))
+                return 1;
+
+            evalsPerBlock (proc, 2.0);
+            afterSwitch = evalsPerBlock (proc, 4.0);
+
+            std::printf ("  %-46s %8.0f Auswertungen je Block | Budget Ø %.0f %%, "
+                         "schlechtester Block %.0f %%\n",
+                         "nach 'mach2.5 vorbei'", afterSwitch,
+                         lastMeanPercent, lastWorstPercent);
+        }
+
+        // c) dasselbe, danach Engine-Neustart
+        {
+            DopplerfeldProcessor proc;
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            if (! loadPreset (proc, quiet))
+                return 1;
+
+            evalsPerBlock (proc, 8.0);
+
+            if (! loadPreset (proc, loud))
+                return 1;
+
+            evalsPerBlock (proc, 2.0);
+
+            proc.requestEngineRestart();
+            evalsPerBlock (proc, 2.0);
+
+            const double e = evalsPerBlock (proc, 4.0);
+            std::printf ("  %-46s %8.0f Auswertungen je Block | Budget Ø %.0f %%, "
+                         "schlechtester Block %.0f %%\n",
+                         "nach 'mach2.5 vorbei' + Engine Restart", e,
+                         lastMeanPercent, lastWorstPercent);
+        }
     }
 
     // 3. Alle Presets der Reihe nach, je vier Sekunden. Eine Uebersicht, an
