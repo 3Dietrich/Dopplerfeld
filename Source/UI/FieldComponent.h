@@ -321,37 +321,6 @@ private:
     // getuned, bei kleineren Feldern "voller heller Schallkreise" - siehe
     // .cpp). Reiner Anzeige-Faktor, unabhaengig von der Geometrie.
     float wavefrontBrightnessFactor() const;
-
-    // -- Machscher Kegel ---------------------------------------------------
-    //
-    // Geometrie des Kegels in WELTkoordinaten, ansichtsunabhaengig: Spitze an
-    // der Quelle, Achse entgegen der Flugrichtung, halber Oeffnungswinkel
-    // mü = asin(c/v). valid ist nur bei Ueberschall gesetzt - unterhalb
-    // Mach 1 gibt es keinen Kegel und es bleibt auch nichts stehen.
-    //
-    // baseCircle ist der Basiskreis in 3D abgetastet (erster Punkt am Ende
-    // wiederholt, also ein geschlossener Linienzug). Aus ihm entsteht die
-    // Silhouette in jeder Ansicht, statt fuer jede Perspektive eigene Achsen
-    // zu rechnen.
-    struct MachCone
-    {
-        bool   valid = false;
-        Vec3   apex;
-        Vec3   baseCentre;
-        double baseRadius = 0.0;
-        std::vector<Vec3> baseCircle;
-    };
-
-    MachCone machConeWorld() const;
-    static constexpr int machConeBasePoints = 32;
-
-    // Die zwei Mantellinien aus bereits projizierten Punkten - dieselbe
-    // Rechnung fuer Draufsicht und Perspektive, siehe .cpp.
-    void strokeMachConeSilhouette (juce::Graphics& g, juce::Point<float> apexPx,
-                                   const std::vector<juce::Point<float>>& basePx) const;
-
-    void drawMachCone (juce::Graphics& g) const;
-    void drawPerspectiveMachCone (juce::Graphics& g) const;
     void drawTrail (juce::Graphics& g) const;
 
     // Vorbeiflug-Wegvorschau (@dpa-Feedback): geplante Reststrecke + Punkt

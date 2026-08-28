@@ -2,23 +2,11 @@
 #include "Labels.h"
 #include "Tooltips.h"
 #include "HeadSymbol.h"
-#include "Theme.h"
 
-#include <algorithm>
 #include <cmath>
-#include <utility>
 
 namespace
 {
-    // Kreuzprodukt - nur hier gebraucht (zwei Achsen senkrecht zur Kegelachse,
-    // siehe machConeWorld()), deshalb lokal statt in Vec3.h.
-    Vec3 cross3D (const Vec3& a, const Vec3& b)
-    {
-        return { a.y * b.z - a.z * b.y,
-                 a.z * b.x - a.x * b.z,
-                 a.x * b.y - a.y * b.x };
-    }
-
     // "Schoene" Gitterschrittweite (1-2-5-Stufung) fuer ungefaehr
     // targetDivisions Linien ueber die Feldbreite - Standardalgorithmus,
     // hier lokal statt einer eigenen Util-Datei, weil er nur hier gebraucht wird.
@@ -272,7 +260,6 @@ void FieldComponent::paint (juce::Graphics& g)
     drawWalls (g);
     drawWavefronts (g);
     drawReflectionWavefronts (g);
-    drawMachCone (g);
     drawTrail (g);
     drawFlyByPreview (g);
     drawSource (g);
@@ -619,209 +606,6 @@ void FieldComponent::drawReflectionWavefronts (juce::Graphics& g) const
     // bei zwei aktiven Waenden schnell unruhig.
     for (const auto& wf : snapshot.wallPairWavefronts)
         drawSet (wf, juce::Colours::hotpink, 1.3f);
-}
-
-FieldComponent::MachCone FieldComponent::machConeWorld() const
-{
-    MachCone cone;
-
-    // snapshot.speedOfSound ist die temperaturabhaengige Schallgeschwindigkeit
-    // der Engine und gehoert zum selben Augenblick wie sourceSpeed - nur aus
-    // diesem Paar wird Mach.
-    const double c = snapshot.speedOfSound > 0.0 ? snapshot.speedOfSound : speedOfSound;
-    const double v = snapshot.sourceSpeed;
-
-    // Unterhalb Mach 1 gibt es keinen Kegel (@dpa: "nur wo er auftaucht, nicht
-    // im subsonic") - kein Rest, kein Ausblenden.
-    if (c <= 0.0 || v <= c)
-        return cone;
-
-    if (snapshot.wavefrontCount <= 0 || snapshot.trailCount < 2)
-        return cone;
-
-    // Flugrichtung aus den letzten Spurpunkten. Der Rueckgriff faengt ein
-    // Stueck vor dem juengsten Punkt an und geht weiter zurueck, solange zwei
-    // Punkte praktisch aufeinanderliegen - direkt benachbarte Punkte tun das
-    // bei feiner Dezimierung leicht, und aus ihnen liesse sich keine Richtung
-    // gewinnen.
-    const int newest = snapshot.trailCount - 1;
-    Vec3 dir;
-
-    for (int back = juce::jmin (8, newest); back <= newest; ++back)
-    {
-        const Vec3 delta = snapshot.trail[(size_t) newest]
-                         - snapshot.trail[(size_t) (newest - back)];
-
-        if (delta.lengthSquared() > 1.0e-12)
-        {
-            dir = delta.normalised();
-            break;
-        }
-    }
-
-    if (dir.lengthSquared() <= 0.0)
-        return cone;
-
-    // Laenge entlang der Achse bis zur AELTESTEN gezeichneten Wellenfront:
-    // die steht am Ende der Liste, weil publishSnapshot() von der juengsten
-    // rueckwaerts zaehlt. Damit endet der Kegel genau dort, wo die aeusserste
-    // der cyanen Fronten liegt, deren Einhuellende er ausziehen soll.
-    const double age = snapshot.now - snapshot.wavefrontEmitTimes[(size_t) (snapshot.wavefrontCount - 1)];
-
-    if (age <= 0.0)
-        return cone;
-
-    const double length = v * age;
-    const double mu     = std::asin (juce::jlimit (-1.0, 1.0, c / v));
-    const double radius = length * std::tan (mu);
-
-    if (! std::isfinite (radius) || radius <= 0.0)
-        return cone;
-
-    cone.apex       = snapshot.sourcePos;
-    cone.baseCentre = cone.apex - dir * length;
-    cone.baseRadius = radius;
-
-    // Zwei Achsen senkrecht zur Kegelachse. Der Hilfsvektor darf nicht parallel
-    // zu dir liegen, sonst faellt das Kreuzprodukt zusammen - bei steilem Flug
-    // (dir fast senkrecht) uebernimmt deshalb die x-Achse.
-    const Vec3 helper = std::abs (dir.z) < 0.9 ? Vec3 { 0.0, 0.0, 1.0 }
-                                               : Vec3 { 1.0, 0.0, 0.0 };
-    const Vec3 u = cross3D (dir, helper).normalised();
-    const Vec3 w = cross3D (dir, u);   // dir und u stehen senkrecht, also schon Einheitslaenge
-
-    cone.baseCircle.reserve ((size_t) machConeBasePoints + 1);
-
-    for (int i = 0; i <= machConeBasePoints; ++i)   // letzter Punkt = erster, geschlossener Zug
-    {
-        const double a = juce::MathConstants<double>::twoPi * (double) i / (double) machConeBasePoints;
-        cone.baseCircle.push_back (cone.baseCentre + (u * std::cos (a) + w * std::sin (a)) * radius);
-    }
-
-    cone.valid = true;
-    return cone;
-}
-
-void FieldComponent::strokeMachConeSilhouette (juce::Graphics& g, juce::Point<float> apexPx,
-                                               const std::vector<juce::Point<float>>& basePx) const
-{
-    if (basePx.size() < 3)
-        return;
-
-    // Von der Spitze aus gesehen liegen alle Basispunkte in einem Winkel-
-    // sektor; dessen Raender sind die beiden Mantellinien. Gesucht ist also
-    // die groesste Luecke zwischen zwei benachbarten Richtungen - ihre Enden
-    // sind die aeussersten Punkte. Das gilt in jeder Ansicht gleichermassen,
-    // ohne Sonderfall je Perspektive.
-    std::vector<std::pair<float, juce::Point<float>>> byAngle;
-    byAngle.reserve (basePx.size());
-
-    for (const auto& p : basePx)
-    {
-        const auto d = p - apexPx;
-
-        if (d.getDistanceSquaredFromOrigin() < 1.0f)
-            continue;   // praktisch auf der Spitze, daraus laesst sich keine Richtung lesen
-
-        byAngle.push_back ({ std::atan2 (d.y, d.x), p });
-    }
-
-    if (byAngle.size() < 3)
-        return;
-
-    std::sort (byAngle.begin(), byAngle.end(),
-               [] (const auto& a, const auto& b) { return a.first < b.first; });
-
-    constexpr float twoPi = juce::MathConstants<float>::twoPi;
-
-    size_t gapStart   = byAngle.size() - 1;
-    float  largestGap = byAngle.front().first + twoPi - byAngle.back().first;
-
-    for (size_t i = 0; i + 1 < byAngle.size(); ++i)
-    {
-        const float gap = byAngle[i + 1].first - byAngle[i].first;
-
-        if (gap > largestGap)
-        {
-            largestGap = gap;
-            gapStart   = i;
-        }
-    }
-
-    // Luecke kleiner als ein Halbkreis heisst: die Spitze liegt im Bild
-    // INNERHALB des Basiskreises, der Blick geht die Kegelachse entlang. Dann
-    // gibt es keine zwei aeusseren Mantellinien, und der Basiskreis steht
-    // allein.
-    if (largestGap <= juce::MathConstants<float>::pi)
-        return;
-
-    const auto& edgeA = byAngle[gapStart].second;
-    const auto& edgeB = byAngle[(gapStart + 1) % byAngle.size()].second;
-
-    g.setColour (Theme::tealgreen.withAlpha (0.55f));
-    g.drawLine (juce::Line<float> (apexPx, edgeA), 1.4f);
-    g.drawLine (juce::Line<float> (apexPx, edgeB), 1.4f);
-}
-
-void FieldComponent::drawMachCone (juce::Graphics& g) const
-{
-    // Der Kegel zieht die Einhuellende aus, die die cyanen Wellenfronten bei
-    // Ueberschall ohnehin schon bilden - deshalb eine Farbe aus derselben
-    // kuehlen Ecke, aber klar unterscheidbar (Theme::tealgreen).
-    const auto cone = machConeWorld();
-
-    if (! cone.valid)
-        return;
-
-    const auto apexPx = worldToScreen (cone.apex);
-
-    std::vector<juce::Point<float>> basePx;
-    basePx.reserve (cone.baseCircle.size());
-
-    for (const auto& p : cone.baseCircle)
-        basePx.push_back (worldToScreen (p));
-
-    juce::Path base;
-    base.startNewSubPath (basePx.front());
-
-    for (size_t i = 1; i < basePx.size(); ++i)
-        base.lineTo (basePx[i]);
-
-    g.setColour (Theme::tealgreen.withAlpha (0.18f));
-    g.strokePath (base, juce::PathStrokeType (1.0f));
-
-    strokeMachConeSilhouette (g, apexPx, basePx);
-}
-
-void FieldComponent::drawPerspectiveMachCone (juce::Graphics& g) const
-{
-    const auto cone = machConeWorld();
-
-    if (! cone.valid)
-        return;
-
-    const auto apex = project (cone.apex);
-
-    if (! apex.visible)
-        return;   // Spitze hinter der Kamera - ohne sie gibt es keine Mantellinien
-
-    strokeWorldPath (g, cone.baseCircle, Theme::tealgreen.withAlpha (0.18f), 1.0f);
-
-    // Nur die Basispunkte vor der Kamera. Ist der Kegel so weit geoeffnet,
-    // dass ein Teil des Basiskreises hinter der Kamera liegt, entsteht die
-    // Silhouette aus dem sichtbaren Rest.
-    std::vector<juce::Point<float>> basePx;
-    basePx.reserve (cone.baseCircle.size());
-
-    for (const auto& p : cone.baseCircle)
-    {
-        const auto pr = project (p);
-
-        if (pr.visible)
-            basePx.push_back (pr.px);
-    }
-
-    strokeMachConeSilhouette (g, apex.px, basePx);
 }
 
 void FieldComponent::drawTrail (juce::Graphics& g) const
@@ -1190,7 +974,6 @@ void FieldComponent::drawPerspective (juce::Graphics& g) const
     drawPerspectiveGround (g);
     drawPerspectiveWalls (g);
     drawPerspectiveWavefronts (g);
-    drawPerspectiveMachCone (g);
     drawPerspectiveTrail (g);
     drawPerspectiveListener (g);
     drawPerspectiveSource (g);

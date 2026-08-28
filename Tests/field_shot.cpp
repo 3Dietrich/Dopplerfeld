@@ -109,57 +109,5 @@ int main()
     field.setSnapshot (snap);
     shoot (field, "field_persp_listener_high");
 
-    // 7) Machscher Kegel (drawMachCone/drawPerspectiveMachCone): eine Quelle
-    // im Ueberschall, geradeaus in +x, mit Spur und Wellenfronten wie sie
-    // DopplerEngine::publishSnapshot() liefert (juengste Front zuerst). Der
-    // Kegel muss bei Mach 2 auftauchen und bei Mach 0,5 restlos verschwinden.
-    {
-        FieldSnapshot mach;
-
-        mach.speedOfSound = 343.0;
-        mach.now          = 10.0;
-        mach.listener.head = { 50.0, 10.0, 1.7 };
-
-        const double speed = 686.0;   // Mach 2
-        const Vec3   apex { 60.0, 30.0, 0.0 };
-
-        mach.sourcePos   = apex;
-        mach.sourceSpeed = speed;
-
-        // Spur: gerade Bahn in +x, die vor der Quelle endet - daraus liest
-        // machConeWorld() die Flugrichtung.
-        mach.trailCount = 32;
-        for (int i = 0; i < mach.trailCount; ++i)
-        {
-            const double back = (double) (mach.trailCount - 1 - i) * 2.0;
-            mach.trail[(size_t) i] = { apex.x - back, apex.y, apex.z };
-        }
-
-        // Wellenfronten: feste Schrittweite, juengste zuerst, Mittelpunkt
-        // jeweils an der Quellposition zur Emissionszeit.
-        const double spacing = 0.02;
-        mach.wavefrontCount = FieldSnapshot::maxWavefronts;
-        for (int i = 0; i < mach.wavefrontCount; ++i)
-        {
-            const double age = (double) (i + 1) * spacing;
-            mach.wavefrontEmitTimes[(size_t) i] = mach.now - age;
-            mach.wavefrontPositions[(size_t) i] = { apex.x - speed * age, apex.y, apex.z };
-        }
-
-        field.setViewMode (FieldComponent::ViewMode::TopDown);
-        field.setSnapshot (mach);
-        shoot (field, "field_topdown_mach2");
-
-        field.setViewMode (FieldComponent::ViewMode::Perspective);
-        field.setSnapshot (mach);
-        shoot (field, "field_persp_mach2");
-
-        // Unterschall: kein Kegel, auch kein Rest davon.
-        mach.sourceSpeed = 171.5;   // Mach 0,5
-        field.setViewMode (FieldComponent::ViewMode::TopDown);
-        field.setSnapshot (mach);
-        shoot (field, "field_topdown_subsonic");
-    }
-
     return 0;
 }
