@@ -40,9 +40,8 @@ constexpr const char* panelOpenId   = "panelsOpen";
 // festen Ordner gäbe es also gar keinen Bezugspunkt für "relativ". Legt sich
 // beim ersten Zugriff selbst an; Presets+Samples, die hier drunterliegen,
 // bleiben beim Verschieben/Kopieren des ganzen Ordners portabel. Alles
-// außerhalb (auch der bisherige projekteigene presets/-Ordner) landet
-// weiterhin als absoluter Pfad im Preset - unverändert funktionsfähig, nur
-// eben ortsgebunden.
+// außerhalb dieses Ankers landet als absoluter Pfad im Preset - voll
+// funktionsfähig, nur eben ortsgebunden.
 juce::File presetsRootDirectory()
 {
     auto dir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
@@ -794,9 +793,9 @@ void DopplerfeldProcessor::applyParameters()
 
     // Dasselbe Reglerpaar, das die Stossfronten der Ausbreitung steuert, geht
     // auch an die Rakete: ihre Druckstoesse entstehen im Generator und nicht
-    // als Kegelankunft, deshalb kam "Duck-Reichw." dort bisher gar nicht an
-    // (@dpa 20260825: "ich habe bei Rakete noch keinen Unterschied zwischen
-    // den Druckreichweiten gehoert").
+    // als Kegelankunft, und ohne diese Weitergabe wirkt "Duck-Reichw." dort
+    // gar nicht (@dpa 20260825: "ich habe bei Rakete noch keinen Unterschied
+    // zwischen den Druckreichweiten gehoert").
     engineGenerator.setRocketShockDuck ((float) shockDuckFixedAmount,
                                         pp.shockDuckRange->load());
 
@@ -1020,8 +1019,8 @@ void DopplerfeldProcessor::applyParameters()
     // Dichtefaktor rho/rho0 physikalisch NICHT exakt 1.0 (rho0 = 1,225 kg/m^3
     // gilt bei 15°C), sondern rund 0,983 - durch Teilen mit dem Faktor bei
     // Default-Werten (statt einer fest eingetragenen Zahl) klingt jedes
-    // bestehende Preset ohne diese beiden Parameter exakt wie zuvor, auch
-    // falls sich die Defaults je aendern sollten.
+    // Preset ohne diese beiden Parameter unveraendert, auch falls sich die
+    // Defaults je aendern sollten.
     MediumState currentMedium;
     currentMedium.tempCelsius    = (double) pp.airTempC->load();
     currentMedium.altitudeMetres = (double) pp.airAltitude->load();
@@ -1186,10 +1185,10 @@ void DopplerfeldProcessor::handlePendingRequests()
             // keinem Preset gehoert, nur im Uebergang vorkommt und falsch
             // ist").
             //
-            // Ein Schnitt ist ein Umbau, keine Bewegung - das galt bisher nur
-            // fuer die Quelle. Der Hoerer lief weiter durch seinen Glaetter
-            // und fuhr die Strecke zwischen den beiden Presets ab: eine
-            // Kopfbewegung mit Doppler und Pegelfahrt, die in keinem der
+            // Ein Schnitt ist ein Umbau, keine Bewegung - und das gilt fuer
+            // Quelle UND Hoerer. Liefe der Hoerer weiter durch seinen
+            // Glaetter, fuehre er die Strecke zwischen den beiden Presets ab:
+            // eine Kopfbewegung mit Doppler und Pegelfahrt, die in keinem der
             // beiden Zustaende vorkommt.
             //
             // Der Sprung ist hier unhoerbar, weil er im stillen Fenster
@@ -1299,8 +1298,8 @@ void DopplerfeldProcessor::handlePendingRequests()
         // Das Ziel bleibt der LOSLASSPUNKT, nicht die Stelle, an der der
         // Nachlauf gerade steht. Das ist der zweite Teil derselben Sache:
         // schafft der Nachlauf den Rueckstand nicht ganz, laeuft die Quelle
-        // danach mit dem gewohnten Glaetter dorthin weiter, statt vorher
-        // stehenzubleiben. Gehalten wird es, damit ein Griff an den Regler
+        // danach mit dem gewohnten Glaetter dorthin weiter, statt auf halbem
+        // Weg stehenzubleiben. Gehalten wird es, damit ein Griff an den Regler
         // den Nachlauf weiterhin beendet (siehe knobsUntouched in
         // applyParameters) - ohne das Halten waere er nach einem Block vorbei.
         if (coastActive)
@@ -1379,8 +1378,7 @@ void DopplerfeldProcessor::handlePendingRequests()
         // Aus dem gespeicherten Zustand geladene Aufzeichnung übernehmen
         // (@dpa: "State laden muss Record laden"). Beide Ziele allokieren
         // dabei nicht: ihre Kapazitäten stehen seit prepareToPlay() fest, und
-        // setStateInformation() hat die Framezahl vorher auf dasselbe Maximum
-        // gedeckelt.
+        // setStateInformation() deckelt die Framezahl auf dasselbe Maximum.
         motionRecorder.setFrames (stagedMotionFrames);
         motionPlayer.setClip (stagedMotionFrames, stagedMotionRateHz);
 
@@ -1395,8 +1393,8 @@ void DopplerfeldProcessor::handlePendingRequests()
     if (flyStopRequest.exchange (false))
     {
         // Gleiche Synchronisation wie beim natuerlichen Ende der Strecke
-        // (siehe advanceMotion()) - sonst springt die Quelle beim manuellen
-        // Stopp-Knopf genauso auf die alte, vorherige Zielposition.
+        // (siehe advanceMotion()), damit die Quelle auch beim Stopp-Knopf
+        // nicht an ihre Zielposition springt.
         // Beim Stopp-Knopf bleibt die Quelle dort stehen, wo sie gerade ist -
         // nicht dort, wo ihr Ziel steht. Das Ziel laeuft um den Glaetter-
         // Nachlauf voraus, und ihm noch hinterherzulaufen waere ein Stueck
@@ -1659,7 +1657,7 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // sourceTargetMetres zurueck - ohne diese Synchronisation waere
             // das der Punkt von VOR dem Flug, und die Quelle spraenge dorthin
             // (@dpa-Repro: Vorbeiflug endet, M springt an die alte Stelle).
-            // So bleibt sie stattdessen einfach dort stehen, wo der Flug
+            // Mit ihr bleibt die Quelle einfach dort stehen, wo der Flug
             // endete - kein Sprung, kein neuer Sonderzustand.
             // Am Ende der Strecke steht die Quelle auf dem geplanten Endpunkt,
             // das Ziel um einen Nachlauf davor (setTargetLead). Gehalten wird
@@ -1730,8 +1728,8 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // Rundenende erreicht: die Wiedergabe steht jetzt auf dem letzten
             // Frame und wartet. Der Schnitt blendet aus, setzt sie zurueck und
             // blendet wieder ein (@dpa: "Ende erreicht, leise, umbau, laut,
-            // start") - vorher lief der Weg vom Ende zum Anfang als echte
-            // Bewegung durch die Glaettung.
+            // start"). Ohne den Schnitt liefe der Weg vom Ende zum Anfang als
+            // echte Bewegung durch die Glaettung.
             if (motionPlayer.atLoopEdge())
                 beginCut (motionPlayer.firstFrame(), true, false,
                           motionPlayer.startVelocity());
@@ -1754,12 +1752,12 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         // Glaetter, um klickfrei zu bleiben - deshalb ist es unbedenklich,
         // ihn auch im bypassSmoothing-Zweig direkt in target zu addieren.
         // Der Wackler wird NICHT auf das Ziel addiert und laeuft daher weder
-        // durch die Bewegungsglaettung noch unter den Tempo-Deckel. Beides hat
-        // ihn vorher fast vollstaendig aufgefressen: die Glaettung daempft ihn
+        // durch die Bewegungsglaettung noch unter den Tempo-Deckel. Beide
+        // fressen ihn sonst fast vollstaendig auf: die Glaettung daempft ihn
         // frequenzabhaengig weg (bei tau 0,145 s und 2 Hz bleiben 23 %), und der
         // Deckel klemmt die Schrittweite - ein Ausschlag von 5 m bei 2 Hz
         // braucht rund 63 m/s Spitze, bei einem Deckel von 1 m/s bleibt davon
-        // ein Kriechen uebrig. Eingestellte Meter kamen so nie an
+        // ein Kriechen uebrig. Eingestellte Meter kaemen so nie an
         // (@dpa 20260820: "kaum Bewegung, obwohl es sich stark bewegen muesste").
         //
         // Der Deckel heisst "max Fly speed" und meint die Fluggeschwindigkeit,
@@ -1808,9 +1806,8 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // Ueberschwinger-Waechter (siehe Klassenkommentar zu
             // wasMotionSlewGuardActive im Header): beim Einstieg in den
             // Bypass-Zweig auf der aktuellen Position aufsetzen, damit kein
-            // Sprung entsteht (der erste Tick liefert dann exakt target,
-            // wie zuvor) - danach begrenzt der Waechter jeden weiteren Tick
-            // auf slewVmax.
+            // Sprung entsteht (der erste Tick liefert dann exakt target) -
+            // danach begrenzt der Waechter jeden weiteren Tick auf slewVmax.
             if (! wasMotionSlewGuardActive)
                 sourceSmoothers.slew.reset (target);
 
@@ -2512,8 +2509,8 @@ void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
     // "Recorded muss in state!"). Die Aufzeichnung hängt als binäre Property
     // am Wurzelknoten der Kopie; JUCE schreibt MemoryBlock-Properties beim
     // Umwandeln in XML als base64-Attribut mit und liest sie ebenso zurück.
-    // Das Dateiformat bleibt damit dasselbe wie bisher (copyXmlToBinary), und
-    // ältere Presets ohne diese Property laden unverändert weiter. Quellwahl
+    // Das Dateiformat bleibt dabei das gewöhnliche (copyXmlToBinary), und
+    // Presets ohne diese Property laden unverändert weiter. Quellwahl
     // und Sample-Pfad hängen als eigene Properties genauso mit dran (@dpa:
     // "state muss Quellen/Sample-Pfad merken!"), siehe sourceKindId/
     // samplePathId weiter unten.
@@ -2575,7 +2572,7 @@ void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
         const juce::File presetsRoot = presetsRootDirectory();
 
         // Liegt die Datei unter dem Presets-Anker, kommt der relative Pfad
-        // ins Preset (portabel), sonst wie bisher der absolute (siehe
+        // ins Preset (portabel), sonst der absolute (siehe
         // presetsRootDirectory()).
         state.setProperty (samplePathId,
                             sampleFile.isAChildOf (presetsRoot)
@@ -2817,8 +2814,8 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
     //
     // apvts.replaceState() setzt nur, was im Baum steht; jeder Parameter ohne
     // Eintrag behaelt seinen aktuellen Wert. Ein Preset aus einer aelteren
-    // Fassung erbt damit alles, was seither dazugekommen ist, von dem Preset,
-    // das vorher geladen war - und klingt beim zweiten Laden anders als beim
+    // Fassung erbt sonst alles, was seither dazugekommen ist, vom zuletzt
+    // geladenen Preset - und klingt beim zweiten Laden anders als beim
     // ersten (@dpa 20260827: "zu leise und ich kann einfach nirgends finden,
     // warum ... schalte 'MachChaos' ein und dann nochmal das erste ... nach
     // Minuten wurde ein anderes Beispiel ploetzlich wieder laut").
@@ -2868,10 +2865,9 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
     // naechsten Block und auch dann, wenn gar kein Fenster offen ist (siehe
     // CutState im Header).
     //
-    // Frueher stand hier stattdessen requestEngineRestart() (@dpa: "bei/nach
-    // jedem State-load Engine Restart triggern"). Das war der einzige Weg,
-    // die Quelle ohne Anflug an ihre geladene Stelle zu bekommen - kostet
-    // aber zweierlei:
+    // Ein requestEngineRestart() an dieser Stelle brachte die Quelle
+    // ebenfalls ohne Anflug an ihre geladene Stelle (@dpa: "bei/nach jedem
+    // State-load Engine Restart triggern"), kostet aber zweierlei:
     //
     //   - Der Restart laeuft ueber prepareToPlay() und haelt den Audiothread
     //     dabei an. Gemessen im load_check-Abschnitt "Sprungnaht": 7 ms bei
@@ -2881,8 +2877,8 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
     //     Danach ist es still, bis der Schall die neue Strecke einmal
     //     zurueckgelegt hat - bei 1000 m gut drei Sekunden.
     //
-    // Beides fiel bei jedem Preset-Wechsel an. Der Schnitt braucht keines von
-    // beidem: er setzt Glaetter und Geometrie an der neuen Stelle auf, laesst
+    // Beides faellt bei jedem Preset-Wechsel an. Der Schnitt braucht keines
+    // von beidem: er setzt Glaetter und Geometrie an der neuen Stelle auf, laesst
     // den Signalpuffer aber stehen, und die Vorgeschichte der Bahn ist an der
     // neuen Stelle vollstaendig gefuellt - der neue Ort klingt sofort.
     //

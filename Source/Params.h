@@ -163,8 +163,8 @@ namespace Params
     constexpr const char* airAltitude = "airAltitude";
 
     // Amp-Verlauf über die Entfernung: verstellt den Exponenten k in
-    // A_geo = 1/R^k. 0 = physikalisch korrektes 1/R (Default und exakt das
-    // bisherige Verhalten), positiv = fällt schneller ab, negativ = flacher.
+    // A_geo = 1/R^k. 0 = physikalisch korrektes 1/R (Default), positiv =
+    // fällt schneller ab, negativ = flacher.
     constexpr const char* distanceCurve   = "distanceCurve";
 
     // Bodenreflexion (Spiegelquelle an der Ebene z = 0) und ihre Höhendämpfung.
@@ -257,8 +257,8 @@ namespace Params
     // daneben (@dpa 20260821: "die Lautstaerke des Rueckwaertssounds muss
     // leiser"). 0 dB = unveraendert.
     // Wellenform der vier Motor-Teiltoene (@dpa 20260823: "mach die 4 Osc
-    // umschaltbar auf Sines"). Aus = PolyBLEP-Saegezahn wie bisher, an =
-    // reiner Sinus. Gilt fuer alle vier gemeinsam - sie sind ein Klang, keine
+    // umschaltbar auf Sines"). Aus = PolyBLEP-Saegezahn, an = reiner Sinus.
+    // Gilt fuer alle vier gemeinsam - sie sind ein Klang, keine
     // vier Einzelstimmen.
     // Wellenform JE Teilton (@dpa 20260824: "der sinus soll (zumindest bei
     // Hubschrauber und Propeller) für jeden osc setzbar sein"). Aus =
@@ -354,8 +354,8 @@ namespace Params
 
     // Laenge des Startknalls in Metern, siehe PropagationPath::setJumpSize().
     // Getrennt von nWaveSize: der Ueberschallknall bildet einen KOERPER ab,
-    // der Startknall eine BESCHLEUNIGUNG - zwei verschiedene Dinge, die
-    // vorher an derselben Zahl hingen.
+    // der Startknall eine BESCHLEUNIGUNG - zwei verschiedene Dinge mit je
+    // eigener Zahl.
     constexpr const char* jumpBoomSize = "jumpBoomSize";
 
     // Mindestdauer des Ausklangs, wenn ein Hoerweg an der Kaustik
@@ -363,7 +363,7 @@ namespace Params
     // faellt bei schnellen Vorbeifluegen aber immer auf die Untergrenze von
     // 1 ms - und ein voll ausgesteuerter Zweig, der in einer Millisekunde weg
     // ist, reisst hoerbar ab (@dpa zum rueckwaerts laufenden Anteil: "nur dass
-    // es ploetzlich aufhoert"). Default 1 ms = bisheriges Verhalten.
+    // es ploetzlich aufhoert").
     // OHNE WIRKUNG - siehe Params.cpp. Der Wert bleibt nur registriert, damit
     // gespeicherte Presets ihn behalten.
     constexpr const char* shadowTailMs = "shadowTailMs";
@@ -383,10 +383,9 @@ namespace Params
     // Oktavlage der Unwucht im Motor. 0 ist der Zuendtakt (halbe Grundfrequenz),
     // jede Stufe verdoppelt bzw. halbiert ihn.
     // Gain der Klone in dB (@dpa: "die klone sind bei Pegel=1 noch zu leise").
-    // 0 dB = unveraendert, Bereich wie bei outputGain +/-36dB - Klone kamen
-    // vorher mit vollem Pegel dazu, sodass schon acht Stueck den Ausgang an den
-    // Limiter druecken und der Schwarm zu einem Brei zusammengefahren wird,
-    // statt breiter zu klingen.
+    // 0 dB = unveraendert, Bereich wie bei outputGain +/-36dB. Ohne
+    // Absenkung druecken schon acht Klone den Ausgang an den Limiter, und der
+    // Schwarm wird zu einem Brei zusammengefahren, statt breiter zu klingen.
     constexpr const char* cloneRealLevel = "cloneRealLevel";
 
     constexpr const char* imbalanceOctave = "imbalanceOctave";
@@ -395,10 +394,9 @@ namespace Params
     // machen"): Duesenantrieb/Raketenantrieb/Hubschrauber/Propeller/Frei.
     // Ueberschreibt KEINEN vorhandenen Regler - der Generator gewichtet nur,
     // wie stark Teiltoene/Rauschband beitragen, und schaltet je Betriebsart
-    // einen eigenen Zusatzklang dazu (siehe EngineGenerator). "Frei" und
-    // "Propeller" verhalten sich wie das bisherige Verhalten, "Propeller" ist
-    // vorerst nur Platzhalter fuer die Geometrie (Source/Physics, nicht Teil
-    // dieses Generators).
+    // einen eigenen Zusatzklang dazu (siehe EngineGenerator). "Frei"
+    // gewichtet nichts um; "Propeller" ist vorerst nur Platzhalter fuer die
+    // Geometrie (Source/Physics, nicht Teil dieses Generators).
     constexpr const char* engineKind = "engineKind";
 
     // Nur in Betriebsart "Hubschrauber" wirksam: Rotordrehzahl (Hz, eigenes
@@ -435,18 +433,18 @@ namespace Params
 
     // Anteil des gewoehnlichen Pegel-Pannings, 0..100 % (@dpa 20260819: "bitte
     // noch ein normales Panning fuer die Kopfdrehung anbieten"). 0 laesst das
-    // Stereobild allein aus der Ohrgeometrie entstehen, wie zuvor.
+    // Stereobild allein aus der Ohrgeometrie entstehen.
     constexpr const char* panAmount = "panAmount";
 
     // --- Ausgang ---
     constexpr const char* outputGain = "outputGain";
     constexpr const char* limiterOn  = "limiterOn";
 
-    // Der frueher eigenstaendige Regler "Lauter" (0..+36 dB) steckt seit
-    // 20260819 in outputGain: dessen Bereich reicht jetzt von -36 bis +36 dB
+    // Alter Parametername aus gespeicherten Zustaenden. Einen eigenen Regler
+    // "Lauter" gibt es nicht - outputGain deckt mit -36..+36 dB beides ab
     // (@dpa: "Lauter soll sich in Output integrieren"). Der Name bleibt hier
-    // stehen, weil gespeicherte Zustaende ihn noch enthalten und beim Laden auf
-    // outputGain aufaddiert werden (setStateInformation).
+    // registriert, weil gespeicherte Zustaende ihn noch enthalten; beim Laden
+    // wird sein Wert auf outputGain aufaddiert (setStateInformation).
     constexpr const char* loudBoostLegacy = "loudBoost";
 
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

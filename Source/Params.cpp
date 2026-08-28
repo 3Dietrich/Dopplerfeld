@@ -129,9 +129,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Skew haelt den ueblichen, dezenten Bereich trotzdem fein bedienbar.
     {
         // Bereich bis 1000 m (@dpa: "exponentiel, also langsam steigend").
-        // Skew-Mittelpunkt bei 1 m statt wie vorher 0,3 m in nur 50 m Bereich -
-        // der Regler haengt dadurch noch deutlich laenger im feinen,
-        // dezenten Arbeitsbereich (Bruchteile bis wenige Meter) und
+        // Skew-Mittelpunkt bei 20 m: der Regler haengt dadurch lange im
+        // feinen, dezenten Arbeitsbereich (Bruchteile bis wenige Meter) und
         // schwingt erst auf dem letzten Stueck des Wegs in die grossen
         // Ausschlaege hoch.
         auto range = juce::NormalisableRange<float> (0.0f, 1000.0f);
@@ -149,14 +148,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // und genau darum geht es: ein Wackler ueber 340 m/s loest von sich
         // aus N-Wellen aus.
         //
-        // Nach oben derselbe Bereich, den der alte "Jit Max" hatte (keine
-        // versteckten Limits, @dpa): wer bei grossem Ausschlag hektisch
+        // Nach oben weit offen (keine versteckten Limits, @dpa): wer bei
+        // grossem Ausschlag hektisch
         // wackeln will, braucht sehr wohl vierstellige Werte - 50 m Ausschlag
         // bei 3 Hz sind rechnerisch schon 3260 m/s. Skew auf 340, damit der
         // hoerbare Bereich darunter den Grossteil des Reglerwegs behaelt.
         //
         // Default 20 m/s: das ist bei ein paar Metern Ausschlag rund 0,2 Hz,
-        // also genau die Trägheit, die vorher als Default-Hektik dastand.
+        // also ein traeges Wandern und kein hektisches Zittern.
         auto range = juce::NormalisableRange<float> (0.0f, 100000.0f);
         range.setSkewForCentre (340.0f);
         layout.add (floatParam (srcJitterSpeed, "Source Jitter Speed", range, 20.0f, "m/s"));
@@ -165,12 +164,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // erst, wenn jemand ihn aufdreht - bestehende Presets klingen unveraendert.
     layout.add (boolParam (srcJitterOn, "Source Jitter On", true));
 
-    // Default 1: der Wackler war bisher auf allen drei Achsen gleich stark,
-    // und das soll er ohne Zutun bleiben.
+    // Default 1: der Wackler ist damit auf allen drei Achsen gleich stark.
+    // Kleinere Werte druecken allein den Hoehenanteil.
     layout.add (floatParam (srcJitterZAmount, "Source Jitter Z Amount", unitRange(), 1.0f));
 
-    // Einen Tempo-Deckel gibt es nicht mehr: ein Tempo, das man in m/s
-    // einstellt, braucht keine Obergrenze gegen sich selbst.
+    // Kein Tempo-Deckel: ein Tempo, das man in m/s einstellt, braucht keine
+    // Obergrenze gegen sich selbst.
     layout.add (boolParam (masterOn, "On", true));
 
     // --- Motor ---
@@ -178,9 +177,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // Skew Richtung niedrige Werte: die Klangänderung beim Hochdrehen ist
         // unten am dichtesten, dort soll der Regler die meiste Auflösung haben.
         //
-        // Obergrenze 96000 statt der frueheren 12000 (@dpa 20260826: "max ist
-        // derzeit 12000, da ist aber theoretisch noch viel Platz. bitte
-        // erweitere es um 2-3 Oktaven"): drei Oktaven, also 8x. 96000 RPM sind
+        // Obergrenze 96000 (@dpa 20260826: "max ist derzeit 12000, da ist aber
+        // theoretisch noch viel Platz. bitte erweitere es um 2-3 Oktaven"):
+        // drei Oktaven ueber 12000, also 8x. 96000 RPM sind
         // 1600 Hz Grundfrequenz - mit den Teiltoenen darueber reicht das bis
         // an den oberen Rand des Hoerbaren, und weiter zu gehen brauchte
         // niemand. Der Skew bleibt bei 1000, der brauchbare Bereich liegt
@@ -294,14 +293,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (flyDistance, "Fly Distance", range, 20.0f, "m"));
     }
     {
-        // Anflug-/Abflugstrecke, eigenstaendig statt aus flyDistance
-        // abgeleitet (vorher halfLength() = max(100, 6*flyDistance) - ein
-        // Regler steuerte damit ungewollt zwei verschiedene Groessen:
-        // seitlichen Abstand UND Bahnlaenge/Startpunkt). Default 300 m deckt
-        // sich ungefaehr mit dem alten abgeleiteten Wert bei einem mittleren
-        // flyDistance und bleibt bei sehr hohen Fluggeschwindigkeiten (>1000
-        // m/s) auf Wunsch weiter hochstellbar, damit der Anflug nicht zu kurz
-        // fuer eine hoerbare Annaeherung wird.
+        // Anflug-/Abflugstrecke, eigener Regler neben flyDistance: der eine
+        // stellt den seitlichen Abstand ein, dieser die Bahnlaenge und damit
+        // den Startpunkt. Bei sehr hohen Fluggeschwindigkeiten (>1000 m/s)
+        // reicht die Voreinstellung nicht fuer eine hoerbare Annaeherung,
+        // darum bis 5000 m hochstellbar.
         auto range = juce::NormalisableRange<float> (10.0f, 5000.0f);
         range.setSkewForCentre (300.0f);
         layout.add (floatParam (flyApproach, "Fly Approach", range, 300.0f, "m"));
@@ -326,19 +322,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Physics/Medium.h. Grosszuegiger Bereich statt eines "vernuenftigen"
     // Wetterausschnitts (keine versteckten Limits): -60°C deckt die
     // Stratosphaeren-Kaelte in Flughoehe ab, +60°C Extremhitze. Default 20°C
-    // bleibt exakt der bisherige feste Wert aus MediumState, damit sich am
-    // Klang bestehender Presets nichts aendert.
+    // ist der Wert, den MediumState ohne diesen Parameter annimmt - Presets
+    // ohne ihn klingen dadurch unveraendert.
     layout.add (floatParam (airTempC, "Air Temperature", { -60.0f, 60.0f, 0.1f }, 20.0f, Text::utf8 ("°C")));
 
     // Hoehe ueber dem Meeresspiegel (Params::airAltitude) - wirkt NICHT auf airTempC (siehe
     // dort), sondern ueber die barometrische Hoehenformel auf die Luftdichte
     // und damit den Ausgangspegel (PluginProcessor::applyParameters,
-    // "--- Ausgang ---"). Default 0 m = Meereshoehe, wie MediumState es bisher
-    // fest annahm. WICHTIG fuer bestehende Presets: bei den Defaults (20°C,
+    // "--- Ausgang ---"). Default 0 m = Meereshoehe, die Annahme von
+    // MediumState ohne diesen Parameter. WICHTIG fuer bestehende Presets: bei den Defaults (20°C,
     // 0 m) ist der physikalische Dichtefaktor rho/rho0 NICHT exakt 1.0
     // (rho0 = 1,225 kg/m^3 gilt bei 15°C, nicht bei 20°C) - er liegt bei rund
     // 0,983. Damit ein frisch geladenes Preset ohne diese beiden Parameter
-    // trotzdem exakt wie bisher klingt, wird der Dichte-Pegelfaktor an der
+    // trotzdem unveraendert klingt, wird der Dichte-Pegelfaktor an der
     // Verwendungsstelle (PluginProcessor.cpp) auf den bei den DEFAULTWERTEN
     // gemessenen Faktor normiert (durch densityGain() eines MediumState mit
     // Default-Werten geteilt) statt hier einen festen Korrekturwert
@@ -438,10 +434,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (nWavePressure, "Pressure", { 0.0f, 4.0f, 0.01f }, 2.0f, ""));
     }
 
-    // Sinus statt Saegezahn fuer die vier Motor-Teiltoene, Default aus =
-    // bisheriges Verhalten.
-    // Wellenform je Teilton, Default Saegezahn - bestehende Snapshots klingen
-    // unveraendert.
+    // Wellenform je Motor-Teilton: aus = PolyBLEP-Saegezahn, an = Sinus.
+    // Default aus, damit bestehende Snapshots unveraendert klingen.
     for (int i = 0; i < 4; ++i)
         layout.add (boolParam (harmSine[i], "Sine " + juce::String (i + 1), false));
 
@@ -458,12 +452,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // nicht aus vier einzeln gedrehten Teiltoenen.
     layout.add (floatParam (engineLevelDb, "Engine Level", { -36.0f, 36.0f, 0.1f }, 12.0f, "dB"));
 
-    // Bis 4 statt bis 1, genau wie beim Knattern des Rotors, und Default 1
-    // statt 0,6 (@dpa 20260825: "die Druckstoesse sind bei mir immer auf 1,
-    // leiser machts keinen sinn"). Wenn der ganze bisherige Regelweg unter
-    // dem liegt, was man tatsaechlich einstellt, ist der Regelweg falsch
-    // gewaehlt und nicht die Einstellung. Skew auf 1, damit die bisherige
-    // Obergrenze den halben Reglerweg behaelt.
+    // Bis 4 und Default 1, genau wie beim Knattern des Rotors (@dpa 20260825:
+    // "die Druckstoesse sind bei mir immer auf 1, leiser machts keinen sinn").
+    // Skew auf 1, damit der dezente Bereich darunter den halben Reglerweg
+    // behaelt.
     {
         auto range = juce::NormalisableRange<float> (0.0f, 4.0f);
         range.setSkewForCentre (1.0f);
@@ -544,9 +536,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
     // Mittlere Folge der Stoesse. Unten einzelne Schlaege, oben ein
     // zusammenhaengender Teppich - das Knattern echter Raketen ("crackle")
-    // sitzt bei einigen zehn bis hundert Stoessen je Sekunde. Skew auf den
-    // bisherigen Festwert 18 Hz, damit die Voreinstellung dort steht, wo sie
-    // vorher fest verdrahtet war.
+    // sitzt bei einigen zehn bis hundert Stoessen je Sekunde. Skew auf 18 Hz,
+    // damit die Voreinstellung in der Mitte des Reglerwegs liegt.
     {
         auto range = juce::NormalisableRange<float> (0.2f, 800.0f);
         range.setSkewForCentre (18.0f);
@@ -555,8 +546,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
     // Betriebsart des Motors (@dpa 20260824). Reihenfolge ist bindend fuer
     // EngineGenerator::kindWeightTable - nicht umsortieren, ohne dort
-    // mitzuziehen. Default "Frei" (Index 0) = bisheriges Verhalten, damit
-    // bestehende Presets bitgleich klingen.
+    // mitzuziehen. Default "Frei" (Index 0): die vier Teiltoene stehen dort
+    // einzeln, ohne Vorlage - bestehende Presets klingen damit bitgleich.
     layout.add (choiceParam (engineKind, "Engine Kind",
                               juce::StringArray { "Frei",
                                                   Text::utf8 ("Düsenantrieb"),
@@ -605,8 +596,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Rueckwaerts-Pegel, Stossfront-Absenkung, Schattenausklang und die beiden
     // Wege, einen Bewegungssprung hoerbar zu machen.
     //
-    // Bis auf die Stossfront-Absenkung ist ueberall das bisherige Verhalten
-    // voreingestellt. Die Absenkung steht voll aufgedreht, weil waehrend einer
+    // Die Absenkung steht als einzige voll aufgedreht, weil waehrend einer
     // N-Welle nichts anderes zu hoeren sein soll - auch nicht zwischen Bug- und
     // Heckstoss (@dpa 20260823).
     // OHNE WIRKUNG, nur noch fuer gespeicherte Presets registriert. Die
@@ -650,21 +640,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (shockDuckRange, "Shock Duck Range", range, 300.0f, "m"));
     }
 
-    // Bewegungssprung: Kante durchlassen (aus) und Druckwelle darauf (0).
-    // Default nicht mehr 0 (@dpa 20260824: "Knall bei Bewegung/Startvariante
-    // ... soll wie der Raketen-Stoss hoerbar sein, ist es aber nicht"). Wer die
-    // Startvariante "Knall-Start" waehlt, meint den Knall - der musste bisher
-    // in einem anderen Panel erst aufgedreht werden, und ohne das war der
-    // Unterschied zur weichen Startvariante nur an der Bahn zu sehen, nicht zu
-    // hoeren. Gemessen im load_check-Abschnitt "Knall-Start": bei 1,0 hebt die
-    // Druckwelle die Spitze im Ankunftsfenster um Faktor 9,5 an.
+    // Bewegungssprung: Kante durchlassen und Druckwelle darauf. Die
+    // Druckwelle ist voreingestellt, damit die Startvariante "Knall-Start"
+    // von sich aus knallt und nicht erst in einem anderen Panel aufgedreht
+    // werden muss (@dpa 20260824: "Knall bei Bewegung/Startvariante ... soll
+    // wie der Raketen-Stoss hoerbar sein, ist es aber nicht"). Gemessen im
+    // load_check-Abschnitt "Knall-Start": bei 1,0 hebt die Druckwelle die
+    // Spitze im Ankunftsfenster um Faktor 9,5 an.
     {
-        // Bis 4 statt bis 1 (@dpa 20260825: "bei Startknall maximum! das muss
-        // mehr wummsen"). Dieselbe Erweiterung wie beim Knattern des Rotors
-        // und beim Druckstoss der Rakete, und aus demselben Grund: wenn der
-        // ganze bisherige Regelweg unter dem liegt, was man tatsaechlich
-        // einstellt, ist der Regelweg falsch gewaehlt. Skew auf 1, damit der
-        // bisherige Bereich den halben Reglerweg behaelt.
+        // Bis 4 (@dpa 20260825: "bei Startknall maximum! das muss mehr
+        // wummsen"), derselbe Bereich wie beim Knattern des Rotors und beim
+        // Druckstoss der Rakete. Skew auf 1, damit der dezente Bereich
+        // darunter den halben Reglerweg behaelt.
         //
         // Ueber 1 darf das uebersteuern - dafuer gibt es den sichtbaren
         // Begrenzer.
