@@ -6840,6 +6840,87 @@ int main()
     }
 
     //==================================================================
+    // Pegel beim Zustandswechsel (@dpa 20260828: "umschalten von
+    // 600kmh-Drone@600m2 nach drone@1km2 - kommt immer ein lauter Burst").
+    //
+    // Zwei Dinge trafen zusammen. Der Signalpuffer trug das Quellsignal des
+    // vorigen Presets weiter, und der Ausgangspegel des neuen galt schon,
+    // waehrend jenes Signal noch ausblendete - das alte, laute Material lief
+    // also eine Laufzeit lang durch die neue, lautere Kette.
+    //
+    // Gemessen wird deshalb der Uebergang selbst: er darf nicht lauter sein
+    // als das, was vorher lief. Der Limiter bleibt dabei aus, sonst deckelt
+    // er den Ausbruch weg, den der Test finden soll.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        // Weites Feld mit Absicht: der Uebergang wird nur so lange gemessen,
+        // wie der Schall ueber die neue Strecke noch gar nicht angekommen sein
+        // kann - sonst faengt die Messung den neuen, lauteren Normalzustand
+        // mit ein und meldet ihn als Ausbruch. Bei 1000 m und 300 m Abstand
+        // sind das 0,87 s, gemessen wird ein Zehntel davon.
+        setParam (proc, Params::fieldMetres, 1000.0f);
+        setParam (proc, Params::limiterOn,   0.0f);
+        setParam (proc, Params::outputGain,  0.0f);
+        setParam (proc, Params::lisX,        0.5f);
+        setParam (proc, Params::lisY,        0.5f);
+        setParam (proc, Params::srcX,        0.5f);
+        setParam (proc, Params::srcY,        0.2f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        Stats warm, quiet;
+        render (proc, buffer, 4.0, warm,  [] (double) {});
+        render (proc, buffer, 0.5, quiet, [] (double) {});
+
+        // Derselbe Zustand, nur 24 dB lauter - der Sprung, den ein Preset mit
+        // anderem Ausgangspegel mitbringt.
+        juce::MemoryBlock louder;
+        setParam (proc, Params::outputGain, 24.0f);
+        proc.getStateInformation (louder);
+        setParam (proc, Params::outputGain, 0.0f);
+
+        Stats settle;
+        render (proc, buffer, 0.3, settle, [] (double) {});
+
+        proc.setStateInformation (louder.getData(), (int) louder.getSize());
+
+        // Nur der Uebergang: 0,1 s reichen weit ueber Ausblende (12 ms), Umbau
+        // und Einblende hinaus.
+        Stats transition;
+        render (proc, buffer, 0.1, transition, [] (double) {});
+
+        // Und danach der eingeschwungene Zustand mit dem neuen Pegel. Er
+        // gehoert dazu, damit der Test nicht dadurch bestanden werden kann,
+        // dass nach einem Wechsel gar nichts mehr kommt.
+        Stats after;
+        render (proc, buffer, 4.0, warm,  [] (double) {});
+        render (proc, buffer, 0.5, after, [] (double) {});
+
+        std::printf ("%-22s vorher %.4f | Uebergang %.4f | danach %.4f\n",
+                     "Pegel Zustandswechsel", quiet.peak, transition.peak, after.peak);
+
+        // Der Uebergang blendet aus, was gerade lief - lauter als das kann er
+        // nicht werden. Der Fehler brachte hier das Sechzehnfache.
+        if (transition.peak > quiet.peak * 1.5)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Zustandswechsel ist lauter als das, "
+                         "was vorher lief (%.4f gegen %.4f).\n",
+                         transition.peak, quiet.peak);
+            failed = true;
+        }
+
+        if (after.peak <= quiet.peak)
+        {
+            std::printf ("FEHLGESCHLAGEN: nach dem Zustandswechsel fehlt der neue, "
+                         "hoehere Pegel (%.4f gegen %.4f).\n", after.peak, quiet.peak);
+            failed = true;
+        }
+    }
+
+    //==================================================================
     // Scope-Wiedergabe und der Ausgangspegel (@dpa 20260828: "das Abspielen
     // von Scope ist viel zu laut ... das liegt am Output").
     //

@@ -32,6 +32,12 @@ public:
     // Bereichs - kein Wrap-Around auf alte/zukünftige Daten.
     float readAt (double absoluteSampleIndex) const;
 
+    // Loescht das gespeicherte Signal, behaelt aber die Schreibposition: die
+    // Zeitbasis der Physik haengt daran (siehe writePos unten). Danach liefert
+    // readAt() fuer die ganze Vorgeschichte Stille, waehrend neu geschriebene
+    // Samples normal weiterlaufen.
+    void clearHistory();
+
     std::int64_t writePosition() const { return writePos; }
 
     // Rechnet eine Zeit in Sekunden (dieselbe Zeitbasis wie im Rest der

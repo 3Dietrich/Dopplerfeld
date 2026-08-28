@@ -34,6 +34,11 @@ void SourceSignalBuffer::write (const float* mono, int numSamples)
     writePos += numSamples;
 }
 
+void SourceSignalBuffer::clearHistory()
+{
+    std::fill (ring.begin(), ring.end(), 0.0f);
+}
+
 float SourceSignalBuffer::readAt (double absoluteSampleIndex) const
 {
     // Stützstellen bei floorIdx-1 .. floorIdx+2 (4 Punkte, kubisch), frac

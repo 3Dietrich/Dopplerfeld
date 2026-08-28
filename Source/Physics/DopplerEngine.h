@@ -120,6 +120,15 @@ public:
     // ersten Sample an mit voller Fahrt, statt erst anzulaufen.
     void cutTo (Vec3 posMetres, Vec3 preVelocity = Vec3{});
 
+    // Loescht das gespeicherte Quellsignal. Gedacht fuer den Schnitt auf einen
+    // GELADENEN Zustand: dort gehoert die Vorgeschichte im Puffer zu einem
+    // anderen Preset, mit eigenem Pegel und eigenem Klang, und wuerde nach dem
+    // Schnitt eine Laufzeit lang durch die neue Verstaerkungskette laufen.
+    // Danach ist es still, bis der Schall die neue Strecke einmal
+    // zurueckgelegt hat - dieselbe Stille wie bei einem frisch geladenen
+    // Preset.
+    void clearSignalHistory() { signal.clearHistory(); }
+
     void setBoomLimitDb (double dB);
     void setAirAbsorptionAmount (double amount01);
 

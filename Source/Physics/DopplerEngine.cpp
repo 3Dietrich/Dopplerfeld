@@ -374,11 +374,12 @@ void DopplerEngine::cutTo (Vec3 posMetres, Vec3 preVelocity)
     // Schnitt-Zustandsmaschine). Die Engine selbst blendet hier bewusst
     // nichts, sie fuehrt den Schnitt nur aus.
     //
-    // Der Signalpuffer bleibt stehen: die Vorgeschichte der Bahn wird an der
-    // neuen Stelle vollstaendig gefuellt (configureSet), der neue Ort klingt
-    // deshalb sofort und nicht erst nach der Laufzeit. Ein Loeschen des
-    // Puffers waere Stille ueber die ganze Laufstrecke - bei 1400 m gut vier
-    // Sekunden.
+    // Der Signalpuffer bleibt hier stehen: die Vorgeschichte der Bahn wird an
+    // der neuen Stelle vollstaendig gefuellt (configureSet), der neue Ort
+    // klingt deshalb sofort und nicht erst nach der Laufzeit. Wer den Puffer
+    // trotzdem leeren muss, weil sein Inhalt zu einem anderen Klang gehoert,
+    // ruft clearSignalHistory() dazu - der Preis ist dann Stille ueber die
+    // ganze Laufstrecke, bei 1400 m gut vier Sekunden.
     sourceTarget = posMetres;
 
     // Eine laufende oder angemeldete Ueberblendung gehoert zum alten Ort.

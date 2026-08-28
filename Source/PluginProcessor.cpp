@@ -1030,8 +1030,20 @@ void DopplerfeldProcessor::applyParameters()
     const MediumState defaultMedium;   // tempCelsius=20, altitudeMetres=0
     const double densityGain = currentMedium.densityGain() / defaultMedium.densityGain();
 
-    outputGainLinear.setTargetValue (
-        juce::Decibels::decibelsToGain (pp.outputGain->load()) * densityGain);
+    // Der Ausgangspegel des GELADENEN Zustands darf erst gelten, wenn auch
+    // sein Klang gilt. Waehrend der Ausblende steht noch das Signal des
+    // vorigen Presets im Ausgang - bekaeme es schon den neuen Pegel, waere
+    // genau das der Ausbruch, den @dpa hoert: 600kmh-Drone@600m2 liegt bei
+    // +12 dB, drone@1km2 bei +26 dB, das alte Signal liefe also 14 dB zu laut
+    // aus. Uebernommen wird der Wert hart im stillen Fenster
+    // (handlePendingRequests), wie Geometrie, Hoerer und Waende auch.
+    const double outTarget = juce::Decibels::decibelsToGain (pp.outputGain->load()) * densityGain;
+
+    if (stateLoadRequest.load() || (cutClearsSignal && cutState == CutState::FadingOut))
+        pendingOutputGainLinear = outTarget;
+    else
+        outputGainLinear.setTargetValue (outTarget);
+
     limiterEnabled = pp.limiterOn->load() > 0.5f;
 }
 
@@ -1065,7 +1077,7 @@ void DopplerfeldProcessor::applyCloneParameters()
 }
 
 void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy,
-                                     Vec3 preVelocity)
+                                     Vec3 preVelocity, bool clearsSignal)
 {
     // Ein bereits laufender Schnitt wird nicht neu angestossen, sondern nur
     // umgelenkt: sein Ziel ist immer das zuletzt angemeldete. Sonst kaskadieren
@@ -1075,6 +1087,7 @@ void DopplerfeldProcessor::beginCut (Vec3 targetMetres, bool rewindPlayer, bool 
     cutPreVelocity   = preVelocity;
     cutRewindsPlayer = cutRewindsPlayer || rewindPlayer;
     cutStartsFlyBy   = cutStartsFlyBy   || startsFlyBy;
+    cutClearsSignal  = cutClearsSignal  || clearsSignal;
 
     if (cutState == CutState::FadingOut)
         return;
@@ -1098,6 +1111,21 @@ void DopplerfeldProcessor::handlePendingRequests()
     if (cutExecutePending)
     {
         cutExecutePending = false;
+
+        // Das gespeicherte Quellsignal des vorigen Zustands loeschen (siehe
+        // cutClearsSignal im Header). Es steht ganz vorn, damit der Umbau
+        // darunter schon auf einem leeren Puffer aufsetzt.
+        if (cutClearsSignal)
+        {
+            cutClearsSignal = false;
+
+            dopplerEngine.clearSignalHistory();
+
+            // Der zurueckgehaltene Ausgangspegel des geladenen Zustands, jetzt
+            // ohne Rampe: die Rampe waere wieder ein Uebergang zwischen zwei
+            // Presets, und der Ausgang ist an dieser Stelle still.
+            outputGainLinear.setCurrentAndTargetValue ((float) pendingOutputGainLinear);
+        }
 
         // Der neue Massstab wird hier uebernommen, im stillen Fenster und vor
         // allem anderen: die Ziele darunter sollen ihn schon sehen. Danach ist
@@ -1220,7 +1248,16 @@ void DopplerfeldProcessor::handlePendingRequests()
     // diesem Block schon, sourceTargetMetres steht also bereits auf der
     // geladenen Position.
     if (stateLoadRequest.exchange (false))
-        beginCut (sourceTargetMetres, false);
+    {
+        // Die Ruhezeit des Feldgroessenreglers gilt dem DREHENDEN Regler:
+        // solange @dpa ihn bewegt, soll nicht bei jedem Zwischenwert umgebaut
+        // werden. Ein geladener Zustand bringt seinen Wert fertig mit, es gibt
+        // nichts abzuwarten - und jede Zehntelsekunde Warten ist eine
+        // Zehntelsekunde, in der das alte Signal noch klingt.
+        fieldSettleRemaining = 0.0;
+
+        beginCut (sourceTargetMetres, false, false, Vec3{}, true);
+    }
 
     // Nachlauf: die Maus wurde losgelassen, ab hier traegt die Quelle sich
     // selbst weiter (siehe startSourceCoast im Header).

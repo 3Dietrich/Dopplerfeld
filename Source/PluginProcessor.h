@@ -758,12 +758,27 @@ private:
     // auf, wo Glaetter und Geometrie ohne Zuhoerer gesetzt werden koennen.
     bool cutStartsFlyBy = false;
 
+    // Beim Umbau das gespeicherte Quellsignal loeschen. Gesetzt wird das nur
+    // vom Zustandsschnitt: nach einem geladenen Preset gehoert die
+    // Vorgeschichte im Puffer zu einem anderen Klang und einem anderen Pegel
+    // (@dpa 20260828: "umschalten von 600kmh-Drone@600m2 nach drone@1km2 -
+    // kommt immer ein lauter Burst").
+    //
+    // Rundenwechsel, Vorbeiflug und Feldgroessenwechsel behalten den Puffer:
+    // dort ist das gespeicherte Signal das eigene und soll ohne Loch
+    // weiterlaufen.
+    bool cutClearsSignal = false;
+
+    // Der Ausgangspegel des geladenen Zustands, bis der Umbau ihn uebernimmt
+    // (siehe applyParameters). Linear, also schon mit Luftdichte verrechnet.
+    double pendingOutputGainLinear = 1.0;
+
     // Meldet einen Schnitt an. Nur aus dem Audiothread aufzurufen.
     //
     // Das Ziel darf beim Vorbeiflug offenbleiben (startFlyBy setzt es
     // selbst); dann zaehlt nur die Stille drumherum.
     void beginCut (Vec3 targetMetres, bool rewindPlayer, bool startsFlyBy = false,
-                   Vec3 preVelocity = Vec3{});
+                   Vec3 preVelocity = Vec3{}, bool clearsSignal = false);
 
     // Geschwindigkeit der Quelle entlang der Sichtlinie zum Hoerer, positiv
     // beim Anflug. Aus dem tatsaechlichen Positionsschritt gemessen, damit sie
