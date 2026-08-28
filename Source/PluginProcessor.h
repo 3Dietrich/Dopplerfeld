@@ -995,6 +995,16 @@ private:
     WallState wallSmoothed[DopplerEngine::maxWalls];
     bool      wallStateInitialised = false;
 
+    // Die Waende springen beim naechsten Durchgang auf ihr Ziel, statt ihm zu
+    // folgen (@dpa 20260828: "Presetwechsel: auch die Waende - sie wandern
+    // noch beim Presetwechsel, sollen sie nicht").
+    //
+    // Gesetzt wird das im stillen Fenster eines Schnitts, wo auch Quelle und
+    // Hoerer umgesetzt werden. Verbraucht wird es einen Block spaeter in
+    // applyParameters(), denn erst dort stehen die neuen Wandziele - das ist
+    // dieselbe Reihenfolge wie beim Feldmassstab.
+    bool      snapWallsPending = false;
+
     double recorderTickAccum = 0.0;   // dito für die 200-Hz-Aufzeichnung
 
     // One-Pole-Koeffizient der Yaw-Glättung, aus smootherTau abgeleitet.

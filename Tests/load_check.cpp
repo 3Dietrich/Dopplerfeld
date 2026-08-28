@@ -6737,6 +6737,14 @@ int main()
         setParam (proc, Params::srcY,         0.5f);
         setParam (proc, Params::smootherTau,  0.5f);
 
+        // Eine Wand dazu: sie haengt an denselben Reglern und soll beim
+        // Umschalten genauso springen (@dpa 20260828: "Presetwechsel: auch
+        // die Waende - sie wandern noch beim Presetwechsel, sollen sie
+        // nicht").
+        setParam (proc, Params::wall1On, 1.0f);
+        setParam (proc, Params::wall1X,  0.2f);
+        setParam (proc, Params::wall1Y,  0.3f);
+
         proc.prepareToPlay (sampleRate, blockSize);
 
         Stats settle;
@@ -6752,8 +6760,10 @@ int main()
         // stehen sofort, und der Schnitt raeumt hinterher auf.
         juce::MemoryBlock state;
         setParam (proc, Params::lisX, 0.8f);
+        setParam (proc, Params::wall1X, 0.8f);
         proc.getStateInformation (state);
         setParam (proc, Params::lisX, 0.2f);
+        setParam (proc, Params::wall1X, 0.2f);
 
         Stats back;
         render (proc, buffer, 0.5, back, [] (double) {});
@@ -6780,6 +6790,25 @@ int main()
             }
         }
 
+        // Dieselbe Zaehlung fuer die Wand. Sie springt einen Block spaeter als
+        // der Hoerer, weil ihre Ziele erst in applyParameters() entstehen -
+        // deshalb wird sie getrennt gemessen und nicht mit ihm zusammen.
+        int wallBlocks = -1;
+
+        for (int i = 0; i < 200; ++i)
+        {
+            Stats one;
+            render (proc, buffer, (double) blockSize / sampleRate, one, [] (double) {});
+
+            proc.fillFieldSnapshot (snap);
+
+            if (std::abs (snap.walls[0].anchor.x - targetX) < 1.0)
+            {
+                wallBlocks = i + 1;
+                break;
+            }
+        }
+
         const double blockMs = 1000.0 * (double) blockSize / sampleRate;
 
         std::printf ("%-22s Hoerer beim Zustandswechsel: von %.0f m nach %.0f m in %d "
@@ -6789,10 +6818,98 @@ int main()
 
         // Grosszuegig: die Ausblende dauert 12 ms, danach ein Block. Der
         // Fehler brauchte mit tau 0,5 s ueber eine Sekunde.
+        std::printf ("%-22s Wand beim Zustandswechsel: in %d Bloecken (%.0f ms)\n",
+                     "", wallBlocks, wallBlocks < 0 ? -1.0 : wallBlocks * blockMs);
+
         if (blocksToArrive < 0 || blocksToArrive * blockMs > 60.0)
         {
             std::printf ("FEHLGESCHLAGEN: der Hoerer gleitet beim Zustandswechsel, "
                          "statt zu springen.\n");
+            failed = true;
+        }
+
+        // Die Wand wird erst nach dem Hoerer gemessen, sie hat also nur noch
+        // wenige Bloecke zu laufen - der Fehler liess sie ueber Sekunden
+        // wandern.
+        if (wallBlocks < 0 || wallBlocks * blockMs > 30.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: die Wand wandert beim Zustandswechsel, "
+                         "statt zu springen.\n");
+            failed = true;
+        }
+    }
+
+    //==================================================================
+    // Scope-Wiedergabe und der Ausgangspegel (@dpa 20260828: "das Abspielen
+    // von Scope ist viel zu laut ... das liegt am Output").
+    //
+    // Der Ringpuffer nimmt NACH Gain und Limiter auf, eingespeist wird die
+    // Wiedergabe davor - der Ausgangspegel lief also ein zweites Mal darueber.
+    // Geprueft wird deshalb, ob derselbe Puffer bei verschiedenen
+    // Ausgangspegeln gleich laut ANKOMMT.
+    {
+        auto playbackPeak = [&] (float outputGainDb)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 100.0f);
+            setParam (proc, Params::outputGain,  outputGainDb);
+            setParam (proc, Params::limiterOn,   0.0f);
+
+            // Quelle stumm: gemessen werden soll die WIEDERGABE, nicht das
+            // Dopplersignal daneben. Ohne das misst man bei hohem
+            // Ausgangspegel vor allem den Motor.
+            setParam (proc, Params::engineLevelDb, -60.0f);
+
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            // Ein einfacher, bekannter Puffer statt eines Mitschnitts: so
+            // haengt die Messung nicht daran, was der Loeser gerade liefert.
+            constexpr int length = 4096;
+
+            std::vector<float> left ((size_t) length), right ((size_t) length);
+
+            for (int i = 0; i < length; ++i)
+            {
+                const float v = 0.5f * (float) std::sin (2.0 * 3.14159265358979323846
+                                                         * 440.0 * i / sampleRate);
+                left[(size_t) i]  = v;
+                right[(size_t) i] = v;
+            }
+
+            proc.setScopePlaybackModeEnabled (true);
+
+            // Ein Block, damit die Umschaltrampe (scopePlaybackModeFadeSeconds)
+            // durch ist, bevor der Puffer kommt.
+            {
+                Stats warm;
+                render (proc, buffer, 0.05, warm, [] (double) {});
+            }
+
+            proc.requestScopePlayback (left.data(), right.data(), length);
+
+            Stats play;
+            render (proc, buffer, 0.3, play, [] (double) {});
+
+            return play.peak;
+        };
+
+        const double at0  = playbackPeak (0.0f);
+        const double at15 = playbackPeak (15.0f);
+
+        std::printf ("%-22s Scope-Wiedergabe: bei 0 dB Spitze %.4f | bei +15 dB %.4f "
+                     "(%+.1f dB)\n", "Scope-Play Pegel", at0, at15,
+                     at0 > 0.0 ? 20.0 * std::log10 (at15 / at0) : 0.0);
+
+        // Der Ausgangspegel darf die Wiedergabe nicht noch einmal anheben:
+        // sie ist bereits mit ihm aufgenommen worden. Ein Dezibel Toleranz
+        // fuer die Ein-/Ausblende der Wiedergabe selbst.
+        if (at0 <= 0.0 || std::abs (20.0 * std::log10 (at15 / at0)) > 1.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: die Scope-Wiedergabe haengt am Ausgangspegel "
+                         "(%.4f gegen %.4f).\n", at15, at0);
             failed = true;
         }
     }

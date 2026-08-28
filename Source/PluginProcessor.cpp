@@ -990,15 +990,21 @@ void DopplerfeldProcessor::applyParameters()
         wallTarget[w].tiltRad    = juce::degreesToRadians ((double) pp.wallTilt[w]->load());
     }
 
-    // Beim allerersten Durchgang (und nach einem Feldgrößenwechsel, der die
-    // Fußpunkte in Metern verschiebt) ohne Anlauf auf das Ziel setzen - sonst
-    // führe die Wand beim Start sichtbar und hörbar aus dem Ursprung heran.
-    if (! wallStateInitialised || fieldJustChanged)
+    // Beim allerersten Durchgang und nach jedem Schnitt ohne Anlauf auf das
+    // Ziel setzen - sonst fuehre die Wand beim Start sichtbar und hoerbar aus
+    // dem Ursprung heran, und beim Zustandswechsel wanderte sie von der alten
+    // zur neuen Stelle (siehe snapWallsPending im Header).
+    //
+    // Der Feldmassstab braucht hier keinen eigenen Anlass mehr: eine
+    // Feldgroessenaenderung laeuft seit dem 27.08. selbst ueber einen Schnitt,
+    // und der setzt dasselbe Merkzeichen.
+    if (! wallStateInitialised || snapWallsPending)
     {
         for (int w = 0; w < DopplerEngine::maxWalls; ++w)
             wallSmoothed[w] = wallTarget[w];
 
         wallStateInitialised = true;
+        snapWallsPending     = false;
     }
 
     // --- Ausgang ---
@@ -1163,6 +1169,12 @@ void DopplerfeldProcessor::handlePendingRequests()
             // bei der Quelle eine Zeile darueber.
             listenerState.head = listenerTargetMetres;
             listenerSmoothers.reset (listenerTargetMetres);
+
+            // Und die Waende: sie haengen am selben Massstab und an denselben
+            // Reglern, also gehoeren sie in denselben Umbau. Sie springen erst
+            // im naechsten Block, denn ihre Ziele werden in applyParameters()
+            // gebildet (siehe snapWallsPending im Header).
+            snapWallsPending = true;
 
             smoothedYawRadians = targetYawRadians;
             listenerState.yaw  = targetYawRadians;
@@ -2023,6 +2035,22 @@ void DopplerfeldProcessor::renderScopePlayback (juce::AudioBuffer<float>& buffer
     // laenger so steht).
     const bool modeOn = scopePlaybackModeEnabled.load();
 
+    // Den Ausgangspegel HERAUSRECHNEN (@dpa 20260828: "das Abspielen von
+    // Scope ist viel zu laut ... das liegt am Output").
+    //
+    // Der Ringpuffer nimmt NACH Gain und Limiter auf - er soll ja zeigen, was
+    // tatsaechlich hinausgeht (siehe applyOutputStage). Eingespeist wird die
+    // Wiedergabe aber DAVOR, damit Limiter, Pegelmesser und Scope sie genauso
+    // behandeln wie das Dopplersignal. Damit lief der Ausgangspegel ein
+    // zweites Mal darueber: bei @dpas +15,5 dB war die Wiedergabe genau um
+    // diese 15,5 dB zu laut.
+    //
+    // Geteilt statt umgehaengt: so bleibt die Wiedergabe im selben Signalweg
+    // wie das Dopplersignal, kommt am Ausgang aber genau mit dem Pegel an,
+    // mit dem sie aufgenommen wurde.
+    const double outGain    = (double) outputGainLinear.getTargetValue();
+    const double replayScale = outGain > 1.0e-6 ? 1.0 / outGain : 1.0;
+
     if (scopePlaybackStartRequest.exchange (false) && modeOn)
     {
         if (scopePlaybackShotPhase == ScopeShotPhase::Idle)
@@ -2117,7 +2145,7 @@ void DopplerfeldProcessor::renderScopePlayback (juce::AudioBuffer<float>& buffer
 
         for (int ch = 0; ch < numCh; ++ch)
         {
-            const float src = (ch == 0 || numCh <= 1) ? previewL : previewR;
+            const float src = ((ch == 0 || numCh <= 1) ? previewL : previewR) * (float) replayScale;
             data[ch][i] = data[ch][i] * (1.0f - (float) scopeReplaceGain) + src * (float) scopeReplaceGain;
         }
     }
