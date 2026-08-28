@@ -2769,13 +2769,13 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
     if (tree.hasProperty (motorGateId))
         setMotorGateEnabled ((bool) tree.getProperty (motorGateId, false));
 
-    // Aeltere Presets kennen die Maske nicht - dort bleibt die Spalte so
-    // stehen, wie der Benutzer sie gerade hat, statt zuzuklappen.
-    if (tree.hasProperty (panelOpenId))
-    {
-        panelOpenMask.store ((int) tree.getProperty (panelOpenId, 0));
-        panelOpenMaskVersion.fetch_add (1);
-    }
+    // Aeltere Presets kennen die Maske nicht. Dort klappt die Spalte zu
+    // (@dpa 20260828: "da haette ich gerne: alles zuklappen") - dasselbe
+    // Ergebnis, als haette das Preset eine leere Maske mitgebracht.
+    panelOpenMask.store (tree.hasProperty (panelOpenId)
+                             ? (int) tree.getProperty (panelOpenId, 0)
+                             : 0);
+    panelOpenMaskVersion.fetch_add (1);
 
     // Was der Zustand NICHT enthaelt, geht auf seinen Grundwert zurueck.
     //

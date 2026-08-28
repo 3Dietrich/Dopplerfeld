@@ -7269,8 +7269,8 @@ int main()
         }
 
         // Ein Preset aus der Zeit vor dieser Aenderung: eine echte Datei aus
-        // presets/, die die Property gar nicht kennt. Sie darf die Spalte
-        // nicht anfassen - sonst klappt jedes aeltere Preset alles zu.
+        // presets/, die die Property gar nicht kennt. Sie klappt die Spalte
+        // zu (@dpa), als haette sie eine leere Maske mitgebracht.
         {
             const juce::File oldPreset (DOPPLERFELD_SOURCE_DIR
                                         "/presets/test/mach2.5 vorbeiflug");
@@ -7292,7 +7292,7 @@ int main()
             }
         }
 
-        std::printf ("%-22s gespeichert %d, geladen %d | altes Preset laesst %d stehen "
+        std::printf ("%-22s gespeichert %d, geladen %d | altes Preset klappt auf %d zu "
                      "(Version %d)\n", "Panels im State", mask, loadedMask, keptMask,
                      versionAfterOldPreset);
 
@@ -7303,9 +7303,9 @@ int main()
             failed = true;
         }
 
-        if (keptMask != mask || versionAfterOldPreset != 0)
+        if (keptMask != 0 || versionAfterOldPreset != 1)
         {
-            std::printf ("FEHLGESCHLAGEN: ein Preset ohne Maske aendert die Spalte "
+            std::printf ("FEHLGESCHLAGEN: ein Preset ohne Maske klappt die Spalte nicht zu "
                          "(%d, Version %d)\n", keptMask, versionAfterOldPreset);
             failed = true;
         }
