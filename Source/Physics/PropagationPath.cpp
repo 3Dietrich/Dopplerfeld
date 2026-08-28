@@ -22,6 +22,36 @@ void PropagationPath::reset()
     lastSolveTime = 0.0;
     seeded        = false;
 
+    // ALLE Zeitmarken zurueck, nicht nur die Loeserzeit.
+    //
+    // DopplerEngine::reset() stellt die Hoereruhr auf null (sampleClock = 0).
+    // Jede Marke, die eine ABSOLUTE Hoererzeit traegt und das ueberlebt, liegt
+    // danach in der Zukunft - und wirkt so lange, wie das Plugin vorher
+    // gelaufen ist.
+    //
+    // Das war der Stille-Bug (@dpa 20260828: "diese minutenlange Stille muss
+    // weg ... ist gerade wieder nur der Ueberschallknall, aber NICHTS anderes
+    // ... jetzt ist der Sound wieder da. nach 1-2min!"):
+    //
+    //   shockEndTime  - Ende der laufenden Stossfront. Liegt sie in der
+    //                   Zukunft, senkt shockDuckAt() den gesamten uebrigen
+    //                   Schall auf null ab. Die N-Welle kommt ADDITIV danach
+    //                   dazu und ueberlebt - deshalb blieb genau der Knall
+    //                   hoerbar und sonst nichts.
+    //   lastDiscoveryTime - wann zuletzt nach neuen Zweigen gesucht wurde.
+    //                   Liegt sie in der Zukunft, sucht der Loeser gar nicht
+    //                   mehr, findet also keine Hoerwege und es bleibt still.
+    //   jumpMarkerTime/jumpArrivalTime - dasselbe fuer den Startknall.
+    //
+    // Fuer den Anzeige-Schnappschuss war derselbe Fall schon bedacht (siehe
+    // lastSnapshotTime in DopplerEngine::reset), fuer diese vier nicht.
+    lastDiscoveryTime = 0.0;
+    shockEndTime      = -1.0e18;
+    shockDuckStrength = 0.0;
+    jumpMarkerTime    = -1.0e18;
+    jumpArrivalTime   = -1.0e18;
+    jumpArmed         = false;
+
     // Ohne das traegt der erste Block nach einem Reset die Differenz zum
     // Versatz von vorher als Geschwindigkeit ein - ein Wusch aus dem Nichts.
     hasPrevTransformOffset = false;

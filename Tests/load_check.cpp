@@ -62,6 +62,14 @@ struct Stats
     double    worstAtSeconds = 0.0;   // wann der schlechteste Block lag
     double    peak        = 0.0;
     double    sumSquares[2] { 0.0, 0.0 };
+
+    // Effektivwert eines Kanals. Als Methode, weil ihn nicht nur report()
+    // braucht - der Stille-Test vergleicht zwei Laeufe darueber.
+    double rms (int channel) const
+    {
+        const double perChan = (double) std::max (samples, 1LL) / 2.0;
+        return std::sqrt (sumSquares[channel] / perChan);
+    }
     long long samples     = 0;
     long long nonFinite   = 0;
     double    maxMach     = 0.0;
@@ -6706,6 +6714,123 @@ int main()
         }
 
         setParam (proc, Params::nWavePressure, 1.0f);
+    }
+
+    //==================================================================
+    // Stille nach dem Wiedereinschalten (@dpa 20260828: "diese minutenlange
+    // Stille muss weg! Der Stille-Bug ist noch nicht weg!! ... ist gerade
+    // wieder nur der Ueberschallknall, aber NICHTS anderes ... jetzt ist der
+    // Sound wieder da. nach 1-2min!").
+    //
+    // Der Hauptschalter setzt beim Wiedereinschalten die Engine zurueck
+    // (DopplerfeldProcessor::processBlock), und DopplerEngine::reset() stellt
+    // dabei die Hoereruhr auf null. Jede Zeitmarke im Pfad, die eine ABSOLUTE
+    // Hoererzeit traegt und das ueberlebt, liegt danach in der Zukunft - und
+    // wirkt so lange, wie das Plugin vorher gelaufen ist. Genau daher kamen
+    // die "1-2 Minuten".
+    //
+    // Der Test faehrt deshalb erst eine Weile MIT Ueberschall (damit
+    // Stossfronten ausgeloest werden und die Marken hoch stehen), schaltet
+    // dann aus und wieder ein und hoert nach: es muss sofort wieder toenen.
+    //
+    // Die Vorlaufzeit ist der ganze Punkt. Mit einer Sekunde Vorlauf faellt
+    // nichts auf - die Marke laege dann nur eine Sekunde in der Zukunft.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+
+        setParam (proc, Params::fieldMetres,    2000.0f);
+        setParam (proc, Params::lisX,           0.5f);
+        setParam (proc, Params::lisY,           0.5f);
+        setParam (proc, Params::srcZ,           50.0f);
+        setParam (proc, Params::nWaveOn,        1.0f);
+        setParam (proc, Params::engineKind,     1.0f);
+        setParam (proc, Params::engineLevelDb,  20.0f);
+        setParam (proc, Params::globalMaxSpeed, 2000.0f);
+        setParam (proc, Params::slewVmax,       2000.0f);
+        setParam (proc, Params::smootherTau,    0.05f);
+
+        // Reichweite ueber den Abstand: nur dann erreicht die Absenkung volle
+        // Tiefe, und nur dann ist die stehengebliebene Marke wirklich Stille
+        // statt nur "leiser". Genau so stehen @dpas Presets (300 m bzw.
+        // 1704 m bei rund 250 m Abstand).
+        setParam (proc, Params::shockDuckRange, 2000.0f);
+
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        // Vorlauf: Ueberschall im Kreis, damit Stossfronten ausgeloest werden.
+        // Der Hoerer steht neben dem Kreismittelpunkt, sonst gibt es keinen
+        // Kegel (siehe "Mach 2,5 im Kreis" weiter oben).
+        constexpr double runUpSeconds = 20.0;
+
+        Stats runUp;
+        render (proc, buffer, runUpSeconds, runUp, [&proc] (double t)
+        {
+            const double omega = 700.0 / 300.0;
+            setParam (proc, Params::srcX, (float) (0.5 + 0.12 + 0.15 * std::cos (omega * t)));
+            setParam (proc, Params::srcY, (float) (0.5 + 0.15 * std::sin (omega * t)));
+        });
+
+        runUp.report ("Vorlauf Ueberschall");
+
+        // Ab hier OHNE N-Welle messen. Der Knall kommt additiv nach der
+        // Absenkung und ueberlebt sie - er wuerde die Stille also zudecken,
+        // und genau daran ist die erste Fassung dieses Tests vorbeigelaufen:
+        // Pegel und Stillezaehler blieben unauffaellig, weil die Knalle
+        // weiterhin da waren. @dpa beschreibt es woertlich so ("nur der
+        // Ueberschallknall, aber NICHTS anderes").
+        //
+        // Ausgeloest sein muessen die Stossfronten trotzdem - sonst steht die
+        // Marke gar nicht hoch. Deshalb erst der Vorlauf MIT Welle, gemessen
+        // wird ohne.
+        setParam (proc, Params::nWaveOn, 0.0f);
+
+        Stats motorBefore;
+        render (proc, buffer, 2.0, motorBefore, [&proc] (double t)
+        {
+            const double omega = 700.0 / 300.0;
+            const double tt    = t + runUpSeconds;
+            setParam (proc, Params::srcX, (float) (0.5 + 0.12 + 0.15 * std::cos (omega * tt)));
+            setParam (proc, Params::srcY, (float) (0.5 + 0.15 * std::sin (omega * tt)));
+        });
+
+        motorBefore.report ("Motor vor dem Schalten");
+
+        // Aus und wieder an, wie am Hauptschalter.
+        setParam (proc, Params::masterOn, 0.0f);
+
+        Stats off;
+        render (proc, buffer, 0.5, off, [] (double) {});
+
+        setParam (proc, Params::masterOn, 1.0f);
+
+        Stats afterOn;
+        render (proc, buffer, 3.0, afterOn, [&proc] (double t)
+        {
+            const double omega = 700.0 / 300.0;
+            const double tt    = t + runUpSeconds + 0.5;
+            setParam (proc, Params::srcX, (float) (0.5 + 0.12 + 0.15 * std::cos (omega * tt)));
+            setParam (proc, Params::srcY, (float) (0.5 + 0.15 * std::sin (omega * tt)));
+        });
+
+        afterOn.report ("Motor nach dem Schalten");
+
+        std::printf ("%-22s Motor RMS vorher %.5f -> nachher %.5f (%.0f %%)\n", "",
+                     motorBefore.rms (0), afterOn.rms (0),
+                     motorBefore.rms (0) > 0.0
+                         ? 100.0 * afterOn.rms (0) / motorBefore.rms (0) : 0.0);
+
+        // Der Vergleich ist derselbe Motor auf derselben Bahn, zwei Sekunden
+        // vorher gemessen. Ein Drittel davon ist grosszuegig - der Fehler
+        // machte es null.
+        if (afterOn.rms (0) < 0.33 * motorBefore.rms (0))
+        {
+            std::printf ("FEHLGESCHLAGEN: nach dem Wiedereinschalten bleibt der Ton weg "
+                         "(RMS %.5f gegen %.5f davor).\n",
+                         afterOn.rms (0), motorBefore.rms (0));
+            failed = true;
+        }
     }
 
     //==================================================================
