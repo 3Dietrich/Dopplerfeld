@@ -3331,8 +3331,13 @@ int main()
             // Das ECHTE Preset laden - dieselbe Datei, die @dpa im Plugin
             // anklickt. Nur so kommen motionFrames und playLoop mit, und
             // genau dort liegt der Unterschied zur Einzelparameter-Szene.
+            //
+            // Sie liegt als Kopie in Tests/fixtures und nicht in presets/test:
+            // dieser Ordner ist Arbeitsmaterial und bleibt lokal (.gitignore),
+            // der Test braucht die Datei aber auch auf einem frischen Klon.
+            // Unter Tests/ ist sie ausserdem kein Teil des Release-Zips.
             const juce::File presetFile (DOPPLERFELD_SOURCE_DIR
-                                         "/presets/test/mach2.5 vorbeiflug");
+                                         "/Tests/fixtures/mach2.5 vorbeiflug");
             juce::MemoryBlock presetData;
 
             if (! presetFile.loadFileAsData (presetData))
@@ -7350,12 +7355,12 @@ int main()
             loadedMask = proc.getPanelOpenMask();
         }
 
-        // Ein Preset aus der Zeit vor dieser Aenderung: eine echte Datei aus
-        // presets/, die die Property gar nicht kennt. Sie klappt die Spalte
-        // zu (@dpa), als haette sie eine leere Maske mitgebracht.
+        // Ein Preset aus der Zeit vor dieser Aenderung: eine echte Datei, die
+        // die Property gar nicht kennt. Sie klappt die Spalte zu (@dpa), als
+        // haette sie eine leere Maske mitgebracht.
         {
             const juce::File oldPreset (DOPPLERFELD_SOURCE_DIR
-                                        "/presets/test/mach2.5 vorbeiflug");
+                                        "/Tests/fixtures/mach2.5 vorbeiflug");
             juce::MemoryBlock oldData;
 
             if (! oldPreset.loadFileAsData (oldData))
