@@ -195,7 +195,8 @@ void FieldPanel::paint (juce::Graphics& g)
         g.setColour (Theme::muted);
         g.setFont (juce::Font (juce::FontOptions (12.0f)));
 
-        const int textWidth = juce::roundToInt (g.getCurrentFont().getStringWidthFloat (title)) + 8;
+        const int textWidth = juce::roundToInt (
+                                  juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), title)) + 8;
 
         g.drawText (title, header.bounds.withWidth (textWidth),
                     juce::Justification::centredLeft, false);

@@ -1224,9 +1224,9 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                         // unhoerbare Zeitverschiebung.
                         if (blade.shockPhase >= 0.0)
                         {
-                            const double u = blade.shockPhase / shockLen;
+                            const double shockU = blade.shockPhase / shockLen;
 
-                            if (u >= 1.0)
+                            if (shockU >= 1.0)
                             {
                                 blade.shockPhase = -1.0;
                             }
@@ -1235,12 +1235,12 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                                 // Dieselbe N-Form wie in der Ausbreitung:
                                 // Sprung auf +1, Gerade durch null, Ruecksprung
                                 // von -1. Nur viel kuerzer.
-                                double shape = 1.0 - 2.0 * u;
+                                double shape = 1.0 - 2.0 * shockU;
 
-                                if (u < bladeShockRise)
-                                    shape *= u / bladeShockRise;
-                                else if (u > 1.0 - bladeShockRise)
-                                    shape *= (1.0 - u) / bladeShockRise;
+                                if (shockU < bladeShockRise)
+                                    shape *= shockU / bladeShockRise;
+                                else if (shockU > 1.0 - bladeShockRise)
+                                    shape *= (1.0 - shockU) / bladeShockRise;
 
                                 shockSum += shape * delocalisation * bladeShockLevel
                                                 * std::min (1.0, slapAmount) * slapScale;

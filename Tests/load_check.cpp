@@ -4598,7 +4598,7 @@ int main()
 
             gen.setNoiseParams (400.0f, 3000.0f, -96.0f, -96.0f, 1.2f);
 
-            std::vector<float> buffer ((size_t) block);
+            std::vector<float> mono ((size_t) block);
 
             // Huellkurve mit einer Zeitkonstante deutlich unter der
             // Blattfolge (5 Hz * 4 Blaetter = 20 Hz, also 50 ms Periode):
@@ -4612,14 +4612,14 @@ int main()
 
             for (int b = 0; b < blocks; ++b)
             {
-                gen.renderMono (buffer.data(), block);
+                gen.renderMono (mono.data(), block);
 
                 if (b < 20)
                     continue;                  // Betriebsart-Blende und Einschwingen
 
                 for (int i = 0; i < block; ++i)
                 {
-                    const double x = (double) buffer[(size_t) i];
+                    const double x = (double) mono[(size_t) i];
 
                     env += coeff * (std::abs (x) - env);
 
@@ -6154,15 +6154,15 @@ int main()
 
             gen.setNoiseParams (400.0f, 3000.0f, -96.0f, -96.0f, 1.2f);
 
-            std::vector<float> buffer ((size_t) block);
+            std::vector<float> mono ((size_t) block);
             std::vector<float> collected;
 
             for (int b = 0; b < blocks; ++b)
             {
-                gen.renderMono (buffer.data(), block);
+                gen.renderMono (mono.data(), block);
 
                 if (b >= 20)
-                    collected.insert (collected.end(), buffer.begin(), buffer.end());
+                    collected.insert (collected.end(), mono.begin(), mono.end());
             }
 
             // Huellkurve, dann Schlaege ueber einer Schwelle zaehlen. Der

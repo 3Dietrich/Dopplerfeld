@@ -681,8 +681,14 @@ void DopplerfeldProcessor::applySourceAndListenerParameters()
         const float srcY = pp.srcY->load();
         const float srcZ = pp.srcZ->load();
 
+        // Identitaetsvergleich mit Absicht: gefragt ist nicht "fast gleich",
+        // sondern "hat der Regler seit dem Festhalten ueberhaupt einen
+        // Schreibzugriff gesehen". Eine Toleranz wuerde genau die kleinen
+        // Bewegungen verschlucken, auf die es hier ankommt.
+        JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wfloat-equal")
         const bool knobsUntouched = sourceTargetHeld
                                  && srcX == heldSrcX && srcY == heldSrcY && srcZ == heldSrcZ;
+        JUCE_END_IGNORE_WARNINGS_GCC_LIKE
 
         if (! knobsUntouched)
         {
@@ -1100,7 +1106,7 @@ void DopplerfeldProcessor::applyMediumAndOutputParameters()
     if (stateLoadRequest.load() || (cutClearsSignal && cutState == CutState::FadingOut))
         pendingOutputGainLinear = outTarget;
     else
-        outputGainLinear.setTargetValue (outTarget);
+        outputGainLinear.setTargetValue ((float) outTarget);
 
     limiterEnabled = pp.limiterOn->load() > 0.5f;
 }
@@ -2495,7 +2501,14 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         const double step   = 1.0 / std::max (1.0, masterFadeSeconds * sr);
         const int    numCh  = buffer.getNumChannels();
 
-        if (masterGain != target || masterGain < 1.0)
+        // target ist genau 0.0 oder 1.0, und masterGain laeuft in Schritten
+        // exakt auf einen der beiden zu - der Vergleich fragt "steht die
+        // Rampe schon am Ziel", nicht "sind zwei gerechnete Werte aehnlich".
+        JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wfloat-equal")
+        const bool fadeRunning = (masterGain != target) || masterGain < 1.0;
+        JUCE_END_IGNORE_WARNINGS_GCC_LIKE
+
+        if (fadeRunning)
         {
             float* const* data = buffer.getArrayOfWritePointers();
 
