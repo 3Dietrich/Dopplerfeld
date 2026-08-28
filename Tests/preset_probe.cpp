@@ -176,6 +176,59 @@ int main()
             if (auto* q = p.apvts.getParameter (Params::extraPathGainDb))
                 q->setValueNotifyingHost (q->convertTo0to1 (-60.0f));
         });
+
+        // Die Gegenrichtung: Fahne GANZ AUF. Sie senkt alle Hoerwege ausser
+        // dem juengsten, und im Ueberschall kommt der Motorton nach der
+        // Kegelankunft ueberwiegend ueber genau die - steht sie zu, bleibt
+        // vom Vorbeiflug nur der Knall.
+        measure ("Fahne auf (0 dB)", [] (DopplerfeldProcessor& p)
+        {
+            if (auto* q = p.apvts.getParameter (Params::extraPathGainDb))
+                q->setValueNotifyingHost (q->convertTo0to1 (0.0f));
+        });
+
+        measure ("Fahne auf (+12 dB)", [] (DopplerfeldProcessor& p)
+        {
+            if (auto* q = p.apvts.getParameter (Params::extraPathGainDb))
+                q->setValueNotifyingHost (q->convertTo0to1 (12.0f));
+        });
+    }
+
+    // 2d. Der leise Teil: der Motorton zwischen den Knallen. Gemessen wird er
+    //     OHNE N-Welle, sonst deckt sie ihn zu. Jede Zeile aendert genau eine
+    //     Sache gegen "wie geladen" - so steht in der Ausgabe, welcher Regler
+    //     ihn wirklich hebt und welcher nichts tut.
+    {
+        std::printf ("\n=== %s: was hebt den Ton ZWISCHEN den Knallen\n", quiet);
+
+        auto motorOnly = [&] (const char* what, auto&& tweak)
+        {
+            DopplerfeldProcessor proc;
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            if (! loadPreset (proc, quiet))
+                return;
+
+            auto set = [&proc] (const char* id, float v)
+            {
+                if (auto* q = proc.apvts.getParameter (id))
+                    q->setValueNotifyingHost (q->convertTo0to1 (v));
+            };
+
+            set (Params::nWaveOn, 0.0f);
+            render (proc, 6.0);
+            tweak (set);
+            report (what, render (proc, 10.0));
+        };
+
+        motorOnly ("wie geladen, nur ohne N-Welle", [] (auto&) {});
+        motorOnly ("Motorpegel +18 dB",       [] (auto& set) { set (Params::engineLevelDb, 30.0f); });
+        motorOnly ("Luftdaempfung aus",       [] (auto& set) { set (Params::airAbsorbAmount, 0.0f); });
+        motorOnly ("Abstandskurve flach",     [] (auto& set) { set (Params::distanceCurve, -1.0f); });
+        motorOnly ("Abstandskurve steil",     [] (auto& set) { set (Params::distanceCurve, 1.0f); });
+        motorOnly ("Boom Limit 6 dB",         [] (auto& set) { set (Params::boomLimitDb, 6.0f); });
+        motorOnly ("Ausgang +10 dB",          [] (auto& set) { set (Params::outputGain, 25.5f); });
     }
 
     // 2c. Die eigentliche Probe: haengt das Ergebnis eines Ladevorgangs davon

@@ -428,6 +428,18 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         return {};
     };
 
+    // Was kein Zustand ist, kommt gar nicht erst in die Liste: im
+    // Preset-Ordner liegt auch das Beispiel-Sample fuer die Sample-Engine.
+    presetBar.onCheck = [this] (const juce::File& f)
+    {
+        juce::MemoryBlock block;
+
+        return f.loadFileAsData (block)
+            && dopplerfeldProcessor.stateBlockIsOurs (block.getData(), (int) block.getSize());
+    };
+
+    presetBar.refreshList();
+
     addAndMakeVisible (presetBar);
 
     refreshAllTooltips();
@@ -712,15 +724,12 @@ juce::String DopplerfeldEditor::statusText() const
     // fuer das 0.5s-Mittelungsfenster (@dpa-Feedback "Langsamkeit der
     // Anzeigewahrnehmung").
 
-    // @dpa-Feedback: Tempo der Quelle, Einheit per speedUnitButton umschaltbar.
-    // Mach kommt aus derselben Momentangeschwindigkeit, nicht aus M_r (das ist
-    // radial zum jeweiligen Ohr, hier geht es um die Quelle selbst). Feste
-    // Breite kommt schon aus FieldComponent::formatSpeed() selbst (auch vom
-    // Cockpit-Display im Feld genutzt) - hier kein zweites Padding noetig.
-    text << FieldComponent::formatSpeed (displayAverages.speedMps, displayAverages.speedOfSoundMps, speedUnit);
-
-    // @dpa-Feedback: L-M-Abstand immer sichtbar, nicht nur bei Vorbeiflug.
-    text << "   L-M " << juce::String::formatted ("%7.1f", displayAverages.listenerDistanceM) << " m";
+    // Tempo und L-M stehen NICHT mehr hier: beide sind gross und gelb im
+    // Cockpit-Display im Feld zu sehen (@dpa 20260828: "Die Angaben 2695.8
+    // km/h L-M 820.7 m sind doch die, die im Display oben, gelb stehen? Dann
+    // brauchen sie doch nicht auf debug zu sein!?"). Was bleibt, ist das, was
+    // es sonst nirgends gibt - und das ist alles vergaenglich, steht also im
+    // Nachleuchten (siehe updateStatusFlashes).
 
     // Die CPU-Last steht nicht mehr in dieser Zeile, sondern in der eigenen
     // Zeile direkt darueber (siehe paint(), cpuMeterBlockHeight) - dort mit
@@ -738,18 +747,20 @@ juce::String DopplerfeldEditor::statusText() const
     return text;
 }
 
-void DopplerfeldEditor::noteStatusFlash (const juce::String& key, const juce::String& text)
+void DopplerfeldEditor::noteStatusFlash (const juce::String& key, const juce::String& text,
+                                        juce::Colour liveBackground)
 {
     for (auto& f : statusFlashes)
         if (f.key == key)
         {
-            f.text = text;
-            f.age  = 0.0;
-            f.live = true;
+            f.text     = text;
+            f.age      = 0.0;
+            f.live     = true;
+            f.liveBack = liveBackground;
             return;
         }
 
-    statusFlashes.push_back ({ key, text, 0.0, true });
+    statusFlashes.push_back ({ key, text, 0.0, true, liveBackground });
 }
 
 void DopplerfeldEditor::updateStatusFlashes (double deltaSeconds)
@@ -772,12 +783,18 @@ void DopplerfeldEditor::updateStatusFlashes (double deltaSeconds)
             noteStatusFlash ("refl", "+" + juce::String (higherOrder) + " Mehrfachrefl.");
     }
 
+    // Aufnahme und Wiedergabe hinterlegt, in denselben zwei Farben wie die
+    // Knoepfe im Bewegung-Panel (@dpa 20260828: "Wiedergabe sollte gruen
+    // hinterlegt werden, so wie Bewegung > Play/Stop") - dieselbe Sache,
+    // dieselbe Farbe, egal wo man hinschaut.
     if (dopplerfeldProcessor.isRecording())
         noteStatusFlash ("motion", Labels::text ("Aufnahme") + " "
                                      + juce::String (dopplerfeldProcessor.recordedFrameCount())
-                                     + " Frames");
+                                     + " Frames",
+                         juce::Colours::red.withAlpha (0.45f));
     else if (dopplerfeldProcessor.isPlayingMotion())
-        noteStatusFlash ("motion", Labels::text ("Wiedergabe"));
+        noteStatusFlash ("motion", Labels::text ("Wiedergabe"),
+                         juce::Colours::limegreen.withAlpha (0.4f));
 
     // Zweig-Abrisse (@dpa 20260819): ein Hoerweg verschwindet, und die
     // Anti-Klick-Rampe faehrt ihn in einer Millisekunde auf null. Die Zahl
@@ -789,7 +806,14 @@ void DopplerfeldEditor::updateStatusFlashes (double deltaSeconds)
     // steht dort manchmal etwas mit 'Env'? es kommt zu selten als dass ich
     // den Sinn begriefen konnte") - zu kurz, um es zu erraten, und zu
     // fluechtig, um es nachzuschlagen.
-    if (snapshot.branchDeaths > 0)
+    // Aktiv nur, wenn gerade welche DAZUGEKOMMEN sind. Der Zaehler laeuft
+    // kumulativ weiter; "groesser als null" liess den Abschnitt dauerhaft
+    // hell stehen, und dann sagt er nichts mehr ueber den Moment.
+    const bool deathsGrew = snapshot.branchDeaths > lastBranchDeaths;
+
+    lastBranchDeaths = snapshot.branchDeaths;
+
+    if (deathsGrew)
     {
         const double loudShare = 100.0 * (double) snapshot.loudBranchDeaths
                                        / (double) snapshot.branchDeaths;
@@ -952,29 +976,40 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
 
         for (const auto& f : statusFlashes)
         {
-            const double over  = f.age - statusHoldSeconds;
-            const double fade  = over <= 0.0 ? 1.0
-                                             : juce::jlimit (0.0, 1.0, 1.0 - over / statusFadeSeconds);
+            const double over = f.age - statusHoldSeconds;
+            const double fade = over <= 0.0 ? 1.0
+                                            : juce::jlimit (0.0, 1.0, 1.0 - over / statusFadeSeconds);
 
             if (fade <= 0.0)
                 continue;
 
-            const juce::String piece = "   " + f.text;
+            const juce::String piece = " " + f.text + " ";
             const int width = (int) std::ceil (juce::GlyphArrangement::getStringWidth (statusFont, piece));
 
             if (x - textLeft + width > textWidth)
                 break;
 
-            // Ein noch laufender Abschnitt ist so hell wie der feste Teil, ein
-            // nachleuchtender wird zusaetzlich gedaempft - damit sieht man auf
-            // einen Blick, was JETZT gilt und was gerade war.
-            const float alpha = (float) (0.6 * fade * (f.live ? 1.0 : 0.75));
+            // Laufend heisst voll weiss, nachleuchtend heisst deutlich
+            // dunkler und dann weg. Der Abstand zwischen beiden ist der
+            // eigentliche Zweck der Zeile: was JETZT passiert, soll ins Auge
+            // springen, was gerade war, nur noch nachlesbar sein.
+            const float alpha = f.live ? statusLiveAlpha
+                                       : (float) (statusEchoAlpha * fade);
+
+            // Hinterlegung nur, solange es laeuft - ein nachleuchtender
+            // Abschnitt ist kein Zustand mehr.
+            if (f.live && ! f.liveBack.isTransparent())
+            {
+                g.setColour (f.liveBack);
+                g.fillRoundedRectangle ((float) x, (float) (statusTop + 2),
+                                        (float) width, (float) (statusHeight - 4), 2.0f);
+            }
 
             g.setColour (juce::Colours::white.withAlpha (alpha));
             g.drawText (piece, x, statusTop, width, statusHeight,
                         juce::Justification::centredLeft, false);
 
-            x += width;
+            x += width + 8;
         }
     }
 }

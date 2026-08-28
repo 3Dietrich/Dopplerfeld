@@ -51,6 +51,12 @@ public:
     // wenn in Wahrheit nur ein gerade geladener Zustand noch nicht durch ist.
     std::function<juce::String (const juce::File&)> onSave;
 
+    // Ob eine Datei ueberhaupt ein Zustand ist. Der Ordner darf anderes
+    // enthalten - @dpas Preset-Ordner liegt zum Beispiel ein Beispiel-Sample
+    // fuer die Sample-Engine bei, und das gehoert dort hin. In die Liste
+    // gehoert es nicht.
+    std::function<bool (const juce::File&)> onCheck;
+
     // Nach einem Sprachwechsel: Beschriftungen und Hinweise neu setzen.
     void refreshTexts();
 

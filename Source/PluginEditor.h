@@ -126,19 +126,38 @@ private:
     // stehenbleibt, sagt nichts mehr darueber, was GERADE passiert.
     struct StatusFlash
     {
-        juce::String key;       // welcher Abschnitt (nicht angezeigt)
-        juce::String text;      // was er zuletzt sagte
-        double       age = 0.0; // Sekunden seit dem letzten Mal aktiv
-        bool         live = false;
+        juce::String  key;        // welcher Abschnitt (nicht angezeigt)
+        juce::String  text;       // was er zuletzt sagte
+        double        age = 0.0;  // Sekunden seit dem letzten Mal aktiv
+        bool          live = false;
+        juce::Colour  liveBack = juce::Colours::transparentBlack;
     };
 
     std::vector<StatusFlash> statusFlashes;
 
-    static constexpr double statusHoldSeconds = 6.0;
-    static constexpr double statusFadeSeconds = 4.0;
+    // Kurz halten, dann sichtbar wegblenden. Die erste Fassung hielt sechs
+    // Sekunden und blendete vier lang - dabei stand praktisch alles dauernd da
+    // und man sah nicht mehr, was GERADE passiert (@dpa 20260828: "Das ist
+    // jetzt immer da ... Auf meine Kritik hin hast Du es so umgedreht, dass
+    // man kaum sieht wann es aktiv ist"). Ein Nachleuchten soll lange genug
+    // sein, um es zu lesen, und kurz genug, um es vom Jetzt zu unterscheiden.
+    static constexpr double statusHoldSeconds = 0.8;
+    static constexpr double statusFadeSeconds = 2.2;
+
+    // Deckkraft laufend gegen nachleuchtend. Der Abstand ist bewusst gross:
+    // laufend soll ins Auge springen.
+    static constexpr float statusLiveAlpha  = 1.0f;
+    static constexpr float statusEchoAlpha  = 0.38f;
+
+    // Zaehlerstand der Zweig-Abrisse beim letzten Mal. Der Zaehler laeuft
+    // kumulativ weiter, "groesser als null" waere also fuer immer wahr - was
+    // ihn dauerhaft stehen liess. Aktiv ist der Abschnitt nur, wenn gerade
+    // welche DAZUGEKOMMEN sind.
+    std::uint64_t lastBranchDeaths = 0;
 
     // Meldet einen Abschnitt als GERADE aktiv (Alter zurueck auf null).
-    void noteStatusFlash (const juce::String& key, const juce::String& text);
+    void noteStatusFlash (const juce::String& key, const juce::String& text,
+                          juce::Colour liveBackground = juce::Colours::transparentBlack);
 
     // Sammelt die verganglichen Abschnitte aus dem Schnappschuss ein und
     // laesst die uebrigen altern. Aus refreshDisplay() gerufen.

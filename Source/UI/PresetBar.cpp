@@ -138,7 +138,8 @@ void PresetBar::refreshList()
     if (folder.isDirectory())
         for (const auto& entry : juce::RangedDirectoryIterator (folder, false, "*",
                                                                 juce::File::findFiles))
-            if (looksLikePreset (entry.getFile()))
+            if (looksLikePreset (entry.getFile())
+                && (! onCheck || onCheck (entry.getFile())))
                 files.add (entry.getFile());
 
     // Nach Namen, damit die Pfeile eine nachvollziehbare Reihenfolge haben

@@ -1360,7 +1360,7 @@ int main()
     //     schlechteste Einzelblock: ein Aussetzer entsteht am einzelnen Block,
     //     der sein Budget reißt, nicht am Durchschnitt.
     {
-        auto fastRun = [&] (bool groundOn, Stats& stats)
+        auto fastRun = [&] (bool groundOn, Stats& stats, float extraPathDb = 0.0f)
         {
             DopplerfeldProcessor proc;
 
@@ -1378,6 +1378,7 @@ int main()
 
             setParam (proc, Params::groundReflectionOn, groundOn ? 1.0f : 0.0f);
             setParam (proc, Params::groundDampAmount, 0.5f);
+            setParam (proc, Params::extraPathGainDb, extraPathDb);
 
             proc.prepareToPlay (sampleRate, blockSize);
 
@@ -1405,6 +1406,34 @@ int main()
             std::printf ("FEHLGESCHLAGEN: Ton setzt %.3f s lang aus (Bodenreflexion bei hoher "
                          "Geschwindigkeit)\n", with.worstSilenceSeconds);
             failed = true;
+        }
+
+        // Dieselbe Bahn mit ZUGEDREHTER Fahne (@dpa 20260828: "sie ist nur
+        // noch da, weil Du Dir so sicher bist, dass sie da sei.. ich selbst
+        // mach sie immer unhoerbar, weil.. klingt 'rueckwaerts' und bricht ab
+        // = voellig falsch").
+        //
+        // Der Regler senkt alle Hoerwege ausser dem juengsten. Bei Mach 1 mit
+        // Bodenreflexion traegt genau einer von ihnen zeitweise den GANZEN Ton
+        // - dreht man ihn zu, ist an dieser Stelle Stille. Das ist die
+        // Gegenrechnung zu @dpas Kritik: sein "bricht ab" und diese Luecke
+        // sind dieselbe Stelle, von zwei Seiten gesehen. Solange sie da ist,
+        // kann die Fahne nicht einfach voreingestellt zubleiben.
+        //
+        // OFFEN, kein Fehlschlag: der Auftrag waere, die zusaetzlichen
+        // Hoerwege richtig klingen zu lassen, nicht sie stummzuschalten.
+        {
+            Stats noTail;
+            fastRun (true, noTail, -60.0f);
+
+            noTail.report ("Mach1, Boden an, Fahne zu");
+
+            std::printf ("%-22s laengste Stille: mit Fahne %.3f s | ohne %.3f s\n", "",
+                         with.worstSilenceSeconds, noTail.worstSilenceSeconds);
+
+            if (noTail.worstSilenceSeconds > 0.05)
+                std::printf ("  OFFEN (kein Fehlschlag): zugedrehte Fahne reisst ein Loch "
+                             "von %.3f s in den Ton.\n", noTail.worstSilenceSeconds);
         }
 
         // Bewusst NICHT über die Wanduhr: die schwankt auf einem beschäftigten

@@ -434,7 +434,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // Nach oben bis 4, damit die Auslenkung auch betont werden kann - sie
         // ist der Teil der Welle, den man mehr spuert als hoert. 1 ist die
         // physikalische N-Welle.
-        layout.add (floatParam (nWavePressure, "Pressure", { 0.0f, 4.0f, 0.01f }, 1.0f, ""));
+        // Grundwert 2 statt 1 (@dpa 20260828: "Druckwelle: setze default =2").
+        layout.add (floatParam (nWavePressure, "Pressure", { 0.0f, 4.0f, 0.01f }, 2.0f, ""));
     }
 
     // Sinus statt Saegezahn fuer die vier Motor-Teiltoene, Default aus =
@@ -615,7 +616,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Regler "Fahne" (Params::extraPathGainDb), und der trifft es.
     layout.add (floatParam (reverseGainDb, "Reverse Gain", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
 
-    // 0 dB laesst alles wie bisher; bis -60 dB ist die Fahne praktisch weg.
+    // @dpa 20260828: "sie ist nur noch da, weil Du Dir so sicher bist, dass
+    // sie da sei.. ich selbst mach sie immer unhoerbar, weil.. klingt
+    // 'rueckwaerts' und bricht ab = voellig falsch. und auch kein
+    // Lautstaerke gewinn."
+    //
+    // Zum Pegel hat er recht, das ist nachgemessen (Tests/preset_probe.cpp,
+    // "mach2.5 vorbei"): zwischen ganz auf und -42 dB liegen 0,0386 gegen
+    // 0,0378 RMS - also nichts.
+    //
+    // Der Grundwert bleibt trotzdem OFFEN, und zwar aus einem gemessenen
+    // Grund: bei Mach 1 mit Bodenreflexion traegt einer der zusaetzlichen
+    // Hoerwege zeitweise den GANZEN Ton. Zugedreht reisst das ein Loch von
+    // 0,131 s (load_check, "Mach1, Boden an, Fahne zu"). Sein "bricht ab"
+    // und diese Luecke sind vermutlich dieselbe Stelle, von zwei Seiten
+    // gesehen. Ein Grundwert, der ein Loch in den Ton reisst, waere die
+    // falsche Antwort - der Auftrag ist, die zusaetzlichen Hoerwege richtig
+    // klingen zu lassen.
     layout.add (floatParam (extraPathGainDb, "Extra Paths", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
     // OHNE WIRKUNG, nur noch fuer gespeicherte Presets registriert. Die Tiefe
     // steht fest auf 1: waehrend eine Stossfront ueber den Hoerweg laeuft,
