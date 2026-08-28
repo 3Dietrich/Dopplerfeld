@@ -10,10 +10,12 @@
 //   cmake --build build-ui --target editor_shot && build-ui/editor_shot
 
 #include "PluginProcessor.h"
+#include "UI/CollapsiblePanel.h"
 #include "UI/SwarmPanel.h"
 
 #include <cstdio>
 #include <memory>
+#include <vector>
 
 namespace
 {
@@ -40,6 +42,32 @@ void shoot (juce::Component& c, const juce::String& name)
     else
         std::printf ("  FEHLER beim Schreiben von %s\n", file.getFullPathName().toRawUTF8());
 }
+
+// Klappt jedes CollapsiblePanel unterhalb von `root` auf. Die Panels der
+// rechten Spalte starten zugeklappt; zugeklappt sieht man aber nur die
+// Kopfzeilen und nicht, wie die Flaechen darunter wirken.
+void collectPanels (juce::Component& root, std::vector<CollapsiblePanel*>& out)
+{
+    for (auto* child : root.getChildren())
+    {
+        if (auto* panel = dynamic_cast<CollapsiblePanel*> (child))
+            out.push_back (panel);
+        else
+            collectPanels (*child, out);
+    }
+}
+
+// Klappt genau die Panels auf, deren Nummer in [first, last] liegt, und alle
+// anderen zu. Die Spalte ist hoeher als das Fenster - offene Panels weiter
+// unten waeren sonst nie im Bild.
+void showPanelRange (juce::Component& root, int first, int last)
+{
+    std::vector<CollapsiblePanel*> panels;
+    collectPanels (root, panels);
+
+    for (int i = 0; i < (int) panels.size(); ++i)
+        panels[(size_t) i]->setExpanded (i >= first && i <= last);
+}
 }
 
 int main()
@@ -55,6 +83,15 @@ int main()
     {
         std::unique_ptr<juce::AudioProcessorEditor> owned (editor);
         shoot (*owned, "editor_full");
+
+        // Die Spalte in zwei Haelften, jeweils offen - so wird sichtbar, wie
+        // sich die Bereiche voneinander absetzen. Alles gleichzeitig offen
+        // passt nicht ins Fenster.
+        showPanelRange (*owned, 0, 2);
+        shoot (*owned, "editor_panels_oben");
+
+        showPanelRange (*owned, 3, 6);
+        shoot (*owned, "editor_panels_unten");
     }
 
     // Das Schwarm-Panel einzeln, in seiner Groesse aus dem Editor

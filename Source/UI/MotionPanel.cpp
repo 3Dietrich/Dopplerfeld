@@ -184,6 +184,17 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     // Generator-Modus, den man bewusst dazuschaltet.
     recordTabButton.setToggleState (true, juce::dontSendNotification);
 
+    // Welcher Reiter gerade gilt, war an drei gleich aussehenden Knoepfen
+    // nicht abzulesen. Der aktive bekommt den Ton des Bereichs (Theme::Panel),
+    // die beiden anderen bleiben leer.
+    for (auto* tab : { &liveTabButton, &flyTabButton, &recordTabButton })
+    {
+        tab->setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+        tab->setColour (juce::TextButton::buttonOnColourId, Theme::activeTab (Theme::Panel::motion));
+        tab->setColour (juce::TextButton::textColourOffId, Theme::muted);
+        tab->setColour (juce::TextButton::textColourOnId, Theme::text);
+    }
+
     smootherTypeLabel.setText (Labels::text ("Smoother"), juce::dontSendNotification);
     smootherTypeLabel.setJustificationType (juce::Justification::centredLeft);
     smootherTypeLabel.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));

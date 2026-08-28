@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Labels.h"
+#include "Theme.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 
 // Schlanke Klapp-Komponente fuer die Motor-/Sample-/Bewegungs-/Feld-Panels
@@ -24,6 +25,13 @@ public:
     // im eingeklappten Zustand benoetigt.
     static constexpr int headerHeight = 24;
 
+    // Luft zwischen Panelrand und Inhalt. Ohne sie kleben die Regler an der
+    // Kante, und die Bereiche laufen optisch ineinander. Der Aufrufer muss
+    // contentPaddingBottom in seine Hoehenrechnung aufnehmen (siehe
+    // DopplerfeldEditor::layoutPanels), sonst fehlt dem Inhalt unten Platz.
+    static constexpr int contentPaddingX      = 5;
+    static constexpr int contentPaddingBottom = 5;
+
     // Der Titel steht als DEUTSCHER Quelltext hier drin und wird ueber
     // Labels::text() angezeigt - genau wie jede andere Beschriftung.
     // Gemerkt wird er, damit refreshTitle() ihn beim Sprachwechsel neu
@@ -32,7 +40,14 @@ public:
 
     // Nach einem Sprachwechsel aufzurufen (siehe PluginEditor).
     void refreshTitle() { updateHeaderText(); }
-    ~CollapsiblePanel() override = default;
+    ~CollapsiblePanel() override;
+
+    // Bereichsfarbe dieses Panels (siehe Theme.h). Sie faerbt nur die
+    // Kopfzeile und - sehr schwach - die Flaeche darunter, damit sich die
+    // sieben Panels der rechten Spalte auseinanderhalten lassen, ohne dass
+    // die Spalte bunt wird. Panels, die inhaltlich zusammengehoeren, teilen
+    // sich bewusst dieselbe Farbe.
+    void setAccentColour (juce::Colour newAccent);
 
     // Setzt den Inhalt des Panels. Die Komponente wird NICHT uebernommen
     // (kein Besitz, kein delete) - Konvention wie bei addAndMakeVisible: der
@@ -49,11 +64,34 @@ public:
     std::function<void()> onExpandedChanged;
 
     void resized() override;
+    void paint (juce::Graphics& g) override;
 
 private:
     void updateHeaderText();
+    void applyAccentToHeader();
+
+    // Die Kopfzeile ist ein Knopf ueber die volle Breite. Der Hintergrund
+    // wird in paint() des Panels gezeichnet, nicht vom Knopf - so bleiben
+    // Rundung und Deckkraft an einer Stelle. Der Knopf steuert nur noch den
+    // Text bei, und der steht links, wo das Auge ihn sucht.
+    struct HeaderLookAndFeel : juce::LookAndFeel_V4
+    {
+        void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour&,
+                                   bool, bool) override {}
+
+        void drawButtonText (juce::Graphics& g, juce::TextButton& b, bool, bool) override
+        {
+            g.setColour (b.findColour (juce::TextButton::textColourOffId));
+            g.setFont (juce::Font (juce::FontOptions (13.0f)));
+            g.drawText (b.getButtonText(), b.getLocalBounds().withTrimmedLeft (7),
+                        juce::Justification::centredLeft, true);
+        }
+    };
+
+    HeaderLookAndFeel headerLnf;
 
     const char* panelTitle = nullptr;
+    juce::Colour accent = Theme::cyan;
     juce::TextButton headerButton;
     juce::Component* contentComponent = nullptr;
 

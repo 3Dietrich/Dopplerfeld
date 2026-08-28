@@ -425,6 +425,8 @@ void EnginePanel::refreshTooltips()
 
 void EnginePanel::resized()
 {
+    groupSeparators.clear();
+
     // Nur das DREHRAD auf zwei Drittel (@dpa 20260823, Berichtigung: "NUR die
     // Knobs! Label und Value sollen so bleiben wie zuvor"). Beschriftung
     // (18 px) und Wertefeld (18 px) bleiben unveraendert, die Zellenhoehe
@@ -526,7 +528,7 @@ void EnginePanel::resized()
                                             .removeFromTop (22)
                                             .removeFromLeft (56));
 
-        area.removeFromTop (6);
+        groupSeparators.push_back (area.removeFromTop (6).getCentreY());
 
         // Rauschband darunter, eine Reihe (Plan 3.10: fc/gain je Lo/Hi + Q).
         auto noiseRow = area.removeFromTop (knobH);
@@ -544,6 +546,11 @@ void EnginePanel::resized()
     // vier Teiltoene, und die gibt es nur dort.
     if (engineKindCombo.getSelectedItemIndex() == 0)
     {
+        // Der Abstand darueber wurde oben schon abgezogen; seine Mitte ist
+        // die Linie. Ohne Gruppe darueber gibt es nichts zu trennen.
+        if (! groupSeparators.empty())
+            groupSeparators.push_back (area.getY() - 3);
+
         auto miscRow = area.removeFromTop (knobH);
 
         for (auto* k : { &jitterAmountKnob, &jitterRateKnob })
@@ -552,4 +559,14 @@ void EnginePanel::resized()
             miscRow.removeFromLeft (4);
         }
     }
+}
+
+void EnginePanel::paint (juce::Graphics& g)
+{
+    // Kontrastarm halten - die Linie soll die Gruppen trennen, nicht das
+    // Panel zerschneiden. Sie laesst links und rechts etwas Rand frei.
+    g.setColour (Theme::separator);
+
+    for (const int y : groupSeparators)
+        g.fillRect (4, y, juce::jmax (0, getWidth() - 8), 1);
 }

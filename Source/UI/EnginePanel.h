@@ -4,6 +4,7 @@
 #include "RoundedSlider.h"
 #include "Tooltips.h"
 #include "Labels.h"
+#include "Theme.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
 #include <functional>
@@ -20,6 +21,10 @@ public:
     ~EnginePanel() override = default;
 
     void resized() override;
+
+    // Zeichnet nur die feinen Trennlinien zwischen den Gruppen (Teiltoene /
+    // Rauschband / Jitter) - der Panelgrund kommt vom CollapsiblePanel.
+    void paint (juce::Graphics& g) override;
 
     // Setzt die Tooltips aller Regler dieses Panels neu, in der aktuell an
     // Tooltips::currentLanguage() gewaehlten Sprache - fuer den Sprach-
@@ -40,6 +45,11 @@ public:
     std::function<void()> onLayoutChanged;
 
 private:
+    // Mittellinien der Abstaende zwischen den Reglergruppen, in resized()
+    // gefuellt. Ohne sie steht das dichteste Panel des Editors als eine
+    // einzige Reglerwand da.
+    std::vector<int> groupSeparators;
+
     using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment   = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;

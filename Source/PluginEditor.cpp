@@ -73,6 +73,17 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     // Alle Panels starten zugeklappt (CollapsiblePanel-Default, @dpa-Feedback)
     // - sonst steht die Spalte beim Oeffnen sofort voll.
 
+    // Bereichsfarben - welcher Bereich welchen Ton bekommt, steht in
+    // Theme::Panel (UI/Theme.h), damit die Panels selbst denselben Ton fuer
+    // ihre Reiter benutzen koennen.
+    engineControlPanelBox.setAccentColour (Theme::Panel::engineControl);
+    enginePanelBox.setAccentColour        (Theme::Panel::engine);
+    samplePanelBox.setAccentColour        (Theme::Panel::sample);
+    motionPanelBox.setAccentColour        (Theme::Panel::motion);
+    fieldPanelBox.setAccentColour         (Theme::Panel::field);
+    wallPanelBox.setAccentColour          (Theme::Panel::wall);
+    swarmPanelBox.setAccentColour         (Theme::Panel::swarm);
+
     for (auto* box : { &engineControlPanelBox, &enginePanelBox, &samplePanelBox, &motionPanelBox,
                        &fieldPanelBox, &wallPanelBox, &swarmPanelBox })
     {
@@ -839,7 +850,7 @@ void DopplerfeldEditor::updateStatusFlashes (double deltaSeconds)
 
 void DopplerfeldEditor::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1a1a1a));
+    g.fillAll (Theme::editorBackground);
 
     g.setColour (juce::Colours::white.withAlpha (0.75f));
     g.setFont (13.0f);
@@ -1110,8 +1121,13 @@ void DopplerfeldEditor::layoutPanels()
 
     for (const auto& entry : entries)
     {
-        const int height = entry.box->isExpanded() ? CollapsiblePanel::headerHeight + entry.contentHeight
-                                                    : CollapsiblePanel::headerHeight;
+        // Aufgeklappt kommt zur Inhaltshoehe die Luft unter dem Inhalt dazu
+        // (CollapsiblePanel::contentPaddingBottom) - sonst schneidet das Panel
+        // die letzte Reglerreihe an.
+        const int height = entry.box->isExpanded()
+                               ? CollapsiblePanel::headerHeight + entry.contentHeight
+                                     + CollapsiblePanel::contentPaddingBottom
+                               : CollapsiblePanel::headerHeight;
 
         entry.box->setBounds (0, y, width, height);
         y += height + 4;

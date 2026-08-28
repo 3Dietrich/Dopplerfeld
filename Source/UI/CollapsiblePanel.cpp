@@ -3,8 +3,65 @@
 CollapsiblePanel::CollapsiblePanel (const char* title) : panelTitle (title)
 {
     headerButton.onClick = [this] { setExpanded (! expanded); };
+    headerButton.setLookAndFeel (&headerLnf);
     addAndMakeVisible (headerButton);
+    applyAccentToHeader();
     updateHeaderText();
+}
+
+CollapsiblePanel::~CollapsiblePanel()
+{
+    // Vor dem Abraeumen loesen: das LookAndFeel ist Member dieser Klasse und
+    // darf nicht mehr angefasst werden, wenn der Knopf es noch kennt.
+    headerButton.setLookAndFeel (nullptr);
+}
+
+void CollapsiblePanel::setAccentColour (juce::Colour newAccent)
+{
+    if (accent == newAccent)
+        return;
+
+    accent = newAccent;
+    applyAccentToHeader();
+    repaint();
+}
+
+void CollapsiblePanel::applyAccentToHeader()
+{
+    // Der Knopf malt keinen Hintergrund mehr (siehe HeaderLookAndFeel), nur
+    // noch den Titel - der bekommt die Bereichsfarbe, gedaempft.
+    headerButton.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+    headerButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
+    headerButton.setColour (juce::TextButton::textColourOffId, Theme::headerText (accent));
+    headerButton.setColour (juce::TextButton::textColourOnId, Theme::headerText (accent));
+    headerButton.repaint();
+}
+
+void CollapsiblePanel::paint (juce::Graphics& g)
+{
+    auto area = getLocalBounds().toFloat();
+
+    // Flaeche: Panelgrund mit einem Hauch der Bereichsfarbe. Zugeklappt gibt
+    // es keine Flaeche, dort steht nur die Kopfzeile.
+    if (expanded)
+    {
+        g.setColour (Theme::panelBackground (accent));
+        g.fillRoundedRectangle (area, Theme::cornerRadius);
+    }
+
+    // Kopfzeile: eine Spur kraeftiger, damit der Bereichsanfang auffaellt.
+    // Oben gerundet, unten gerade - darum zweimal gemalt.
+    auto header = area.withHeight ((float) headerHeight);
+
+    g.setColour (Theme::headerBackground (accent));
+    g.fillRoundedRectangle (header, Theme::cornerRadius);
+
+    if (expanded)
+        g.fillRect (header.withTop (header.getBottom() - Theme::cornerRadius));
+
+    // Rahmen bewusst kontrastarm (siehe Theme::line).
+    g.setColour (Theme::line);
+    g.drawRoundedRectangle (area.reduced (0.5f), Theme::cornerRadius, 1.0f);
 }
 
 void CollapsiblePanel::setContent (juce::Component* content)
@@ -52,7 +109,8 @@ void CollapsiblePanel::resized()
     // Zustand ist `area` nach Abzug des Headers leer, sofern der Aufrufer die
     // Gesamthoehe korrekt auf headerHeight reduziert hat.
     if (contentComponent != nullptr && expanded)
-        contentComponent->setBounds (area);
+        contentComponent->setBounds (area.reduced (contentPaddingX, 0)
+                                         .withTrimmedBottom (contentPaddingBottom));
 }
 
 void CollapsiblePanel::updateHeaderText()

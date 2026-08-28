@@ -5,6 +5,7 @@
 #include "FieldComponent.h"
 #include "Tooltips.h"
 #include "Labels.h"
+#include "Theme.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
