@@ -383,7 +383,39 @@ private:
         void tick (Vec3& outPos, Vec3& outVel) { current->tick (outPos, outVel); }
     };
 
+    // Liest die Reglerstaende ein und reicht sie an Engine, Generator und die
+    // Zielgroessen der Bewegung weiter. Der Rumpf steht in den Methoden
+    // darunter, eine je Thema; applyParameters() ruft sie der Reihe nach auf.
+    // Die Reihenfolge ist Teil der Sache: die Meterkoordinaten haengen am
+    // Feldmassstab, der Motor an den Zielpositionen, der Ausgang am Schnitt.
     void applyParameters();
+
+    // Quelle, Hoerer, Blickrichtung und Panorama in Metern - der Feldmassstab
+    // wird hier eingelesen, alle folgenden Meterkoordinaten haengen daran.
+    void applySourceAndListenerParameters();
+    // Wackler der Quelle und derselbe Satz Werte fuer die Klone.
+    void applyJitterParameters();
+    // Feldgroesse: meldet den Schnitt an und wartet die Ruhezeit ab.
+    void applyFieldSizeParameters();
+    // Verfahren und Grenzen der Bewegungsglaettung, dazu der Gierwinkel.
+    void applySmoothingParameters();
+    // Tempo des Vorbeiflugs und die Einstellungen der Bewegungswiedergabe.
+    void applyFlyByAndPlaybackParameters();
+    // Motor: Drehzahl, Klangarten, Oberwellen, Rausch- und Rotorwerte.
+    void applyEngineParameters();
+    // Sample: Pegel, Tonhoehe, Schleife und Klangregelung.
+    void applySampleParameters();
+    // Physik der Ausbreitung: Knallgrenze, Luftdaempfung, Abstandskurve.
+    void applyPhysicsParameters();
+    // N-Welle, Rueckwaerts-Pegel, Stossfront-Absenkung und Sprungknall.
+    void applyNWaveAndShockParameters();
+    // Bodenreflexion und zweite Ordnung.
+    void applyReflectionParameters();
+    // Waende: Ziele einsammeln, gefolgt wird ihnen in advanceMotion().
+    void applyWallParameters();
+    // Medium (Temperatur, Hoehe) und Ausgangspegel samt Begrenzer.
+    void applyMediumAndOutputParameters();
+
     void handlePendingRequests();
 
     // Blendet den Ausgang zwischen Dopplersignal und Scope-Wiedergabe (s.

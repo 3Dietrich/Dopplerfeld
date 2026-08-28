@@ -639,6 +639,23 @@ void DopplerfeldProcessor::holdSourceTargetAt (Vec3 posMetres)
 
 void DopplerfeldProcessor::applyParameters()
 {
+    applySourceAndListenerParameters();
+    applyJitterParameters();
+    applyFieldSizeParameters();
+    applySmoothingParameters();
+    applyFlyByAndPlaybackParameters();
+    applyEngineParameters();
+    applySampleParameters();
+    applyPhysicsParameters();
+    applyNWaveAndShockParameters();
+    applyReflectionParameters();
+    applyCloneParameters();
+    applyWallParameters();
+    applyMediumAndOutputParameters();
+}
+
+void DopplerfeldProcessor::applySourceAndListenerParameters()
+{
     fieldMetresValue = (double) pp.fieldMetres->load();
 
     // Nach einem Vorbeiflug bleibt die Quelle dort stehen, wo der Flug endete
@@ -674,7 +691,10 @@ void DopplerfeldProcessor::applyParameters()
 
     dopplerEngine.setPanoramaAmount (0.01 * (double) pp.panAmount->load());
     listenerState.earSpacing = (double) pp.earSpacing->load();
+}
 
+void DopplerfeldProcessor::applyJitterParameters()
+{
     // Ein Schalter fuer das Wackeln insgesamt, Quelle wie Klone. Abgeschaltet
     // wird ueber den Ausschlag und nicht durch Ueberspringen des tick():
     // die Oszillatoren laufen weiter, also setzt das Wackeln beim
@@ -709,7 +729,10 @@ void DopplerfeldProcessor::applyParameters()
         j.setSpeed     (jitterSpeed);
         j.setZFactor   (jitterZAmount);
     }
+}
 
+void DopplerfeldProcessor::applyFieldSizeParameters()
+{
     // Feldgroesse: nicht anwenden, sondern in die Stille legen (siehe
     // appliedFieldMetres im Header). Angewendet wird sie erst im stillen
     // Fenster des Schnitts, und erst, wenn der Regler zur Ruhe gekommen ist.
@@ -747,7 +770,10 @@ void DopplerfeldProcessor::applyParameters()
             cutExecutePending = true;
         }
     }
+}
 
+void DopplerfeldProcessor::applySmoothingParameters()
+{
     // --- Bewegungsglättung ---
     const double tau  = (double) pp.smootherTau->load();
     const double vMax = (double) pp.slewVmax->load();
@@ -762,7 +788,10 @@ void DopplerfeldProcessor::applyParameters()
     listenerSmoothers.applyParameters (tau, vMax, aMax);
 
     yawSmoothCoeff = 1.0 - std::exp (-1.0 / (DopplerEngine::trajectoryRateHz * std::max (1.0e-3, tau)));
+}
 
+void DopplerfeldProcessor::applyFlyByAndPlaybackParameters()
+{
     // --- Vorbeiflug ---
     // Nur das Tempo wird laufend nachgeführt; Bahnart, Startvariante und
     // Abstand legt der Start fest (siehe handlePendingRequests). Eine
@@ -775,7 +804,10 @@ void DopplerfeldProcessor::applyParameters()
     motionPlayer.setLooping (pp.playLoop->load() > 0.5f);
     motionPlayer.setInterp (pp.playInterp->load() < 0.5f ? MotionPlayer::Interp::Linear
                                                          : MotionPlayer::Interp::CatmullRom);
+}
 
+void DopplerfeldProcessor::applyEngineParameters()
+{
     // --- Motor ---
     engineGenerator.setRpm (pp.rpm->load());
     engineGenerator.setKindLevelDb (pp.engineLevelDb->load());
@@ -858,7 +890,10 @@ void DopplerfeldProcessor::applyParameters()
     // erst zusammen reissen sie die Grenze, ab der die Verdichtungsstoesse
     // sich von der Spitze loesen (siehe EngineGenerator::setRotorFlightSpeed).
     engineGenerator.setRotorFlightSpeed ((float) sourceClosingSpeed);
+}
 
+void DopplerfeldProcessor::applySampleParameters()
+{
     // --- Sample ---
     sampleSource.setGainDb (pp.sampleGain->load());
     sampleSource.setPitchSemitones (pp.samplePitch->load());
@@ -869,7 +904,10 @@ void DopplerfeldProcessor::applyParameters()
     sampleSource.setEqMidGainDb (pp.eqMidGain->load());
     sampleSource.setEqMidFreqHz (pp.eqMidFreq->load());
     sampleSource.setEqHighGainDb (pp.eqHighGain->load());
+}
 
+void DopplerfeldProcessor::applyPhysicsParameters()
+{
     // --- Physik ---
     // Beide Setter laufen über alle Pfade beider Geometriesätze, deshalb nur
     // bei tatsächlicher Änderung.
@@ -898,7 +936,10 @@ void DopplerfeldProcessor::applyParameters()
         lastDistanceCurve = distCurve;
         dopplerEngine.setDistanceCurve (distCurve);
     }
+}
 
+void DopplerfeldProcessor::applyNWaveAndShockParameters()
+{
     // Wie oben: der Setter läuft über alle Pfade beider Geometriesätze,
     // deshalb nur bei tatsächlicher Änderung.
     const bool   nWaveEnabled = pp.nWaveOn->load() > 0.5f;
@@ -963,7 +1004,10 @@ void DopplerfeldProcessor::applyParameters()
         dopplerEngine.setJumpSize (jumpBoomSize);
     }
 
+}
 
+void DopplerfeldProcessor::applyReflectionParameters()
+{
     // Beides ist inzwischen billig: die Engine legt Schalter und Dämpfung an
     // ihrer Fläche ab und reicht sie vor jedem Block an die Pfade durch, statt
     // dass hier über alle Pfade beider Geometriesätze gelaufen werden müsste.
@@ -974,9 +1018,10 @@ void DopplerfeldProcessor::applyParameters()
     dopplerEngine.setSecondOrderEnabled (pp.reflect2ndOn->load() > 0.5f);
     dopplerEngine.setBounceGain ((double) pp.bounceGain->load());
     dopplerEngine.setBounceGainBoost (juce::Decibels::decibelsToGain ((double) pp.bounceGainDb->load()));
+}
 
-    applyCloneParameters();
-
+void DopplerfeldProcessor::applyWallParameters()
+{
     // Wände: nur die Ziele einsammeln, gefolgt wird ihnen in advanceMotion().
     for (int w = 0; w < DopplerEngine::maxWalls; ++w)
     {
@@ -1005,7 +1050,10 @@ void DopplerfeldProcessor::applyParameters()
         wallStateInitialised = true;
         snapWallsPending     = false;
     }
+}
 
+void DopplerfeldProcessor::applyMediumAndOutputParameters()
+{
     // --- Ausgang ---
     // Ausgangspegel, -36 bis +36 dB (siehe Params::outputGain), multipliziert
     // mit dem Dichte-Pegelfaktor der Hoehe (Params::airAltitude): der
