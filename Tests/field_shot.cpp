@@ -109,5 +109,63 @@ int main()
     field.setSnapshot (snap);
     shoot (field, "field_persp_listener_high");
 
+    // 7) Ueberschall-Frontlinien (drawMachFronts/drawPerspectiveMachFronts):
+    // eine Quelle in Flughoehe, geradeaus in +x, mit Spur und Wellenfronten
+    // wie sie DopplerEngine::publishSnapshot() liefert (juengste zuerst).
+    // Geprueft wird, dass die Front bei Mach 2 als Hyperbel-Schar auftaucht,
+    // die hoeheren Schnitte anders liegen als die Bodenspur, und dass bei
+    // Mach 0,5 nichts stehenbleibt.
+    {
+        // Grosses Feld: bei 400 m Flughoehe liegt die Bodenspur weit hinter
+        // der Quelle, auf 100 m Feldbreite waere davon nichts zu sehen.
+        field.setFieldMetres (2000.0);
+
+        FieldSnapshot mach;
+
+        mach.speedOfSound  = 343.0;
+        mach.now           = 20.0;
+        mach.listener.head = { 700.0, 400.0, 1.7 };
+
+        const double speed = 686.0;   // Mach 2
+        const Vec3   apex { 1200.0, 600.0, 400.0 };
+
+        mach.sourcePos   = apex;
+        mach.sourceSpeed = speed;
+
+        // Spur: gerade Bahn in +x, die an der Quelle endet - daraus liest
+        // machGeometry() die Flugrichtung.
+        mach.trailCount = 32;
+        for (int i = 0; i < mach.trailCount; ++i)
+        {
+            const double back = (double) (mach.trailCount - 1 - i) * 30.0;
+            mach.trail[(size_t) i] = { apex.x - back, apex.y, apex.z };
+        }
+
+        // Wellenfronten: feste Schrittweite, juengste zuerst, Mittelpunkt
+        // jeweils an der Quellposition zur Emissionszeit.
+        const double spacing = 0.486;   // wie publishSnapshot() bei n = 2000 m
+        mach.wavefrontCount = FieldSnapshot::maxWavefronts;
+        for (int i = 0; i < mach.wavefrontCount; ++i)
+        {
+            const double age = (double) (i + 1) * spacing;
+            mach.wavefrontEmitTimes[(size_t) i] = mach.now - age;
+            mach.wavefrontPositions[(size_t) i] = { apex.x - speed * age, apex.y, apex.z };
+        }
+
+        field.setViewMode (FieldComponent::ViewMode::TopDown);
+        field.setSnapshot (mach);
+        shoot (field, "field_topdown_mach2");
+
+        field.setViewMode (FieldComponent::ViewMode::Perspective);
+        field.setSnapshot (mach);
+        shoot (field, "field_persp_mach2");
+
+        // Unterschall: keine Front, auch kein Rest davon.
+        mach.sourceSpeed = 171.5;   // Mach 0,5
+        field.setViewMode (FieldComponent::ViewMode::TopDown);
+        field.setSnapshot (mach);
+        shoot (field, "field_topdown_subsonic");
+    }
+
     return 0;
 }

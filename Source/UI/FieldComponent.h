@@ -321,6 +321,53 @@ private:
     // getuned, bei kleineren Feldern "voller heller Schallkreise" - siehe
     // .cpp). Reiner Anzeige-Faktor, unabhaengig von der Geometrie.
     float wavefrontBrightnessFactor() const;
+
+    // -- Ueberschall-Frontlinien -------------------------------------------
+    //
+    // Bei Ueberschall bilden alle Kugelwellen zusammen EINE Front, die mit der
+    // Quelle durchs Feld wandert. Wo sie einen Hoerer ueberstreicht, hoert der
+    // in diesem Augenblick den Knall (die N-Welle, s. PropagationPath) - die
+    // Linie ist also nicht Deko, sondern genau die Stelle, an der es knallt.
+    //
+    // Die Front ist eine Flaeche im Raum, keine Linie: auf Ohrhoehe laeuft sie
+    // woanders als am Boden oder auf halber Flughoehe. Gezeichnet wird deshalb
+    // ihr Schnitt mit mehreren waagerechten Ebenen, gestaffelt nach Hoehe
+    // (@dpa: "das kann man farblich oder strichfarb-deckungsmaessig andeuten").
+    //
+    // Bei Unterschall gibt es keine Front - dann bleibt auch nichts stehen.
+    struct MachGeometry
+    {
+        bool   valid = false;
+        Vec3   apex;        // Spitze: aktuelle Quellposition
+        Vec3   dir;         // Flugrichtung (Einheitsvektor)
+        Vec3   u, w;        // zwei Achsen senkrecht dazu, fuer den Umlaufwinkel
+        double tanMu = 0.0; // Tangens des halben Oeffnungswinkels asin(c/v)
+        double maxLength = 0.0; // wie weit die Front nach hinten gezeichnet wird
+    };
+
+    MachGeometry machGeometry() const;
+
+    // Schnittkurve der Front mit der Ebene z = height, in Weltkoordinaten.
+    // Mehrere Stuecke, weil die Kurve (eine Hyperbel, sobald die Ebene die
+    // Kegelachse verfehlt) abreisst, wo sie ueber maxLength hinauslaeuft.
+    std::vector<std::vector<Vec3>> machFrontAtHeight (const MachGeometry& geom, double height) const;
+
+    // Welche Hoehen gezeichnet werden und wie kraeftig - an einer Stelle,
+    // damit Draufsicht und Perspektive dieselbe Staffelung zeigen.
+    struct MachFrontLayer { double height; float alpha; float thickness; };
+    std::vector<MachFrontLayer> machFrontLayers() const;
+
+    void drawMachFronts (juce::Graphics& g) const;
+    void drawPerspectiveMachFronts (juce::Graphics& g) const;
+
+    // Abtastung des Umlaufwinkels je Schnittkurve. Reichlich, weil eine
+    // Hyperbel in der Nahe ihrer Asymptote weit auseinanderlaeuft und bei
+    // grober Teilung eckig wird.
+    static constexpr int machFrontSamples = 240;
+
+    // Wie viele Hoehenstufen zwischen Boden und Flughoehe liegen (siehe
+    // machFrontLayers()).
+    static constexpr int machFrontHeightSteps = 5;
     void drawTrail (juce::Graphics& g) const;
 
     // Vorbeiflug-Wegvorschau (@dpa-Feedback): geplante Reststrecke + Punkt
