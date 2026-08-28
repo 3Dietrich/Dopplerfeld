@@ -181,7 +181,7 @@ int main()
 
         // Sanfte Rechtskurve: Bogen mit 4 km Radius, die Quelle steht bei
         // turn.now auf 90 Grad (also mit Flugrichtung +x) im Bild.
-        const double turnRadius = 4000.0;
+        const double turnRadius = 1200.0;   // enge Schleife: der harte Fall fuer die Bogenstuecke
         const Vec3   turnCentre { 1200.0, 600.0 - turnRadius, 0.0 };
         const double omega = turn.sourceSpeed / turnRadius;
 

@@ -665,9 +665,36 @@ std::vector<std::vector<Vec3>> FieldComponent::machFrontAtHeight (double height)
     // dort also keinen Ueberschall und folglich auch keine Front. Genau das
     // ist die Mach-1-Bedingung, nur aus den gezeichneten Kreisen gelesen statt
     // aus einer geschaetzten Geschwindigkeit.
+    // Zwischen zwei Tangentenstuecken liegt auf dem gemeinsamen Kreis ein
+    // Bogen: der Beruehrpunkt wandert von der einen Normalen zur naechsten.
+    // Bei gerader Bahn ist der Bogen praktisch null lang, im Kurvenflug wird
+    // er sichtbar - und genau er macht die Front dort rund, statt sie von
+    // Beruehrpunkt zu Beruehrpunkt springen zu lassen.
+    auto pointOn = [height] (const Circle& circle, double angle)
+    {
+        return Vec3 { circle.x + circle.r * std::cos (angle),
+                      circle.y + circle.r * std::sin (angle),
+                      height };
+    };
+
+    auto appendArc = [&] (std::vector<Vec3>& line, const Circle& circle, double from, double to)
+    {
+        // Kuerzester Weg: die Kontur nutzt nur das kleine Bogenstueck.
+        double sweep = to - from;
+        while (sweep >  juce::MathConstants<double>::pi) sweep -= juce::MathConstants<double>::twoPi;
+        while (sweep < -juce::MathConstants<double>::pi) sweep += juce::MathConstants<double>::twoPi;
+
+        constexpr int arcSteps = 8;
+
+        for (int k = 1; k <= arcSteps; ++k)
+            line.push_back (pointOn (circle, from + sweep * (double) k / (double) arcSteps));
+    };
+
     for (const double side : { -1.0, 1.0 })
     {
         std::vector<Vec3> line;
+        double previousAngle = 0.0;
+        bool   havePrevious  = false;
 
         for (size_t i = 0; i + 1 < circles.size(); ++i)
         {
@@ -685,20 +712,32 @@ std::vector<std::vector<Vec3>> FieldComponent::machFrontAtHeight (double height)
                     segments.push_back (line);
 
                 line.clear();
+                havePrevious = false;
                 continue;
             }
 
             const double cosAlpha = dr / distance;
             const double sinAlpha = side * std::sqrt (juce::jmax (0.0, 1.0 - cosAlpha * cosAlpha));
 
-            // Normale = die um alpha gedrehte Verbindungsrichtung.
+            // Normale der Tangente = die um alpha gedrehte Verbindungsrichtung.
             const double ux = dx / distance;
             const double uy = dy / distance;
             const double nx = ux * cosAlpha - uy * sinAlpha;
             const double ny = ux * sinAlpha + uy * cosAlpha;
 
-            line.push_back ({ a.x - nx * a.r, a.y - ny * a.r, height });
-            line.push_back ({ b.x - nx * b.r, b.y - ny * b.r, height });
+            // Beide Beruehrpunkte liegen auf derselben Seite, also unter
+            // demselben Winkel um ihren jeweiligen Mittelpunkt.
+            const double angle = std::atan2 (-ny, -nx);
+
+            if (havePrevious)
+                appendArc (line, a, previousAngle, angle);
+            else
+                line.push_back (pointOn (a, angle));
+
+            line.push_back (pointOn (b, angle));
+
+            previousAngle = angle;
+            havePrevious  = true;
         }
 
         if (line.size() >= 2)
