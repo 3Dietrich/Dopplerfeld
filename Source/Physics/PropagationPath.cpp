@@ -26,7 +26,7 @@ void PropagationPath::reset()
     //
     // DopplerEngine::reset() stellt die Hoereruhr auf null (sampleClock = 0).
     // Jede Marke, die eine ABSOLUTE Hoererzeit traegt und das ueberlebt, liegt
-    // danach in der Zukunft - und wirkt so lange, wie das Plugin vorher
+    // danach in der Zukunft - und wirkt so lange, wie das Plugin bis dahin
     // gelaufen ist.
     //
     // Ohne dieses Zuruecksetzen entsteht der Stille-Bug (@dpa 20260828: "diese
@@ -55,7 +55,7 @@ void PropagationPath::reset()
     jumpArmed         = false;
 
     // Ohne das traegt der erste Block nach einem Reset die Differenz zum
-    // Versatz von vorher als Geschwindigkeit ein - ein Wusch aus dem Nichts.
+    // Versatz davor als Geschwindigkeit ein - ein Wusch aus dem Nichts.
     hasPrevTransformOffset = false;
     prevTransformOffset    = Vec3{};
 
@@ -295,9 +295,9 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // Spitzenüberdruck einer N-Welle waechst mit L^(3/4) der Körperlänge L,
     // genau wie er mit R^(-3/4) der Entfernung faellt. Bei nWaveSizeRefMetres
     // (15 m, derselbe Wert wie der Default/Skew-Mittelpunkt des "N-Wave
-    // Size"-Reglers) ist der Faktor exakt 1 - der bisher eingehörte Klang bei
-    // mittlerer Reglerstellung bleibt also unveraendert, kleinere Koerper
-    // werden leiser, groessere lauter. Kein Deckel noetig: das Potenzgesetz
+    // Size"-Reglers) ist der Faktor exakt 1 - bei mittlerer Reglerstellung
+    // aendert die Groesse den Pegel also nicht, kleinere Koerper werden
+    // leiser, groessere lauter. Kein Deckel noetig: das Potenzgesetz
     // ist ueber den ganzen Reglerbereich (0,5 bis 200 m) von selbst monoton
     // und endlich.
     // Ausgleich fuer die Anstiegszeit (@dpa 20260827 zur Knall-Kante: "Unter 1
@@ -352,9 +352,9 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // INNERHALB der eingestellten Reichweite ist die Absenkung voll - dort
     // ist die Front noch eine, und dann kommt zwischen Bug- und Heckstoss
     // wirklich nichts durch. Erst DAHINTER laesst sie nach, mit range / R.
-    // Gemessen im Szenario "Kreis, Druckwelle 0": bei Reichweite 1345 m und
-    // rund 190 m Abstand kam vorher, als der Abfall schon ab dem ersten Meter
-    // lief, nie mehr als 87,6 % Absenkung zustande - 12,4 % Motorton standen
+    // Gemessen im Szenario "Kreis, Druckwelle 0": liefe der Abfall schon ab
+    // dem ersten Meter, kaeme bei Reichweite 1345 m und rund 190 m Abstand
+    // nie mehr als 87,6 % Absenkung zustande - 12,4 % Motorton stuenden
     // dauerhaft zwischen den Knallen (@dpa 20260827). Wer den Ton auch bei
     // nahen Fronten stehen lassen will, dreht die Reichweite herunter.
     const double beyond = std::max (0.0, radius - shockDuckRange);
@@ -868,9 +868,9 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // ist keine Umbenennung desselben Hoerwegs, sondern wirklich
                 // eine andere Ankunft.
                 //
-                // Das ist der bisher wichtigste Hinweis: die Paare sterben nicht
-                // und tauchen unter neuer Nummer wieder auf, sondern es
-                // entstehen und vergehen tatsaechlich staendig neue. Der Kegel
+                // Die Paare sterben also nicht, um unter neuer Nummer wieder
+                // aufzutauchen - es entstehen und vergehen tatsaechlich
+                // staendig neue. Der Kegel
                 // ueberstreicht das Ohr also immer wieder, statt einmal.
                 slot = freeSlot();
 
@@ -1371,9 +1371,9 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                     // Nach dem Ende der Welle liefert nWaveAt() null, der
                     // Hochpass schwingt aber noch aus - und dieser Nachschwinger
                     // GEHOERT zur Welle. Wird er abgeschnitten, ist genau das
-                    // wieder ein Sprung: gemessen ein Samplesprung von 0,246,
-                    // wo vorher 0,004 standen. Deshalb endet die Welle erst,
-                    // wenn auch der Filter zur Ruhe gekommen ist.
+                    // wieder ein Sprung: gemessen ein Samplesprung von 0,246
+                    // gegen 0,004 im ausgeschwungenen Fall. Deshalb endet die
+                    // Welle erst, wenn auch der Filter zur Ruhe gekommen ist.
                     if (b.nPhase > b.nDuration
                         && std::abs (b.nHpZ)  < nWaveTailFloor
                         && std::abs (b.nHpZ2) < nWaveTailFloor)

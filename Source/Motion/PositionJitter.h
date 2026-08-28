@@ -154,9 +154,9 @@ private:
     //
     // heading ist die tatsaechlich geflogene Richtung, IMMER exakt
     // Einheitslaenge - garantiert durch Konstruktion (Rodrigues-Drehformel
-    // unten), nicht durch Nachnormieren. Ein Knick wird nicht durch
-    // Glaetten der drei Vektor-Komponenten einzeln erzeugt (das war der
-    // fruehere Ansatz ueber OnePoleSmoother/CriticallyDampedSpring): zwei
+    // unten), nicht durch Nachnormieren. Die drei Vektor-Komponenten
+    // einzeln zu glaetten (ueber OnePoleSmoother/CriticallyDampedSpring)
+    // taugt dafuer nicht: zwei
     // nahezu entgegengesetzte Einheitsvektoren komponentenweise
     // ueberblendet durchlaufen zwangslaeufig einen Punkt nahe dem
     // Nullvektor - und die Richtung eines fast-Null-Vektors ist numerisch

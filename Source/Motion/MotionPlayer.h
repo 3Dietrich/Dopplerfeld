@@ -32,8 +32,8 @@ public:
 
     void trigger (double now);
 
-    // Bricht eine laufende Wiedergabe sofort ab (Plan-Lücke: bisher lief
-    // Play nur bis zum Clip-Ende oder Loop-Endlos-Betrieb ohne Ausstieg).
+    // Bricht eine laufende Wiedergabe sofort ab - ohne das liefe Play nur
+    // bis zum Clip-Ende oder im Loop-Betrieb ohne Ausstieg weiter.
     // Springt NICHT auf Frame 0 zurück - ein erneutes trigger() startet ohne
     // hängengebliebene Kopfposition sauber von vorn.
     void stop() { playing = false; loopEdgePending = false; }

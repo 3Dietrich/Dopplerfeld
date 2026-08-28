@@ -193,9 +193,9 @@ private:
     Knob flyDistanceKnob, flyApproachKnob, flySpeedKnob;
 
     // Was den Knall-Start hoerbar macht (@dpa 20260824: "Soll wie der
-    // Raketen-Stoss hoerbar sein, ist es aber nicht"). Beides stand vorher im
-    // Feld/Physik-Panel - drei Panels entfernt von der Startvariante, die es
-    // ausloest. Hier steht es neben seiner Ursache.
+    // Raketen-Stoss hoerbar sein, ist es aber nicht"). Beides steht hier
+    // neben der Startvariante, die es ausloest, und nicht drei Panels
+    // entfernt im Feld/Physik-Panel.
     Knob flyJumpBoomKnob, flyJumpSizeKnob;
 
 

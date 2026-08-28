@@ -100,7 +100,7 @@ int ScopeComponent::findTriggerIndexNear (const float* left, int searchLo, int s
     if (coarse < 0)
     {
         // Nichts uebrig geblieben (Stille, oder ein Signal ganz ohne tiefen
-        // Anteil): dann eben direkt im Rohsignal, wie zuvor.
+        // Anteil): dann eben direkt im Rohsignal.
         return nearestRisingZero (left, searchLo, searchHi, target);
     }
 
@@ -380,8 +380,7 @@ void ScopeComponent::mouseWheelMove (const juce::MouseEvent& e, const juce::Mous
     // Math.exp(deltaY * k)) statt fixem 0.8/1.25-Sprung pro Event - bei
     // Trackpad-Gesten kommen viele Events mit sehr kleinem deltaY, ein
     // fixer Sprung pro Event macht das sonst viel zu schnell/ruckelig.
-    // Hoch scrollen (deltaY > 0) verkuerzt die Zeitbasis (reinzoomen), wie
-    // bisher.
+    // Hoch scrollen (deltaY > 0) verkuerzt die Zeitbasis (reinzoomen).
     const float anchorFraction = getWidth() > 0 ? (float) e.x / (float) getWidth() : 0.5f;
     const float factor = (float) std::exp (-(double) wheel.deltaY * zoomWheelSensitivity);
     zoomAroundFraction (factor, anchorFraction);

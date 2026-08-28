@@ -56,9 +56,9 @@ const std::array<EngineVoicePreset, 5> jetVoiceTable
     { 250.0, 1000.0, 0.55, 2500.0,   0.85, 0.85, 0.85,      0.0, 1.0, 0.00 }
 }};
 
-// Die Raketen-Vorlagen liegen seit @dpa 20260825 eine gute Oktave tiefer als
-// zuvor ("muss noch tiefer gehen, subsubbass tief. Energie von weit Weit
-// weg.. also zutiefst (bis 5Hz cutoff) aber druckvoll (amp)"). Zusammen mit
+// Die Raketen-Vorlagen liegen eine gute Oktave tiefer als die uebrigen
+// (@dpa 20260825: "muss noch tiefer gehen, subsubbass tief. Energie von weit
+// Weit weg.. also zutiefst (bis 5Hz cutoff) aber druckvoll (amp)"). Zusammen mit
 // dem erweiterten Reglerweg nach unten (rocketDarkOctaves) und der auf 4 Hz
 // gesenkten Filteruntergrenze erreicht das Tiefband der Vorlage "Ferne" bei
 // ganz dunklem Regler die geforderten 5 Hz.
@@ -999,9 +999,9 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                     // das ist der Unterschied zwischen "prasselt" und
                     // "rattert".
                     //
-                    // Uniform in [0,5 .. 1,5] wie zuvor konnte das nicht: die
-                    // Abstaende blieben in einem schmalen Band um den
-                    // Mittelwert, das Ohr fand darin sofort ein Tempo.
+                    // Eine Gleichverteilung in [0,5 .. 1,5] kann das nicht:
+                    // die Abstaende blieben in einem schmalen Band um den
+                    // Mittelwert, das Ohr faende darin sofort ein Tempo.
                     //
                     // -mean * ln(u) ist die Inversionsformel der
                     // Exponentialverteilung. u wird von der Null weggehalten,
@@ -1168,7 +1168,7 @@ void EngineGenerator::renderMono (float* out, int numSamples)
                         // die Radialgeschwindigkeit null, dort bekaeme der
                         // Schlag gar keine Richtwirkung ab und das Knattern
                         // bliebe in jeder Lage gleich. Zusammen ergeben die N
-                        // Blaetter dieselbe Schlagrate wie zuvor.
+                        // Blaetter die volle Schlagrate.
                         const double slapPhase   = bladePhase - 0.25;
                         const double slapWrapped = slapPhase - std::floor (slapPhase);
 

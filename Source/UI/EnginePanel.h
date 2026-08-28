@@ -95,8 +95,8 @@ private:
 
     static void populateChoices (juce::ComboBox& combo, juce::AudioProcessorValueTreeState& apvts, const juce::String& paramID);
 
-    // Wellenform der vier Teiltoene: aus = Saegezahn wie bisher, an = reiner
-    // Sinus (@dpa 20260823). Steht rechts neben der Teilton-Matrix, dort ist
+    // Wellenform der vier Teiltoene: aus = Saegezahn, an = reiner Sinus
+    // (@dpa 20260823). Steht rechts neben der Teilton-Matrix, dort ist
     // ohnehin Platz - eine eigene Zeile dafuer wuerde das Panel nur hoeher
     // machen, ohne mehr zu zeigen.
     // Wellenform JE Teilton (@dpa 20260824: "der sinus soll ... für jeden osc
@@ -129,8 +129,8 @@ private:
 
     // Betriebsart des Motors (@dpa 20260824: "in 'Motor' mehrere umschaltbar
     // machen") - ueberschreibt keinen der Regler oben, gewichtet nur im
-    // Generator, siehe EngineGenerator::setEngineKind(). "Frei"/"Propeller"
-    // verhalten sich wie bisher.
+    // Generator, siehe EngineGenerator::setEngineKind(). "Frei" gewichtet
+    // nichts um, "Propeller" ist noch Platzhalter.
     juce::Label engineKindLabel;
     juce::ComboBox engineKindCombo;
     std::unique_ptr<ComboBoxAttachment> engineKindAttachment;
@@ -172,8 +172,8 @@ private:
     Knob jetToneKnob, rocketToneKnob;
 
     // Form der Druckstoesse aus der Raketenduese: Laenge einer Stosswelle und
-    // ihre Folge. Erst mit diesen beiden ist der Stoss einstellbar - vorher
-    // steckten beide Groessen als Festwerte im Generator.
+    // ihre Folge. Erst mit diesen beiden ist der Stoss einstellbar; ohne sie
+    // stuenden beide Groessen als Festwerte im Generator.
     Knob rocketShockSizeKnob, rocketShockRateKnob, rocketFarColourKnob;
 
     // Beschriftete Auswahlliste, gebuendelt wie Knob - dieselbe Begruendung:

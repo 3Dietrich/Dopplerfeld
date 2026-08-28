@@ -104,13 +104,13 @@ public:
 
     // Gesamtpegel der Betriebsart in dB. Gilt NICHT für "Frei" - dort machen
     // die vier Teilton-Pegel den Pegel, und daran darf sich nichts ändern,
-    // sonst klängen alte Snapshots anders.
+    // sonst klängen bestehende Snapshots anders.
     //
     // Die anderen Betriebsarten brauchen ihn, weil ihre Pegel aus der Sache
     // kommen und nicht aus vier Reglern: ein Hubschrauber in drei Metern
-    // Abstand ist ohrenbetäubend, und genau das war er vorher nicht (@dpa:
-    // "die Lautstärken sind noch irgendwie völlig unrealistisch: Hubschrauber
-    // in 3m abstand ist flüsterleise..!").
+    // Abstand ist ohrenbetäubend, und ohne diesen Pegel klingt er es nicht
+    // (@dpa: "die Lautstärken sind noch irgendwie völlig unrealistisch:
+    // Hubschrauber in 3m abstand ist flüsterleise..!").
     void setKindLevelDb (float levelDb);
 
     // Fahrtwind: Betrag der Quellgeschwindigkeit in m/s. Treibt in jeder
@@ -163,8 +163,8 @@ public:
     //     (setRocketFarColour).
     //   - Die Tiefe der Absenkung durch die Druckstoesse. Die Stoesse der
     //     Rakete entstehen hier im Generator und nicht als Kegelankunft in der
-    //     Ausbreitung - deshalb kam der Regler "Duck-Reichw." bei der Rakete
-    //     bisher gar nicht an (@dpa: "ich habe bei Rakete noch keinen
+    //     Ausbreitung - ohne diesen Weg kaeme der Regler "Duck-Reichw." bei
+    //     der Rakete gar nicht an (@dpa: "ich habe bei Rakete noch keinen
     //     Unterschied zwischen den Druckreichweiten gehoert"). Mit dem
     //     Abstand hier greift dieselbe Formel wie in
     //     PropagationPath::triggerNWave: range / (range + R).
@@ -290,8 +290,7 @@ private:
     // Verdichters; bei den meisten Vorlagen steht sein Pegel auf null).
     //
     // Warum drei Bänder und nicht ein durchstimmbares Filter: ein einzelner
-    // Hochpass, wie das Strahlrauschen ihn bisher hatte, kann nur heller oder
-    // dunkler werden. Ein Turbofan klingt aber nicht wie ein leiserer
+    // Hochpass kann nur heller oder dunkler werden. Ein Turbofan klingt aber nicht wie ein leiserer
     // Nachbrenner, sondern anders VERTEILT - viel Bypass-Rauschen unten, wenig
     // Schärfe oben. Das lässt sich nur über getrennt regelbare Bänder sagen.
     struct BandVoicing

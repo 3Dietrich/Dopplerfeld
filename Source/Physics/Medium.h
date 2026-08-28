@@ -57,8 +57,8 @@ struct MediumState
     // kg/m^3 (15°C, Meereshöhe) - der Schalldruck einer gegebenen Quelle
     // skaliert näherungsweise mit der Luftdichte. Reine Physik ohne
     // Normierung auf die Regler-Defaults: bei tempCelsius=20/altitudeMetres=0
-    // kommt hier NICHT exakt 1.0 heraus (rund 0,983), das Zurechtrücken auf
-    // "Defaults klingen wie bisher" passiert an der Verwendungsstelle
+    // kommt hier NICHT exakt 1.0 heraus (rund 0,983); die Normierung auf
+    // "Defaults ändern den Pegel nicht" passiert an der Verwendungsstelle
     // (PluginProcessor::applyParameters), nicht hier.
     double densityGain() const
     {

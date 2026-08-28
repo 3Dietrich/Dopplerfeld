@@ -36,9 +36,9 @@ Vec3 FlyByGenerator::offset() const
 
 double FlyByGenerator::halfLength() const
 {
-    // Eigenständiger Regler (Params::flyApproach), keine Ableitung mehr aus
-    // distance - die beiden steuerten vorher ungewollt gemeinsam Bahnlänge
-    // UND seitlichen Abstand. Untergrenze nur als Schutz vor einer entarteten
+    // Eigenständiger Regler (Params::flyApproach), nicht aus distance
+    // abgeleitet: Bahnlänge und seitlicher Abstand sind zwei Größen und
+    // gehören an zwei Regler. Untergrenze nur als Schutz vor einer entarteten
     // (quasi punktförmigen) Bahn.
     return std::max (10.0, approach);
 }

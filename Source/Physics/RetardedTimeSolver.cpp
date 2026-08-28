@@ -287,8 +287,8 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
     // Das ist keine Heuristik, sondern dieselbe Kausalität wie oben, nur von
     // der anderen Seite: der Puffer ist nach der GRÖSSTEN Feldgröße bemessen
     // (Plan 2.12, bei n = 10000 rund 42 s), gehört wird aber meist auf einem
-    // kleinen Feld, wo die längste Laufzeit unter einer Sekunde liegt. Der
-    // Scan lief bisher trotzdem jedes Mal über die vollen 42 s.
+    // kleinen Feld, wo die längste Laufzeit unter einer Sekunde liegt. Ohne
+    // die Eingrenzung liefe der Scan trotzdem jedes Mal über die vollen 42 s.
     //
     // Der physikalisch echte Fall "verspäteter Boom aus großer Distanz" bleibt
     // dabei vollständig drin: ein Boom, der erst jetzt eintrifft, hat genau
@@ -417,10 +417,10 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
         // dt_e/dt_h = 1/(1 - M_r) (Plan 2.11). Direkt an der Mach-Front geht
         // der Nenner gegen null und die Wurzel wandert entsprechend weit.
         //
-        // Der frühere Deckel von 0,05 begrenzte die vorhergesagte Wanderung auf
-        // das 20-fache eines Solver-Schritts. In Wirklichkeit sind an der
-        // Kaustik einige hundert drin (für Mach 2 in 150 m Abstand rund 281).
-        // Der Startwert lag damit systematisch zu kurz, und weil das Suchbudget
+        // Ein Deckel von 0,05 begrenzte die vorhergesagte Wanderung auf das
+        // 20-fache eines Solver-Schritts. In Wirklichkeit sind an der Kaustik
+        // einige hundert drin (für Mach 2 in 150 m Abstand rund 281). Der
+        // Startwert läge damit systematisch zu kurz, und weil das Suchbudget
         // aus derselben Grösse gebildet wird (siehe budget unten), reichte auch
         // die Suche nicht bis zur echten Wurzel. Sie fand dann entweder die des
         // Nachbarn oder gar keine - beides ein Zweigtod bei vollem Pegel.
@@ -718,7 +718,7 @@ int RetardedTimeSolver::solve (const SourceTrajectory& traj,
         }
     }
 
-    // Nicht mehr versucht: Zuordnung über die REIHENFOLGE beider Listen
+    // Nicht gangbar: Zuordnung über die REIHENFOLGE beider Listen
     // (beide sind nach t_e sortiert, zwei Wurzeln können einander nicht
     // überholen ohne vorher zu verschmelzen). Die Idee scheitert an der
     // Bedingung, unter der sie gelten würde - gleich viele Wurzeln wie zuletzt

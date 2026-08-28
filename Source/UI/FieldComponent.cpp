@@ -1685,7 +1685,7 @@ Vec3 FieldComponent::perspectiveScreenToWorld (juce::Point<float> screenPx) cons
 
     // Absolute Weltposition aus Tiefe (entlang fwd) + Seitenlage (entlang
     // right) - bei der festen Standardkamera (fwd = +y, right = +x)
-    // deckt sich das exakt mit den bisherigen einzelnen x/y-Formeln; aus
+    // deckt sich das exakt mit getrennten x/y-Formeln; aus
     // Hoerer-Sicht (gedrehte Kamera, s. setPerspectiveFromListener())
     // verteilt sich die Seitenlage stattdessen auf Welt-x UND Welt-y.
     Vec3 worldPos = cam + fwd * depth + right * lateralOffset;

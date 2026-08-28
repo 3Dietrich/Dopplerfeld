@@ -270,7 +270,7 @@ public:
     // erheblicher Winkel. Jede Spiegelung bekommt darueber automatisch ihre
     // eigene Richtung - eine Wandreflexion von links kommt von links.
     //
-    // amount 0 laesst alles wie zuvor, 1 ist volles Panorama. right ist die
+    // amount 0 schaltet das Panorama aus, 1 ist volles Panorama. right ist die
     // Rechts-Achse des Kopfes in Weltkoordinaten (siehe Listener.h), rightEar
     // waehlt das Ohr. Nach setTransform() aufrufen.
     void setPanning (double amount, Vec3 right, bool rightEar);

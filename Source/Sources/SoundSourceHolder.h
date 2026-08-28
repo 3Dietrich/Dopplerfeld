@@ -8,8 +8,8 @@
 // gesamte Propagationsteil bleibt damit einfach vorhanden, nur die billige
 // Quellstufe existiert kurzzeitig doppelt.
 //
-// Ist selbst eine SoundSource, damit sie überall dort steht, wo bisher eine
-// rohe SoundSource* stand (DopplerEngine::setSource, H13-Verdrahtung) - der
+// Ist selbst eine SoundSource und steht damit überall dort, wo sonst eine
+// rohe SoundSource* stünde (DopplerEngine::setSource, H13-Verdrahtung) - der
 // Crossfade ist von außen nicht sichtbar.
 //
 // Kein Besitz: Generator und Sample leben im Processor, hier stehen nur

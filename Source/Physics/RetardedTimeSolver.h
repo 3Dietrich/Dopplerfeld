@@ -47,8 +47,8 @@ public:
     // ältesten verworfen, weil die jüngeren Emissionen den aktuellen Klang
     // tragen.
     //
-    // allowFullScan trennt zwei Dinge, die bisher zusammenhingen: das
-    // NACHFÜHREN bereits bekannter Zweige (billig, passiert immer) und das
+    // allowFullScan trennt zwei Dinge: das NACHFÜHREN bereits bekannter
+    // Zweige (billig, passiert immer) und das
     // ENTDECKEN neu entstandener (der Lipschitz-Vollscan über das gesamte
     // Suchfenster, im Überschall der mit Abstand teuerste Posten). Neue Zweige
     // entstehen nur bei einer Kegelankunft; sie deshalb seltener zu suchen als

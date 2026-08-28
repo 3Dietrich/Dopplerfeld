@@ -246,7 +246,7 @@ private:
 
     // Blickrichtung/"rechts" der Kamera. Im Standardmodus fest die
     // Weltachsen (+y vorwaerts, +x rechts) - deshalb zerfaellt project()
-    // unten in diesem Fall exakt in die feste x/y-Rechnung von vorher. "Aus
+    // unten in diesem Fall exakt in eine feste x/y-Rechnung. "Aus
     // L Sicht" (perspectiveFromListener) sind es stattdessen die Hoerer-
     // Achsen aus Listener.h (Nase/rechts), dieselbe Konvention wie
     // listenerScreenYaw() in der Draufsicht.
@@ -544,10 +544,9 @@ private:
     static constexpr float perspectiveHorizonFractionMax = 0.94f;
 
     // Empfindlichkeit der Wheel-Zoom-/Horizont-Kurven (s. mouseWheelMove()) -
-    // 3.0 fuer den Zoom-Exponenten uebernommen aus dem bisherigen Verhalten
-    // (frueher als 3.0f inline im Code), 0.3 fuer die Horizontverschiebung
-    // gilt fuer beide Wege dorthin (2 Finger waagerecht UND Umschalt+Mausrad),
-    // damit sich beide gleich anfuehlen.
+    // 3.0 fuer den Zoom-Exponenten, 0.3 fuer die Horizontverschiebung. Die
+    // 0.3 gelten fuer beide Wege dorthin (2 Finger waagerecht UND
+    // Umschalt+Mausrad), damit sich beide gleich anfuehlen.
     static constexpr double perspectiveZoomWheelSensitivity = 3.0;
     static constexpr double perspectiveHorizonWheelSensitivity = 0.3;
 

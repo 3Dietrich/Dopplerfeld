@@ -74,7 +74,7 @@ public:
     //
     // Der Glätter im Processor tickt auf derselben Rate, auf der die Bahn
     // gespeichert wird. Seine Ergebnisse gehören deshalb unverändert ins
-    // Raster - jedes Umrechnen dazwischen (früher: Position am Teilblockende
+    // Raster - jedes Umrechnen dazwischen (etwa: Position am Teilblockende
     // merken und über die Teilblockspanne linear verteilen) macht aus einer
     // gleichförmigen Bewegung eine zackige: die Zahl der Glätter-Ticks je
     // Teilblock schwankt (bei 128 Samples und 48 kHz zwischen zwei und drei),
@@ -289,8 +289,8 @@ public:
     static constexpr int maxRealClones = 20;
 
     // gainLinear ist der lineare Faktor aus Params::cloneRealLevel (dB, im
-    // Processor via Decibels::decibelsToGain umgerechnet) - anders als frueher
-    // KEIN 0..1-Pegel mehr, sondern ein echter Gain, der ueber 1 hinaus darf.
+    // Processor via Decibels::decibelsToGain umgerechnet) - KEIN 0..1-Pegel,
+    // sondern ein echter Gain, der ueber 1 hinaus darf.
     // zAmount: Anteil der Hoehe an der Streuung, derselbe Regler wie beim
     // Wackler der Quelle (Params::srcJitterZAmount, @dpa 20260826: "Z-Anteil
     // auch bei Feld/Streuung ... vielleicht gegenseitig ferngesteuert/gleich
