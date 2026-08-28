@@ -30,6 +30,7 @@ constexpr const char* motionPlayingId = "motionWasPlaying";
 constexpr const char* sourceKindId  = "sourceKind";
 constexpr const char* samplePathId  = "samplePath";
 constexpr const char* motorGateId   = "motorGateEnabled";
+constexpr const char* panelOpenId   = "panelsOpen";
 
 // Fester Anker für relative Sample-Pfade (@dpa 20260818: "relativ zum
 // Presets-Ordner!"). JUCE teilt getStateInformation()/setStateInformation()
@@ -2527,6 +2528,11 @@ void DopplerfeldProcessor::getStateInformation (juce::MemoryBlock& destData)
     // Property mit in den State, sonst verliert ihn jeder Preset-/Host-Recall.
     state.setProperty (motorGateId, isMotorGateEnabled(), nullptr);
 
+    // Welche Panels offen standen, gehoert zum Preset: ein Preset fuer den
+    // Vorbeiflug soll die Bewegung offen zeigen, eines fuer den Motor den
+    // Motor. Bitmaske, siehe setPanelOpenMask().
+    state.setProperty (panelOpenId, getPanelOpenMask(), nullptr);
+
     if (samplePath.isNotEmpty())
     {
         const juce::File sampleFile (samplePath);
@@ -2762,6 +2768,14 @@ void DopplerfeldProcessor::setStateInformation (const void* data, int sizeInByte
     // eingefuehrten Properties.
     if (tree.hasProperty (motorGateId))
         setMotorGateEnabled ((bool) tree.getProperty (motorGateId, false));
+
+    // Aeltere Presets kennen die Maske nicht - dort bleibt die Spalte so
+    // stehen, wie der Benutzer sie gerade hat, statt zuzuklappen.
+    if (tree.hasProperty (panelOpenId))
+    {
+        panelOpenMask.store ((int) tree.getProperty (panelOpenId, 0));
+        panelOpenMaskVersion.fetch_add (1);
+    }
 
     // Was der Zustand NICHT enthaelt, geht auf seinen Grundwert zurueck.
     //

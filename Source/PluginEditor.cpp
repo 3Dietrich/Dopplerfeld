@@ -87,7 +87,14 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     for (auto* box : { &engineControlPanelBox, &enginePanelBox, &samplePanelBox, &motionPanelBox,
                        &fieldPanelBox, &wallPanelBox, &swarmPanelBox })
     {
-        box->onExpandedChanged = [this] { layoutPanels(); };
+        box->onExpandedChanged = [this]
+        {
+            layoutPanels();
+
+            // Jeder Klick geht sofort in den Prozessor - von dort schreibt ihn
+            // das naechste Sichern mit ins Preset.
+            storePanelOpenMask();
+        };
         panelHolder.addAndMakeVisible (box);
     }
 
@@ -455,6 +462,13 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
 
     refreshAllTooltips();
 
+    // Klappzustand aus dem Prozessor uebernehmen: das Fenster kann geschlossen
+    // und wieder geoeffnet werden, und ein Preset kann ganz ohne Fenster
+    // geladen worden sein. Ohne vorherigen Zustand ist die Maske 0, also alles
+    // zu - genau der Grundzustand von CollapsiblePanel.
+    lastPanelOpenMaskVersion = dopplerfeldProcessor.getPanelOpenMaskVersion();
+    applyPanelOpenMask (dopplerfeldProcessor.getPanelOpenMask());
+
     // 30 Hz: schnell genug, dass eine gezogene Quelle nicht ruckelt, und
     // langsam genug, dass die Wellenfronten nicht flimmern.
     startTimerHz (30);
@@ -593,6 +607,16 @@ void DopplerfeldEditor::refreshDisplay()
     // Nach einem Preset-/State-Load muss der Schalter den geladenen Zustand
     // zeigen, nicht den Klick-Stand von vorher (wie der Quelle-Button oben).
     engineControlPanel.setMotorGateEnabled (dopplerfeldProcessor.isMotorGateEnabled());
+
+    // Dasselbe fuer die Panelspalte: brachte der geladene Zustand einen
+    // Klappzustand mit, klappt die Spalte darauf um. Die Version zaehlt nur
+    // beim Laden hoch, eigene Klicks loesen hier also nichts aus.
+    if (const int version = dopplerfeldProcessor.getPanelOpenMaskVersion();
+        version != lastPanelOpenMaskVersion)
+    {
+        lastPanelOpenMaskVersion = version;
+        applyPanelOpenMask (dopplerfeldProcessor.getPanelOpenMask());
+    }
 
     // Engine-Restart nach einem State-Load (@dpa): setStateInformation()
     // fordert ihn nur an, ausgefuehrt wird er hier auf dem Nachrichten-
@@ -1096,6 +1120,41 @@ void DopplerfeldEditor::resized()
     // Volle Editorflaeche, ungeachtet der obigen Aufteilung - das Overlay
     // legt sich darueber, nicht daneben.
     welcomeOverlay.setBounds (getLocalBounds());
+}
+
+std::array<CollapsiblePanel*, 7> DopplerfeldEditor::panelBoxes()
+{
+    return { &engineControlPanelBox, &enginePanelBox, &samplePanelBox,
+             &motionPanelBox, &fieldPanelBox, &wallPanelBox, &swarmPanelBox };
+}
+
+void DopplerfeldEditor::storePanelOpenMask()
+{
+    int mask = 0;
+    int bit  = 1;
+
+    for (auto* box : panelBoxes())
+    {
+        if (box->isExpanded())
+            mask |= bit;
+
+        bit <<= 1;
+    }
+
+    dopplerfeldProcessor.setPanelOpenMask (mask);
+}
+
+void DopplerfeldEditor::applyPanelOpenMask (int mask)
+{
+    int bit = 1;
+
+    for (auto* box : panelBoxes())
+    {
+        box->setExpanded ((mask & bit) != 0);
+        bit <<= 1;
+    }
+
+    layoutPanels();
 }
 
 void DopplerfeldEditor::layoutPanels()

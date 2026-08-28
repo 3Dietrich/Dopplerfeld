@@ -288,6 +288,18 @@ public:
     void setMotorGateEnabled (bool shouldGate);
     bool isMotorGateEnabled() const { return motorGateEnabled.load(); }
 
+    // Welche Panels der rechten Spalte aufgeklappt sind, als Bitmaske (Bit 0
+    // ist das oberste Panel). Der Editor schreibt sie bei jedem Klick her und
+    // liest sie im Timer zurueck; sie liegt hier, weil sie mit ins Preset
+    // gehoert (@dpa 20260828: "die offenen/zuen Bereiche im Preset mit
+    // speichern") und der Editor nicht die ganze Zeit existiert.
+    //
+    // Der Zaehler daneben zaehlt jedes Setzen von aussen mit, damit der Editor
+    // ein Laden von seinem eigenen Klick unterscheiden kann.
+    void setPanelOpenMask (int mask) { panelOpenMask.store (mask); }
+    int  getPanelOpenMask() const { return panelOpenMask.load(); }
+    int  getPanelOpenMaskVersion() const { return panelOpenMaskVersion.load(); }
+
     // Von FieldComponent::onSourceGrabbed/onSourceReleased aufgerufen
     // (Message-Thread) - setzt nur Anfrage-Flags, die eigentliche Umschaltung
     // laeuft wie ueberall sonst im Audiothread (handlePendingRequests()).
@@ -1114,6 +1126,12 @@ private:
     std::atomic<bool> stateLoadRequest    { false };
 
     std::atomic<bool> motorGateEnabled    { false };
+
+    // Klappzustand der Panelspalte (siehe setPanelOpenMask). Grundwert 0:
+    // alles zu, wie beim ersten Oeffnen des Editors. Die Version steigt nur,
+    // wenn ein geladener Zustand die Maske mitbringt.
+    std::atomic<int> panelOpenMask        { 0 };
+    std::atomic<int> panelOpenMaskVersion { 0 };
     std::atomic<bool> sourceGrabRequest   { false };
     std::atomic<bool> sourceReleaseRequest{ false };
 

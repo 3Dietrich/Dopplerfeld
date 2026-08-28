@@ -7235,6 +7235,82 @@ int main()
                          "%.2f-fache der Ruhelast.\n", factor);
     }
 
+    // ------------------------------------------------------------------
+    // Klappzustand der Panelspalte im Preset
+    //
+    // @dpa 20260828: "die offenen/zuen Bereiche im Preset mit speichern". Der
+    // Zustand ist eine Bitmaske im Prozessor (setPanelOpenMask), damit er ein
+    // geschlossenes Fenster ueberlebt. Geprueft wird: er kommt gespeichert
+    // zurueck, und ein Preset OHNE Maske (aeltere Datei) laesst die Spalte in
+    // Ruhe, statt sie zuzuklappen.
+    {
+        constexpr int mask = 0b1010110;
+
+        juce::MemoryBlock withMask, withoutMask;
+
+        {
+            DopplerfeldProcessor proc;
+            proc.getStateInformation (withoutMask);
+
+            proc.setPanelOpenMask (mask);
+            proc.getStateInformation (withMask);
+        }
+
+        juce::ignoreUnused (withoutMask);
+
+        int loadedMask = -1;
+        int keptMask   = -1;
+        int versionAfterOldPreset = -1;
+
+        {
+            DopplerfeldProcessor proc;
+            proc.setStateInformation (withMask.getData(), (int) withMask.getSize());
+            loadedMask = proc.getPanelOpenMask();
+        }
+
+        // Ein Preset aus der Zeit vor dieser Aenderung: eine echte Datei aus
+        // presets/, die die Property gar nicht kennt. Sie darf die Spalte
+        // nicht anfassen - sonst klappt jedes aeltere Preset alles zu.
+        {
+            const juce::File oldPreset (DOPPLERFELD_SOURCE_DIR
+                                        "/presets/test/mach2.5 vorbeiflug");
+            juce::MemoryBlock oldData;
+
+            if (! oldPreset.loadFileAsData (oldData))
+            {
+                std::printf ("FEHLER: Preset %s nicht ladbar\n",
+                             oldPreset.getFullPathName().toRawUTF8());
+                failed = true;
+            }
+            else
+            {
+                DopplerfeldProcessor proc;
+                proc.setPanelOpenMask (mask);
+                proc.setStateInformation (oldData.getData(), (int) oldData.getSize());
+                keptMask = proc.getPanelOpenMask();
+                versionAfterOldPreset = proc.getPanelOpenMaskVersion();
+            }
+        }
+
+        std::printf ("%-22s gespeichert %d, geladen %d | altes Preset laesst %d stehen "
+                     "(Version %d)\n", "Panels im State", mask, loadedMask, keptMask,
+                     versionAfterOldPreset);
+
+        if (loadedMask != mask)
+        {
+            std::printf ("FEHLGESCHLAGEN: Klappzustand kommt als %d zurueck statt %d\n",
+                         loadedMask, mask);
+            failed = true;
+        }
+
+        if (keptMask != mask || versionAfterOldPreset != 0)
+        {
+            std::printf ("FEHLGESCHLAGEN: ein Preset ohne Maske aendert die Spalte "
+                         "(%d, Version %d)\n", keptMask, versionAfterOldPreset);
+            failed = true;
+        }
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }

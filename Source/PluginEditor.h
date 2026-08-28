@@ -266,6 +266,20 @@ private:
     // refreshDisplay().
     double lastKnownScopeSampleRate = 0.0;
 
+    // Klappzustand der Panelspalte: der Editor schreibt ihn in den Prozessor
+    // (dort landet er im Preset, siehe setPanelOpenMask) und holt ihn im Timer
+    // zurueck, sobald ein geladener Zustand einen mitbringt.
+    void storePanelOpenMask();
+    void applyPanelOpenMask (int mask);
+
+    // Die sieben Panels in der Reihenfolge, in der sie in der Spalte stehen -
+    // dieselbe Reihenfolge wie die Bits der Maske und wie layoutPanels().
+    std::array<CollapsiblePanel*, 7> panelBoxes();
+
+    // Zuletzt vom Prozessor uebernommene Fassung - daran erkennt der Editor,
+    // dass ein Laden stattgefunden hat und nicht nur sein eigener Klick.
+    int lastPanelOpenMaskVersion = 0;
+
     juce::Viewport  panelViewport;
     juce::Component panelHolder;
 
