@@ -108,6 +108,42 @@ private:
     // unterschiedliche Mittelung auseinanderlaufen koennten.
     juce::String statusText() const;
 
+    //------------------------------------------------------------------
+    // Nachleuchten der Statuszeile (@dpa 20260828: "wenn etwas aufblinkt und
+    // wieder verschwindet bitte (wiedermal!) lesbar lassen. Also ein decay
+    // und oder ein 'Uebrigbleibsel'. Es steht dort manchmal etwas mit 'Env'?
+    // es kommt zu selten als dass ich den Sinn begriefen konnte").
+    //
+    // Ein Teil der Zeile ist nicht dauerhaft da: Mehrfachreflexionen, Aufnahme/
+    // Wiedergabe und die Zweig-Abrisse erscheinen nur, solange es sie gibt.
+    // Der Zaehler der Abrisse faengt ausserdem bei jedem Geometriewechsel neu
+    // an (PropagationPath::reset), er blitzt also auf und ist wieder weg,
+    // bevor man ihn gelesen hat.
+    //
+    // Deshalb bleibt jeder Abschnitt nach seinem Verschwinden stehen: erst
+    // statusHoldSeconds unveraendert lesbar, danach ueber statusFadeSeconds
+    // ausgeblendet. Nicht laenger - eine Zeile, in der alles ewig
+    // stehenbleibt, sagt nichts mehr darueber, was GERADE passiert.
+    struct StatusFlash
+    {
+        juce::String key;       // welcher Abschnitt (nicht angezeigt)
+        juce::String text;      // was er zuletzt sagte
+        double       age = 0.0; // Sekunden seit dem letzten Mal aktiv
+        bool         live = false;
+    };
+
+    std::vector<StatusFlash> statusFlashes;
+
+    static constexpr double statusHoldSeconds = 6.0;
+    static constexpr double statusFadeSeconds = 4.0;
+
+    // Meldet einen Abschnitt als GERADE aktiv (Alter zurueck auf null).
+    void noteStatusFlash (const juce::String& key, const juce::String& text);
+
+    // Sammelt die verganglichen Abschnitte aus dem Schnappschuss ein und
+    // laesst die uebrigen altern. Aus refreshDisplay() gerufen.
+    void updateStatusFlashes (double deltaSeconds);
+
     // Zweite, kleinere Zeile unter der Statuszeile (@dpa-Feedback 20260819:
     // "ich kann mit m/s schlecht rechnen") - zeigt Fly Speed/Max Speed/Slew
     // Vmax (die drei Bewegungs-Regler in m/s) in der am speedUnitButton

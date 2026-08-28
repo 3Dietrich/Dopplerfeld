@@ -545,6 +545,9 @@ void DopplerfeldEditor::refreshDisplay()
     dopplerfeldProcessor.fillFieldSnapshot (snapshot);
     updateDisplayAverages();
 
+    // 30-Hz-Timer, siehe startTimerHz() im Konstruktor.
+    updateStatusFlashes (1.0 / 30.0);
+
     field.setFieldMetres ((double) *dopplerfeldProcessor.apvts.getRawParameterValue (Params::fieldMetres));
     field.setSnapshot (snapshot);
     field.setDisplaySpeed (displayAverages.speedMps, displayAverages.speedOfSoundMps);
@@ -661,8 +664,9 @@ void DopplerfeldEditor::refreshDisplay()
 
     // Statuszeile UND die CPU-Zeile darueber neu zeichnen, nicht das ganze
     // Fenster - die Panels darüber ändern sich nur bei Bedienung.
+    // Ueber die ganze Breite, so weit die Statuszeile reicht (siehe paint()).
     repaint (margin, getHeight() - statusHeight - cpuMeterBlockHeight,
-             fieldWidth, cpuMeterBlockHeight + statusHeight);
+             getWidth() - 2 * margin, cpuMeterBlockHeight + statusHeight);
 }
 
 void DopplerfeldEditor::updateDisplayAverages()
@@ -726,39 +730,87 @@ juce::String DopplerfeldEditor::statusText() const
     // @dpa-Feedback: Einzelne Pfade (L/R, M_r, Zweige) sind zu klein und zu
     // viel für die Statuszeile - nur die Anzahl aktiver Mehrfachreflexionen
     // bleibt als grobe Andeutung, was gerade gerechnet wird.
-    int higherOrder = 0;
+    // Alles Vergaengliche steht nicht mehr hier, sondern im Nachleuchten
+    // (siehe updateStatusFlashes / StatusFlash im Header): Mehrfachreflexionen,
+    // Aufnahme/Wiedergabe und die Zweig-Abrisse. Diese Zeile traegt nur noch,
+    // was immer gilt.
 
-    for (int i = 0; i < snapshot.pathCount; ++i)
-        if (snapshot.paths[(size_t) i].order > 1)
-            ++higherOrder;
+    return text;
+}
 
-    if (higherOrder > 0)
-        text << "   +" << higherOrder << " Mehrfachrefl.";
+void DopplerfeldEditor::noteStatusFlash (const juce::String& key, const juce::String& text)
+{
+    for (auto& f : statusFlashes)
+        if (f.key == key)
+        {
+            f.text = text;
+            f.age  = 0.0;
+            f.live = true;
+            return;
+        }
+
+    statusFlashes.push_back ({ key, text, 0.0, true });
+}
+
+void DopplerfeldEditor::updateStatusFlashes (double deltaSeconds)
+{
+    for (auto& f : statusFlashes)
+    {
+        f.age += deltaSeconds;
+        f.live = false;
+    }
+
+    // Mehrfachreflexionen: eine grobe Andeutung, was gerade gerechnet wird.
+    {
+        int higherOrder = 0;
+
+        for (int i = 0; i < snapshot.pathCount; ++i)
+            if (snapshot.paths[(size_t) i].order > 1)
+                ++higherOrder;
+
+        if (higherOrder > 0)
+            noteStatusFlash ("refl", "+" + juce::String (higherOrder) + " Mehrfachrefl.");
+    }
 
     if (dopplerfeldProcessor.isRecording())
-        text << "   Aufnahme " << dopplerfeldProcessor.recordedFrameCount() << " Frames";
+        noteStatusFlash ("motion", Labels::text ("Aufnahme") + " "
+                                     + juce::String (dopplerfeldProcessor.recordedFrameCount())
+                                     + " Frames");
     else if (dopplerfeldProcessor.isPlayingMotion())
-        text << "   Wiedergabe";
+        noteStatusFlash ("motion", Labels::text ("Wiedergabe"));
 
-    // Zweig-Todesmessung (@dpa 20260819): mit welchem Huellkurvenwert stirbt
-    // ein Zweig? Nahe 1 heisst, die Anti-Klick-Rampe schneidet ihn bei vollem
-    // Pegel ab - das waere der gesuchte Abbruch am Ende der Ueberschall-
-    // Haelfte. Nahe 0 hiesse, er war ohnehin schon ausgeklungen.
+    // Zweig-Abrisse (@dpa 20260819): ein Hoerweg verschwindet, und die
+    // Anti-Klick-Rampe faehrt ihn in einer Millisekunde auf null. Die Zahl
+    // dahinter ist der PEGEL, bei dem das passiert ist - nahe 1 heisst
+    // abgeschnitten, obwohl er noch voll toente, nahe 0 heisst, er war
+    // ohnehin ausgeklungen. Zwei Werte: Mittel und schlimmster Fall.
     //
-    // Zaehlt ab dem letzten prepareToPlay() (PropagationPath::reset()), also
-    // pro Audio-Start neu. Feste Zahlenbreite wie der Rest der Zeile.
+    // Frueher stand dort "env", und genau danach hat @dpa gefragt ("es
+    // steht dort manchmal etwas mit 'Env'? es kommt zu selten als dass ich
+    // den Sinn begriefen konnte") - zu kurz, um es zu erraten, und zu
+    // fluechtig, um es nachzuschlagen.
     if (snapshot.branchDeaths > 0)
     {
         const double loudShare = 100.0 * (double) snapshot.loudBranchDeaths
                                        / (double) snapshot.branchDeaths;
 
-        text << "   Zw-Tod " << juce::String::formatted ("%6llu", (unsigned long long) snapshot.branchDeaths)
-             << " env " << juce::String::formatted ("%4.2f", snapshot.branchDeathEnvMean)
-             << "/" << juce::String::formatted ("%4.2f", snapshot.branchDeathEnvMax)
-             << " laut " << juce::String::formatted ("%3.0f", loudShare) << " %";
+        noteStatusFlash ("deaths",
+                         Labels::text ("Zweig-Abriss") + " "
+                             + juce::String ((int) snapshot.branchDeaths)
+                             + ", " + Labels::text ("Pegel dabei") + " "
+                             + juce::String::formatted ("%.2f", snapshot.branchDeathEnvMean)
+                             + " / max " + juce::String::formatted ("%.2f", snapshot.branchDeathEnvMax)
+                             + ", " + juce::String::formatted ("%.0f", loudShare) + " % "
+                             + Labels::text ("laut"));
     }
 
-    return text;
+    // Was ganz ausgeblendet ist, kann weg.
+    statusFlashes.erase (std::remove_if (statusFlashes.begin(), statusFlashes.end(),
+                                         [] (const StatusFlash& f)
+                                         {
+                                             return f.age > statusHoldSeconds + statusFadeSeconds;
+                                         }),
+                         statusFlashes.end());
 }
 
 void DopplerfeldEditor::paint (juce::Graphics& g)
@@ -871,13 +923,60 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
     g.fillEllipse (stateDotBounds);
 
     const int textLeft  = margin + statusStateDotDiameter + statusStateDotGap;
-    const int textWidth = fieldWidth - statusStateDotDiameter - statusStateDotGap;
+
+    // Ueber die ganze Fensterbreite, nicht nur ueber die des Feldes: unter der
+    // Reglerspalte ist hier nichts mehr, und die verganglichen Abschnitte
+    // dahinter (Zweig-Abriss und Co.) brauchen den Platz. Vorher passte der
+    // laengste von ihnen nicht mehr hinein und wurde deshalb GAR NICHT
+    // gezeichnet - er war nicht zu kurz zu sehen, sondern gar nicht.
+    const int textWidth = getWidth() - margin - textLeft;
+
+    const juce::Font statusFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
+                                                    16.0f, juce::Font::plain));
+    g.setFont (statusFont);
+
+    const juce::String fixedPart = statusText();
 
     g.setColour (juce::Colours::white.withAlpha (0.6f));
-    g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 16.0f, juce::Font::plain)));
-    g.drawText (statusText(),
+    g.drawText (fixedPart,
                 textLeft, statusTop, textWidth, statusHeight,
                 juce::Justification::centredLeft, false);
+
+    // Die verganglichen Abschnitte dahinter, jeder mit seiner eigenen
+    // Deckkraft: solange er aktiv ist (und statusHoldSeconds danach) voll,
+    // dann ueber statusFadeSeconds heruntergeblendet. Monospace, deshalb
+    // laesst sich die Breite des Vorangegangenen exakt ausrechnen, statt sie
+    // zu schaetzen.
+    {
+        int x = textLeft + (int) std::ceil (juce::GlyphArrangement::getStringWidth (statusFont, fixedPart));
+
+        for (const auto& f : statusFlashes)
+        {
+            const double over  = f.age - statusHoldSeconds;
+            const double fade  = over <= 0.0 ? 1.0
+                                             : juce::jlimit (0.0, 1.0, 1.0 - over / statusFadeSeconds);
+
+            if (fade <= 0.0)
+                continue;
+
+            const juce::String piece = "   " + f.text;
+            const int width = (int) std::ceil (juce::GlyphArrangement::getStringWidth (statusFont, piece));
+
+            if (x - textLeft + width > textWidth)
+                break;
+
+            // Ein noch laufender Abschnitt ist so hell wie der feste Teil, ein
+            // nachleuchtender wird zusaetzlich gedaempft - damit sieht man auf
+            // einen Blick, was JETZT gilt und was gerade war.
+            const float alpha = (float) (0.6 * fade * (f.live ? 1.0 : 0.75));
+
+            g.setColour (juce::Colours::white.withAlpha (alpha));
+            g.drawText (piece, x, statusTop, width, statusHeight,
+                        juce::Justification::centredLeft, false);
+
+            x += width;
+        }
+    }
 }
 
 void DopplerfeldEditor::resized()

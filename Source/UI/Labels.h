@@ -42,6 +42,13 @@ namespace Labels
     {
         static const Entry entries[] =
         {
+            // --- Statuszeile ---
+            { "Aufnahme",                   "Recording"     },
+            { "Wiedergabe",                 "Playback"      },
+            { "Zweig-Abriss",               "Branch cut"    },
+            { "Pegel dabei",                "level"         },
+            { "laut",                       "loud"          },
+
             // --- Zustandsleiste ---
             { "Sichern",                    "Save"          },
             { "Neu...",                     "New..."        },
