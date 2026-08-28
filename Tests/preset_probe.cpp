@@ -15,6 +15,7 @@
 #include "PluginProcessor.h"
 
 #include <chrono>
+#include <initializer_list>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -99,8 +100,23 @@ int main()
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
 
-    const char* quiet = "mach2.5 vorbei";
-    const char* loud  = "MachChaos";
+    // Das ursprungliche Beispiel war "mach2.5 vorbei". Presets kommen und
+    // gehen, waehrend @dpa arbeitet - deshalb ein Ersatz, statt hier
+    // auszusteigen.
+    auto firstThatExists = [] (std::initializer_list<const char*> names) -> const char*
+    {
+        for (const char* n : names)
+            if (presetFolder().getChildFile (n).existsAsFile())
+                return n;
+
+        return *names.begin();
+    };
+
+    const char* quiet = firstThatExists ({ "mach2.5 vorbei", "woanders Vorbeiflug",
+                                           "spacerocket flyby" });
+    const char* loud  = firstThatExists ({ "MachChaos", "hektische 30m Mach3" });
+
+    std::printf ("  (leises Beispiel: %s | lautes: %s)\n", quiet, loud);
 
     // 1. Allein geladen, in einem frischen Processor.
     {
@@ -481,6 +497,134 @@ int main()
                          "schlechtester Block %.0f %%\n",
                          "nach 'mach2.5 vorbei' + Engine Restart", e,
                          lastMeanPercent, lastWorstPercent);
+        }
+    }
+
+    // 2f. Auszeiten bei starken Ausschlaegen (@dpa 20260828: "'spacerocket
+    //     flyby' - was laeuft hier verkehrt? Die Ausschlaege produzieren
+    //     Auszeiten .. bei jedem Durchgang irgendwie anders.. an anderer
+    //     Stelle?").
+    //
+    //     Zwei Erklaerungen kommen in Frage, und sie sehen von aussen gleich
+    //     aus: entweder reisst der Block sein Zeitbudget (dann liegt die
+    //     Auszeit jedes Mal woanders, weil die Wanduhr mitspielt), oder der
+    //     Loeser verliert die Hoerwege (dann liegt sie IMMER an derselben
+    //     Stelle). Deshalb laeuft dasselbe Preset hier mehrfach: bleibt die
+    //     Stelle gleich, ist es die Rechnung; wandert sie, ist es die Last.
+    {
+        const char* rocket = "spacerocket flyby";
+
+        std::printf ("\n=== %s: Auszeiten, drei Durchgaenge\n", rocket);
+
+        const double budgetMicros = 1.0e6 * (double) blockSize / sampleRate;
+
+        for (int run = 0; run < 3; ++run)
+        {
+            DopplerfeldProcessor proc;
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            if (! loadPreset (proc, rocket))
+                break;
+
+            // Der Vorbeiflug wird von Hand gestartet - im Preset steht
+            // motionWasPlaying=0, dafuer flyLoop=1. Ohne diesen Anstoss steht
+            // die Quelle still und der ganze Lauf ist ein anderer Fall als
+            // @dpas.
+            {
+                juce::AudioBuffer<float> warm (2, blockSize);
+                juce::MidiBuffer wm;
+
+                for (int i = 0; i < 40; ++i) { warm.clear(); proc.processBlock (warm, wm); }
+            }
+
+            proc.triggerFlyBy();
+
+            juce::AudioBuffer<float> buf (2, blockSize);
+            juce::MidiBuffer         midi;
+
+            const int blocks = (int) std::ceil (10.0 * sampleRate / blockSize);
+
+            double worstMicros = 0.0, overBudget = 0.0;
+            double silenceRun = 0.0, worstSilence = 0.0, worstSilenceAt = 0.0;
+            bool   heard = false;
+            bool   everPlayed = false;
+            double lastPlayingAt = -1.0;
+
+            for (int b = 0; b < blocks; ++b)
+            {
+                buf.clear();
+
+                const auto t0 = std::chrono::steady_clock::now();
+                proc.processBlock (buf, midi);
+                const double micros = std::chrono::duration<double, std::micro> (
+                                          std::chrono::steady_clock::now() - t0).count();
+
+                worstMicros = std::max (worstMicros, micros);
+
+                if (micros > budgetMicros)
+                    overBudget += 1.0;
+
+                double peak = 0.0;
+
+                for (int i = 0; i < blockSize; ++i)
+                    peak = std::max (peak, (double) std::abs (buf.getSample (0, i)));
+
+                const double now = (double) b * blockSize / sampleRate;
+
+                FieldSnapshot live;
+                proc.fillFieldSnapshot (live);
+
+                if (live.flyByActive)
+                {
+                    everPlayed = true;
+                    lastPlayingAt = now;
+                }
+
+                if (peak > 1.0e-4)
+                {
+                    // Erst als "gehoert" zaehlen, wenn wirklich Ton da ist -
+                    // sonst gilt schon der Anlaufknacks als Anfang, und die
+                    // Laufzeit bis zum ersten Ton erscheint als Auszeit.
+                    if (peak > 1.0e-3)
+                        heard = true;
+
+                    if (heard && silenceRun >= 0.04)
+                        std::printf ("  Lauf %d:   Luecke %5.0f ms bei t=%5.2f s\n",
+                                     run + 1, silenceRun * 1000.0, now - silenceRun);
+
+                    silenceRun = 0.0;
+                }
+                else if (heard)
+                {
+                    silenceRun += (double) blockSize / sampleRate;
+
+                    if (silenceRun > worstSilence)
+                    {
+                        worstSilence   = silenceRun;
+                        worstSilenceAt = now - silenceRun;
+                    }
+                }
+            }
+
+            // Bewegt sich die Quelle ueberhaupt? Ohne laufende Aufzeichnung
+            // waere der ganze Lauf ein anderer Fall als @dpas, und die
+            // Aussage "keine Auszeiten" waere wertlos.
+            FieldSnapshot sn;
+            proc.fillFieldSnapshot (sn);
+
+            std::printf ("  Lauf %d: laengste Auszeit %.3f s bei t=%.2f s | schlechtester "
+                         "Block %.0f %% des Budgets | %.0f Bloecke drueber | "
+                         "Wiedergabe %s, |M_r| %.2f, Zweige %d\n",
+                         run + 1, worstSilence, worstSilenceAt,
+                         100.0 * worstMicros / budgetMicros, overBudget,
+                         everPlayed ? "Flug lief" : "Flug NIE GESTARTET",
+                         sn.pathCount > 0 ? sn.paths[0].machRadial : 0.0,
+                         sn.pathCount > 0 ? sn.paths[0].activeBranches : 0);
+
+            if (everPlayed)
+                std::printf ("  Lauf %d:   Wiedergabe zuletzt aktiv bei t=%.2f s\n",
+                             run + 1, lastPlayingAt);
         }
     }
 
