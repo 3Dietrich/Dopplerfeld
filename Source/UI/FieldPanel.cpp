@@ -102,6 +102,12 @@ void FieldPanel::refreshTooltips()
 
 void FieldPanel::resized()
 {
+    // Sortiert nach dem, was ein Regler tut, nicht danach, was gerade in eine
+    // Reihe passte (@dpa 20260828: "bei anderen sind die Regler durcheinander
+    // und uncool verteilt"). Fuenf Gruppen, jede mit eigener Kopfzeile, und
+    // der Schalter, der zur Gruppe gehoert, steht rechts in dieser Kopfzeile
+    // statt in einer eigenen Schalterreihe ganz oben.
+    //
     // Nur das DREHRAD auf zwei Drittel (@dpa 20260823, Berichtigung: "NUR die
     // Knobs! Label und Value sollen so bleiben wie zuvor"). Beschriftung
     // (18 px) und Wertefeld (18 px) bleiben unveraendert, die Zellenhoehe
@@ -110,79 +116,99 @@ void FieldPanel::resized()
     // Zellenbreite bleibt ebenfalls, sonst wuerde das Wertefeld beschnitten -
     // JUCE zeichnet das Rad mit dem kleineren der beiden Masse, die Hoehe
     // allein macht es also klein.
-    constexpr int knobW = 84;
-    constexpr int knobH = 67;
+    constexpr int knobW       = 84;
+    constexpr int knobH       = 67;
+    constexpr int headerH     = 20;  // Kopfzeile einer Gruppe
+    constexpr int groupGap    = 8;   // Luft zwischen zwei Gruppen
+    constexpr int afterHeader = 2;
+
     auto area = getLocalBounds().reduced (8);
 
-    auto toggleRow = area.removeFromTop (26);
-    limiterOnButton.setBounds (toggleRow.removeFromLeft (100));
-    toggleRow.removeFromLeft (8);
-    groundReflectionButton.setBounds (toggleRow.removeFromLeft (140));
-    toggleRow.removeFromLeft (8);
-    nWaveButton.setBounds (toggleRow.removeFromLeft (100));
-    area.removeFromTop (6);
+    groupHeaders.clear();
 
-    auto knobRow = area.removeFromTop (knobH);
-    for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &outputGainKnob })
+    // Kopfzeile einer Gruppe: Text links (in paint()), Schalter rechts.
+    auto groupHeader = [&] (const char* title, juce::Button* toggle, int toggleWidth)
     {
-        layoutKnob (*k, knobRow.removeFromLeft (knobW));
-        knobRow.removeFromLeft (4);
-    }
+        auto row = area.removeFromTop (headerH);
 
-    // Levelmeter direkt neben Output Gain, gleiche Höhe wie die Regler
+        // Der Schalter zuerst: was danach von der Zeile uebrig ist, gehoert
+        // der Ueberschrift - so laeuft die Linie bis zum Schalter und nicht
+        // durch ihn hindurch.
+        if (toggle != nullptr)
+        {
+            toggle->setBounds (row.removeFromRight (toggleWidth));
+            row.removeFromRight (8);
+        }
+
+        groupHeaders.push_back ({ title, row });
+
+        area.removeFromTop (afterHeader);
+    };
+
+    // Eine Reglerreihe von links nach rechts.
+    auto knobRow = [&] (std::initializer_list<Knob*> knobs) -> juce::Rectangle<int>
+    {
+        auto row = area.removeFromTop (knobH);
+
+        for (auto* k : knobs)
+        {
+            layoutKnob (*k, row.removeFromLeft (knobW));
+            row.removeFromLeft (4);
+        }
+
+        return row; // was rechts uebrig bleibt (fuer das Meter)
+    };
+
+    // Raum: wie gross das Feld ist und wo Quelle und Hoerer darin stehen.
+    groupHeader ("Raum", nullptr, 0);
+    knobRow ({ &fieldMetresKnob, &srcZKnob, &lisZKnob });
+
+    // Luft: das Medium, durch das der Schall laeuft - Daempfung, Temperatur,
+    // Hoehe ueber dem Meer und wie schnell der Pegel mit der Entfernung faellt.
+    area.removeFromTop (groupGap);
+    groupHeader ("Luft", nullptr, 0);
+    knobRow ({ &airAbsorbKnob, &airTempKnob, &airAltitudeKnob, &distanceCurveKnob });
+
+    // Boden: der zweite Weg, ueber den der Schall ankommt.
+    area.removeFromTop (groupGap);
+    groupHeader ("Boden", &groundReflectionButton, 140);
+    knobRow ({ &groundDampKnob, &groundGainKnob });
+
+    // Knall: alles, was zur Ueberschall-Stossfront gehoert - ihre Form, ihre
+    // Groesse, ihr Deckel und was nach ihr passiert.
+    area.removeFromTop (groupGap);
+    groupHeader ("Knall", &nWaveButton, 100);
+    knobRow ({ &nWaveSizeKnob, &nWaveGainKnob, &nWaveEdgeKnob, &nWavePressureKnob, &boomLimitKnob });
+    area.removeFromTop (4);
+    knobRow ({ &extraPathKnob, &shockDuckRangeKnob });
+
+    // Ausgang: was das Plugin am Ende abgibt.
+    area.removeFromTop (groupGap);
+    groupHeader ("Ausgang", &limiterOnButton, 100);
+
+    auto rest = knobRow ({ &outputGainKnob, &panAmountKnob });
+
+    // Levelmeter direkt neben dem Ausgangspegel, gleiche Hoehe wie die Regler
     // (ohne die Beschriftungszeile, die braucht das Meter nicht).
-    knobRow.removeFromLeft (4);
-    levelMeter.setBounds (knobRow.removeFromLeft (24));
+    levelMeter.setBounds (rest.removeFromLeft (24));
+}
 
-    // Zweite Reihe: die Geometrie-Achse z, die daran hängende Bodendämpfung
-    // und (aus Platzgruenden hier, thematisch aber unabhaengig von den
-    // z-Positionen) die Hoehe ueber dem Meeresspiegel des Mediums.
-    area.removeFromTop (6);
-
-    auto geoRow = area.removeFromTop (knobH);
-    for (auto* k : { &srcZKnob, &lisZKnob, &groundDampKnob, &groundGainKnob, &airAltitudeKnob })
+void FieldPanel::paint (juce::Graphics& g)
+{
+    for (const auto& header : groupHeaders)
     {
-        layoutKnob (*k, geoRow.removeFromLeft (knobW));
-        geoRow.removeFromLeft (4);
-    }
+        const auto title = Labels::text (header.title);
 
-    // Dritte Reihe: Amplituden-/Pegelthemen (N-Wave-Groesse, Amp-Verlauf,
-    // Panning-Anteil) - seit Jitter/Hektik/Jitter An ins Bewegungs-Panel
-    // gewandert sind (@dpa-Feedback), war diese Reihe frei; die Hoehe bleibt
-    // exakt gleich (PluginEditor::fieldContentHeight unveraendert). Die
-    // Lufttemperatur zieht hier aus Platzgruenden mit ein, obwohl sie
-    // thematisch zu boomLimitKnob/airAbsorbKnob in Reihe 1 gehoert.
-    area.removeFromTop (6);
+        g.setColour (Theme::muted);
+        g.setFont (juce::Font (juce::FontOptions (12.0f)));
 
-    auto ampRow = area.removeFromTop (knobH);
-    for (auto* k : { &nWaveSizeKnob, &nWaveGainKnob, &distanceCurveKnob, &panAmountKnob, &airTempKnob })
-    {
-        layoutKnob (*k, ampRow.removeFromLeft (knobW));
-        ampRow.removeFromLeft (4);
-    }
+        const int textWidth = juce::roundToInt (g.getCurrentFont().getStringWidthFloat (title)) + 8;
 
-    // Vierte Reihe: was nach dem Knall passiert (siehe Header). Sie gehoert
-    // zur N-Welle darueber und steht deshalb direkt darunter; die Panelhoehe
-    // ist dafuer in PluginEditor::fieldContentHeight um eine Reglerreihe
-    // gewachsen.
-    area.removeFromTop (6);
+        g.drawText (title, header.bounds.withWidth (textWidth),
+                    juce::Justification::centredLeft, false);
 
-    auto boomRow = area.removeFromTop (knobH);
-    for (auto* k : { &extraPathKnob, &shockDuckRangeKnob })
-    {
-        layoutKnob (*k, boomRow.removeFromLeft (knobW));
-        boomRow.removeFromLeft (4);
-    }
-
-    // Fuenfte Reihe: die FORM der Druckwelle - wie scharf ihre Stossfronten
-    // sind und wie stark die Auslenkung dazwischen. Eigene Reihe, weil die
-    // vierte auf der Breite der Panelspalte voll ist.
-    area.removeFromTop (6);
-
-    auto shapeRow = area.removeFromTop (knobH);
-    for (auto* k : { &nWaveEdgeKnob, &nWavePressureKnob })
-    {
-        layoutKnob (*k, shapeRow.removeFromLeft (knobW));
-        shapeRow.removeFromLeft (4);
+        // Die Linie endet vor einem Schalter, falls die Zeile einen traegt -
+        // dort ist die Zeile schon schmaler (siehe resized()).
+        Theme::drawGroupRule (g, header.bounds, header.bounds.getX() + textWidth);
     }
 }

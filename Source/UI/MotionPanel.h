@@ -20,6 +20,7 @@ public:
     ~MotionPanel() override = default;
 
     void resized() override;
+    void paint (juce::Graphics& g) override;
 
     // Beschriftung des Play-Knopfs auf "Play"/"Stop" umschalten - der Aufrufer
     // kennt den tatsaechlichen Wiedergabezustand (MotionPlayer gehoert dem
@@ -57,6 +58,11 @@ public:
     void refreshTooltips();
 
 private:
+    // Hoehe der Linie ueber der gemeinsamen Reihe (Tempo-Deckel und Jitter).
+    // Diese Reihe gehoert zu keinem der drei Reiter, und genau das soll man
+    // sehen, ohne den Tooltip zu lesen.
+    int sharedRowRuleY = -1;
+
     using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment   = juce::AudioProcessorValueTreeState::ButtonAttachment;

@@ -4,8 +4,10 @@
 #include "LevelMeter.h"
 #include "RoundedSlider.h"
 #include "Tooltips.h"
+#include "Theme.h"
 #include "Labels.h"
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <vector>
 #include <juce_gui_basics/juce_gui_basics.h>
 
 // Regler fuer Feldgroesse, Physik-Limits, Crossfade und Ausgang (Plan 3.11,
@@ -19,6 +21,10 @@ public:
     ~FieldPanel() override = default;
 
     void resized() override;
+
+    // Zeichnet die Gruppenkoepfe (Raum / Luft / Boden / Knall / Ausgang) -
+    // der Panelgrund kommt vom CollapsiblePanel.
+    void paint (juce::Graphics& g) override;
 
     // Weiterleitung an das Levelmeter (@dpa-Feedback) - der Aufrufer
     // (Editor-Timer) kennt den Processor, dieses Panel nicht.
@@ -34,6 +40,18 @@ public:
     void refreshTooltips();
 
 private:
+    // Ein Gruppenkopf: deutscher Text (wie jede Beschriftung, siehe Labels)
+    // und die Zeile, in der er steht. In resized() gefuellt, in paint()
+    // gezeichnet - als Komponenten waeren es fuenf weitere Kinder fuer je
+    // eine Textzeile.
+    struct GroupHeader
+    {
+        const char* title = nullptr;
+        juce::Rectangle<int> bounds;
+    };
+
+    std::vector<GroupHeader> groupHeaders;
+
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 

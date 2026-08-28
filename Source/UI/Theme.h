@@ -22,12 +22,17 @@ namespace Theme
     inline const juce::Colour muted            { 0xffbec5d7 };
 
     // Kontrastarme Trennlinie - bewusst schwach (siehe Settings-Fenster).
-    inline const juce::Colour line = juce::Colours::white.withAlpha (0.09f);
+    //
+    // Als ARGB-Zahl geschrieben und NICHT als juce::Colours::white.withAlpha():
+    // diese Konstanten entstehen vor main(), juce::Colours::white aber
+    // moeglicherweise erst danach. Aus Weiss mit 9 % wurde so Schwarz mit 9 %,
+    // und die Linien wurden dunkler statt heller als ihr Untergrund.
+    inline const juce::Colour line { 0x17ffffffu };      // Weiss, 9 %
 
     // Trennlinie zwischen Reglergruppen INNERHALB eines Panels. Etwas
     // kraeftiger als der Panelrahmen, sonst verschwindet sie zwischen den
     // Reglern - aber immer noch weit unter dem Kontrast einer Beschriftung.
-    inline const juce::Colour separator = juce::Colours::white.withAlpha (0.16f);
+    inline const juce::Colour separator { 0x29ffffffu }; // Weiss, 16 %
 
     // Ecken: klein halten, nicht rund.
     inline constexpr float cornerRadius = 3.0f;
@@ -62,6 +67,21 @@ namespace Theme
     inline juce::Colour activeTab (juce::Colour accent)
     {
         return accent.withAlpha (0.32f);
+    }
+
+    // Feine Linie, die eine Gruppenueberschrift (Text oder Schalter) mit der
+    // Reihe darunter verbindet: sie laeuft vom Ende der Ueberschrift bis zum
+    // rechten Rand der Zeile. Bindet die Gruppe zusammen, ohne sie
+    // einzurahmen - dieselbe Sprache in allen Panels.
+    inline void drawGroupRule (juce::Graphics& g, juce::Rectangle<int> row, int fromX)
+    {
+        const int width = row.getRight() - fromX;
+
+        if (width < 8)
+            return;
+
+        g.setColour (separator);
+        g.fillRect (fromX, row.getCentreY(), width, 1);
     }
 
     // Panelgrund mit einem Hauch der Bereichsfarbe. Der Wert ist absichtlich

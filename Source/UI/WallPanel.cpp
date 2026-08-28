@@ -122,12 +122,15 @@ void WallPanel::resized()
 
     auto area = getLocalBounds().reduced (8);
 
+    groupRules.clear();
+
     for (int w = 0; w < wallCount; ++w)
     {
         auto& wall = walls[(size_t) w];
 
         auto toggleRow = area.removeFromTop (26);
         wall.onButton.setBounds (toggleRow.removeFromLeft (120));
+        groupRules.push_back ({ toggleRow, toggleRow.getX() + 6 });
         area.removeFromTop (4);
 
         auto knobRow = area.removeFromTop (knobH);
@@ -143,10 +146,19 @@ void WallPanel::resized()
 
     auto secondRow = area.removeFromTop (26);
     secondOrderButton.setBounds (secondRow.removeFromLeft (160));
+    groupRules.push_back ({ secondRow, secondRow.getX() + 6 });
     area.removeFromTop (4);
 
     auto gainRow = area.removeFromTop (knobH);
     layoutKnob (bounceGainKnob, gainRow.removeFromLeft (knobW));
     gainRow.removeFromLeft (4);
     layoutKnob (bounceGainBoostKnob, gainRow.removeFromLeft (knobW));
+}
+
+void WallPanel::paint (juce::Graphics& g)
+{
+    // Nur die Linien neben den Gruppenschaltern - der Panelgrund kommt vom
+    // CollapsiblePanel.
+    for (const auto& rule : groupRules)
+        Theme::drawGroupRule (g, rule.row, rule.fromX);
 }

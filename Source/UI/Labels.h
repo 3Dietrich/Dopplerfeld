@@ -166,6 +166,10 @@ namespace Labels
             { "Ansicht: Perspektive", "View: Perspective" },
             { "nicht mehr zeigen", "don't show again" },
             { "öffne states",   "open states" },
+            { "Raum",           "Space"       },
+            { "Luft",           "Air"         },
+            { "Boden",          "Ground"      },
+            { "Ausgang",        "Output"      },
         };
 
         count = (int) (sizeof (entries) / sizeof (entries[0]));

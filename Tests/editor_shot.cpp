@@ -88,17 +88,23 @@ int main()
         // sich die Bereiche voneinander absetzen. Alles gleichzeitig offen
         // passt nicht ins Fenster.
         showPanelRange (*owned, 0, 2);
-        shoot (*owned, "editor_panels_oben");
+        shoot (*owned, "editor_panels_quelle");   // Motorsteuerung, Motor, Sample
 
-        showPanelRange (*owned, 3, 6);
-        shoot (*owned, "editor_panels_unten");
+        showPanelRange (*owned, 3, 3);
+        shoot (*owned, "editor_panel_bewegung");
+
+        showPanelRange (*owned, 4, 4);
+        shoot (*owned, "editor_panel_feld");
+
+        showPanelRange (*owned, 5, 6);
+        shoot (*owned, "editor_panels_raum");     // Reflexionen/Waende, Schwarm/Klone
     }
 
     // Das Schwarm-Panel einzeln, in seiner Groesse aus dem Editor
     // (panelColumnWidth abzueglich Scrollbalken, swarmContentHeight): darin
     // die Reglerreihe mit dem Z-Anteil.
     SwarmPanel swarm (proc.apvts);
-    swarm.setSize (462, 171);
+    swarm.setSize (462, 115);
     shoot (swarm, "panel_swarm");
 
     return 0;

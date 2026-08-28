@@ -3,9 +3,11 @@
 #include "../Params.h"
 #include "RoundedSlider.h"
 #include "Tooltips.h"
+#include "Theme.h"
 #include "Labels.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <vector>
 
 // Regler für die frei platzierbaren Wände (unendliche Ebenen) und den
 // Notausschalter für alle Reflexionen. Gedacht als Inhalt eines
@@ -22,6 +24,7 @@ public:
     ~WallPanel() override = default;
 
     void resized() override;
+    void paint (juce::Graphics& g) override;
 
     // Setzt die Tooltips aller Regler/Schalter dieses Panels neu, in der
     // aktuell an Tooltips::currentLanguage() gewaehlten Sprache - fuer den
@@ -29,6 +32,13 @@ public:
     void refreshTooltips();
 
 private:
+    // Die Zeilen der Gruppenschalter (Wand 1, Wand 2, Mehrfachreflexion) samt
+    // der Stelle, ab der rechts daneben die Linie laeuft - dieselbe Sprache
+    // wie im Feld-Panel (Theme::drawGroupRule).
+    struct GroupRule { juce::Rectangle<int> row; int fromX = 0; };
+
+    std::vector<GroupRule> groupRules;
+
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 

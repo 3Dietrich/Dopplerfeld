@@ -622,7 +622,9 @@ void MotionPanel::resized()
     // Pixel bei 446 verfuegbaren. Die Luecke von 6 Pixeln setzt den
     // Tempo-Deckel ab - er gehoert nicht zum Jitter, sondern ueber alle
     // Reiter. Nachgeprueft wird das im load_check-Abschnitt "Bedienelemente".
-    area.removeFromTop (6);
+    // Die Linie liegt in der Mitte dieses Abstands, also zwischen Reiterteil
+    // und gemeinsamer Reihe.
+    sharedRowRuleY = area.removeFromTop (6).getCentreY();
 
     auto sharedRow = area.removeFromTop (knobH);
 
@@ -640,5 +642,15 @@ void MotionPanel::resized()
     {
         layoutKnob (*k, sharedRow.removeFromLeft (knobW));
         sharedRow.removeFromLeft (4);
+    }
+}
+
+void MotionPanel::paint (juce::Graphics& g)
+{
+    // Trennt die gemeinsame Reihe vom Reiterteil darueber (siehe resized()).
+    if (sharedRowRuleY >= 0)
+    {
+        g.setColour (Theme::separator);
+        g.fillRect (8, sharedRowRuleY, juce::jmax (0, getWidth() - 16), 1);
     }
 }
