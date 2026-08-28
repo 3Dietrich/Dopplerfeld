@@ -1,5 +1,7 @@
 # Dopplerfeld
 
+[![Build & Release](https://github.com/3Dietrich/Dopplerfeld/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/3Dietrich/Dopplerfeld/actions/workflows/build.yml)
+
 Audio-Plugin (AU/VST3/Standalone) für macOS, das den akustischen
 Dopplereffekt physikalisch nachstellt – inklusive Überschall und Mach-Kegel.
 Eine Schallquelle **M** und ein Hörer **L** (mit Kopf-Orientierung) auf einer
@@ -53,11 +55,16 @@ git clone <dieses-repo>
 cd Dopplerfeld
 cmake -B build -DJUCE_DIR=~/Documents/JUCE
 cmake --build build --config Release -j 4
-cd build && ctest --output-on-failure     # solver_check + load_check
+cd build && ctest --output-on-failure     # solver_check, load_check, repo_check
 ```
 
 `-DJUCE_DIR` zeigt auf einen lokalen JUCE-Checkout (Version 8.0.6 getestet);
 ohne die Angabe wird `~/Documents/JUCE` angenommen.
+
+`repo_check` braucht keinen Build und prüft, ob die Tests nur Dateien öffnen,
+die auch im Repo liegen. Was ein Test öffnet, gehört eingecheckt — sonst ist
+er auf dem eigenen Rechner grün und auf einem frischen Klon rot (siehe
+`Tests/fixtures/README.md`).
 
 ## Warum klingt es anders als erwartet
 

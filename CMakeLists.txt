@@ -313,3 +313,10 @@ target_compile_features(editor_shot PRIVATE cxx_std_20)
 enable_testing()
 add_test(NAME solver_check COMMAND solver_check)
 add_test(NAME load_check COMMAND load_check)
+
+# Oeffnen die beiden Tests darueber nur Dateien, die auch im Repo liegen?
+# Braucht keinen Build und laeuft in Sekunden - der Fund kommt damit hier
+# heraus statt als Fehlschlag bei GitHub (siehe Tests/repo_check.py).
+add_test(NAME repo_check
+         COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/Tests/repo_check.py"
+                         "${CMAKE_CURRENT_SOURCE_DIR}")
