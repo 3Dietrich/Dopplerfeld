@@ -310,11 +310,25 @@ target_compile_definitions(editor_shot PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(editor_shot PRIVATE cxx_std_20)
 
+# Pruefprogramm der Hallbauarten. Wie solver_check ohne JUCE, weil Source/Reverb
+# JUCE-frei ist - der Test braucht damit weder Audiogeraet noch Plugin-Bau.
+add_executable(reverb_check Tests/reverb_check.cpp)
+target_include_directories(reverb_check PRIVATE Source)
+target_compile_features(reverb_check PRIVATE cxx_std_20)
+
+# Messwerkzeug zu den Hallbauarten (Tests/reverb_probe.cpp): schreibt WAVs und
+# misst Rechenzeit. Wie loop_peak bewusst KEIN Test, weil die Zeiten an der
+# Maschine haengen.
+add_executable(reverb_probe EXCLUDE_FROM_ALL Tests/reverb_probe.cpp)
+target_include_directories(reverb_probe PRIVATE Source)
+target_compile_features(reverb_probe PRIVATE cxx_std_20)
+
 enable_testing()
 add_test(NAME solver_check COMMAND solver_check)
 add_test(NAME load_check COMMAND load_check)
+add_test(NAME reverb_check COMMAND reverb_check)
 
-# Oeffnen die beiden Tests darueber nur Dateien, die auch im Repo liegen?
+# Oeffnen die Tests darueber nur Dateien, die auch im Repo liegen?
 # Braucht keinen Build und laeuft in Sekunden - der Fund kommt damit hier
 # heraus statt als Fehlschlag bei GitHub (siehe Tests/repo_check.py).
 add_test(NAME repo_check

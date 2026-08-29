@@ -27,6 +27,7 @@ import sys
 CTEST_SOURCES = [
     "Tests/load_check.cpp",
     "Tests/solver_check.cpp",
+    "Tests/reverb_check.cpp",
 ]
 
 # DOPPLERFELD_SOURCE_DIR, gefolgt von einem oder mehreren aneinander
