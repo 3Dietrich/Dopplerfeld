@@ -99,6 +99,8 @@ public:
 
     void setDamping (double amount01)
     {
+        early.setDamping (amount01);
+
         for (auto* u : units())
             u->setDamping (amount01);
     }

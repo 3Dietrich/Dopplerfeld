@@ -46,6 +46,9 @@ public:
             left[i].reset();
             right[i].reset();
         }
+
+        dampL.reset();
+        dampR.reset();
     }
 
     void process (const float* in, float* outL, float* outR, int numSamples) override
@@ -61,8 +64,8 @@ public:
                 r = right[i].process (r);
             }
 
-            outL[n] = l;
-            outR[n] = r;
+            outL[n] = dampL.process (l);
+            outR[n] = dampR.process (r);
         }
     }
 
@@ -82,11 +85,22 @@ public:
         updateLengths();
     }
 
-    void setDamping (double /*amount01*/) override
+    void setDamping (double amount01) override
     {
-        // Ein Allpass ohne Rueckkopplung hat keinen Umlauf, in dem sich eine
-        // Daempfung aufsummieren koennte. Ein Tiefpass hier waere ein
-        // gewoehnlicher Klangregler und gehoert nicht in den Hall.
+        // Ein Tiefpass am Ausgang, und damit tatsaechlich ein Klangregler und
+        // kein Verlust je Umlauf - ein Allpass ohne Rueckkopplung hat keinen
+        // Umlauf, in dem sich etwas aufsummieren koennte.
+        //
+        // Er steht hier trotzdem, weil diese Bauart die Vorgabe ist: eine
+        // streuende Flaeche schluckt Hoehen, und ein Regler, der bei der
+        // meistbenutzten Einstellung nichts tut, ist schlimmer als einer, der
+        // die Sache vereinfacht. Bei den rueckgekoppelten Bauarten daneben
+        // wirkt derselbe Regler je Umlauf und der Nachhall wird mit der Zeit
+        // dunkler; hier ist er von Anfang an so dunkel, wie er eingestellt ist.
+        const double c = reverbparts::dampingCoefficient (amount01, sr);
+
+        dampL.setCoefficient (c);
+        dampR.setCoefficient (c);
     }
 
     // Bezugswert der Kostenskala: gemessen 0,09 % Echtzeit bei 48 kHz
@@ -120,8 +134,9 @@ private:
     static constexpr int primesL[stages] { 149, 89, 53, 31 };
     static constexpr int primesR[stages] { 157, 97, 59, 37 };
 
-    reverbparts::Allpass left[stages];
-    reverbparts::Allpass right[stages];
+    reverbparts::Allpass       left[stages];
+    reverbparts::Allpass       right[stages];
+    reverbparts::DampingFilter dampL, dampR;
 
     double sr         = 48000.0;
     double roomMetres = 10.0;

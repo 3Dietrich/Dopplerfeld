@@ -379,9 +379,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (tapId (t, TapPart::z).toRawUTF8(),
                                 "Tap " + juce::String (t + 1) + " Z", heightRange(), 2.0f, "m"));
 
+        // Diffusor als Vorgabe (@dpa 20260829, nach dem Hoerdurchgang an der
+        // N-Wellen-Aufnahme: "FDN und Diffusor klingen soweit gleich gut,
+        // nehmen wir den CPU guenstigeren"). Gemessen ueber die volle Kette
+        // 0,23 % gegen 0,40 % Echtzeit.
         layout.add (choiceParam (tapId (t, TapPart::type).toRawUTF8(),
                                  "Tap " + juce::String (t + 1) + " Type",
-                                 { "Diffusor", "Schroeder", "FDN" }, 2));
+                                 { "Diffusor", "Schroeder", "FDN" }, 0));
 
         // Der Raum ist auf 200 m gedeckelt, und zwar nicht aus Geschmack: die
         // Verzoegerungsleitungen aller drei Bauarten werden danach bemessen und

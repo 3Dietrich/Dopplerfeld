@@ -37,7 +37,13 @@ public:
         reset();
     }
 
-    void reset() { line.reset(); }
+    void reset()
+    {
+        line.reset();
+
+        for (auto& d : damp)
+            d.reset();
+    }
 
     void setRoomSize (double metres)
     {
@@ -48,6 +54,20 @@ public:
     // Wie stark die Echos gegenueber dem Original sind. 1 = das erste Echo ist
     // so laut wie das Original, was einer harten, nahen Flanke entspricht.
     void setAmount (double amount01) { amount = (float) std::clamp (amount01, 0.0, 4.0); }
+
+    // Hoehenverlust der Echos, gestaffelt: das erste Echo hat eine Reflexion
+    // hinter sich, das letzte viele, also verliert es mehr. Ein gemeinsamer
+    // Tiefpass ueber alle waere billiger und falsch - er wuerde das nahe, harte
+    // Echo genauso dumpf machen wie das ferne.
+    //
+    // Ohne diese Staffelung waere der Daempfungsregler beim Diffusor wirkungslos:
+    // der hat keine Rueckkopplung, in der sich eine Daempfung je Umlauf
+    // aufsummieren koennte.
+    void setDamping (double amount01)
+    {
+        damping = std::clamp (amount01, 0.0, 1.0);
+        update();
+    }
 
     // Schreibt die Echos nach outL/outR und gibt gleichzeitig ihre Summe
     // zurueck, damit der spaete Hall sie als Eingang nehmen kann. Genau so
@@ -64,7 +84,7 @@ public:
 
             for (int t = 0; t < taps; ++t)
             {
-                const float v = line.readAt (delaySamples[t]) * gain[t] * amount;
+                const float v = damp[t].process (line.readAt (delaySamples[t])) * gain[t] * amount;
 
                 l += v * panL[t];
                 r += v * panR[t];
@@ -115,10 +135,16 @@ private:
 
             panL[t] = 0.5f * (1.0f + side);
             panR[t] = 0.5f * (1.0f - side);
+
+            // Der spaeteste Tap bekommt die volle Reglerwirkung, der erste ein
+            // Achtel davon - er hat ja auch nur eine Flaeche gestreift.
+            damp[t].setCoefficient (
+                reverbparts::dampingCoefficient (damping * (0.125 + 0.875 * frac), sr));
         }
     }
 
-    reverbparts::DelayLine line;
+    reverbparts::DelayLine     line;
+    reverbparts::DampingFilter damp[taps];
 
     int   delaySamples[taps] {};
     float gain[taps] {};
@@ -127,5 +153,6 @@ private:
 
     double sr         = 48000.0;
     double roomMetres = 30.0;
+    double damping    = 0.0;
     float  amount     = 0.0f;
 };
