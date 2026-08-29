@@ -688,7 +688,7 @@ void DopplerEngine::setTap (int index, bool enabled, Vec3 posMetres)
 
 void DopplerEngine::setTapReverb (int index, int type, double roomMetres,
                                   double decaySeconds, double damping01,
-                                  double gainLinear, double width,
+                                  double earlyAmount, double gainLinear, double width,
                                   bool predelayEnabled)
 {
     if (index < 0 || index >= maxTaps)
@@ -703,6 +703,7 @@ void DopplerEngine::setTapReverb (int index, int type, double roomMetres,
     bus.setRoomSize (roomMetres);
     bus.setDecaySeconds (decaySeconds);
     bus.setDamping (damping01);
+    bus.setEarlyAmount (earlyAmount);
     bus.setGain (gainLinear);
     bus.setWidth (width);
 

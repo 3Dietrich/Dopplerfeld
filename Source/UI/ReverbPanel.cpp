@@ -67,6 +67,7 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (y,     "Y",       Tooltips::Key::TapY);
     setupKnob (z,     "Hoehe",   Tooltips::Key::TapZ);
     setupKnob (room,  "Raum",    Tooltips::Key::TapRoom);
+    setupKnob (early, "Frueh",   Tooltips::Key::TapEarly);
     setupKnob (decay, "Abkling", Tooltips::Key::TapDecay);
     setupKnob (damp,  "Damp",    Tooltips::Key::TapDamp);
     setupKnob (gain,  "Gain",    Tooltips::Key::TapGain);
@@ -89,7 +90,7 @@ void ReverbPanel::selectTap (int index)
     predelayAttachment.reset();
     typeAttachment.reset();
 
-    for (auto* k : { &x, &y, &z, &room, &decay, &damp, &gain, &width })
+    for (auto* k : { &x, &y, &z, &room, &early, &decay, &damp, &gain, &width })
         k->attachment.reset();
 
     onAttachment = std::make_unique<ButtonAttachment> (
@@ -106,6 +107,7 @@ void ReverbPanel::selectTap (int index)
         { &y,     Params::TapPart::y },
         { &z,     Params::TapPart::z },
         { &room,  Params::TapPart::room },
+        { &early, Params::TapPart::early },
         { &decay, Params::TapPart::decay },
         { &damp,  Params::TapPart::damp },
         { &gain,  Params::TapPart::gain },
@@ -156,7 +158,7 @@ void ReverbPanel::refreshTooltips()
     typeLabel.setTooltip (Tooltips::text (Tooltips::Key::TapType));
     typeBox.setTooltip (Tooltips::text (Tooltips::Key::TapType));
 
-    for (auto* k : { &x, &y, &z, &room, &decay, &damp, &gain, &width })
+    for (auto* k : { &x, &y, &z, &room, &early, &decay, &damp, &gain, &width })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
 
@@ -193,11 +195,11 @@ void ReverbPanel::resized()
 
     area.removeFromTop (6);
 
-    // Zwei Reglerreihen und nicht eine: acht Regler nebeneinander waeren bei
-    // 470 px Panelbreite ueber 590 px breit. Die Aufteilung folgt dabei der
-    // Sache statt nur dem Platz - oben steht, WO der Punkt ist und wie laut,
-    // unten WIE sein Hall klingt.
-    constexpr int perRow = 4;
+    // Zwei Reglerreihen und nicht eine: neun Regler nebeneinander waeren bei
+    // 470 px Panelbreite weit ueber 700 px breit. Die Aufteilung folgt dabei
+    // der Sache statt nur dem Platz - oben steht, WO der Punkt ist und wie er
+    // im Ausgang steht, unten WIE sein Hall klingt.
+    constexpr int perRow = 5;
 
     auto placeRow = [&] (std::initializer_list<Knob*> knobs)
     {
@@ -214,9 +216,9 @@ void ReverbPanel::resized()
                    "Eine Reglerreihe muss in die Panelbreite passen (siehe "
                    "DopplerfeldEditor::panelColumnWidth).");
 
-    placeRow ({ &x, &y, &z, &gain });
+    placeRow ({ &x, &y, &z, &gain, &width });
     area.removeFromTop (4);
-    placeRow ({ &room, &decay, &damp, &width });
+    placeRow ({ &room, &early, &decay, &damp });
 
     area.removeFromTop (6);
 

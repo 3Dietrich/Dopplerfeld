@@ -34,6 +34,7 @@ namespace Params
         constexpr const char* room     = "Room";
         constexpr const char* decay    = "Decay";
         constexpr const char* damp     = "Damp";
+        constexpr const char* early    = "Early";
         constexpr const char* gain     = "Gain";
         constexpr const char* width    = "Width";
         constexpr const char* predelay = "Predelay";

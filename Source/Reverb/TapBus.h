@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AllpassDiffuser.h"
+#include "EarlyReflections.h"
 #include "FdnReverb.h"
 #include "ReverbParts.h"
 #include "SchroederReverb.h"
@@ -35,6 +36,7 @@ public:
     {
         sr = sampleRate;
 
+        early.prepare (sampleRate, maxBlock);
         diffuser.prepare (sampleRate, maxBlock);
         schroeder.prepare (sampleRate, maxBlock);
         fdn.prepare (sampleRate, maxBlock);
@@ -47,12 +49,16 @@ public:
         wetL.assign ((size_t) std::max (1, maxBlock), 0.0f);
         wetR.assign ((size_t) std::max (1, maxBlock), 0.0f);
         dry.assign  ((size_t) std::max (1, maxBlock), 0.0f);
+        erL.assign  ((size_t) std::max (1, maxBlock), 0.0f);
+        erR.assign  ((size_t) std::max (1, maxBlock), 0.0f);
+        erSum.assign((size_t) std::max (1, maxBlock), 0.0f);
 
         reset();
     }
 
     void reset()
     {
+        early.reset();
         diffuser.reset();
         schroeder.reset();
         fdn.reset();
@@ -76,9 +82,14 @@ public:
 
     void setRoomSize (double metres)
     {
+        early.setRoomSize (metres);
+
         for (auto* u : units())
             u->setRoomSize (metres);
     }
+
+    // Staerke der fruehen Einzelechos. 0 = reiner Nachhall wie vorher.
+    void setEarlyAmount (double amount) { early.setAmount (amount); }
 
     void setDecaySeconds (double seconds)
     {
@@ -176,10 +187,20 @@ public:
             }
         }
 
-        // 2) Hall.
+        // 2) Fruehe Einzelechos. Sie gehen sowohl direkt in den Ausgang als
+        //    auch in den spaeten Hall - so waechst der Nachhall aus ihnen
+        //    heraus, statt als zweite Schicht daneben zu stehen.
+        early.process (dry.data(), erL.data(), erR.data(), erSum.data(), n);
+
+        // 3) Spaeter Hall, gespeist aus dem Direktsignal UND den fruehen
+        //    Echos. Ohne den Direktanteil verschwaende ein abgedrehter
+        //    Frueh-Regler auch den Nachhall.
+        for (int i = 0; i < n; ++i)
+            dry[(size_t) i] += erSum[(size_t) i];
+
         activeUnit()->process (dry.data(), wetL.data(), wetR.data(), n);
 
-        // 3) Breite ueber Mitte/Seite und Pegel, in einem Durchgang. Der Pegel
+        // 4) Breite ueber Mitte/Seite und Pegel, in einem Durchgang. Der Pegel
         //    laeuft ueber den Block auf sein Ziel zu, damit ein gezogener
         //    Regler nicht knackst.
         const float step = (targetGain - currentGain) / (float) n;
@@ -188,8 +209,8 @@ public:
         {
             currentGain += step;
 
-            const float l = wetL[(size_t) i];
-            const float r = wetR[(size_t) i];
+            const float l = wetL[(size_t) i] + erL[(size_t) i];
+            const float r = wetR[(size_t) i] + erR[(size_t) i];
 
             const float mid  = 0.5f * (l + r);
             const float side = 0.5f * (l - r) * width;
@@ -225,13 +246,14 @@ private:
     static constexpr int fadeLength     = 1024;   // rund 21 ms bei 48 kHz
     static constexpr int minStepSamples = 32;
 
+    EarlyReflections early;
     AllpassDiffuser diffuser;
     SchroederReverb schroeder;
     FdnReverb       fdn;
 
     reverbparts::DelayLine preA, preB;
 
-    std::vector<float> wetL, wetR, dry;
+    std::vector<float> wetL, wetR, dry, erL, erR, erSum;
 
     Type   type         = Type::fdn;
     double sr           = 48000.0;

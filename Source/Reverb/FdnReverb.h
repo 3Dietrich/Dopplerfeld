@@ -64,7 +64,13 @@ public:
 
     void process (const float* in, float* outL, float* outR, int numSamples) override
     {
-        const float inScale = 1.0f / (float) lines;
+        // Energetisch normiert, nicht arithmetisch: die acht Leitungen sind
+        // untereinander unkorreliert, ihre Summe waechst deshalb mit der
+        // WURZEL aus der Zahl der Leitungen und nicht mit ihr selbst. Ein
+        // Faktor 1/8 waere die richtige Antwort auf acht gleiche Kopien
+        // desselben Signals; hier verschenkt er rund 9 dB, und der Hall klingt
+        // kraftlos, obwohl das Netz selbst nichts verliert.
+        constexpr float inScale = 0.35355339059327373f;   // 1/sqrt(8)
 
         for (int n = 0; n < numSamples; ++n)
         {
@@ -80,12 +86,21 @@ public:
             for (int i = 0; i < lines; ++i)
                 state[i] = delay[i].read();
 
-            // L und R greifen verschiedene Leitungen ab. Das ist die billigste
-            // brauchbare Dekorrelation: die Leitungen sind ohnehin verschieden
-            // lang und untereinander unkorreliert, es braucht also keinen
-            // zweiten Durchlauf fuer die zweite Seite.
-            outL[n] = state[0] + state[2] + state[4] + state[6];
-            outR[n] = state[1] + state[3] + state[5] + state[7];
+            // L und R greifen ALLE acht Leitungen ab, nur mit verschiedenem
+            // Vorzeichenmuster. Die billigere Fassung nimmt je vier Leitungen
+            // je Seite - sie ist genauso dekorreliert, laesst aber die Haelfte
+            // der Energie im Netz liegen, weil jede Seite nur die Haelfte der
+            // Leitungen hoert. Das Vorzeichenmuster trennt die Seiten ohne
+            // diesen Verlust: beide hoeren alles, nur anders gemischt.
+            //
+            // Die Muster stehen senkrecht aufeinander (ihr Skalarprodukt ist
+            // null). Genau das macht die Seiten unkorreliert, ohne dass sie
+            // sich in der Summe ausloeschen.
+            const float sumA = state[0] + state[2] + state[5] + state[7];
+            const float sumB = state[1] + state[3] + state[4] + state[6];
+
+            outL[n] = (sumA + sumB) * outScale;
+            outR[n] = (sumA - sumB) * outScale;
 
             hadamard8 (state);
 
@@ -178,6 +193,12 @@ private:
             inDiffR[i].setGain (0.62f);
         }
     }
+
+    // Der Ausgang summiert acht unkorrelierte Leitungen, waechst also um den
+    // Faktor sqrt(8); die Mitte/Seite-Bildung darueber halbiert nicht, sondern
+    // laesst die Energie stehen. Ohne diesen Faktor waere das Netz nach der
+    // Umstellung zwar kraeftig, aber ueber der Aussteuerung.
+    static constexpr float outScale = 0.35355339059327373f;   // 1/sqrt(8)
 
     static constexpr int diffusers = 3;
 

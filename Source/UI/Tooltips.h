@@ -122,6 +122,7 @@ namespace Tooltips
         TapRoom,
         TapDecay,
         TapDamp,
+        TapEarly,
         TapGain,
         TapWidth,
         TapPredelay,
@@ -1175,6 +1176,16 @@ namespace Tooltips
                           "mit der Zeit dunkler."
                         : "How much treble the reverb loses per round trip. The tail grows darker "
                           "over time.";
+                case Key::TapEarly:
+                    return lang == Language::De
+                        ? "Staerke der ersten Einzelechos, bevor der Hall diffus wird. Sie machen "
+                          "einen Knall wuchtig: ein Nachhallnetz verteilt seine Energie auf "
+                          "tausende winzige Echos, eine harte Flanke wirft EINES zurueck, das "
+                          "fast so laut ist wie das Original. 0 = reiner Nachhall."
+                        : "Strength of the first discrete echoes before the reverb turns diffuse. "
+                          "They are what makes a bang forceful: a reverb network spreads its "
+                          "energy over thousands of tiny echoes, a hard surface throws back ONE "
+                          "that is almost as loud as the original. 0 = tail only.";
                 case Key::TapGain:
                     return lang == Language::De
                         ? "Pegel dieses Abgriffpunkts im Ausgang, in dB."

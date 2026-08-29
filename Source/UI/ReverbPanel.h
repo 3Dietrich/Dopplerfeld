@@ -81,7 +81,7 @@ private:
     juce::ToggleButton predelayButton { "Vorlauf" };
     std::unique_ptr<ButtonAttachment> predelayAttachment;
 
-    Knob x, y, z, room, decay, damp, gain, width;
+    Knob x, y, z, room, early, decay, damp, gain, width;
 
     int selected = 0;
 

@@ -398,6 +398,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (tapId (t, TapPart::damp).toRawUTF8(),
                                 "Tap " + juce::String (t + 1) + " Damp", unitRange(), 0.35f));
 
+        // Staerke der fruehen Einzelechos. Sie sind das, was einen Knall
+        // wuchtig macht: ein Nachhallnetz verteilt seine Energie auf tausende
+        // winzige Echos, eine reale Talflanke wirft EINES zurueck, das fast so
+        // laut ist wie das Original. Ueber 1 hinaus erlaubt, weil eine nahe
+        // harte Flanke genau das tut.
+        layout.add (floatParam (tapId (t, TapPart::early).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Early",
+                                { 0.0f, 4.0f, 0.01f }, 1.0f));
+
         layout.add (floatParam (tapId (t, TapPart::gain).toRawUTF8(),
                                 "Tap " + juce::String (t + 1) + " Gain",
                                 { -60.0f, 36.0f, 0.1f }, -6.0f, "dB"));

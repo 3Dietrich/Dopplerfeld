@@ -81,6 +81,18 @@ public:
         return buffer[(size_t) p];
     }
 
+    // Lesen an einer beliebigen Stelle, unabhaengig von der eingestellten
+    // Laenge. Dafuer sind die getappten Leitungen da: eine Leitung, viele
+    // Lesekoepfe, statt einer Leitung je Echo.
+    float readAt (int samples) const
+    {
+        int p = writePos - std::clamp (samples, 1, capacity);
+        if (p < 0)
+            p += capacity;
+
+        return buffer[(size_t) p];
+    }
+
     void write (float x)
     {
         buffer[(size_t) writePos] = x;

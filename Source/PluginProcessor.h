@@ -498,6 +498,7 @@ private:
         std::atomic<float>* tapRoom[DopplerEngine::maxTaps]     {};
         std::atomic<float>* tapDecay[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapDamp[DopplerEngine::maxTaps]     {};
+        std::atomic<float>* tapEarly[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapGain[DopplerEngine::maxTaps]     {};
         std::atomic<float>* tapWidth[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapPredelay[DopplerEngine::maxTaps] {};
@@ -1092,6 +1093,7 @@ private:
         double room       = 30.0;
         double decay      = 2.0;
         double damping    = 0.35;
+        double early      = 1.0;
         double gainLinear = 0.5;
         double width      = 1.0;
         bool   predelay   = true;

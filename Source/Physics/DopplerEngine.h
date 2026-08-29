@@ -324,7 +324,7 @@ public:
     // Hallwerte eines Punktes. Getrennt vom Ort, weil der Ort die Physik
     // betrifft und der Rest nur den Hall dahinter.
     void setTapReverb (int index, int type, double roomMetres, double decaySeconds,
-                       double damping01, double gainLinear, double width,
+                       double damping01, double earlyAmount, double gainLinear, double width,
                        bool predelayEnabled);
 
     bool isTapEnabled (int index) const

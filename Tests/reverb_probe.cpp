@@ -8,7 +8,11 @@
 // starten.
 //
 //   reverb_probe [--in datei.wav] [--out ordner] [--size m] [--decay s]
-//                [--damp 0..1] [--seconds t] [--sr hz]
+//                [--damp 0..1] [--early x] [--seconds t] [--sr hz]
+//
+// Gemessen wird die VOLLE Kette eines Abgriffpunkts (TapBus), also samt
+// fruehen Reflexionen - nicht nur das Hallnetz. Nur so entspricht das, was man
+// hier hoert, dem, was im Plugin herauskommt.
 //
 // Ausgegeben wird je Bauart eine WAV-Datei und eine Zeile mit gemessener
 // Abklingzeit und Rechenzeit als Anteil an der Echtzeit.
@@ -16,6 +20,7 @@
 #include "Reverb/AllpassDiffuser.h"
 #include "Reverb/FdnReverb.h"
 #include "Reverb/SchroederReverb.h"
+#include "Reverb/TapBus.h"
 
 #include <chrono>
 #include <cmath>
@@ -217,6 +222,7 @@ int main (int argc, char** argv)
     const double      size    = std::stod (argValue (argc, argv, "--size",    "30"));
     const double      decay   = std::stod (argValue (argc, argv, "--decay",   "2.0"));
     const double      damp    = std::stod (argValue (argc, argv, "--damp",    "0.35"));
+    const double      early   = std::stod (argValue (argc, argv, "--early",   "1.0"));
     const double      seconds = std::stod (argValue (argc, argv, "--seconds", "0"));
 
     double sampleRate = std::stod (argValue (argc, argv, "--sr", "48000"));
@@ -255,25 +261,41 @@ int main (int argc, char** argv)
     const size_t tail = (size_t) (decay * 1.5 * sampleRate);
     input.resize (input.size() + tail, 0.0f);
 
-    std::printf ("Raum %.1f m, Abklingzeit %.2f s, Daempfung %.2f\n\n", size, decay, damp);
-    std::printf ("  %-12s %10s %10s %12s\n", "Bauart", "RT60", "Rechenzeit", "Anteil");
-    std::printf ("  %-12s %10s %10s %12s\n", "------", "----", "----------", "------");
-
-    AllpassDiffuser dif;
-    SchroederReverb sch;
-    FdnReverb       fdn;
-
-    ReverbUnit* units[] { &dif, &sch, &fdn };
+    std::printf ("Raum %.1f m, Abklingzeit %.2f s, Daempfung %.2f, fruehe Echos %.2f\n\n",
+                 size, decay, damp, early);
+    std::printf ("  %-12s %10s %11s %10s %11s %11s\n",
+                 "Bauart", "RT60", "Rechenzeit", "Anteil", "Energie", "Spitze");
+    std::printf ("  %-12s %10s %11s %10s %11s %11s\n",
+                 "------", "----", "----------", "------", "-------", "------");
 
     constexpr int block = 256;
 
-    for (auto* u : units)
+    struct Entry { const char* name; TapBus::Type type; };
+
+    const Entry entries[] {
+        { "Diffusor",  TapBus::Type::diffuser },
+        { "Schroeder", TapBus::Type::schroeder },
+        { "FDN",       TapBus::Type::fdn }
+    };
+
+    for (const auto& e : entries)
     {
-        u->prepare (sampleRate, block);
-        u->setRoomSize (size);
-        u->setDecaySeconds (decay);
-        u->setDamping (damp);
-        u->reset();
+        TapBus bus;
+
+        bus.prepare (sampleRate, block);
+        bus.setType (e.type);
+        bus.setRoomSize (size);
+        bus.setDecaySeconds (decay);
+        bus.setDamping (damp);
+        bus.setEarlyAmount (early);
+        bus.setGain (1.0);
+        bus.setWidth (1.0);
+
+        // Kein Vorlauf im Messbetrieb: er verschoebe nur alles um eine feste
+        // Zeit und macht die Messung schwerer lesbar. Im Plugin kommt er aus
+        // der Entfernung des Punktes.
+        bus.setPredelayMetres (0.0);
+        bus.reset();
 
         std::vector<float> l (input.size(), 0.0f);
         std::vector<float> r (input.size(), 0.0f);
@@ -283,18 +305,37 @@ int main (int argc, char** argv)
         for (size_t n = 0; n < input.size(); n += block)
         {
             const int count = (int) std::min ((size_t) block, input.size() - n);
-            u->process (input.data() + n, l.data() + n, r.data() + n, count);
+            bus.processAdd (input.data() + n, l.data() + n, r.data() + n, count);
         }
 
-        const auto   t1      = std::chrono::steady_clock::now();
-        const double cpuSec  = std::chrono::duration<double> (t1 - t0).count();
+        const auto   t1       = std::chrono::steady_clock::now();
+        const double cpuSec   = std::chrono::duration<double> (t1 - t0).count();
         const double audioSec = (double) input.size() / sampleRate;
-        const double rt      = measureRt60 (l, sampleRate);
+        const double rt       = measureRt60 (l, sampleRate);
 
-        std::printf ("  %-12s %8.2f s %8.1f ms %10.2f %%\n",
-                     u->name(), rt, cpuSec * 1000.0, cpuSec / audioSec * 100.0);
+        // Energie und Spitze gegen den Eingang: das ist die Zahl, an der man
+        // sieht, ob eine Bauart Kraft verliert oder nur anders verteilt.
+        double inEnergy = 0.0, outEnergy = 0.0, outPeak = 0.0;
 
-        const std::string path = outDir + "/reverb_" + u->name() + ".wav";
+        for (size_t i = 0; i < input.size(); ++i)
+        {
+            inEnergy  += (double) input[i] * (double) input[i];
+            outEnergy += (double) l[i] * (double) l[i] + (double) r[i] * (double) r[i];
+            outPeak    = std::max (outPeak, (double) std::fabs (l[i]));
+        }
+
+        // Der Ausgang ist zweikanalig, der Eingang nicht - halbieren, sonst
+        // stuende jede Bauart grundlos 3 dB im Plus.
+        outEnergy *= 0.5;
+
+        auto dB = [] (double x) { return x > 1.0e-12 ? 10.0 * std::log10 (x) : -120.0; };
+
+        std::printf ("  %-12s %8.2f s %8.1f ms %8.2f %% %8.1f dB %8.1f dB\n",
+                     e.name, rt, cpuSec * 1000.0, cpuSec / audioSec * 100.0,
+                     dB (outEnergy) - dB (inEnergy),
+                     20.0 * std::log10 (std::max (1.0e-12, outPeak)));
+
+        const std::string path = outDir + "/reverb_" + e.name + ".wav";
 
         if (! writeWavStereo (path, l, r, sampleRate))
             std::printf ("     (konnte %s nicht schreiben)\n", path.c_str());
