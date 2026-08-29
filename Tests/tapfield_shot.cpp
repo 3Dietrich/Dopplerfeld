@@ -14,11 +14,13 @@ int main()
     snap.listener.head  = { 50.0, 40.0, 1.75 };
 
     // Vier Abgriffpunkte in verschiedenen Hoehen: der Ring waechst mit z.
-    snap.taps[0] = { true, Vec3 { 15.0, 12.0,  0.0 } };
-    snap.taps[1] = { true, Vec3 { 82.0, 15.0,  8.0 } };
-    snap.taps[2] = { true, Vec3 { 20.0, 48.0, 25.0 } };
-    snap.taps[3] = { true, Vec3 { 70.0, 45.0,  2.0 } };
-    snap.taps[4] = { false, Vec3 { 50.0, 30.0, 0.0 } };
+    // Die Raumgroesse steht daneben als gestrichelter Kreis im Feldmassstab -
+    // 8 m sind kaum groesser als der Ring, 120 m reichen ueber den Bildrand.
+    snap.taps[0] = { true, Vec3 { 15.0, 12.0,  0.0 },   8.0 };
+    snap.taps[1] = { true, Vec3 { 82.0, 15.0,  8.0 },  30.0 };
+    snap.taps[2] = { true, Vec3 { 20.0, 48.0, 25.0 },  60.0 };
+    snap.taps[3] = { true, Vec3 { 70.0, 45.0,  2.0 }, 120.0 };
+    snap.taps[4] = { false, Vec3 { 50.0, 30.0, 0.0 },  40.0 };
 
     field.setSnapshot (snap);
 

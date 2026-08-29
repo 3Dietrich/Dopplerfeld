@@ -190,6 +190,11 @@ struct FieldSnapshot
     {
         bool on = false;
         Vec3 pos;
+
+        // Ausdehnung des Raums, den dieser Punkt darstellt, in Metern. Sie
+        // wird im Feld als Kreis um den Punkt gezeichnet und ist damit die
+        // einzige Groesse hier, die nicht der Ortung dient.
+        double roomMetres = 0.0;
     };
     std::array<TapInfo, maxTaps> taps {};
 

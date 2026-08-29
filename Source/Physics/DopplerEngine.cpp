@@ -722,6 +722,8 @@ void DopplerEngine::setTapReverb (int index, int type, double roomMetres,
                : type == 3 ? TapBus::Type::openAir
                            : TapBus::Type::diffuser);
 
+    taps[(size_t) index].roomMetres = roomMetres;
+
     bus.setRoomSize (roomMetres);
     bus.setDecaySeconds (decaySeconds);
     bus.setDamping (damping01);
@@ -1319,6 +1321,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
     {
         s.taps[(size_t) t].on  = taps[(size_t) t].enabled;
         s.taps[(size_t) t].pos = taps[(size_t) t].pos;
+        s.taps[(size_t) t].roomMetres = taps[(size_t) t].roomMetres;
     }
 
     snapshotIndex.store (snapshotWriteSlot, std::memory_order_release);

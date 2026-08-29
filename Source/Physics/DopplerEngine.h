@@ -578,6 +578,10 @@ private:
         bool enabled = false;
         Vec3 pos;
 
+        // Nur fuer die Feldanzeige gemerkt: der Hall selbst haelt seine
+        // Raumgroesse im TapBus, dort aber schon auf die Kapazitaet geklemmt.
+        double roomMetres = 30.0;
+
         // Ob der Rueckweg zum Hoerer als Laufzeit abgebildet wird. Aus
         // klingt der Hall, als saesse er am Ohr - manchmal gewollt, meist
         // nicht.

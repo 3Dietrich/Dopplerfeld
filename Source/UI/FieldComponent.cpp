@@ -470,6 +470,39 @@ void FieldComponent::drawTaps (juce::Graphics& g) const
         // Beschriftung sitzt (Theme::Panel::wall).
         const auto colour = juce::Colour (0xff55c99a);
 
+        // Der Raum, den dieser Punkt darstellt - im echten Feldmassstab, also
+        // ein Kreis von so vielen Metern Durchmesser, wie am Regler stehen.
+        //
+        // Er darf NICHT wieder im Ringdurchmesser stecken: der traegt bereits
+        // die Hoehe, und zwei Bedeutungen auf einem Durchmesser sind nicht
+        // lesbar. Deshalb der zweite, gestrichelte Kreis - gestrichelt, weil er
+        // eine gedachte Ausdehnung zeigt und keine Wand, und schwach, weil bei
+        // acht Punkten sonst acht Scheiben uebereinanderliegen.
+        //
+        // Dass ein grosser Raum ueber den Bildrand hinauswaechst, ist richtig
+        // so: 2000 m sind in einem 100-m-Feld eben groesser als das Feld.
+        if (tap.roomMetres > 0.0)
+        {
+            const float rr = 0.5f * (float) tap.roomMetres * pixelsPerMetre();
+
+            // Nach oben begrenzt: ein Kreis, der weit ausserhalb des Bildes
+            // liegt, ist nicht mehr zu sehen, wuerde aber weiter gezeichnet
+            // werden - bei 2000 m im 100-m-Feld ein Pfad von 14000 px.
+            const float tooBig = 2.0f * (float) std::hypot ((double) getWidth(), (double) getHeight());
+
+            if (rr > r + 2.0f && rr < tooBig)
+            {
+                juce::Path ring;
+                ring.addEllipse (juce::Rectangle<float> (rr * 2.0f, rr * 2.0f).withCentre (p));
+
+                const float dashes[] { 4.0f, 5.0f };
+
+                g.setColour (colour.withAlpha (0.28f));
+                juce::PathStrokeType (1.0f).createDashedStroke (ring, ring, dashes, 2);
+                g.strokePath (ring, juce::PathStrokeType (1.0f));
+            }
+        }
+
         g.setColour (colour.withAlpha (0.75f));
         g.drawEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (p), 1.4f);
 
