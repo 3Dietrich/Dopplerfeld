@@ -1,7 +1,5 @@
 #include "ReverbPanel.h"
 
-#include "../Util/Utf8.h"
-
 #include <initializer_list>
 
 void ReverbPanel::setupKnob (Knob& knob, const char* labelText, Tooltips::Key tooltipKey)
@@ -56,7 +54,7 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
     predelayButton.setTooltip (Tooltips::text (Tooltips::Key::TapPredelay));
     addAndMakeVisible (predelayButton);
 
-    typeBox.addItemList ({ "Diffusor", "Schroeder", "FDN", Text::utf8 ("Draußen") }, 1);
+    typeBox.addItemList ({ "Diffusor", "Schroeder", "FDN", Labels::text ("Draußen") }, 1);
     typeBox.setTooltip (Tooltips::text (Tooltips::Key::TapType));
     addAndMakeVisible (typeBox);
 
@@ -274,6 +272,11 @@ void ReverbPanel::refreshTooltips()
     typeLabel.setText (Labels::text ("Bauart"), juce::dontSendNotification);
     typeLabel.setTooltip (Tooltips::text (Tooltips::Key::TapType));
     typeBox.setTooltip (Tooltips::text (Tooltips::Key::TapType));
+
+    // Nur der TEXT des vierten Eintrags wechselt mit der Sprache; die Liste
+    // neu aufzubauen wuerde die Auswahl mitreissen, an der das Attachment
+    // haengt.
+    typeBox.changeItemText (4, Labels::text ("Draußen"));
 
     for (auto* k : { &z, &room, &early, &decay, &damp, &gain, &width, &echoes, &seed, &direct })
     {

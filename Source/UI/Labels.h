@@ -167,6 +167,11 @@ namespace Labels
             { "nicht mehr zeigen", "don't show again" },
             { "öffne states",   "open states" },
             { "Raum",           "Space"       },
+
+            // --- Hall-Panel ---
+            { "Höhe",           "Height"      },
+            { "Würfel",         "Seed"        },
+            { "Draußen",        "Outdoors"    },
             { "Luft",           "Air"         },
             { "Boden",          "Ground"      },
             { "Ausgang",        "Output"      },
