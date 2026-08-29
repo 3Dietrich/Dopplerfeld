@@ -343,6 +343,30 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     }
 
 
+    {
+        static_assert (Params::tapCount == DopplerEngine::maxTaps,
+                       "Die Parameterliste und die Pfadliste der Engine muessen gleich viele "
+                       "Abgriffpunkte kennen, sonst zeigen Regler ins Leere oder Pfade bleiben "
+                       "unerreichbar.");
+
+        for (int t = 0; t < Params::tapCount; ++t)
+        {
+            using namespace Params::TapPart;
+
+            pp.tapOn[t]       = raw (Params::tapId (t, on).toRawUTF8());
+            pp.tapX[t]        = raw (Params::tapId (t, x).toRawUTF8());
+            pp.tapY[t]        = raw (Params::tapId (t, y).toRawUTF8());
+            pp.tapZ[t]        = raw (Params::tapId (t, z).toRawUTF8());
+            pp.tapType[t]     = raw (Params::tapId (t, type).toRawUTF8());
+            pp.tapRoom[t]     = raw (Params::tapId (t, room).toRawUTF8());
+            pp.tapDecay[t]    = raw (Params::tapId (t, decay).toRawUTF8());
+            pp.tapDamp[t]     = raw (Params::tapId (t, damp).toRawUTF8());
+            pp.tapGain[t]     = raw (Params::tapId (t, gain).toRawUTF8());
+            pp.tapWidth[t]    = raw (Params::tapId (t, width).toRawUTF8());
+            pp.tapPredelay[t] = raw (Params::tapId (t, predelay).toRawUTF8());
+        }
+    }
+
     pp.imbalanceOctave = raw (Params::imbalanceOctave);
     pp.groundGain = raw (Params::groundGain);
     pp.panAmount  = raw (Params::panAmount);
@@ -663,6 +687,7 @@ void DopplerfeldProcessor::applyParameters()
     applyReflectionParameters();
     applyCloneParameters();
     applyWallParameters();
+    applyTapParameters();
     applyMediumAndOutputParameters();
 }
 
@@ -1070,6 +1095,41 @@ void DopplerfeldProcessor::applyWallParameters()
     }
 }
 
+void DopplerfeldProcessor::applyTapParameters()
+{
+    // Wie bei den Waenden nur die Ziele einsammeln; gefolgt wird ihnen in
+    // advanceMotion().
+    for (int t = 0; t < Params::tapCount; ++t)
+    {
+        TapState& target = tapTarget[t];
+
+        target.on         = pp.tapOn[t]->load() > 0.5f;
+        target.pos        = metresFromNormalised ((double) pp.tapX[t]->load(),
+                                                  (double) pp.tapY[t]->load(),
+                                                  (double) pp.tapZ[t]->load());
+        target.type       = (int) std::lround (pp.tapType[t]->load());
+        target.room       = (double) pp.tapRoom[t]->load();
+        target.decay      = (double) pp.tapDecay[t]->load();
+        target.damping    = (double) pp.tapDamp[t]->load();
+        target.gainLinear = juce::Decibels::decibelsToGain ((double) pp.tapGain[t]->load());
+        target.width      = (double) pp.tapWidth[t]->load();
+        target.predelay   = pp.tapPredelay[t]->load() > 0.5f;
+    }
+
+    // Beim ersten Durchgang und nach jedem Schnitt sofort auf das Ziel, sonst
+    // wanderte der Punkt beim Presetwechsel sichtbar von der alten zur neuen
+    // Stelle - dasselbe Argument wie bei den Waenden, und deshalb auch
+    // dasselbe Merkzeichen.
+    if (! tapStateInitialised || snapTapsPending)
+    {
+        for (int t = 0; t < Params::tapCount; ++t)
+            tapSmoothed[t] = tapTarget[t];
+
+        tapStateInitialised = true;
+        snapTapsPending     = false;
+    }
+}
+
 void DopplerfeldProcessor::applyMediumAndOutputParameters()
 {
     // --- Ausgang ---
@@ -1268,6 +1328,7 @@ void DopplerfeldProcessor::handlePendingRequests()
             // im naechsten Block, denn ihre Ziele werden in applyParameters()
             // gebildet (siehe snapWallsPending im Header).
             snapWallsPending = true;
+            snapTapsPending  = true;
 
             smoothedYawRadians = targetYawRadians;
             listenerState.yaw  = targetYawRadians;
@@ -2006,6 +2067,18 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             s.tiltRad   += (t.tiltRad - s.tiltRad) * yawSmoothCoeff;
         }
 
+        // Abgriffpunkte nach demselben Muster: nur der Ort wird gezogen.
+        for (int t = 0; t < Params::tapCount; ++t)
+        {
+            TapState&       s = tapSmoothed[t];
+            const TapState& d = tapTarget[t];
+
+            const Vec3 pos = s.pos;
+
+            s = d;
+            s.pos = pos + (d.pos - pos) * yawSmoothCoeff;
+        }
+
         // Aufgezeichnet wird die GEGLÄTTETE Position (Plan 3.9), sonst klänge
         // die Wiedergabe anders als die Live-Bewegung.
         recorderTickAccum += tickDt;
@@ -2430,6 +2503,15 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             const auto& wall = wallSmoothed[w];
             dopplerEngine.setWall (w, wall.on, wall.anchor, wall.azimuthRad, wall.tiltRad,
                                    wall.damping, wall.gainLinear);
+        }
+
+        for (int t = 0; t < Params::tapCount; ++t)
+        {
+            const auto& tap = tapSmoothed[t];
+
+            dopplerEngine.setTap (t, tap.on, tap.pos);
+            dopplerEngine.setTapReverb (t, tap.type, tap.room, tap.decay, tap.damping,
+                                        tap.gainLinear, tap.width, tap.predelay);
         }
 
         // Fenster auf den Ausgabepuffer, keine Kopie und keine Allokation.

@@ -116,12 +116,24 @@ void DopplerEngine::PathSet::renderInto (juce::AudioBuffer<float>& dest, int num
         const bool rightEar = (recipe.ear != 0);
 
         // Nach setTransform(), siehe dort: die Kopfachse wird mitgespiegelt.
-        paths[i].setPanning (engine->panoramaAmount(), listenerRight (prevListener), rightEar);
+        // Ein Abgriffpunkt hat kein Panorama: er ist ein einzelner Punkt im
+        // Feld, kein Kopf mit zwei Ohren. Seine Breite entsteht erst im Hall.
+        paths[i].setPanning (recipe.tap >= 0 ? 0.0 : engine->panoramaAmount(),
+                             listenerRight (prevListener), rightEar);
 
-        const Vec3 pos = earPosition (prevListener, rightEar);
-        const Vec3 vel = earVelocity (prevListener, headVel, yawRate, rightEar);
+        // Der Abgriffpunkt steht fest, seine Geschwindigkeit ist deshalb
+        // null - anders als ein Ohr, das sich mit dem Kopf bewegt und dreht.
+        const bool isTap = (recipe.tap >= 0);
 
-        const int ch = std::min (recipe.ear, numCh - 1);
+        const Vec3 pos = isTap ? engine->tapPosition (recipe.tap)
+                               : earPosition (prevListener, rightEar);
+        const Vec3 vel = isTap ? Vec3{}
+                               : earVelocity (prevListener, headVel, yawRate, rightEar);
+
+        // Abgriffpunkte liegen hinter den beiden Ohrkanaelen, je einer je
+        // Punkt. Aus ihnen wird nach dem Rendern der Hall gespeist; direkt
+        // hoerbar sind sie nicht.
+        const int ch = std::min (isTap ? 2 + recipe.tap : recipe.ear, numCh - 1);
 
         paths[i].process (trajectory, *signal, *medium,
                           pos, vel, blockStartTime,
@@ -196,6 +208,16 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
         recipes.push_back ({ 1, -1, -1, -1, prop });
     }
 
+    // Abgriffpunkte: EIN Weg je Punkt, nicht zwei. Der Punkt hat kein zweites
+    // Ohr, also auch keinen zweiten Loeser - das ist der Grund, warum acht von
+    // ihnen weniger kosten als die vier Wege, die Direktschall und Boden
+    // zusammen schon belegen.
+    //
+    // ear bleibt 0 und wird bei ihnen nicht ausgewertet (siehe renderInto):
+    // ihr Kanal haengt am Tap-Index, nicht am Ohr.
+    for (int t = 0; t < maxTaps; ++t)
+        recipes.push_back ({ 0, -1, -1, -1, -1, t });
+
     // Der Direktschall ist die Fläche ohne Fläche: keine Spiegelung, keine
     // Dämpfung, nie abschaltbar.
     surfaces[0] = Surface{};
@@ -213,7 +235,17 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
                  surfaces[(size_t) (2 + w)].damping, 1.0);
     }
 
-    geometry.prepare (sr, maxBlock, 2);
+    // Zwei Ohren plus je ein Kanal je Abgriffpunkt. Die Zwischenpuffer des
+    // Crossfaders muessen genauso breit sein, sonst faellt beim
+    // Feldgroessenwechsel gerade der Hall aus der Ueberblendung heraus.
+    const int renderChannels = 2 + maxTaps;
+
+    geometry.prepare (sr, maxBlock, renderChannels);
+
+    renderBuffer.setSize (renderChannels, maxBlock, false, true, true);
+
+    for (auto& bus : tapBus)
+        bus.prepare (sr, maxBlock);
 
     geometry.active().prepare  (sr, maxBlock, recipes.size(), trajectoryRateHz, maxHistorySeconds);
     geometry.pending().prepare (sr, maxBlock, recipes.size(), trajectoryRateHz, maxHistorySeconds);
@@ -244,6 +276,14 @@ void DopplerEngine::reset()
     geometry.reset();
     geometry.active().reset  (sourceTarget, 0.0, listener);
     geometry.pending().reset (sourceTarget, 0.0, listener);
+
+    // Der Nachhall der Abgriffpunkte muss mit weg. Er steht sonst noch minuten-
+    // lang im Puffer und klingt nach dem Zuruecksetzen aus einer Szene aus, die
+    // es nicht mehr gibt.
+    for (auto& bus : tapBus)
+        bus.reset();
+
+    renderBuffer.clear();
 
     queuedJumpPos    = sourceTarget;
     queuedJumpVel    = Vec3{};
@@ -628,6 +668,47 @@ void DopplerEngine::setRealClones (int count, double spreadMetres, double zAmoun
     cloneRealLevel = std::max (0.0, gainLinear);
 }
 
+void DopplerEngine::setTap (int index, bool enabled, Vec3 posMetres)
+{
+    if (index < 0 || index >= maxTaps)
+        return;
+
+    TapState& t = taps[(size_t) index];
+
+    // Beim Einschalten den Hall raeumen. Sein Puffer traegt sonst noch den
+    // Nachhall vom letzten Ort, und der Punkt faengt an einer neuen Stelle mit
+    // dem Ausklang der alten an. Der Pfad selbst braucht das nicht: sein
+    // Loeser erkennt die Luecke und saet sich von selbst neu.
+    if (enabled && ! t.enabled)
+        tapBus[(size_t) index].reset();
+
+    t.enabled = enabled;
+    t.pos     = posMetres;
+}
+
+void DopplerEngine::setTapReverb (int index, int type, double roomMetres,
+                                  double decaySeconds, double damping01,
+                                  double gainLinear, double width,
+                                  bool predelayEnabled)
+{
+    if (index < 0 || index >= maxTaps)
+        return;
+
+    TapBus& bus = tapBus[(size_t) index];
+
+    bus.setType (type == 1 ? TapBus::Type::schroeder
+               : type == 2 ? TapBus::Type::fdn
+                           : TapBus::Type::diffuser);
+
+    bus.setRoomSize (roomMetres);
+    bus.setDecaySeconds (decaySeconds);
+    bus.setDamping (damping01);
+    bus.setGain (gainLinear);
+    bus.setWidth (width);
+
+    taps[(size_t) index].predelay = predelayEnabled;
+}
+
 void DopplerEngine::setPropellers (bool enabled, double gainLinear)
 {
     propellersOn  = enabled;
@@ -670,6 +751,9 @@ void DopplerEngine::disableAllReflections()
 
 bool DopplerEngine::recipeEnabled (const PathRecipe& r) const
 {
+    if (r.tap >= 0)
+        return isTapEnabled (r.tap);
+
     if (r.clone >= 0)
         return r.clone < realClones;
 
@@ -1238,9 +1322,38 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
     if (fading)
         setContext (geometry.active(), false);
 
-    // 4) Rendern. Ohne laufenden Fade rendert nur der aktive Satz, direkt in
-    //    stereoOut - der zweite kostet dann keine CPU.
-    geometry.process (stereoOut);
+    // 4) Rendern, in den eigenen Puffer: er traegt hinter den zwei Ohrkanaelen
+    //    je einen Kanal je Abgriffpunkt. Ohne laufenden Fade rendert nur der
+    //    aktive Satz - der zweite kostet dann keine CPU.
+    const int rendered = std::min (numSamples, maxBlock);
+
+    geometry.process (renderBuffer);
+
+    // 5) Abgriffpunkte: was an ihrem Ort ankommt, durch ihren Hall und als
+    //    zusaetzliche Signalquelle auf die Ohrkanaele. Der Hall laeuft nicht
+    //    noch einmal durch die Physik; sein Weg zurueck zum Hoerer steckt im
+    //    Vorlauf.
+    for (int t = 0; t < maxTaps; ++t)
+    {
+        if (! taps[(size_t) t].enabled)
+            continue;
+
+        const double back = taps[(size_t) t].predelay
+                              ? (taps[(size_t) t].pos - listener.head).length()
+                              : 0.0;
+
+        tapBus[(size_t) t].setPredelayMetres (back);
+
+        tapBus[(size_t) t].processAdd (renderBuffer.getReadPointer (2 + t),
+                                       renderBuffer.getWritePointer (0),
+                                       renderBuffer.getWritePointer (1),
+                                       rendered);
+    }
+
+    // 6) Die zwei Ohrkanaele nach draussen. Die Kanaele der Abgriffpunkte
+    //    bleiben drin - sie sind Zwischenergebnis, nicht Ausgang.
+    for (int ch = 0; ch < std::min (numCh, 2); ++ch)
+        stereoOut.copyFrom (ch, 0, renderBuffer, ch, 0, rendered);
 
     // Größere Blöcke als in prepare() angekündigt kann der Doppelpfad nicht
     // bedienen (die Zwischenpuffer stehen fest); der Rest muss still sein

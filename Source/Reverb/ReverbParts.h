@@ -27,11 +27,17 @@ inline constexpr double soundSpeed = 343.0;
 // Klangregler: die Verzoegerungsleitungen werden in prepare() auf diese Laenge
 // bemessen und danach nie wieder allokiert.
 //
-// Der Preis steht in RAM. Ein FDN mit acht Leitungen braucht bei 500 m und
-// 48 kHz rund 2,3 MB, bei 192 kHz das Vierfache; acht Abgriffpunkte kommen
-// damit auf 18 bis 74 MB. Nach oben ist hier also nicht beliebig Platz, und
-// 500 m sind bereits ein Tal, kein Zimmer.
-inline constexpr double maxRoomMetres = 500.0;
+// Der Preis steht in RAM, und er ist der einzige Punkt am ganzen Hall, an dem
+// RAM ueberhaupt zaehlt. Ein Abgriffpunkt haelt alle drei Bauarten gleichzeitig
+// bereit, damit ein Typwechsel im Audiothread nichts allokiert; das sind bei
+// 200 m und 48 kHz rund 4,4 MB, bei acht Abgriffpunkten also gut 35 MB.
+// Bei 500 m waeren es 90 MB, und dafuer ist der Gewinn zu klein: 200 m
+// Raumgroesse sind bereits eine Grundlaufzeit von 583 ms.
+//
+// Die ENTFERNUNG eines Abgriffpunkts ist davon nicht betroffen. Sie steckt im
+// Vorlauf des TapBus, und der ist eine einzelne Monoleitung - die darf
+// kilometerweit reichen, ohne dass es auffaellt.
+inline constexpr double maxRoomMetres = 200.0;
 
 // Ringpuffer mit ganzzahliger Verzoegerung.
 //

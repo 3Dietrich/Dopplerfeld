@@ -11,6 +11,39 @@ namespace Params
     // --- Feld ---
     constexpr const char* fieldMetres = "fieldMetres";
 
+    // --- Abgriffpunkte ---
+    //
+    // Ein Abgriffpunkt hoert an einer Stelle im Feld und schickt, was dort
+    // ankommt, durch einen Hall. Acht davon mit je elf Werten waeren als
+    // ausgeschriebene Konstanten eine Liste von 88 Zeilen, in der ein
+    // Tippfehler nicht mehr auffaellt - deshalb wird die Kennung hier aus
+    // Index und Zweck gebildet und die Registrierung ist eine Schleife.
+    //
+    // Der Zweck kommt trotzdem aus einer Konstanten, damit ein Vertipper wie
+    // bei allen anderen Parametern beim Uebersetzen auffliegt und nicht erst
+    // als stummer nullptr zur Laufzeit.
+    constexpr int tapCount = 8;
+
+    namespace TapPart
+    {
+        constexpr const char* on       = "On";
+        constexpr const char* x        = "X";
+        constexpr const char* y        = "Y";
+        constexpr const char* z        = "Z";
+        constexpr const char* type     = "Type";
+        constexpr const char* room     = "Room";
+        constexpr const char* decay    = "Decay";
+        constexpr const char* damp     = "Damp";
+        constexpr const char* gain     = "Gain";
+        constexpr const char* width    = "Width";
+        constexpr const char* predelay = "Predelay";
+    }
+
+    inline juce::String tapId (int index, const char* part)
+    {
+        return "tap" + juce::String (index) + part;
+    }
+
     // --- Quelle ---
     // x/y sind auf die Feldfläche normiert (0..1), z ist die Höhe über dem
     // Boden in echten Metern - sie hängt nicht am Feldmaßstab.

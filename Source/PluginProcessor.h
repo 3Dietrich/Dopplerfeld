@@ -424,6 +424,7 @@ private:
     void applyReflectionParameters();
     // Waende: Ziele einsammeln, gefolgt wird ihnen in advanceMotion().
     void applyWallParameters();
+    void applyTapParameters();
     // Medium (Temperatur, Hoehe) und Ausgangspegel samt Begrenzer.
     void applyMediumAndOutputParameters();
 
@@ -488,6 +489,18 @@ private:
         std::atomic<float>* srcX = nullptr;
         std::atomic<float>* srcY = nullptr;
         std::atomic<float>* srcZ = nullptr;
+
+        std::atomic<float>* tapOn[DopplerEngine::maxTaps]       {};
+        std::atomic<float>* tapX[DopplerEngine::maxTaps]        {};
+        std::atomic<float>* tapY[DopplerEngine::maxTaps]        {};
+        std::atomic<float>* tapZ[DopplerEngine::maxTaps]        {};
+        std::atomic<float>* tapType[DopplerEngine::maxTaps]     {};
+        std::atomic<float>* tapRoom[DopplerEngine::maxTaps]     {};
+        std::atomic<float>* tapDecay[DopplerEngine::maxTaps]    {};
+        std::atomic<float>* tapDamp[DopplerEngine::maxTaps]     {};
+        std::atomic<float>* tapGain[DopplerEngine::maxTaps]     {};
+        std::atomic<float>* tapWidth[DopplerEngine::maxTaps]    {};
+        std::atomic<float>* tapPredelay[DopplerEngine::maxTaps] {};
 
         std::atomic<float>* lisX       = nullptr;
         std::atomic<float>* lisY       = nullptr;
@@ -1065,6 +1078,29 @@ private:
     WallState wallSmoothed[DopplerEngine::maxWalls];
     bool      wallStateInitialised = false;
 
+    // Zustand eines Abgriffpunkts, wie ihn der Processor fuehrt.
+    //
+    // Gezogen wird nur der ORT: er bestimmt die Laufzeit des Pfades, und ein
+    // Sprung darin waere ein Klick - dasselbe Argument wie bei der Wandlage.
+    // Alles andere springt sofort, weil es nur Filterkoeffizienten und Pegel
+    // sind.
+    struct TapState
+    {
+        Vec3   pos;
+        bool   on         = false;
+        int    type       = 2;
+        double room       = 30.0;
+        double decay      = 2.0;
+        double damping    = 0.35;
+        double gainLinear = 0.5;
+        double width      = 1.0;
+        bool   predelay   = true;
+    };
+
+    TapState tapTarget[DopplerEngine::maxTaps];
+    TapState tapSmoothed[DopplerEngine::maxTaps];
+    bool     tapStateInitialised = false;
+
     // Die Waende springen beim naechsten Durchgang auf ihr Ziel, statt ihm zu
     // folgen (@dpa 20260828: "Presetwechsel: auch die Waende - sie wandern
     // noch beim Presetwechsel, sollen sie nicht").
@@ -1074,6 +1110,11 @@ private:
     // applyParameters(), denn erst dort stehen die neuen Wandziele - das ist
     // dieselbe Reihenfolge wie beim Feldmassstab.
     bool      snapWallsPending = false;
+
+    // Dasselbe fuer die Abgriffpunkte. Ein eigenes Merkzeichen und nicht das
+    // der Waende, weil applyWallParameters() jenes bereits zurueckgesetzt hat,
+    // wenn applyTapParameters() an die Reihe kommt.
+    bool      snapTapsPending = false;
 
     double recorderTickAccum = 0.0;   // dito für die 200-Hz-Aufzeichnung
 

@@ -10,6 +10,7 @@
 #include "Vec3.h"
 #include <array>
 
+#include "Reverb/TapBus.h"
 #include "Sources/SoundSource.h"
 #include "Util/Crossfader.h"
 #include "Util/FieldSnapshot.h"
@@ -299,6 +300,44 @@ public:
     void setRealClones (int count, double spreadMetres, double zAmount, double gainLinear);
     int  realCloneCount() const { return realClones; }
 
+    // ------------------------------------------------------ Abgriffpunkte
+    //
+    // Ein Abgriffpunkt ist ein Empfangspunkt im Feld, der nicht zu einem Ohr
+    // gehoert. Was dort ankommt, laeuft durch einen Hall (TapBus) und wird
+    // dem Ausgang als zusaetzliche Signalquelle zugemischt.
+    //
+    // Der Preis ist genau EIN Loeser je Punkt, nicht zwei: der Punkt hat kein
+    // zweites Ohr. Zum Vergleich kosten Direktschall und Boden zusammen schon
+    // vier, weil jeder von beiden fuer beide Ohren laeuft. Acht Abgriffpunkte
+    // liegen damit in der Groessenordnung dessen, was die zweite
+    // Reflexionsordnung ohnehin verbraucht.
+    //
+    // Der Hall selbst laeuft NICHT noch einmal durch die Physik. Er wird
+    // direkt in den Ausgang gemischt, mit einem Vorlauf fuer den Rueckweg zum
+    // Hoerer (siehe TapBus::setPredelayMetres). Das ist der Unterschied
+    // zwischen bezahlbar und nicht bezahlbar: eine echte Rueckausbreitung
+    // braeuchte je Punkt einen zweiten Signalpuffer und ein zweites Pfadpaar.
+    static constexpr int maxTaps = 8;
+
+    void setTap (int index, bool enabled, Vec3 posMetres);
+
+    // Hallwerte eines Punktes. Getrennt vom Ort, weil der Ort die Physik
+    // betrifft und der Rest nur den Hall dahinter.
+    void setTapReverb (int index, int type, double roomMetres, double decaySeconds,
+                       double damping01, double gainLinear, double width,
+                       bool predelayEnabled);
+
+    bool isTapEnabled (int index) const
+    {
+        return index >= 0 && index < maxTaps && taps[(size_t) index].enabled;
+    }
+
+    // Ort des Punktes, wie ihn die Pfadschleife braucht.
+    Vec3 tapPosition (int index) const
+    {
+        return (index >= 0 && index < maxTaps) ? taps[(size_t) index].pos : Vec3{};
+    }
+
     // Alles außer dem Direktschall aus - die minimale sichere Konfiguration.
     void disableAllReflections();
 
@@ -417,6 +456,11 @@ private:
         // Fluegeln, nicht dem Rumpf (siehe setPropellers). -1 sonst.
         int prop   = -1;
 
+        // >= 0: dieser Weg endet nicht an einem Ohr, sondern an einem
+        // Abgriffpunkt (siehe setTap). Er traegt dann nichts direkt zum
+        // Ausgang bei - sein Signal geht in den zugehoerigen TapBus.
+        int tap    = -1;
+
         int order() const { return (first < 0 ? 0 : (second < 0 ? 1 : 2)); }
     };
 
@@ -493,6 +537,30 @@ private:
     void applyArmedFieldChange();
 
     int fadeSamplesFor (FadeReason reason, double positionDeltaMetres) const;
+
+    // Zustand eines Abgriffpunkts, soweit er die Physik betrifft.
+    struct TapState
+    {
+        bool enabled = false;
+        Vec3 pos;
+
+        // Ob der Rueckweg zum Hoerer als Laufzeit abgebildet wird. Aus
+        // klingt der Hall, als saesse er am Ohr - manchmal gewollt, meist
+        // nicht.
+        bool predelay = true;
+    };
+
+    TapState taps[maxTaps];
+    TapBus   tapBus[maxTaps];
+
+    // Renderziel der Pfade: zwei Ohrkanaele plus je einer je Abgriffpunkt.
+    //
+    // Die Abgriffpunkte als zusaetzliche KANAELE zu fuehren statt als eigene
+    // Puffer ist der Grund, warum sie beim Geometrie-Crossfade von selbst
+    // mitgefadet werden - der Crossfader mischt schlicht alle Kanaele, die er
+    // vorfindet. Ein eigener Puffer neben dem Crossfader wuerde bei jedem
+    // Feldgroessenwechsel springen.
+    juce::AudioBuffer<float> renderBuffer;
 
     DualPathCrossfader<PathSet> geometry;
 

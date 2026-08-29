@@ -310,6 +310,23 @@ target_compile_definitions(editor_shot PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(editor_shot PRIVATE cxx_std_20)
 
+# Messprogramm zu den Abgriffpunkten (Tests/tap_probe.cpp): faehrt die Quelle
+# am Punkt vorbei und zeigt, dass sein Hall von SEINEM Ort haengt und nicht vom
+# Hoerer. Wie loop_peak kein Test.
+add_executable(tap_probe EXCLUDE_FROM_ALL Tests/tap_probe.cpp)
+target_link_libraries(tap_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(tap_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(tap_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(tap_probe PRIVATE cxx_std_20)
+
 # Pruefprogramm der Hallbauarten. Wie solver_check ohne JUCE, weil Source/Reverb
 # JUCE-frei ist - der Test braucht damit weder Audiogeraet noch Plugin-Bau.
 add_executable(reverb_check Tests/reverb_check.cpp)

@@ -14,6 +14,7 @@
 #include "Reverb/AllpassDiffuser.h"
 #include "Reverb/FdnReverb.h"
 #include "Reverb/SchroederReverb.h"
+#include "Reverb/TapBus.h"
 
 #include <cmath>
 #include <algorithm>
@@ -297,6 +298,87 @@ void checkExtremes()
     }
 }
 
+// Der Vorlauf bildet den Rueckweg vom Abgriffpunkt zum Hoerer ab. Er muss
+// wirklich verzoegern - ohne ihn kaeme der Hall einer weit entfernten Talwand
+// gleichzeitig mit dem Direktschall an.
+void checkPredelay()
+{
+    constexpr double metres = 343.0;   // genau eine Sekunde
+
+    TapBus bus;
+
+    bus.prepare (sr, block);
+    bus.setType (TapBus::Type::diffuser);
+    bus.setRoomSize (10.0);
+    bus.setDecaySeconds (0.5);
+    bus.setGain (1.0);
+    bus.setWidth (1.0);
+    bus.setPredelayMetres (metres);
+    bus.reset();
+
+    const int total = (int) (2.0 * sr);
+
+    std::vector<float> l ((size_t) total, 0.0f);
+    std::vector<float> r ((size_t) total, 0.0f);
+    std::vector<float> in ((size_t) block, 0.0f);
+
+    in[0] = 1.0f;
+
+    for (int n = 0; n < total; n += block)
+    {
+        bus.processAdd (in.data(), l.data() + n, r.data() + n, std::min (block, total - n));
+        in[0] = 0.0f;
+    }
+
+    // Erster Ausschlag ueber der Rauschgrenze.
+    int first = -1;
+
+    for (int i = 0; i < total; ++i)
+        if (std::fabs (l[(size_t) i]) > 1.0e-4f)
+        {
+            first = i;
+            break;
+        }
+
+    const double t = first < 0 ? -1.0 : (double) first / sr;
+
+    char detail[160];
+    std::snprintf (detail, sizeof detail, "%.0f m sollen %.3f s dauern, gemessen %.3f s",
+                   metres, metres / 343.0, t);
+
+    check (t > 0.9 && t < 1.1, "Vorlauf verzoegert um den Weg", detail);
+}
+
+// Ein Abgriffpunkt ist eine ZUSAETZLICHE Signalquelle: er addiert auf den
+// Ausgang, statt ihn zu ersetzen. Vorhandener Inhalt darf dabei nicht
+// verschwinden.
+void checkAdds()
+{
+    TapBus bus;
+
+    bus.prepare (sr, block);
+    bus.setType (TapBus::Type::fdn);
+    bus.setRoomSize (20.0);
+    bus.setDecaySeconds (1.0);
+    bus.setGain (0.0);            // stumm: der Ausgang darf sich nicht aendern
+    bus.setPredelayMetres (0.0);
+    bus.reset();
+
+    std::vector<float> in ((size_t) block, 0.5f);
+    std::vector<float> l ((size_t) block, 0.25f);
+    std::vector<float> r ((size_t) block, -0.25f);
+
+    bus.processAdd (in.data(), l.data(), r.data(), block);
+
+    bool untouched = true;
+
+    for (int i = 0; i < block; ++i)
+        if (std::fabs (l[(size_t) i] - 0.25f) > 1.0e-6f || std::fabs (r[(size_t) i] + 0.25f) > 1.0e-6f)
+            untouched = false;
+
+    check (untouched, "stummer Abgriffpunkt laesst den Ausgang unberuehrt", "Pegel 0");
+}
+
 } // namespace
 
 int main()
@@ -329,6 +411,8 @@ int main()
         check (std::fabs (correlation (ir.l, ir.r)) < 0.9, "Diffusor ist zweiseitig", dif.name());
     }
 
+    checkPredelay();
+    checkAdds();
     checkNetworkStability();
     checkDampingTakesTreble();
     checkExtremes();

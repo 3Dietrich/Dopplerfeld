@@ -356,6 +356,61 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (boolParam (groundReflectionOn, "Ground Reflection", false));
     layout.add (floatParam (groundDampAmount, "Ground Damping", unitRange(), 0.5f));
     layout.add (floatParam (groundGain, "Ground Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
+
+    // --- Abgriffpunkte ---
+    //
+    // Der Ort liegt in denselben Koordinaten wie Quelle und Hoerer: x/y auf die
+    // Feldflaeche normiert, z als echte Hoehe in Metern. Nur so zeigt der
+    // Marker im Feld an derselben Stelle wie die Quelle, wenn beide dieselben
+    // Zahlen tragen.
+    //
+    // Die Vorgaben setzen einen Punkt gegenueber vom Hoerer in mittlerer
+    // Hoehe, mit ausgeschaltetem Zustand: acht laufende Haelle beim ersten
+    // Oeffnen waeren weder gewollt noch bezahlbar.
+    for (int t = 0; t < tapCount; ++t)
+    {
+        layout.add (boolParam (tapId (t, TapPart::on).toRawUTF8(),
+                               "Tap " + juce::String (t + 1) + " On", false));
+
+        layout.add (floatParam (tapId (t, TapPart::x).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " X", unitRange(), 0.5f));
+        layout.add (floatParam (tapId (t, TapPart::y).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Y", unitRange(), 0.8f));
+        layout.add (floatParam (tapId (t, TapPart::z).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Z", heightRange(), 2.0f, "m"));
+
+        layout.add (choiceParam (tapId (t, TapPart::type).toRawUTF8(),
+                                 "Tap " + juce::String (t + 1) + " Type",
+                                 { "Diffusor", "Schroeder", "FDN" }, 2));
+
+        // Der Raum ist auf 200 m gedeckelt, und zwar nicht aus Geschmack: die
+        // Verzoegerungsleitungen aller drei Bauarten werden danach bemessen und
+        // liegen dauerhaft im Speicher (siehe reverbparts::maxRoomMetres). Die
+        // ENTFERNUNG des Punktes ist davon unberuehrt - die steckt im Vorlauf.
+        layout.add (floatParam (tapId (t, TapPart::room).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Room",
+                                { 0.5f, 200.0f, 0.1f }, 30.0f, "m"));
+
+        layout.add (floatParam (tapId (t, TapPart::decay).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Decay",
+                                { 0.0f, 60.0f, 0.01f }, 2.0f, "s"));
+
+        layout.add (floatParam (tapId (t, TapPart::damp).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Damp", unitRange(), 0.35f));
+
+        layout.add (floatParam (tapId (t, TapPart::gain).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Gain",
+                                { -60.0f, 36.0f, 0.1f }, -6.0f, "dB"));
+
+        // Ueber 1 wird die Seite ueberhoeht. Erlaubt, weil ein Hall aus einer
+        // Richtung genau davon lebt; bei 0 sitzt er als Punkt in der Mitte.
+        layout.add (floatParam (tapId (t, TapPart::width).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Width",
+                                { 0.0f, 3.0f, 0.01f }, 1.0f));
+
+        layout.add (boolParam (tapId (t, TapPart::predelay).toRawUTF8(),
+                               "Tap " + juce::String (t + 1) + " Predelay", true));
+    }
     layout.add (std::make_unique<juce::AudioParameterInt> (juce::ParameterID { solverStride, 1 }, "Solver Stride", 1, 16, 1));
 
     // Wände. Default aus und mit derselben Begründung wie beim Boden: jede
