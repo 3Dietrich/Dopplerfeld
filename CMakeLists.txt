@@ -79,6 +79,7 @@ target_sources(Dopplerfeld
         Source/UI/MotionPanel.cpp
         Source/UI/FieldPanel.cpp
         Source/UI/WallPanel.cpp
+        Source/UI/ReverbPanel.cpp
         Source/Util/Crossfader.cpp
         Source/UI/SwarmPanel.cpp
         Source/Sources/SoundSourceHolder.cpp
@@ -326,6 +327,21 @@ target_compile_definitions(tap_probe PRIVATE
     $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(tap_probe PRIVATE cxx_std_20)
+
+# Layout-Bild des Hall-Panels (Tests/reverb_shot.cpp), offscreen. Kein Test.
+add_executable(reverb_shot EXCLUDE_FROM_ALL Tests/reverb_shot.cpp)
+target_link_libraries(reverb_shot
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(reverb_shot PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(reverb_shot PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(reverb_shot PRIVATE cxx_std_20)
 
 # Pruefprogramm der Hallbauarten. Wie solver_check ohne JUCE, weil Source/Reverb
 # JUCE-frei ist - der Test braucht damit weder Audiogeraet noch Plugin-Bau.

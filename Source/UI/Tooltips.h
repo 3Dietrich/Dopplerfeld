@@ -112,6 +112,19 @@ namespace Tooltips
         WallTilt,
         WallDamp,
         WallGain,
+
+        TapSelect,
+        TapOn,
+        TapX,
+        TapY,
+        TapZ,
+        TapType,
+        TapRoom,
+        TapDecay,
+        TapDamp,
+        TapGain,
+        TapWidth,
+        TapPredelay,
         SecondOrder,
         BounceGain,
         BounceGainBoost,
@@ -1113,6 +1126,71 @@ namespace Tooltips
                         : "Level of the reflection in dB, independent of Damp. Damp is a "
                           "low-pass with unity DC gain (only removes highs, not overall "
                           "level) - if the wall still sounds too quiet, this is the control for that.";
+                case Key::TapSelect:
+                    return lang == Language::De
+                        ? "Welcher der acht Abgriffpunkte gerade eingestellt wird. Ein heller "
+                          "Rahmen heisst: dieser Punkt laeuft."
+                        : "Which of the eight pickup points is currently being edited. A bright "
+                          "outline means this point is running.";
+                case Key::TapOn:
+                    return lang == Language::De
+                        ? "Schaltet diesen Abgriffpunkt ein. Er kostet einen Loeser - halb so viel "
+                          "wie eine Reflexionsflaeche, die immer fuer beide Ohren rechnet."
+                        : "Switches this pickup point on. It costs one solver - half of what a "
+                          "reflecting surface costs, which always computes for both ears.";
+                case Key::TapX:
+                    return lang == Language::De
+                        ? "Ort des Abgriffpunkts quer, 0 = links, 1 = rechts. Was hier ankommt, "
+                          "geht in den Hall."
+                        : "Position of the pickup point across the field, 0 = left, 1 = right. "
+                          "Whatever arrives here feeds the reverb.";
+                case Key::TapY:
+                    return lang == Language::De
+                        ? "Ort des Abgriffpunkts in der Tiefe, 0 = vorn, 1 = hinten."
+                        : "Position of the pickup point in depth, 0 = front, 1 = back.";
+                case Key::TapZ:
+                    return lang == Language::De
+                        ? "Hoehe des Abgriffpunkts ueber dem Boden, in Metern."
+                        : "Height of the pickup point above the ground, in metres.";
+                case Key::TapType:
+                    return lang == Language::De
+                        ? "Bauart des Halls. Diffusor streut kurz ohne Nachhall, Schroeder ist der "
+                          "klassische Kammfilter-Hall, FDN klingt dichter und kostet trotzdem "
+                          "weniger."
+                        : "Reverb type. Diffuser scatters briefly without a tail, Schroeder is the "
+                          "classic comb-filter reverb, FDN sounds denser and still costs less.";
+                case Key::TapRoom:
+                    return lang == Language::De
+                        ? "Kantenlaenge des gedachten Raums in Metern. Bestimmt Echodichte und "
+                          "Faerbung. Die ENTFERNUNG des Punktes steckt im Vorlauf, nicht hier."
+                        : "Edge length of the imagined room in metres. Sets echo density and "
+                          "colour. The DISTANCE of the point sits in the pre-delay, not here.";
+                case Key::TapDecay:
+                    return lang == Language::De
+                        ? "Zeit, bis der Nachhall auf ein Tausendstel gefallen ist."
+                        : "Time until the tail has dropped to a thousandth.";
+                case Key::TapDamp:
+                    return lang == Language::De
+                        ? "Wie viel Hoehen der Hall je Umlauf verliert. Der Nachhall wird damit "
+                          "mit der Zeit dunkler."
+                        : "How much treble the reverb loses per round trip. The tail grows darker "
+                          "over time.";
+                case Key::TapGain:
+                    return lang == Language::De
+                        ? "Pegel dieses Abgriffpunkts im Ausgang, in dB."
+                        : "Level of this pickup point in the output, in dB.";
+                case Key::TapWidth:
+                    return lang == Language::De
+                        ? "Stereobreite des Halls. 0 = ein Punkt in der Mitte, ueber 1 wird die "
+                          "Seite ueberhoeht."
+                        : "Stereo width of the reverb. 0 = a point in the centre, above 1 the "
+                          "sides are exaggerated.";
+                case Key::TapPredelay:
+                    return lang == Language::De
+                        ? "Bildet den Weg vom Abgriffpunkt zurueck zum Hoerer als Laufzeit ab. Aus "
+                          "klingt der Hall, als saesse er am Ohr."
+                        : "Renders the way back from the pickup point to the listener as travel "
+                          "time. Off, the reverb sounds as if it sat at the ear.";
                 case Key::SecondOrder:
                     return lang == Language::De
                         ? "Genau EINE zusätzliche Reflexionsgeneration: Wege der Form Quelle -> Fläche X "

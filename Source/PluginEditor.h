@@ -11,6 +11,7 @@
 #include "UI/SamplePanel.h"
 #include "UI/ScopeComponent.h"
 #include "UI/SwarmPanel.h"
+#include "UI/ReverbPanel.h"
 #include "UI/WallPanel.h"
 #include "UI/ToggleableTooltipWindow.h"
 #include "UI/Tooltips.h"
@@ -272,7 +273,7 @@ private:
 
     // Die sieben Panels in der Reihenfolge, in der sie in der Spalte stehen -
     // dieselbe Reihenfolge wie die Bits der Maske und wie layoutPanels().
-    std::array<CollapsiblePanel*, 7> panelBoxes();
+    std::array<CollapsiblePanel*, 8> panelBoxes();
 
     // Zuletzt vom Prozessor uebernommene Fassung - daran erkennt der Editor,
     // dass ein Laden stattgefunden hat und nicht nur sein eigener Klick.
@@ -287,6 +288,7 @@ private:
     CollapsiblePanel motionPanelBox { "Bewegung" };
     CollapsiblePanel fieldPanelBox  { "Feld / Physik / Ausgang" };
     CollapsiblePanel wallPanelBox   { "Reflexionen / Waende" };
+    CollapsiblePanel reverbPanelBox { "Hall / Abgriffpunkte" };
     CollapsiblePanel swarmPanelBox  { "Schwarm / Klone" };
 
     EngineControlPanel engineControlPanel;
@@ -295,6 +297,7 @@ private:
     MotionPanel motionPanel;
     FieldPanel  fieldPanel;
     WallPanel   wallPanel;
+    ReverbPanel reverbPanel;
     SwarmPanel  swarmPanel;
 
     // Quellwahl ist kein Parameter (siehe DopplerfeldProcessor), deshalb ein
@@ -370,6 +373,9 @@ public:
     static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // Der CPU-Balken sitzt in einer eigenen Zeile am unteren Fensterrand
     // (siehe cpuMeterBlockHeight), nicht in diesem Panel.
+    // Nummernwahl, zwei Reglerreihen (Ort/Pegel, dann Hall) und der
+    // Vorlaufschalter - siehe ReverbPanel::resized().
+    static constexpr int reverbContentHeight = 8 + 26 + 6 + 2 * Theme::knobHeight + 4 + 6 + 26 + 8;
     static constexpr int swarmContentHeight  = 115;   // eine Reglerreihe plus den Zeigen-Schalter, ohne Leerlauf darunter (s. SwarmPanel::resized())
 
     // Breite der Panelspalte - ebenfalls oeffentlich, aus demselben Grund wie

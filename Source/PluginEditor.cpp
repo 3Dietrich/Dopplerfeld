@@ -12,6 +12,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
       motionPanel (p.apvts),
       fieldPanel  (p.apvts),
       wallPanel   (p.apvts),
+      reverbPanel (p.apvts),
       swarmPanel  (p.apvts)
 {
     addAndMakeVisible (field);
@@ -68,6 +69,7 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     motionPanelBox.setContent (&motionPanel);
     fieldPanelBox.setContent (&fieldPanel);
     wallPanelBox.setContent (&wallPanel);
+    reverbPanelBox.setContent (&reverbPanel);
     swarmPanelBox.setContent (&swarmPanel);
 
     // Alle Panels starten zugeklappt (CollapsiblePanel-Default, @dpa-Feedback)
@@ -82,10 +84,15 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     motionPanelBox.setAccentColour        (Theme::Panel::motion);
     fieldPanelBox.setAccentColour         (Theme::Panel::field);
     wallPanelBox.setAccentColour          (Theme::Panel::wall);
+
+    // Derselbe Ton wie die Reflexionen: der Hall ist dasselbe Thema, nur die
+    // billige Naeherung davon. Ein eigener Ton waere ein siebter, und die
+    // Palette hat sechs.
+    reverbPanelBox.setAccentColour        (Theme::Panel::wall);
     swarmPanelBox.setAccentColour         (Theme::Panel::swarm);
 
     for (auto* box : { &engineControlPanelBox, &enginePanelBox, &samplePanelBox, &motionPanelBox,
-                       &fieldPanelBox, &wallPanelBox, &swarmPanelBox })
+                       &fieldPanelBox, &wallPanelBox, &reverbPanelBox, &swarmPanelBox })
     {
         box->onExpandedChanged = [this]
         {
@@ -510,7 +517,7 @@ void DopplerfeldEditor::refreshAllTooltips()
     // Die Ueberschriften der Klappen gehoeren dazu (@dpa 20260824: "die
     // Klappen sind noch deutsch geblieben").
     for (auto* box : { &engineControlPanelBox, &enginePanelBox, &samplePanelBox,
-                        &motionPanelBox, &fieldPanelBox, &wallPanelBox, &swarmPanelBox })
+                        &motionPanelBox, &fieldPanelBox, &wallPanelBox, &reverbPanelBox, &swarmPanelBox })
         box->refreshTitle();
 
     masterOnButton.setButtonText (Labels::text ("An"));
@@ -537,6 +544,7 @@ void DopplerfeldEditor::refreshAllTooltips()
     motionPanel.refreshTooltips();
     fieldPanel.refreshTooltips();
     wallPanel.refreshTooltips();
+    reverbPanel.refreshTooltips();
     swarmPanel.refreshTooltips();
 }
 
@@ -1118,10 +1126,10 @@ void DopplerfeldEditor::resized()
     welcomeOverlay.setBounds (getLocalBounds());
 }
 
-std::array<CollapsiblePanel*, 7> DopplerfeldEditor::panelBoxes()
+std::array<CollapsiblePanel*, 8> DopplerfeldEditor::panelBoxes()
 {
     return { &engineControlPanelBox, &enginePanelBox, &samplePanelBox,
-             &motionPanelBox, &fieldPanelBox, &wallPanelBox, &swarmPanelBox };
+             &motionPanelBox, &fieldPanelBox, &wallPanelBox, &reverbPanelBox, &swarmPanelBox };
 }
 
 void DopplerfeldEditor::storePanelOpenMask()
@@ -1169,6 +1177,7 @@ void DopplerfeldEditor::layoutPanels()
         { &motionPanelBox, motionContentHeight },
         { &fieldPanelBox,  fieldContentHeight  },
         { &wallPanelBox,   wallContentHeight   },
+        { &reverbPanelBox, reverbContentHeight },
         { &swarmPanelBox,  swarmContentHeight  }
     };
 

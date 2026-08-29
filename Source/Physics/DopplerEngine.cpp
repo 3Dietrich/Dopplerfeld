@@ -1327,7 +1327,16 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
     //    aktive Satz - der zweite kostet dann keine CPU.
     const int rendered = std::min (numSamples, maxBlock);
 
-    geometry.process (renderBuffer);
+    // Fenster auf den Renderpuffer, keine Kopie und keine Allokation. Es MUSS
+    // ein Fenster sein und nicht der ganze Puffer: der Crossfader rechnet so
+    // viele Samples, wie der uebergebene Puffer lang ist, und der Renderpuffer
+    // steht immer auf der groessten Blocklaenge. Ein Teilblock wuerde damit auf
+    // voller Laenge gerechnet - dieselbe Loeserlast fuer ein Vielfaches der
+    // noetigen Samples, und alle Zeitbezuege daneben.
+    juce::AudioBuffer<float> renderView (renderBuffer.getArrayOfWritePointers(),
+                                         renderBuffer.getNumChannels(), 0, rendered);
+
+    geometry.process (renderView);
 
     // 5) Abgriffpunkte: was an ihrem Ort ankommt, durch ihren Hall und als
     //    zusaetzliche Signalquelle auf die Ohrkanaele. Der Hall laeuft nicht
@@ -1344,16 +1353,16 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
 
         tapBus[(size_t) t].setPredelayMetres (back);
 
-        tapBus[(size_t) t].processAdd (renderBuffer.getReadPointer (2 + t),
-                                       renderBuffer.getWritePointer (0),
-                                       renderBuffer.getWritePointer (1),
+        tapBus[(size_t) t].processAdd (renderView.getReadPointer (2 + t),
+                                       renderView.getWritePointer (0),
+                                       renderView.getWritePointer (1),
                                        rendered);
     }
 
     // 6) Die zwei Ohrkanaele nach draussen. Die Kanaele der Abgriffpunkte
     //    bleiben drin - sie sind Zwischenergebnis, nicht Ausgang.
     for (int ch = 0; ch < std::min (numCh, 2); ++ch)
-        stereoOut.copyFrom (ch, 0, renderBuffer, ch, 0, rendered);
+        stereoOut.copyFrom (ch, 0, renderView, ch, 0, rendered);
 
     // Größere Blöcke als in prepare() angekündigt kann der Doppelpfad nicht
     // bedienen (die Zwischenpuffer stehen fest); der Rest muss still sein
