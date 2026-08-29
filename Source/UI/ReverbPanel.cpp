@@ -1,5 +1,7 @@
 #include "ReverbPanel.h"
 
+#include "../Util/Utf8.h"
+
 #include <initializer_list>
 
 void ReverbPanel::setupKnob (Knob& knob, const char* labelText, Tooltips::Key tooltipKey)
@@ -54,7 +56,7 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
     predelayButton.setTooltip (Tooltips::text (Tooltips::Key::TapPredelay));
     addAndMakeVisible (predelayButton);
 
-    typeBox.addItemList ({ "Diffusor", "Schroeder", "FDN", "Draussen" }, 1);
+    typeBox.addItemList ({ "Diffusor", "Schroeder", "FDN", Text::utf8 ("Draußen") }, 1);
     typeBox.setTooltip (Tooltips::text (Tooltips::Key::TapType));
     addAndMakeVisible (typeBox);
 
@@ -63,7 +65,7 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
     typeLabel.setTooltip (Tooltips::text (Tooltips::Key::TapType));
     addAndMakeVisible (typeLabel);
 
-    setupKnob (z,     "Hoehe",   Tooltips::Key::TapZ);
+    setupKnob (z,     "Höhe",    Tooltips::Key::TapZ);
     setupKnob (room,  "Raum",    Tooltips::Key::TapRoom);
     setupKnob (early, "Energie", Tooltips::Key::TapEarly);
     setupKnob (decay, "Abkling", Tooltips::Key::TapDecay);
@@ -71,13 +73,8 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (gain,  "Gain",    Tooltips::Key::TapGain);
     setupKnob (width, "Breite",  Tooltips::Key::TapWidth);
     setupKnob (echoes, "Echos",   Tooltips::Key::TapEchoes);
-    setupKnob (seed,   "Wuerfel", Tooltips::Key::TapSeed);
+    setupKnob (seed,   "Würfel",  Tooltips::Key::TapSeed);
     setupKnob (direct, "Direkt",  Tooltips::Key::DirectGain);
-
-    // Ganze Zahlen: ein halber Rueckwurf und ein Komma-Wuerfelbecher ergeben
-    // beide keinen Sinn.
-    echoes.slider.setNumDecimalPlacesToDisplay (0);
-    seed.slider.setNumDecimalPlacesToDisplay (0);
 
     typeBox.onChange = [this] { updateTypeDependentControls(); };
 
@@ -366,9 +363,9 @@ void ReverbPanel::resized()
     rest.removeFromLeft (6);
 
     auto buttons = rest.removeFromTop (24);
-    copyButton.setBounds (buttons.removeFromLeft (44));
+    copyButton.setBounds (buttons.removeFromLeft (26));
     buttons.removeFromLeft (4);
-    pasteButton.setBounds (buttons.removeFromLeft (48));
+    pasteButton.setBounds (buttons.removeFromLeft (26));
 }
 
 void ReverbPanel::paint (juce::Graphics& g)

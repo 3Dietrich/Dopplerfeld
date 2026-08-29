@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Params.h"
+#include "IconButton.h"
 #include "Labels.h"
 #include "RoundedSlider.h"
 #include "Theme.h"
@@ -98,8 +99,11 @@ private:
     // Neubindung beim Umschalten.
     Knob direct;
 
-    juce::TextButton copyButton  { "Kop" };
-    juce::TextButton pasteButton { "Einf" };
+    // Zeichen statt Wort: "Kop" und "Einf" waren abgeschnittene Woerter, die
+    // man erst am Hinweistext verstand, und sie kosteten fast doppelt so viel
+    // Breite wie das Bild (siehe IconButton).
+    IconButton copyButton  { IconButton::Icon::copy,  "copy" };
+    IconButton pasteButton { IconButton::Icon::paste, "paste" };
 
     // Was ein Kopieren mitnimmt: alles ausser dem ORT. Zwei Punkte
     // uebereinander waeren beim Einfuegen die haeufigste Ueberraschung, und

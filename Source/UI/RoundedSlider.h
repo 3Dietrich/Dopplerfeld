@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <cmath>
 #include <functional>
 
 // Slider mit wertabhaengig gerundeter Anzeige (@dpa 20260819): der
@@ -21,6 +22,13 @@
 //   |Wert| < 100    1
 //   sonst           0
 //
+// Ein Regler, der ohnehin nur ganze Zahlen annimmt (Rasterweite 1 oder
+// groesser), zeigt gar keine Nachkommastellen - "24,00 Echos" behauptet eine
+// Feinheit, die es an diesem Regler nicht gibt. Das ist kein Sonderfall
+// einzelner Panels, sondern gehoert in dieselbe Regel: sonst faengt jedes
+// Panel an, seine ganzzahligen Regler mit setNumDecimalPlacesToDisplay(0)
+// selbst zu behandeln, und die zentrale Regel gilt nicht mehr fuer alle.
+//
 // juce::Slider bietet dafuer keinen std::function-Hook, deshalb die
 // Unterklasse: getTextFromValue() ist genau dafuer vorgesehen (virtuell,
 // JUCE ruft sie fuers Textfeld).
@@ -39,8 +47,15 @@ public:
     // bilden (etwa die Tempo-Regler, die zusaetzlich die Einheit umrechnen).
     // Waere sie nur hier unten eingebaut, faenden solche Anzeigen an, eigene
     // Stellenzahlen zu erfinden.
-    static int decimalsFor (double value)
+    //
+    // interval ist die Rasterweite des Reglers (juce::Slider::getInterval()).
+    // Ohne Angabe gilt die reine Groessenordnungsregel - das ist der Fall fuer
+    // Anzeigen ohne eigenen Regler dahinter.
+    static int decimalsFor (double value, double interval = 0.0)
     {
+        if (isIntegerStep (interval))
+            return 0;
+
         const double a = std::abs (value);
 
         if (a < 1.0)   return 3;
@@ -50,15 +65,22 @@ public:
         return 0;
     }
 
+    // Raster von genau einer ganzen Zahl (1, 2, ...) heisst: der Regler kennt
+    // nur ganze Werte.
+    static bool isIntegerStep (double interval)
+    {
+        return interval >= 1.0 && interval == std::floor (interval);
+    }
+
     // Wert nach der Regel gerundet, ohne Einheit.
     //
     // Formatiert wird ueber printf und NICHT ueber juce::String (double, int):
     // dort bedeutet die Null "kuerzestmoegliche Darstellung", nicht "keine
     // Nachkommastellen". Werte ueber 100 kaemen damit weiterhin voll ausgedruckt
     // heraus (708.301 statt 708) - also genau das, was die Regel verhindern soll.
-    static juce::String roundedText (double value)
+    static juce::String roundedText (double value, double interval = 0.0)
     {
-        return juce::String::formatted ("%.*f", decimalsFor (value), value);
+        return juce::String::formatted ("%.*f", decimalsFor (value, interval), value);
     }
 
     // Eigene Darstellung, wenn ein Regler mehr braucht als Wert plus festes
@@ -77,7 +99,7 @@ public:
         if (displayText != nullptr)
             return displayText (value);
 
-        return roundedText (value) + getTextValueSuffix();
+        return roundedText (value, getInterval()) + getTextValueSuffix();
     }
 
     double getValueFromText (const juce::String& text) override
@@ -105,6 +127,13 @@ public:
     //
     // Ein halbes Prozent Weg je Druck: zweihundert Schritte von Anschlag zu
     // Anschlag. Mit Umschalt ein Zehntel davon, fuer das letzte Feintuning.
+    //
+    // Am Raster eines Reglers endet dieses Mass allerdings. Ein halbes Prozent
+    // des Weges sind bei den Echos (2 bis 48 Rueckwuerfe, Raster 1) knapp ein
+    // Viertel Rueckwurf; JUCE rastet den Wert danach wieder auf denselben ein,
+    // und der Regler ruehrt sich ueberhaupt nicht - genau daran waren die
+    // ganzzahligen Regler mit den Pfeiltasten nicht zu bedienen. Bleibt der
+    // Wert stehen, geht es deshalb um GENAU EIN Raster weiter.
     bool keyPressed (const juce::KeyPress& key) override
     {
         const bool up   = key.isKeyCode (juce::KeyPress::upKey)   || key.isKeyCode (juce::KeyPress::rightKey);
@@ -115,11 +144,21 @@ public:
 
         const double step = key.getModifiers().isShiftDown() ? 0.0005 : 0.005;
 
-        const auto range = getNormalisableRange();
-        const double here = range.convertTo0to1 (getValue());
-        const double next = juce::jlimit (0.0, 1.0, here + (up ? step : -step));
+        const auto   range = getNormalisableRange();
+        const double value = getValue();
+        const double here  = range.convertTo0to1 (value);
+        const double next  = juce::jlimit (0.0, 1.0, here + (up ? step : -step));
 
-        setValue (range.convertFrom0to1 (next), juce::sendNotificationSync);
+        double target = range.convertFrom0to1 (next);
+
+        if (range.interval > 0.0
+            && std::abs (range.snapToLegalValue (target) - range.snapToLegalValue (value))
+                   < range.interval * 0.5)
+        {
+            target = value + (up ? range.interval : -range.interval);
+        }
+
+        setValue (target, juce::sendNotificationSync);
 
         return true;
     }

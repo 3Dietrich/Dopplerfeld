@@ -2380,7 +2380,10 @@ int main()
                             const juce::String number = shown.upToFirstOccurrenceOf (" ", false, false);
                             const int dot      = number.indexOfChar ('.');
                             const int decimals = dot < 0 ? 0 : number.length() - dot - 1;
-                            const int expected = RoundedSlider::decimalsFor (number.getDoubleValue());
+                            // Mit der Rasterweite: ein Regler, der nur ganze
+                            // Zahlen annimmt, zeigt auch keine Nachkommastellen.
+                            const int expected = RoundedSlider::decimalsFor (number.getDoubleValue(),
+                                                                             slider.getInterval());
 
                             ++checked;
 
