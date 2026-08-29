@@ -3,6 +3,7 @@
 #include "AllpassDiffuser.h"
 #include "EarlyReflections.h"
 #include "FdnReverb.h"
+#include "OpenAirReverb.h"
 #include "ReverbParts.h"
 #include "SchroederReverb.h"
 
@@ -25,7 +26,7 @@
 class TapBus
 {
 public:
-    enum class Type { diffuser = 0, schroeder = 1, fdn = 2 };
+    enum class Type { diffuser = 0, schroeder = 1, fdn = 2, openAir = 3 };
 
     // Groesste Entfernung, die der Vorlauf abbilden kann. Grosszuegig, weil er
     // nur eine einzelne Monoleitung ist: 5 km kosten bei 96 kHz 5,6 MB, und
@@ -40,6 +41,7 @@ public:
         diffuser.prepare (sampleRate, maxBlock);
         schroeder.prepare (sampleRate, maxBlock);
         fdn.prepare (sampleRate, maxBlock);
+        openAir.prepare (sampleRate, maxBlock);
 
         const int maxDelay = (int) (maxPredelayMetres / reverbparts::soundSpeed * sr) + 2;
 
@@ -62,6 +64,7 @@ public:
         diffuser.reset();
         schroeder.reset();
         fdn.reset();
+        openAir.reset();
 
         preA.reset();
         preB.reset();
@@ -150,6 +153,18 @@ public:
     // 0 = mono in der Mitte, 1 = wie der Hall sie liefert, darueber breiter.
     void setWidth (double w) { width = (float) std::max (0.0, w); }
 
+    // Wo der Hall im Stereobild sitzt: -1 ganz links, 0 mittig, +1 ganz rechts.
+    //
+    // Der Wert kommt aus dem ORT des Abgriffpunkts, nicht aus einem Regler
+    // (siehe DopplerEngine::tapPanorama). Ein Punkt links vom Hoerer soll auch
+    // von links klingen - das ist die halbe Ortsinformation, und sie kostet
+    // nichts. Die andere Haelfte waere die Laufzeit, und die bliebe eine
+    // zweite Ausbreitungsrechnung; sie steckt naeherungsweise im Vorlauf.
+    //
+    // Breite und Panorama wirken beide: das Panorama verschiebt, die Breite
+    // spreizt um die verschobene Mitte.
+    void setPanorama (double p) { panorama = (float) std::clamp (p, -1.0, 1.0); }
+
     // Mono rein, ADDIERT auf outL/outR. Der Abgriffpunkt ist eine zusaetzliche
     // Signalquelle fuer den Hoerer, kein Ersatz fuer irgendetwas.
     void processAdd (const float* in, float* outL, float* outR, int numSamples)
@@ -217,8 +232,15 @@ public:
             const float mid  = 0.5f * (l + r);
             const float side = 0.5f * (l - r) * width;
 
-            outL[i] += (mid + side) * currentGain;
-            outR[i] += (mid - side) * currentGain;
+            // Gleiche Leistung links wie rechts: gL^2 + gR^2 bleibt konstant,
+            // der Hall wird beim Wandern also nicht lauter oder leiser. Eine
+            // lineare Verteilung haette in der Mitte ein hoerbares Loch.
+            const float t  = 0.5f * (1.0f + panorama);
+            const float gL = std::sqrt (1.0f - t);
+            const float gR = std::sqrt (t);
+
+            outL[i] += (mid + side) * gL * 1.41421356f * currentGain;
+            outR[i] += (mid - side) * gR * 1.41421356f * currentGain;
         }
 
         currentGain = targetGain;
@@ -233,6 +255,7 @@ private:
         {
             case Type::schroeder: return &schroeder;
             case Type::fdn:       return &fdn;
+            case Type::openAir:   return &openAir;
             case Type::diffuser:
             default:              return &diffuser;
         }
@@ -243,7 +266,7 @@ private:
     // Die Stellwerte gehen an ALLE Bauarten, nicht nur an die aktive: sonst
     // stuende die eben eingeschaltete auf den Werten von vorhin und der
     // Typwechsel klaenge nach Sprung statt nach anderer Bauart.
-    std::array<ReverbUnit*, 3> units() { return { &diffuser, &schroeder, &fdn }; }
+    std::array<ReverbUnit*, 4> units() { return { &diffuser, &schroeder, &fdn, &openAir }; }
 
     static constexpr int fadeLength     = 1024;   // rund 21 ms bei 48 kHz
     static constexpr int minStepSamples = 32;
@@ -252,6 +275,7 @@ private:
     AllpassDiffuser diffuser;
     SchroederReverb schroeder;
     FdnReverb       fdn;
+    OpenAirReverb   openAir;
 
     reverbparts::DelayLine preA, preB;
 
@@ -262,6 +286,7 @@ private:
     int    targetLength = 1;
     int    fadePos      = -1;
     float  width        = 1.0f;
+    float  panorama     = 0.0f;
     float  currentGain  = 0.0f;
     float  targetGain   = 0.0f;
 };

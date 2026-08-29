@@ -294,7 +294,8 @@ int main (int argc, char** argv)
     const Entry entries[] {
         { "Diffusor",  TapBus::Type::diffuser },
         { "Schroeder", TapBus::Type::schroeder },
-        { "FDN",       TapBus::Type::fdn }
+        { "FDN",       TapBus::Type::fdn },
+        { "Draussen",  TapBus::Type::openAir }
     };
 
     for (const auto& e : entries)

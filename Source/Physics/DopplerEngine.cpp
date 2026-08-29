@@ -668,6 +668,27 @@ void DopplerEngine::setRealClones (int count, double spreadMetres, double zAmoun
     cloneRealLevel = std::max (0.0, gainLinear);
 }
 
+double DopplerEngine::tapPanorama (int index) const
+{
+    if (index < 0 || index >= maxTaps)
+        return 0.0;
+
+    const Vec3 toTap = taps[(size_t) index].pos - listener.head;
+    const double d   = toTap.length();
+
+    // Steht der Punkt auf dem Kopf, gibt es keine Richtung. Dann Mitte, statt
+    // durch null zu teilen.
+    if (d < 1.0e-6)
+        return 0.0;
+
+    // Die Rechts-Achse des Hoerers, also die WELTrichtung, die fuer ihn rechts
+    // ist - dreht er den Kopf, wandert der Punkt im Stereobild mit. Genau das
+    // tut er auch bei den Ohren (siehe PropagationPath::setPanning).
+    const double side = (toTap * (1.0 / d)).dot (listenerRight (listener));
+
+    return std::clamp (side * panoramaAmount(), -1.0, 1.0);
+}
+
 void DopplerEngine::setTap (int index, bool enabled, Vec3 posMetres)
 {
     if (index < 0 || index >= maxTaps)
@@ -698,6 +719,7 @@ void DopplerEngine::setTapReverb (int index, int type, double roomMetres,
 
     bus.setType (type == 1 ? TapBus::Type::schroeder
                : type == 2 ? TapBus::Type::fdn
+               : type == 3 ? TapBus::Type::openAir
                            : TapBus::Type::diffuser);
 
     bus.setRoomSize (roomMetres);
@@ -781,7 +803,10 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
         // (siehe setPropellerOffset).
         PathTransform t;
         t.offset = -propellerOffset[(size_t) r.prop];
-        t.gain   = (float) propellerGain;
+
+        // Propeller laufen ueber den Direktschall, gehoeren also unter
+        // dessen Pegel (siehe setDirectGain).
+        t.gain   = (float) (propellerGain * directGain);
         return t;
     }
 
@@ -801,12 +826,17 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
         // jeder Klon mit vollem Pegel dazu, und schon acht Stueck druecken den
         // Ausgang an den Limiter - dann klingt der Schwarm nicht breiter,
         // sondern zusammengefahren.
-        t.gain = (float) cloneRealLevel;
+        // Klone sind Direktschall und gehoeren damit unter dessen Pegel.
+        t.gain = (float) (cloneRealLevel * directGain);
         return t;
     }
 
     if (r.order() == 0)
-        return PathTransform{};
+    {
+        PathTransform t;
+        t.gain = (float) directGain;
+        return t;
+    }
 
     if (r.order() == 1)
     {
@@ -1359,6 +1389,7 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
                               : 0.0;
 
         tapBus[(size_t) t].setPredelayMetres (back);
+        tapBus[(size_t) t].setPanorama (tapPanorama (t));
 
         tapBus[(size_t) t].processAdd (renderView.getReadPointer (2 + t),
                                        renderView.getWritePointer (0),

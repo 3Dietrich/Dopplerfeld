@@ -332,6 +332,17 @@ public:
         return index >= 0 && index < maxTaps && taps[(size_t) index].enabled;
     }
 
+    // Pegel des Direktschalls, linear. Wirkt NUR auf die Wege ohne Spiegelung
+    // (order() == 0), also auf den Direktschall selbst samt Klonen und
+    // Propellern - nicht auf Boden, Waende oder Abgriffpunkte.
+    //
+    // Damit laesst sich hoeren, was der Raum allein macht: dreht man ihn zu,
+    // bleiben Reflexionen und Haelle stehen (@dpa 20260829: "wenn alle reverbs
+    // aus sind: dieses Signal. Wenn man das runter dreht, dann bleiben nur noch
+    // die Reverbs (und Waende..)").
+    void   setDirectGain (double gainLinear) { directGain = gainLinear; }
+    double getDirectGain() const { return directGain; }
+
     // Ort des Punktes, wie ihn die Pfadschleife braucht.
     Vec3 tapPosition (int index) const
     {
@@ -550,6 +561,13 @@ private:
         bool predelay = true;
     };
 
+    // Wo der Hall eines Punktes im Stereobild sitzt, aus seinem Ort gegenueber
+    // dem Hoerer: die Richtung zum Punkt auf die Rechts-Achse des Kopfes
+    // projiziert. Ein Punkt genau vor dem Hoerer landet damit in der Mitte,
+    // einer seitlich davon aussen - dieselbe Regel wie beim Ohr-Panorama, und
+    // sie haengt am selben Regler (panoramaAmount).
+    double tapPanorama (int index) const;
+
     TapState taps[maxTaps];
     TapBus   tapBus[maxTaps];
 
@@ -561,6 +579,8 @@ private:
     // vorfindet. Ein eigener Puffer neben dem Crossfader wuerde bei jedem
     // Feldgroessenwechsel springen.
     juce::AudioBuffer<float> renderBuffer;
+
+    double directGain = 1.0;
 
     DualPathCrossfader<PathSet> geometry;
 

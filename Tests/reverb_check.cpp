@@ -13,6 +13,7 @@
 
 #include "Reverb/AllpassDiffuser.h"
 #include "Reverb/FdnReverb.h"
+#include "Reverb/OpenAirReverb.h"
 #include "Reverb/SchroederReverb.h"
 #include "Reverb/TapBus.h"
 
@@ -269,8 +270,9 @@ void checkExtremes()
     FdnReverb        fdn;
     SchroederReverb  sch;
     AllpassDiffuser  dif;
+    OpenAirReverb    air;
 
-    ReverbUnit* units[] { &fdn, &sch, &dif };
+    ReverbUnit* units[] { &fdn, &sch, &dif, &air };
 
     for (auto* u : units)
     {
@@ -409,6 +411,51 @@ int main()
 
         check (peak (ir.l) < 4.0 && allFinite (ir.l), "Diffusor bleibt beschraenkt", dif.name());
         check (std::fabs (correlation (ir.l, ir.r)) < 0.9, "Diffusor ist zweiseitig", dif.name());
+    }
+
+    // Draussen soll gerade NICHT dicht werden - das ist sein Zweck. Geprueft
+    // wird deshalb das Gegenteil dessen, was man von einem Hall erwartet: die
+    // Zahl der Ausschlaege je Sekunde darf zum Ende hin nicht steigen.
+    {
+        OpenAirReverb air;
+
+        air.prepare (sr, block);
+        air.setRoomSize (60.0);
+        air.setDecaySeconds (4.0);
+        air.setDamping (0.3);
+        air.reset();
+
+        const Impulse ir = renderImpulse (air, 5.0);
+
+        auto pulseCount = [&] (double fromSec, double toSec)
+        {
+            const size_t a = (size_t) (fromSec * sr);
+            const size_t b = std::min (ir.l.size(), (size_t) (toSec * sr));
+
+            double thresh = 0.0;
+
+            for (size_t i = a; i < b; ++i)
+                thresh = std::max (thresh, (double) std::fabs (ir.l[i]));
+
+            int n = 0;
+
+            for (size_t i = a + 1; i + 1 < b; ++i)
+                if (std::fabs (ir.l[i]) > thresh * 0.25
+                    && std::fabs (ir.l[i]) >= std::fabs (ir.l[i - 1])
+                    && std::fabs (ir.l[i]) > std::fabs (ir.l[i + 1]))
+                    ++n;
+
+            return n;
+        };
+
+        const int early = pulseCount (0.0, 1.5);
+        const int late  = pulseCount (2.5, 4.0);
+
+        char detail[160];
+        std::snprintf (detail, sizeof detail, "%d Ausschlaege frueh, %d spaet", early, late);
+
+        check (late <= early + 2, "Draussen wird nicht dichter", detail);
+        check (allFinite (ir.l) && peak (ir.l) < 4.0, "Draussen bleibt beschraenkt", air.name());
     }
 
     checkPredelay();

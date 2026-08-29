@@ -130,13 +130,20 @@ private:
 
 // Daempfungsstaerke 0..1 in einen Filterkoeffizienten uebersetzen.
 //
-// Die Eckfrequenz laeuft geometrisch von 20 kHz (offen) auf 300 Hz (zu). Ein
-// linearer Verlauf waere in der oberen Haelfte des Reglers fast wirkungslos,
-// weil das Gehoer Frequenzen logarithmisch nimmt.
+// Die Eckfrequenz laeuft geometrisch von 20 kHz (offen) auf 80 Hz (ganz zu).
+// Ein linearer Verlauf waere in der oberen Haelfte des Reglers fast
+// wirkungslos, weil das Gehoer Frequenzen logarithmisch nimmt.
+//
+// 80 Hz und nicht die urspruenglichen 300 (@dpa 20260829: "max Damp bitte noch
+// tiefer noch erdiger"). Bei voller Stellung bleibt damit wirklich nur noch
+// Grollen stehen - ein Rueckwurf von weichem Waldboden oder aus grosser Ferne,
+// bei dem alles Sprechende weg ist. Der obere Teil des Reglerwegs aendert sich
+// dadurch kaum, weil der Verlauf geometrisch ist: die neue Strecke haengt
+// unten dran, sie staucht nicht die alte.
 inline double dampingCoefficient (double amount01, double sampleRate)
 {
     const double a  = std::clamp (amount01, 0.0, 1.0);
-    const double fc = 20000.0 * std::pow (300.0 / 20000.0, a);
+    const double fc = 20000.0 * std::pow (80.0 / 20000.0, a);
     const double x  = std::exp (-2.0 * 3.14159265358979323846 * fc / std::max (1.0, sampleRate));
 
     return std::clamp (x, 0.0, 0.999);

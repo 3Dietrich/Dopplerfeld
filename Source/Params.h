@@ -22,6 +22,10 @@ namespace Params
     // Der Zweck kommt trotzdem aus einer Konstanten, damit ein Vertipper wie
     // bei allen anderen Parametern beim Uebersetzen auffliegt und nicht erst
     // als stummer nullptr zur Laufzeit.
+    // Pegel des Direktschalls. Gilt fuers ganze Plugin und nicht je
+    // Abgriffpunkt: er regelt das, was OHNE Abgriffpunkte herauskaeme.
+    constexpr const char* directGain = "directGain";
+
     constexpr int tapCount = 8;
 
     namespace TapPart

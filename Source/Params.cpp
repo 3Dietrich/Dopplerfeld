@@ -357,6 +357,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (groundDampAmount, "Ground Damping", unitRange(), 0.5f));
     layout.add (floatParam (groundGain, "Ground Gain", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
 
+    // Direktschall: wirkt nur auf die Wege ohne Spiegelung. Ganz zugedreht
+    // bleiben Boden, Waende und die Abgriffpunkte stehen - so hoert man, was
+    // der Raum allein macht. Deshalb reicht der Bereich bis -60 dB, was hier
+    // als stumm gilt, und nicht nur bis -36 wie bei den Flaechen.
+    layout.add (floatParam (directGain, "Direct (L)", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+
     // --- Abgriffpunkte ---
     //
     // Der Ort liegt in denselben Koordinaten wie Quelle und Hoerer: x/y auf die
@@ -385,7 +391,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // 0,23 % gegen 0,40 % Echtzeit.
         layout.add (choiceParam (tapId (t, TapPart::type).toRawUTF8(),
                                  "Tap " + juce::String (t + 1) + " Type",
-                                 { "Diffusor", "Schroeder", "FDN" }, 0));
+                                 { "Diffusor", "Schroeder", "FDN", "Draussen" }, 0));
 
         // Der Raum ist auf 200 m gedeckelt, und zwar nicht aus Geschmack: die
         // Verzoegerungsleitungen aller drei Bauarten werden danach bemessen und

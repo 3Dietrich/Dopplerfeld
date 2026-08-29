@@ -81,7 +81,39 @@ private:
     juce::ToggleButton predelayButton { "Vorlauf" };
     std::unique_ptr<ButtonAttachment> predelayAttachment;
 
-    Knob x, y, z, room, early, decay, damp, gain, width;
+    // X und Y stehen bewusst NICHT hier: der Ort wird im Feld gezogen
+    // (@dpa 20260829: "x und Y braucht es nicht wenn man es so cool auf dem
+    // Panel verschieben kann"). Die Hoehe bleibt, die hat im Feld keine Achse.
+    Knob z, room, early, decay, damp, gain, width;
+
+    // Direktschall: der einzige Regler hier, der NICHT zum gewaehlten Punkt
+    // gehoert, sondern fuers ganze Plugin gilt. Er bekommt deshalb auch keine
+    // Neubindung beim Umschalten.
+    Knob direct;
+
+    juce::TextButton copyButton  { "Kop" };
+    juce::TextButton pasteButton { "Einf" };
+
+    // Was ein Kopieren mitnimmt: alles ausser dem ORT. Zwei Punkte
+    // uebereinander waeren beim Einfuegen die haeufigste Ueberraschung, und
+    // kopiert werden soll der Hall, nicht die Stelle.
+    struct Clipboard
+    {
+        bool   valid    = false;
+        float  type     = 2.0f;
+        float  room     = 30.0f;
+        float  early    = 1.0f;
+        float  decay    = 2.0f;
+        float  damp     = 0.35f;
+        float  gain     = -6.0f;
+        float  width    = 1.0f;
+        bool   predelay = true;
+    };
+
+    Clipboard clipboard;
+
+    void copyFromSelected();
+    void pasteToSelected();
 
     int selected = 0;
 

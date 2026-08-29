@@ -503,6 +503,8 @@ private:
         std::atomic<float>* tapWidth[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapPredelay[DopplerEngine::maxTaps] {};
 
+        std::atomic<float>* directGain = nullptr;
+
         std::atomic<float>* lisX       = nullptr;
         std::atomic<float>* lisY       = nullptr;
         std::atomic<float>* lisZ       = nullptr;

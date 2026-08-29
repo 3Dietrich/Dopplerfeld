@@ -126,6 +126,9 @@ namespace Tooltips
         TapGain,
         TapWidth,
         TapPredelay,
+        TapCopy,
+        TapPaste,
+        DirectGain,
         SecondOrder,
         BounceGain,
         BounceGainBoost,
@@ -1186,6 +1189,24 @@ namespace Tooltips
                           "They are what makes a bang forceful: a reverb network spreads its "
                           "energy over thousands of tiny echoes, a hard surface throws back ONE "
                           "that is almost as loud as the original. 0 = tail only.";
+                case Key::TapCopy:
+                    return lang == Language::De
+                        ? "Merkt die Halleinstellungen dieses Punktes. Der ORT bleibt aussen vor - "
+                          "kopiert wird der Hall, nicht die Stelle."
+                        : "Remembers this point's reverb settings. The LOCATION stays out of it - "
+                          "what gets copied is the reverb, not the place.";
+                case Key::TapPaste:
+                    return lang == Language::De
+                        ? "Setzt die gemerkten Halleinstellungen auf den gewaehlten Punkt."
+                        : "Applies the remembered reverb settings to the selected point.";
+                case Key::DirectGain:
+                    return lang == Language::De
+                        ? "Pegel des Direktschalls, also der Wege ohne Reflexion. Zugedreht bleiben "
+                          "Boden, Waende und die Abgriffpunkte stehen - so hoert man, was der Raum "
+                          "allein macht. Gilt fuers ganze Plugin, nicht je Punkt."
+                        : "Level of the direct sound, meaning the paths without reflection. Turned "
+                          "down, ground, walls and pickup points remain - that way you hear what "
+                          "the room alone does. Applies to the whole plugin, not per point.";
                 case Key::TapGain:
                     return lang == Language::De
                         ? "Pegel dieses Abgriffpunkts im Ausgang, in dB."
