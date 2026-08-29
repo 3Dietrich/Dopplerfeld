@@ -86,6 +86,13 @@ private:
     // Panel verschieben kann"). Die Hoehe bleibt, die hat im Feld keine Achse.
     Knob z, room, early, decay, damp, gain, width;
 
+    // Nur fuer die Bauart Draussen. Bei den Raumbauarten steht die
+    // Leitungszahl fest, dort sind sie ausgegraut statt versteckt: ein Regler,
+    // der beim Umschalten verschwindet, laesst das Panel springen.
+    Knob echoes, seed;
+
+    void updateTypeDependentControls();
+
     // Direktschall: der einzige Regler hier, der NICHT zum gewaehlten Punkt
     // gehoert, sondern fuers ganze Plugin gilt. Er bekommt deshalb auch keine
     // Neubindung beim Umschalten.
@@ -108,6 +115,8 @@ private:
         float  gain     = -6.0f;
         float  width    = 1.0f;
         bool   predelay = true;
+        float  echoes   = 24.0f;
+        float  seed     = 137.0f;
     };
 
     Clipboard clipboard;

@@ -70,7 +70,16 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (damp,  "Damp",    Tooltips::Key::TapDamp);
     setupKnob (gain,  "Gain",    Tooltips::Key::TapGain);
     setupKnob (width, "Breite",  Tooltips::Key::TapWidth);
+    setupKnob (echoes, "Echos",   Tooltips::Key::TapEchoes);
+    setupKnob (seed,   "Wuerfel", Tooltips::Key::TapSeed);
     setupKnob (direct, "Direkt",  Tooltips::Key::DirectGain);
+
+    // Ganze Zahlen: ein halber Rueckwurf und ein Komma-Wuerfelbecher ergeben
+    // beide keinen Sinn.
+    echoes.slider.setNumDecimalPlacesToDisplay (0);
+    seed.slider.setNumDecimalPlacesToDisplay (0);
+
+    typeBox.onChange = [this] { updateTypeDependentControls(); };
 
     // Der Direktschall haengt fest am globalen Parameter und wird beim
     // Umschalten des Punktes nicht neu gebunden.
@@ -102,7 +111,7 @@ void ReverbPanel::selectTap (int index)
     predelayAttachment.reset();
     typeAttachment.reset();
 
-    for (auto* k : { &z, &room, &early, &decay, &damp, &gain, &width })
+    for (auto* k : { &z, &room, &early, &decay, &damp, &gain, &width, &echoes, &seed })
         k->attachment.reset();
 
     onAttachment = std::make_unique<ButtonAttachment> (
@@ -121,14 +130,33 @@ void ReverbPanel::selectTap (int index)
         { &decay, Params::TapPart::decay },
         { &damp,  Params::TapPart::damp },
         { &gain,  Params::TapPart::gain },
-        { &width, Params::TapPart::width }
+        { &width, Params::TapPart::width },
+        { &echoes, Params::TapPart::echoes },
+        { &seed,   Params::TapPart::seed }
     };
 
     for (const auto& b : bindings)
         b.first->attachment = std::make_unique<SliderAttachment> (
             state, Params::tapId (selected, b.second), b.first->slider);
 
+    updateTypeDependentControls();
     refreshRunningMarks();
+}
+
+// Echos und Wuerfelbecher beschreiben, wie eine FLAECHE abgetastet wird - das
+// gibt es nur bei Draussen. Ausgegraut statt versteckt, damit das Panel beim
+// Umschalten nicht springt.
+void ReverbPanel::updateTypeDependentControls()
+{
+    const bool isOpenAir = (typeBox.getSelectedItemIndex() == 3);
+
+    for (auto* k : { &echoes, &seed })
+    {
+        k->slider.setEnabled (isOpenAir);
+        k->label.setEnabled (isOpenAir);
+        k->slider.setAlpha (isOpenAir ? 1.0f : 0.42f);
+        k->label.setAlpha (isOpenAir ? 1.0f : 0.42f);
+    }
 }
 
 void ReverbPanel::refreshRunningMarks()
@@ -193,6 +221,8 @@ void ReverbPanel::copyFromSelected()
     clipboard.gain     = read (TP::gain,  -6.0f);
     clipboard.width    = read (TP::width, 1.0f);
     clipboard.predelay = read (TP::predelay, 1.0f) > 0.5f;
+    clipboard.echoes   = read (TP::echoes, 24.0f);
+    clipboard.seed     = read (TP::seed,   137.0f);
     clipboard.valid    = true;
 
     pasteButton.setEnabled (true);
@@ -226,6 +256,8 @@ void ReverbPanel::pasteToSelected()
     write (TP::gain,  clipboard.gain);
     write (TP::width, clipboard.width);
     write (TP::predelay, clipboard.predelay ? 1.0f : 0.0f);
+    write (TP::echoes,   clipboard.echoes);
+    write (TP::seed,     clipboard.seed);
 }
 
 void ReverbPanel::refreshTooltips()
@@ -246,7 +278,7 @@ void ReverbPanel::refreshTooltips()
     typeLabel.setTooltip (Tooltips::text (Tooltips::Key::TapType));
     typeBox.setTooltip (Tooltips::text (Tooltips::Key::TapType));
 
-    for (auto* k : { &z, &room, &early, &decay, &damp, &gain, &width, &direct })
+    for (auto* k : { &z, &room, &early, &decay, &damp, &gain, &width, &echoes, &seed, &direct })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
 
@@ -294,6 +326,11 @@ void ReverbPanel::resized()
     typeRow.removeFromLeft (4);
     typeBox.setBounds (typeRow.removeFromLeft (128));
 
+    // Der Vorlauf steht hier oben, weil die untere Reihe die vier Hallregler
+    // braucht und danach nur noch Platz fuer die zwei Uebertragungsknoepfe hat.
+    typeRow.removeFromLeft (10);
+    predelayButton.setBounds (typeRow.removeFromLeft (96));
+
     groupRules.push_back ({ typeRow, typeRow.getX() + 6 });
 
     area.removeFromTop (6);
@@ -322,7 +359,7 @@ void ReverbPanel::resized()
     placeRow ({ &z, &gain, &width, &room, &early });
     area.removeFromTop (4);
 
-    auto rest = placeRow ({ &decay, &damp });
+    auto rest = placeRow ({ &decay, &damp, &echoes, &seed });
 
     // Vorlauf und die zwei Uebertragungsknoepfe im freien Rest der unteren
     // Reihe, statt eine weitere Zeile zu oeffnen.
@@ -332,9 +369,6 @@ void ReverbPanel::resized()
     copyButton.setBounds (buttons.removeFromLeft (44));
     buttons.removeFromLeft (4);
     pasteButton.setBounds (buttons.removeFromLeft (48));
-
-    rest.removeFromTop (4);
-    predelayButton.setBounds (rest.removeFromTop (24).withWidth (100));
 }
 
 void ReverbPanel::paint (juce::Graphics& g)

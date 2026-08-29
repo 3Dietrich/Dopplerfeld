@@ -325,7 +325,7 @@ public:
     // betrifft und der Rest nur den Hall dahinter.
     void setTapReverb (int index, int type, double roomMetres, double decaySeconds,
                        double damping01, double earlyAmount, double gainLinear, double width,
-                       bool predelayEnabled);
+                       bool predelayEnabled, int echoCount, int seed);
 
     bool isTapEnabled (int index) const
     {

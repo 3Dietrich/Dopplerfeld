@@ -4,59 +4,56 @@
 #include "ReverbUnit.h"
 
 #include <cmath>
+#include <cstdint>
 
-// Draussen: die Antwort EINER Flaeche, nicht die eines ganzen Tals.
+// Draussen: eine Flaeche, die man abtastet, und die sich untereinander
+// verkoppeln kann.
 //
 // Ein Abgriffpunkt steht fuer eine Stelle im Gelaende - eine Bergflanke, eine
-// Hauswand, einen Waldrand. Was von dort zurueckkommt, ist EIN Rueckwurf. Dass
-// es in einem Tal mehrere gibt, ist die Sache der acht Abgriffpunkte, von denen
-// jeder an seinem eigenen Ort sitzt und seine eigene Laufzeit und Richtung
-// mitbringt.
+// Hauswand, einen Waldrand. Was von dort zurueckkommt, ist EIN Rueckwurf,
+// verschmiert ueber die Ausdehnung der Flaeche: ihre Mitte antwortet zuerst,
+// ihre Raender spaeter, weil sie weiter weg sind. Dass ein Tal mehrere
+// Flaechen hat, bleibt Sache der acht Abgriffpunkte, von denen jeder seinen
+// eigenen Ort, seine eigene Laufzeit und seine eigene Richtung mitbringt.
 //
-// Deshalb hat diese Bauart ausdruecklich KEINE Nachechos (@dpa 20260829: "Es
-// hat seine eigenen Nachechos, was ungünstig ist, weil das die 8 Reverbs das ja
-// eigentlich in 'richtig' machen sollten"). Ein Punkt, der sich selbst weitere
-// Rueckwuerfe ausdenkt, macht die Arbeit der anderen sieben noch einmal - nur
-// ohne deren Ort, Richtung und Laufzeit, also falsch.
+// Jede Verzoegerung hat hier eine EIGENE Leitung, nicht nur einen Lesekopf auf
+// einer gemeinsamen. Das ist die Bedingung dafuer, dass sie sich gegenseitig
+// speisen koennen - und genau das macht aus einzelnen Rueckwuerfen einen
+// Teppich (@dpa 20260829: "geht es dass nicht jedes Delay auf sich selbst
+// gefeedbackt wird, sondern mit jedem anderen, ausser sich selbst? Damit einen
+// gleichmaessigen Teppich?").
 //
-// Was bleibt, ist die Streuung der einen Flaeche. Eine Bergflanke ist kein
-// Spiegel: sie ist Fels, Geroell, Bewuchs, und sie ist gross. Die Mitte
-// antwortet zuerst, die Raender kommen spaeter, weil sie weiter weg sind - eine
-// Flanke von hundert Metern Ausdehnung verschmiert den Rueckwurf ueber knapp
-// dreihundert Millisekunden. Das ist kein Nachhall, das ist eine einzige
-// Antwort mit Tiefe.
+// Die Verkopplung ist eine zyklisch verschobene Householder-Matrix:
 //
-// Zwei Dinge kommen dazu, die eine reale Flaeche eben auch tut.
+//   feed[i] = v[(i + shift) % n] - (2/n) * Summe(v)
 //
-// Sie DREHT die Phase, und zwar frequenzabhaengig. Ein Tiefpass allein war
-// hier zu wenig (@dpa 20260829: "das was Du beschreibst ist aufgrund der
-// fehlenden Feedbacks ja nur Lopass. Das war kaum zu hoeren und passt auch
-// nicht") - ohne Rueckkopplung summiert sich eine Daempfung ja nirgends auf.
-// Ein Phasenverdreher je Abtastpunkt aendert dagegen, wie sich die
-// vierundzwanzig Rueckwuerfe gegenseitig ausloeschen und verstaerken, und das
-// ist deutlich hoerbar (siehe reverbparts::PhaseRotator).
+// Jede Leitung bekommt also den Inhalt einer ANDEREN plus einen kleinen Abzug
+// von allen. Ihr eigener Anteil daran ist -2/n, bei vierundzwanzig Leitungen
+// also ein Zwoelftel - praktisch kein Selbst-Feedback, genau wie gewuenscht.
 //
-// Und sie kann in sich zuruecksehen. Ein Talkessel, eine Felsnische, ein Hof
-// zwischen zwei Waenden - dort trifft der Rueckwurf wieder auf die Flaeche
-// selbst. Der Abkling-Regler oeffnet genau diesen Weg (@dpa: "kann man die
-// einzel Delays nicht miteinander hallmaessig verknuepfen, so dass noch mehr
-// Echos der Echos entstehen"). Bei null bleibt es bei der einen Antwort.
-
+// Warum nicht die naheliegende Form "Durchschnitt aller ausser mir selbst":
+// die hat exakt null auf der Diagonale, ist aber nicht energieerhaltend. Ihre
+// Eigenwerte sind 1 fuer den Gleichanteil und -1/(n-1) fuer alles andere; nach
+// wenigen Umlaeufen traegt jede Leitung dasselbe, und aus dem Teppich wird ein
+// einzelner Kammfilter. Die Verschiebung mal Householder ist dagegen das
+// Produkt zweier orthogonaler Matrizen und damit selbst orthogonal - sie
+// erhaelt die Energie und laesst alle Moden am Leben.
 class OpenAirReverb : public ReverbUnit
 {
 public:
-    // Genug Abtastpunkte, dass die Flaeche als Flaeche klingt und nicht als
-    // Reihe einzelner Echos. Vierundzwanzig sind der Punkt, ab dem man bei
-    // grossen Flaechen keine einzelnen Anschlaege mehr heraushoert - darunter
-    // klingt es nach Kamm, darueber wird es nicht mehr besser, nur teurer.
-    static constexpr int taps = 24;
+    // Obergrenze der Leitungen. Die tatsaechliche Zahl stellt der Echo-Regler
+    // ein; alle liegen dauerhaft bereit, damit ein Drehen daran im Audiothread
+    // nichts allokiert.
+    static constexpr int maxLines = 48;
 
     void prepare (double sampleRate, int /*maxBlock*/) override
     {
         sr = sampleRate;
 
-        // Die groesste Flaeche verschmiert ueber ihre eigene Ausdehnung.
-        line.prepare ((int) (reverbparts::maxRoomMetres / reverbparts::soundSpeed * sr * 1.2) + 2);
+        const int longest = (int) (reverbparts::maxRoomMetres / reverbparts::soundSpeed * sr * 1.1) + 2;
+
+        for (auto& l : line)
+            l.prepare (longest);
 
         update();
         reset();
@@ -64,196 +61,248 @@ public:
 
     void reset() override
     {
-        line.reset();
-
-        for (auto& d : damp)
-            d.reset();
-
-        for (auto& r : rotator)
-            r.reset();
-
-        loopDamp.reset();
-        loopRotator.reset();
-
-        loopState = 0.0f;
+        for (auto& l : line)      l.reset();
+        for (auto& d : damp)      d.reset();
+        for (auto& r : rotator)   r.reset();
+        for (auto& s : state)     s = 0.0f;
     }
 
     void process (const float* in, float* outL, float* outR, int numSamples) override
     {
-        for (int n = 0; n < numSamples; ++n)
+        const int n = lines;
+
+        for (int k = 0; k < numSamples; ++k)
         {
-            // Was von der letzten Runde zurueckkommt, geht zusammen mit dem
-            // Eingang wieder auf die Flaeche. Der Rueckweg laeuft ueber die
-            // MONO-Summe: eine Flaeche, die in sich zurueckwirft, hoert sich
-            // selbst ja nicht in Stereo.
-            line.write (in[n] + loopState * feedback);
+            float l   = 0.0f;
+            float r   = 0.0f;
+            float sum = 0.0f;
 
-            float l = 0.0f;
-            float r = 0.0f;
-
-            for (int t = 0; t < taps; ++t)
+            for (int i = 0; i < n; ++i)
             {
-                float v = damp[t].process (line.readAt (delaySamples[t]));
+                // Daempfung und Phasenverdreher sitzen IM Umlauf, nicht am
+                // Ausgang: nur so verliert jede Runde erneut Hoehen und dreht
+                // erneut die Phase, und der Teppich wird mit der Zeit dunkler
+                // und dichter statt von Anfang an fertig.
+                const float v = rotator[(size_t) i].process (
+                                    damp[(size_t) i].process (line[(size_t) i].read()));
 
-                // Phasenverdreher NACH der Daempfung: er soll die schon
-                // gefilterte Antwort drehen, nicht das rohe Signal.
-                v = rotator[t].process (v) * gain[t];
+                state[(size_t) i] = v;
+                sum += v;
 
-                l += v * panL[t];
-                r += v * panR[t];
+                l += v * gain[(size_t) i] * panL[(size_t) i];
+                r += v * gain[(size_t) i] * panR[(size_t) i];
             }
 
-            // Der Rueckweg hat einen EIGENEN Abgriff und nimmt nicht die Summe
-            // der Abtastpunkte. Deren Vorzeichen wechseln, damit sich die
-            // Rueckwuerfe nicht zu einem Bassschlag addieren - ihre Summe ist
-            // deshalb fast null, und eine Rueckkopplung darueber waere
-            // wirkungslos (gemessen: 41 dB zu leise).
-            //
-            // Stattdessen der Weg ueber die ganze Flaeche, einmal hin und
-            // zurueck. Das ist auch die Zeit, mit der die Abklingzeit
-            // gerechnet wird, und deshalb stimmt sie.
-            loopState = loopRotator.process (loopDamp.process (line.readAt (loopDelay)));
+            const float share = (2.0f / (float) n) * sum;
 
-            outL[n] = l;
-            outR[n] = r;
+            for (int i = 0; i < n; ++i)
+            {
+                const int from = (i + shift) % n;
+
+                // Der Eingang geht in ALLE Leitungen. Beim allerersten
+                // Durchlauf tasten sie damit die Flaeche ab - das ist der
+                // Rueckwurf, den es auch ohne jede Rueckkopplung gibt.
+                line[(size_t) i].write (in[k] * inGain[(size_t) i]
+                                        + (state[(size_t) from] - share) * feedback);
+            }
+
+            outL[k] = l;
+            outR[k] = r;
         }
     }
 
-    // Ausdehnung der Flaeche in Metern. Sie bestimmt, ueber welche Zeit der
-    // Rueckwurf verschmiert: die Raender einer hundert Meter breiten Flanke
-    // liegen knapp dreihundert Millisekunden hinter ihrer Mitte.
+    // Ausdehnung der Flaeche in Metern: ueber diese Zeit verschmiert ihr
+    // Rueckwurf.
     void setRoomSize (double metres) override
     {
         extentMetres = std::clamp (metres, 0.5, reverbparts::maxRoomMetres);
         update();
     }
 
-    // Jetzt wieder eine echte Abklingzeit: sie oeffnet den Weg der Flaeche
-    // zurueck auf sich selbst.
-    //
-    // Bei null bleibt es bei der einen Antwort - eine freistehende Flanke, die
-    // ins Offene wirft. Aufgedreht sieht die Flaeche sich selbst, wie in einem
-    // Talkessel oder einer Nische, und es entstehen Echos der Echos. Der
-    // Rueckkopplungsfaktor wird dabei aus der mittleren Umlaufzeit gerechnet,
-    // damit die eingestellte Zeit ungefaehr auch die gemessene ist.
+    // Oeffnet den Weg der Flaeche zurueck auf sich selbst. Bei null antwortet
+    // sie einmal, wie eine freistehende Flanke; aufgedreht sieht sie sich
+    // selbst wie in einem Talkessel, und es entstehen Echos der Echos.
     void setDecaySeconds (double seconds) override
     {
         decaySeconds = std::max (0.0, seconds);
         update();
     }
 
-    // Was Luft und Bewuchs von den Hoehen uebrig lassen. Anders als bei den
-    // Raumbauarten wirkt es auf ALLE Abtastpunkte gleich stark: der Weg zur
-    // Flaeche und zurueck ist fuer sie derselbe, nur die Raender liegen etwas
-    // weiter.
     void setDamping (double amount01) override
     {
         damping = std::clamp (amount01, 0.0, 1.0);
         update();
     }
 
-    // Gemessen 0,62 % Echtzeit bei 48 kHz, also gut das Doppelte des
-    // Diffusors. Das meiste davon sind die vierundzwanzig Phasenverdreher mit
-    // je vier Stufen - sechsundneunzig Filter je Sample, und sie sind den
-    // Klang wert.
-    double      relativeCost() const override { return 2.3; }
+    // Wie viele Rueckwuerfe die Flaeche liefert. Weniger heisst einzeln
+    // hoerbare Anschlaege, mehr heisst Flaeche.
+    void setEchoCount (int count)
+    {
+        lines = std::clamp (count, 2, maxLines);
+        update();
+    }
+
+    // Wuerfelbecher fuer die Verteilung der Rueckwuerfe. Dieselbe Zahl gibt
+    // immer dieselbe Flaeche - ohne das klaenge jedes Laden anders und kein
+    // Vergleich zweier Durchgaenge waere moeglich.
+    void setSeed (int newSeed)
+    {
+        seed = newSeed;
+        update();
+    }
+
+    double      relativeCost() const override { return 2.5; }
     const char* name()         const override { return "Draussen"; }
 
 private:
-    void update()
+    // Kleiner, schneller Zufall mit festem Anfang. Ein xorshift genuegt: die
+    // Zahlen muessen nur ungleichmaessig aussehen, nicht statistisch sauber
+    // sein.
+    struct Rng
     {
-        // Ausdehnung als Laufzeit: der Rand einer Flaeche liegt um ihre
-        // halbe Ausdehnung weiter weg, hin und zurueck also um die ganze.
-        const double spanSec = extentMetres / reverbparts::soundSpeed;
+        uint32_t s;
 
-        for (int t = 0; t < taps; ++t)
+        explicit Rng (uint32_t seed) : s (seed * 2654435761u + 1u) {}
+
+        uint32_t next()
         {
-            const double frac = (double) t / (double) (taps - 1);
-
-            // Eine glatte Flaeche antwortet fast auf einen Schlag, eine raue
-            // ueber ihre ganze Ausdehnung. Die Rauigkeit stellt also ein, wie
-            // weit die Abtastpunkte auseinanderruecken.
-            //
-            // Die Unregelmaessigkeit kommt aus einem festen Versatz je Punkt.
-            // Ein gleichmaessiges Raster waere ein Kammfilter und klaenge nach
-            // Metallrohr; gewuerfelt wird trotzdem nichts, sonst klaenge jedes
-            // Laden anders.
-            const double jitter = 0.4 * std::sin (12.9898 * (double) t + 0.7);
-            const double when   = spanSec * (0.02 + 0.98
-                                                    * std::clamp (frac + jitter / (double) taps, 0.0, 1.0));
-
-            delaySamples[t] = std::max (1, (int) std::lround (when * sr));
-
-            // Zum Rand hin leiser: diese Teile der Flaeche stehen schraeger
-            // zum Schall und liegen weiter weg. Ohne dieses Gefaelle klaenge
-            // die Flaeche wie ein Rechteckfenster - mit hoerbarem Ende.
-            const float shape = (float) std::cos (frac * 1.5707963);
-
-            const float sign = ((t * 7 + t / 3) % 2 == 0) ? 1.0f : -1.0f;
-
-            // Auf die Zahl der Punkte normiert, damit die Rauigkeit den Pegel
-            // nicht mitzieht: eine raue Flaeche wirft nicht weniger zurueck als
-            // eine glatte, sie verteilt es nur anders.
-            gain[t] = sign * shape * (1.6f / (float) taps);
-
-            damp[t].setCoefficient (reverbparts::dampingCoefficient (damping, sr));
-
-            // Die Eckfrequenz des Verdrehers wandert mit dem Regler von ganz
-            // oben (kaum Wirkung im Hoerbereich) bis in den Grundtonbereich,
-            // und sie ist je Abtastpunkt VERSCHIEDEN - darauf kommt es an.
-            // Gleiche Drehung fuer alle waere keine Drehung, weil sich am
-            // Verhaeltnis der Rueckwuerfe zueinander nichts aenderte.
-            const double spreadOct = 3.2 * (0.35 + 0.65 * frac);
-            const double baseHz    = 12000.0 * std::pow (60.0 / 12000.0, damping);
-
-            rotator[t].setFrequency (baseHz * std::pow (2.0, spreadOct * (frac - 0.5)), sr);
-
-            // Die Flaeche hat eine Breite, also kommt ihre Antwort nicht aus
-            // einem Punkt. Die Streuung waechst zum Rand hin - dort ist der
-            // Winkel zum Hoerer am groessten.
-            const float side = (float) (std::sin (2.4 * (double) t + 0.7) * frac);
-
-            panL[t] = 0.5f * (1.0f + side);
-            panR[t] = 0.5f * (1.0f - side);
+            s ^= s << 13;
+            s ^= s >> 17;
+            s ^= s << 5;
+            return s;
         }
 
-        // Der Umlauf geht ueber die ganze Flaeche. Sein Abgriff sitzt beim
-        // spaetesten Abtastpunkt, seine Laenge ist damit dieselbe Zeit, mit der
-        // die Abklingzeit gerechnet wird.
-        loopDelay = delaySamples[taps - 1];
+        // 0..1
+        double uniform() { return (double) (next() >> 8) / 16777216.0; }
+    };
 
-        const double loopSec = std::max (1.0e-4, (double) loopDelay / sr);
+    // Verschiebung, die teilerfremd zur Leitungszahl ist - sonst zerfiele der
+    // Kreis in mehrere kleine, und ein Teil der Leitungen sprachen nie
+    // miteinander.
+    static int coprimeShift (int n)
+    {
+        auto gcd = [] (int a, int b) { while (b != 0) { const int t = a % b; a = b; b = t; } return a; };
 
-        // Der Deckel bei 0,93 haelt die Schleife sicher unter eins. Anders als
-        // beim vorigen Weg ueber die Tap-Summe hat dieser Abgriff Verstaerkung
-        // eins, der Faktor ist also die Schleifenverstaerkung selbst - bei 0,93
-        // reicht das fuer rund sechzehn Sekunden Ausklang.
-        feedback = (float) std::min (0.93,
-                       reverbparts::feedbackForDecay (loopSec, decaySeconds));
+        for (int s = n / 2; s >= 1; --s)
+            if (gcd (s, n) == 1)
+                return s;
 
-        // Im Umlauf dieselbe Daempfung wie an den Abtastpunkten, sonst wuerde
-        // die Flaeche beim zweiten Durchgang heller antworten als beim ersten.
-        loopDamp.setCoefficient (reverbparts::dampingCoefficient (damping, sr));
-        loopRotator.setFrequency (12000.0 * std::pow (60.0 / 12000.0, damping), sr);
+        return 1;
     }
 
-    reverbparts::DelayLine     line;
-    reverbparts::DampingFilter damp[taps];
-    reverbparts::PhaseRotator  rotator[taps];
+    void update()
+    {
+        const int    n       = lines;
+        const double spanSec = extentMetres / reverbparts::soundSpeed;
 
-    reverbparts::DampingFilter loopDamp;
-    reverbparts::PhaseRotator  loopRotator;
+        shift = coprimeShift (n);
 
-    int   delaySamples[taps] {};
-    float gain[taps] {};
-    float panL[taps] {};
-    float panR[taps] {};
+        Rng rng ((uint32_t) (seed < 0 ? 0 : seed));
+
+        double sumSquares = 0.0;
+
+        for (int i = 0; i < n; ++i)
+        {
+            const double frac = (double) i / (double) std::max (1, n - 1);
+
+            // Gewuerfelt statt gerastert (@dpa: "Derzeit sind die Delaytimes
+            // glaub ich zu gleichmaessig, muss durcheinanderer sein"). Der
+            // Wurf verschiebt jeden Rueckwurf um bis zu eine halbe Teilung
+            // gegen sein Raster - das haelt die Reihenfolge grob erhalten,
+            // damit die Flaeche vorn dicht und hinten duenn bleibt, macht die
+            // Abstaende aber wirklich ungleich.
+            const double jitter = (rng.uniform() - 0.5) * 1.6 / (double) n;
+            const double rel    = std::clamp (frac + jitter, 0.0, 1.0);
+            const double when   = spanSec * (0.02 + 0.98 * rel);
+
+            const int len = std::max (1, (int) std::lround (when * sr));
+
+            line[(size_t) i].setLength (len);
+
+            if (i == n - 1)
+                loopSamples = len;
+
+            // Zum Rand hin leiser: diese Teile der Flaeche stehen schraeger
+            // zum Schall und liegen weiter weg.
+            const double shape = std::cos (frac * 1.5707963267948966);
+
+            // Druck-Offset (@dpa: "Deswegen soll es ruhig ein bisschen
+            // Druck-Offset kriegen. Ich glaube das tut dem Bass gut").
+            //
+            // Reine Vorzeichenwechsel loeschen den Gleichanteil aus - der Bass
+            // verschwindet, und der Rueckweg hatte deshalb frueher fast nichts
+            // zu tragen. Ein Uebergewicht von rund zwei Dritteln auf plus
+            // laesst genug davon stehen, dass die Flaeche schiebt, ohne dass
+            // aus dem Rueckwurf ein einzelner Bassschlag wird.
+            const double sign = rng.uniform() < 0.68 ? 1.0 : -1.0;
+
+            gain[(size_t) i]   = (float) (sign * shape);
+            inGain[(size_t) i] = (float) shape;
+
+            sumSquares += shape * shape;
+
+            damp[(size_t) i].setCoefficient (reverbparts::dampingCoefficient (damping, sr));
+
+            // Die Eckfrequenz des Verdrehers ist je Leitung VERSCHIEDEN -
+            // darauf kommt es an. Gleich gedreht waere gar nicht gedreht, weil
+            // sich am Verhaeltnis der Rueckwuerfe zueinander nichts aenderte.
+            const double baseHz = 12000.0 * std::pow (60.0 / 12000.0, damping);
+            const double spread = 3.2 * (frac - 0.5) * (0.4 + 0.6 * rng.uniform());
+
+            rotator[(size_t) i].setFrequency (baseHz * std::pow (2.0, spread), sr);
+
+            // Streuung im Stereobild, gewuerfelt und zum Rand hin weiter.
+            const double side = (rng.uniform() * 2.0 - 1.0) * (0.3 + 0.7 * frac);
+
+            panL[(size_t) i] = (float) (0.5 * (1.0 + side));
+            panR[(size_t) i] = (float) (0.5 * (1.0 - side));
+        }
+
+        // Auf gleiche Leistung normieren, unabhaengig von der Zahl der
+        // Rueckwuerfe. Ohne das waere der Echo-Regler in erster Linie ein
+        // Lautstaerkeregler, und man koennte die Klangaenderung nicht
+        // beurteilen.
+        //
+        // Der Faktor 1,5 hebt die Bauart auf den Pegel der anderen drei. Mit
+        // der frueheren Normierung lag sie 14 dB darunter und ging neben den
+        // fruehen Reflexionen schlicht unter - gemessen an einer Aufnahme mit
+        // lauter N-Welle unterschieden sich Abkling 0 und 3 s nur noch um
+        // 16 dB unter dem Signal, also gar nicht hoerbar.
+        const float norm = (float) (1.5 / std::sqrt (std::max (1.0e-9, sumSquares)));
+
+        for (int i = 0; i < n; ++i)
+        {
+            gain[(size_t) i]   *= norm;
+            inGain[(size_t) i] *= norm;
+        }
+
+        // Rueckkopplung aus der Umlaufzeit. Die Matrix ist orthogonal, die
+        // Schleifenverstaerkung ist damit der Faktor selbst - der Deckel bei
+        // 0,93 haelt sie sicher unter eins.
+        const double loopSec = std::max (1.0e-4, (double) loopSamples / sr);
+
+        feedback = (float) std::min (0.93,
+                       reverbparts::feedbackForDecay (loopSec, decaySeconds));
+    }
+
+    reverbparts::DelayLine     line[maxLines];
+    reverbparts::DampingFilter damp[maxLines];
+    reverbparts::PhaseRotator  rotator[maxLines];
+
+    float state[maxLines]  {};
+    float gain[maxLines]   {};
+    float inGain[maxLines] {};
+    float panL[maxLines]   {};
+    float panR[maxLines]   {};
 
     double sr           = 48000.0;
-    double extentMetres  = 60.0;
-    double decaySeconds  = 0.0;
-    double damping       = 0.35;
-    int    loopDelay     = 1;
-    float  feedback      = 0.0f;
-    float  loopState     = 0.0f;
+    double extentMetres = 60.0;
+    double decaySeconds = 0.0;
+    double damping      = 0.35;
+
+    int    lines       = 24;
+    int    seed        = 137;
+    int    shift       = 7;
+    int    loopSamples = 1;
+    float  feedback    = 0.0f;
 };

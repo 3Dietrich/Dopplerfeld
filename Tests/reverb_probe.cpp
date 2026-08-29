@@ -8,7 +8,8 @@
 // starten.
 //
 //   reverb_probe [--in datei.wav] [--out ordner] [--size m] [--decay s]
-//                [--damp 0..1] [--early x] [--gain x] [--seconds t] [--sr hz]
+//                [--damp 0..1] [--early x] [--gain x] [--echoes n] [--seed n]
+//                [--seconds t] [--sr hz]
 //
 // Gemessen wird die VOLLE Kette eines Abgriffpunkts (TapBus), also samt
 // fruehen Reflexionen - nicht nur das Hallnetz. Nur so entspricht das, was man
@@ -241,6 +242,8 @@ int main (int argc, char** argv)
     const double      damp    = std::stod (argValue (argc, argv, "--damp",    "0.35"));
     const double      early   = std::stod (argValue (argc, argv, "--early",   "1.0"));
     const double      gain    = std::stod (argValue (argc, argv, "--gain",    "1.0"));
+    const int         echoes  = std::stoi (argValue (argc, argv, "--echoes",  "24"));
+    const int         seedArg = std::stoi (argValue (argc, argv, "--seed",    "137"));
     const double      seconds = std::stod (argValue (argc, argv, "--seconds", "0"));
 
     double sampleRate = std::stod (argValue (argc, argv, "--sr", "48000"));
@@ -281,6 +284,7 @@ int main (int argc, char** argv)
 
     std::printf ("Raum %.1f m, Abklingzeit %.2f s, Daempfung %.2f, fruehe Echos %.2f, Pegel %.2f\n",
                  size, decay, damp, early, gain);
+    std::printf ("Draussen: %d Rueckwuerfe, Wuerfelbecher %d\n", echoes, seedArg);
     std::printf ("Die WAVs sind hart auf Vollausschlag begrenzt.\n\n");
     std::printf ("  %-12s %10s %11s %10s %11s %11s %10s\n",
                  "Bauart", "RT60", "Rechenzeit", "Anteil", "Energie", "Spitze", "geclippt");
@@ -308,6 +312,8 @@ int main (int argc, char** argv)
         bus.setDecaySeconds (decay);
         bus.setDamping (damp);
         bus.setEarlyAmount (early);
+        bus.setEchoCount (echoes);
+        bus.setSeed (seedArg);
         bus.setGain (gain);
         bus.setWidth (1.0);
 

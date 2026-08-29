@@ -92,7 +92,18 @@ public:
     }
 
     // Staerke der fruehen Einzelechos. 0 = reiner Nachhall wie vorher.
-    void setEarlyAmount (double amount) { early.setAmount (amount); }
+    void setEarlyAmount (double amount)
+    {
+        earlyAmount = (float) std::max (0.0, amount);
+        early.setAmount (amount);
+    }
+
+    // Nur die Bauart Draussen kennt diese beiden: wie viele Rueckwuerfe die
+    // Flaeche liefert und mit welchem Wuerfelbecher sie verteilt sind. Die
+    // Raumbauarten haben ihre Leitungszahl fest, dort waere ein Regler dafuer
+    // eine Einladung, das Netz zu zerlegen.
+    void setEchoCount (int count) { openAir.setEchoCount (count); }
+    void setSeed (int seed)       { openAir.setSeed (seed); }
 
     void setDecaySeconds (double seconds)
     {
@@ -204,18 +215,51 @@ public:
             }
         }
 
-        // 2) Fruehe Einzelechos. Sie gehen sowohl direkt in den Ausgang als
-        //    auch in den spaeten Hall - so waechst der Nachhall aus ihnen
-        //    heraus, statt als zweite Schicht daneben zu stehen.
-        early.process (dry.data(), erL.data(), erR.data(), erSum.data(), n);
+        // 2) Fruehe Einzelechos - ausser bei Draussen, das sie selbst macht.
+        //
+        //    Die beiden taten dasselbe zur selben Zeit: verstreute Rueckwuerfe
+        //    einer Flaeche in den ersten paar hundert Millisekunden. Die
+        //    fruehen Echos waren dabei rund zwoelf Dezibel lauter, und die
+        //    Bauart verschwand darunter - gemessen unterschieden sich Abkling
+        //    0 und 3 Sekunden nur noch um 16 dB unter dem Signal, also gar
+        //    nicht mehr hoerbar (@dpa 20260829: "die 4 Beispiele klingen alle
+        //    gleich!").
+        //
+        //    Bei Draussen macht deshalb die Bauart die Arbeit, und der
+        //    Energie-Regler hebt stattdessen ihren Pegel. Er tut damit fuer
+        //    das Ohr dasselbe wie bei den Raumbauarten - mehr Wucht -, nur
+        //    ohne die Doppelung.
+        const bool ownsEarly = (type == Type::openAir);
 
-        // 3) Spaeter Hall, gespeist aus dem Direktsignal UND den fruehen
-        //    Echos. Ohne den Direktanteil verschwaende ein abgedrehter
-        //    Frueh-Regler auch den Nachhall.
-        for (int i = 0; i < n; ++i)
-            dry[(size_t) i] += erSum[(size_t) i];
+        if (! ownsEarly)
+        {
+            early.process (dry.data(), erL.data(), erR.data(), erSum.data(), n);
 
+            // Der spaete Hall wird aus dem Direktsignal UND den fruehen Echos
+            // gespeist, damit er aus ihnen herauswaechst statt daneben zu
+            // stehen.
+            for (int i = 0; i < n; ++i)
+                dry[(size_t) i] += erSum[(size_t) i];
+        }
+
+        // 3) Die Bauart.
         activeUnit()->process (dry.data(), wetL.data(), wetR.data(), n);
+
+        if (ownsEarly)
+        {
+            // Kein Nullpunkt bei abgedrehtem Regler: die Bauart IST hier der
+            // Hall, sie darf nicht verschwinden. Bei 1 steht sie auf ihrem
+            // vollen Pegel, darueber schiebt sie.
+            const float lift = 0.4f + 0.6f * earlyAmount;
+
+            for (int i = 0; i < n; ++i)
+            {
+                wetL[(size_t) i] *= lift;
+                wetR[(size_t) i] *= lift;
+                erL[(size_t) i]   = 0.0f;
+                erR[(size_t) i]   = 0.0f;
+            }
+        }
 
         // 4) Breite ueber Mitte/Seite und Pegel, in einem Durchgang. Der Pegel
         //    laeuft ueber den Block auf sein Ziel zu, damit ein gezogener
@@ -286,6 +330,7 @@ private:
     int    targetLength = 1;
     int    fadePos      = -1;
     float  width        = 1.0f;
+    float  earlyAmount  = 1.0f;
     float  panorama     = 0.0f;
     float  currentGain  = 0.0f;
     float  targetGain   = 0.0f;

@@ -362,6 +362,8 @@ DopplerfeldProcessor::DopplerfeldProcessor()
             pp.tapDecay[t]    = raw (Params::tapId (t, decay).toRawUTF8());
             pp.tapDamp[t]     = raw (Params::tapId (t, damp).toRawUTF8());
             pp.tapEarly[t]    = raw (Params::tapId (t, early).toRawUTF8());
+            pp.tapEchoes[t]   = raw (Params::tapId (t, echoes).toRawUTF8());
+            pp.tapSeed[t]     = raw (Params::tapId (t, seed).toRawUTF8());
             pp.tapGain[t]     = raw (Params::tapId (t, gain).toRawUTF8());
             pp.tapWidth[t]    = raw (Params::tapId (t, width).toRawUTF8());
             pp.tapPredelay[t] = raw (Params::tapId (t, predelay).toRawUTF8());
@@ -1115,6 +1117,8 @@ void DopplerfeldProcessor::applyTapParameters()
         target.decay      = (double) pp.tapDecay[t]->load();
         target.damping    = (double) pp.tapDamp[t]->load();
         target.early      = (double) pp.tapEarly[t]->load();
+        target.echoes     = (int) std::lround (pp.tapEchoes[t]->load());
+        target.seed       = (int) std::lround (pp.tapSeed[t]->load());
         target.gainLinear = juce::Decibels::decibelsToGain ((double) pp.tapGain[t]->load());
         target.width      = (double) pp.tapWidth[t]->load();
         target.predelay   = pp.tapPredelay[t]->load() > 0.5f;
@@ -2522,7 +2526,8 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
             dopplerEngine.setTap (t, tap.on, tap.pos);
             dopplerEngine.setTapReverb (t, tap.type, tap.room, tap.decay, tap.damping,
-                                        tap.early, tap.gainLinear, tap.width, tap.predelay);
+                                        tap.early, tap.gainLinear, tap.width, tap.predelay,
+                                        tap.echoes, tap.seed);
         }
 
         // Fenster auf den Ausgabepuffer, keine Kopie und keine Allokation.

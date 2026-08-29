@@ -434,6 +434,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
         layout.add (boolParam (tapId (t, TapPart::predelay).toRawUTF8(),
                                "Tap " + juce::String (t + 1) + " Predelay", true));
+
+        // Nur fuer die Bauart Draussen: wie viele Rueckwuerfe die Flaeche
+        // liefert und mit welchem Wuerfelbecher sie verteilt sind. Bei den
+        // Raumbauarten steht die Leitungszahl fest.
+        layout.add (floatParam (tapId (t, TapPart::echoes).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Echoes",
+                                { 2.0f, 48.0f, 1.0f }, 24.0f));
+
+        layout.add (floatParam (tapId (t, TapPart::seed).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Seed",
+                                { 0.0f, 999.0f, 1.0f }, 137.0f));
     }
     layout.add (std::make_unique<juce::AudioParameterInt> (juce::ParameterID { solverStride, 1 }, "Solver Stride", 1, 16, 1));
 

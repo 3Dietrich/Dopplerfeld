@@ -123,6 +123,8 @@ namespace Tooltips
         TapDecay,
         TapDamp,
         TapEarly,
+        TapEchoes,
+        TapSeed,
         TapGain,
         TapWidth,
         TapPredelay,
@@ -1227,6 +1229,18 @@ namespace Tooltips
                         : "Level of the direct sound, meaning the paths without reflection. Turned "
                           "down, ground, walls and pickup points remain - that way you hear what "
                           "the room alone does. Applies to the whole plugin, not per point.";
+                case Key::TapEchoes:
+                    return lang == Language::De
+                        ? "Wie viele Rueckwuerfe die Flaeche liefert. Wenige klingen als einzelne "
+                          "Anschlaege, viele als Flaeche. Nur bei der Bauart Draussen."
+                        : "How many reflections the surface delivers. Few sound like separate "
+                          "hits, many like a surface. Outdoors type only.";
+                case Key::TapSeed:
+                    return lang == Language::De
+                        ? "Wuerfelbecher fuer die Verteilung der Rueckwuerfe. Dieselbe Zahl gibt "
+                          "immer dieselbe Flaeche. Nur bei der Bauart Draussen."
+                        : "Dice cup for how the reflections are spread. The same number always "
+                          "gives the same surface. Outdoors type only.";
                 case Key::TapGain:
                     return lang == Language::De
                         ? "Pegel dieses Abgriffpunkts im Ausgang, in dB."
