@@ -8,7 +8,7 @@
 // starten.
 //
 //   reverb_probe [--in datei.wav] [--out ordner] [--size m] [--decay s]
-//                [--damp 0..1] [--early x] [--seconds t] [--sr hz]
+//                [--damp 0..1] [--early x] [--gain x] [--seconds t] [--sr hz]
 //
 // Gemessen wird die VOLLE Kette eines Abgriffpunkts (TapBus), also samt
 // fruehen Reflexionen - nicht nur das Hallnetz. Nur so entspricht das, was man
@@ -22,6 +22,7 @@
 #include "Reverb/SchroederReverb.h"
 #include "Reverb/TapBus.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -138,6 +139,19 @@ bool readWav (const std::string& path, WavData& out)
 void writeU32 (std::FILE* f, uint32_t v) { uint8_t b[4] { (uint8_t) v, (uint8_t) (v >> 8), (uint8_t) (v >> 16), (uint8_t) (v >> 24) }; std::fwrite (b, 1, 4, f); }
 void writeU16 (std::FILE* f, uint16_t v) { uint8_t b[2] { (uint8_t) v, (uint8_t) (v >> 8) }; std::fwrite (b, 1, 2, f); }
 
+// Hart auf Vollausschlag begrenzt, absichtlich und ohne Weichzeichnen
+// (@dpa 20260829: "bitte lasse es clippen, damit es nicht ueberrechnet").
+//
+// Ein Wert ueber 1,0 ist in einer Float-Datei erlaubt und wird dort auch
+// gespeichert, aber jeder Abspieler, der daraus Ganzzahlen macht, laeuft damit
+// ueber - und ein Ueberlauf klingt nicht nach Uebersteuerung, sondern nach
+// zerbrochenen Bits. Hartes Clipping ist an dieser Stelle das ehrlichere
+// Ergebnis: man hoert, DASS es zu laut ist, statt Muell zu hoeren.
+inline float clipHard (float x)
+{
+    return std::max (-1.0f, std::min (1.0f, x));
+}
+
 bool writeWavStereo (const std::string& path, const std::vector<float>& l, const std::vector<float>& r, double sampleRate)
 {
     std::FILE* f = std::fopen (path.c_str(), "wb");
@@ -163,8 +177,11 @@ bool writeWavStereo (const std::string& path, const std::vector<float>& l, const
 
     for (uint32_t i = 0; i < frames; ++i)
     {
-        std::fwrite (&l[i], 4, 1, f);
-        std::fwrite (&r[i], 4, 1, f);
+        const float a = clipHard (l[i]);
+        const float b = clipHard (r[i]);
+
+        std::fwrite (&a, 4, 1, f);
+        std::fwrite (&b, 4, 1, f);
     }
 
     std::fclose (f);
@@ -223,6 +240,7 @@ int main (int argc, char** argv)
     const double      decay   = std::stod (argValue (argc, argv, "--decay",   "2.0"));
     const double      damp    = std::stod (argValue (argc, argv, "--damp",    "0.35"));
     const double      early   = std::stod (argValue (argc, argv, "--early",   "1.0"));
+    const double      gain    = std::stod (argValue (argc, argv, "--gain",    "1.0"));
     const double      seconds = std::stod (argValue (argc, argv, "--seconds", "0"));
 
     double sampleRate = std::stod (argValue (argc, argv, "--sr", "48000"));
@@ -261,12 +279,13 @@ int main (int argc, char** argv)
     const size_t tail = (size_t) (decay * 1.5 * sampleRate);
     input.resize (input.size() + tail, 0.0f);
 
-    std::printf ("Raum %.1f m, Abklingzeit %.2f s, Daempfung %.2f, fruehe Echos %.2f\n\n",
-                 size, decay, damp, early);
-    std::printf ("  %-12s %10s %11s %10s %11s %11s\n",
-                 "Bauart", "RT60", "Rechenzeit", "Anteil", "Energie", "Spitze");
-    std::printf ("  %-12s %10s %11s %10s %11s %11s\n",
-                 "------", "----", "----------", "------", "-------", "------");
+    std::printf ("Raum %.1f m, Abklingzeit %.2f s, Daempfung %.2f, fruehe Echos %.2f, Pegel %.2f\n",
+                 size, decay, damp, early, gain);
+    std::printf ("Die WAVs sind hart auf Vollausschlag begrenzt.\n\n");
+    std::printf ("  %-12s %10s %11s %10s %11s %11s %10s\n",
+                 "Bauart", "RT60", "Rechenzeit", "Anteil", "Energie", "Spitze", "geclippt");
+    std::printf ("  %-12s %10s %11s %10s %11s %11s %10s\n",
+                 "------", "----", "----------", "------", "-------", "------", "--------");
 
     constexpr int block = 256;
 
@@ -288,7 +307,7 @@ int main (int argc, char** argv)
         bus.setDecaySeconds (decay);
         bus.setDamping (damp);
         bus.setEarlyAmount (early);
-        bus.setGain (1.0);
+        bus.setGain (gain);
         bus.setWidth (1.0);
 
         // Kein Vorlauf im Messbetrieb: er verschoebe nur alles um eine feste
@@ -330,10 +349,20 @@ int main (int argc, char** argv)
 
         auto dB = [] (double x) { return x > 1.0e-12 ? 10.0 * std::log10 (x) : -120.0; };
 
-        std::printf ("  %-12s %8.2f s %8.1f ms %8.2f %% %8.1f dB %8.1f dB\n",
+        // Wie viel davon steht ueber Vollausschlag und wird beim Schreiben
+        // abgeschnitten. Die Zahl sagt, ob man den Pegel senken muss oder ob
+        // nur ein paar Spitzen anstossen.
+        size_t clipped = 0;
+
+        for (size_t i = 0; i < input.size(); ++i)
+            if (std::fabs (l[i]) > 1.0f || std::fabs (r[i]) > 1.0f)
+                ++clipped;
+
+        std::printf ("  %-12s %8.2f s %8.1f ms %8.2f %% %8.1f dB %8.1f dB %8.2f %%\n",
                      e.name, rt, cpuSec * 1000.0, cpuSec / audioSec * 100.0,
                      dB (outEnergy) - dB (inEnergy),
-                     20.0 * std::log10 (std::max (1.0e-12, outPeak)));
+                     20.0 * std::log10 (std::max (1.0e-12, outPeak)),
+                     (double) clipped / (double) std::max<size_t> (1, input.size()) * 100.0);
 
         const std::string path = outDir + "/reverb_" + e.name + ".wav";
 
