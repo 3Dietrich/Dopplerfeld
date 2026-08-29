@@ -235,6 +235,38 @@ target_compile_definitions(preset_probe PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(preset_probe PRIVATE cxx_std_20)
 
+# Messprogramm zur "Fahne" nach einem Ueberschall-Vorbeiflug
+# (Tests/trail_probe.cpp), kein Test - es misst, es bewertet nicht.
+add_executable(trail_probe EXCLUDE_FROM_ALL Tests/trail_probe.cpp)
+target_link_libraries(trail_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(trail_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(trail_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(trail_probe PRIVATE cxx_std_20)
+
+# Messprogramm dazu, WOMIT ein Abgriffpunkt gespeist wird
+# (Tests/tapfeed_probe.cpp), kein Test.
+add_executable(tapfeed_probe EXCLUDE_FROM_ALL Tests/tapfeed_probe.cpp)
+target_link_libraries(tapfeed_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(tapfeed_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(tapfeed_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(tapfeed_probe PRIVATE cxx_std_20)
+
 # Layout-Bilder des Bewegungs-Panels (Tests/panel_shot.cpp), kein Test.
 add_executable(panel_shot EXCLUDE_FROM_ALL Tests/panel_shot.cpp)
 target_link_libraries(panel_shot

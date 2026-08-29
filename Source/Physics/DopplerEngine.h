@@ -550,7 +550,10 @@ private:
     // Raum zurueck), weich gegen 0, wenn sie auf verschiedenen Seiten stehen
     // (die "Reflexion" waere ein Durchschein durch die feste Wand, das gibt
     // es hier nicht). wallIndex ist 0/1 (nicht der Surface-Index).
-    double wallSideGain (int wallIndex) const;
+    // Stetiges 0..1-Mass dafuer, ob Quelle und Empfaenger auf derselben Seite
+    // der Wandebene stehen. Der Empfaenger ist meistens der Hoerer, bei den
+    // Wegen zu einem Abgriffpunkt aber dieser Punkt.
+    double wallSideGain (int wallIndex, Vec3 receiverPos) const;
 
     // Sicherheitsnetz: füllt die Bahn mit der zuletzt geschriebenen Position
     // auf, falls der Aufrufer für diesen Block weniger Punkte geliefert hat

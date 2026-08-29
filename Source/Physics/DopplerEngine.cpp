@@ -208,15 +208,35 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
         recipes.push_back ({ 1, -1, -1, -1, prop });
     }
 
-    // Abgriffpunkte: EIN Weg je Punkt, nicht zwei. Der Punkt hat kein zweites
-    // Ohr, also auch keinen zweiten Loeser - das ist der Grund, warum acht von
-    // ihnen weniger kosten als die vier Wege, die Direktschall und Boden
-    // zusammen schon belegen.
+    // Abgriffpunkte: EIN Weg je Punkt und Flaeche, nicht zwei. Der Punkt hat
+    // kein zweites Ohr, also auch keinen zweiten Loeser - das ist der Grund,
+    // warum acht von ihnen weniger kosten als die vier Wege, die Direktschall
+    // und Boden zusammen schon belegen.
     //
     // ear bleibt 0 und wird bei ihnen nicht ausgewertet (siehe renderInto):
     // ihr Kanal haengt am Tap-Index, nicht am Ohr.
+    //
+    // Neben dem Direktweg bekommt jeder Punkt die Reflexionen erster Ordnung
+    // (@dpa 20260829: die Waende "muessen die Reverbs korrekt beliefern").
+    // Was an einer Talwand ankommt, kommt nicht nur geradewegs von der
+    // Maschine - der Boden wirft denselben Schall dorthin, nur spaeter und
+    // dumpfer, und eine gegenueberliegende Wand ebenfalls. Ohne diese Wege
+    // haengt der Hall an einer Quelle, die es so nicht gibt: der Punkt hoert
+    // weniger als jedes Ohr daneben.
+    //
+    // Zweite Ordnung bleibt aussen vor. Sie kostet noch einmal so viel und
+    // traegt an einem Abgriffpunkt am wenigsten - was dort ankommt, wird
+    // ohnehin durch einen Hall geschickt, der Nachwuerfe selbst erzeugt.
+    //
+    // Alle diese Wege schreiben in DENSELBEN Kanal (2 + tap) und addieren sich
+    // dort, genau wie die Wege eines Ohres.
     for (int t = 0; t < maxTaps; ++t)
+    {
         recipes.push_back ({ 0, -1, -1, -1, -1, t });
+
+        for (int surface = 1; surface < 2 + maxWalls; ++surface)
+            recipes.push_back ({ 0, surface, -1, -1, -1, t });
+    }
 
     // Der Direktschall ist die Fläche ohne Fläche: keine Spiegelung, keine
     // Dämpfung, nie abschaltbar.
@@ -821,7 +841,14 @@ void DopplerEngine::disableAllReflections()
 bool DopplerEngine::recipeEnabled (const PathRecipe& r) const
 {
     if (r.tap >= 0)
-        return isTapEnabled (r.tap);
+    {
+        if (! isTapEnabled (r.tap))
+            return false;
+
+        // Der Direktweg zum Punkt laeuft immer, die Reflexionswege nur, wenn
+        // ihre Flaeche eingeschaltet ist - dieselbe Bedingung wie am Ohr.
+        return r.order() == 0 || surfaces[(size_t) r.first].enabled;
+    }
 
     if (r.clone >= 0)
         return r.clone < realClones;
@@ -898,14 +925,21 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
         // sondern immer da - wer den Direktschall zudreht, will die Quelle
         // loswerden, und der Boden wirft genau sie zurueck. Die Waende bleiben
         // stehen, sie sind die Flaechen, die man absichtlich hinstellt.
-        if (r.first == 1)
+        // Nicht am Abgriffpunkt: dort steht der Hall, und der soll bleiben,
+        // wenn man den Direktschall zudreht (dieselbe Ausnahme wie beim
+        // Direktweg oben).
+        if (r.first == 1 && r.tap < 0)
             t.gain *= (float) directGain;
 
         // Seitenerkennung nur bei Waenden (Index >= 2), nicht beim Boden -
         // @dpa wollte ausdruecklich die Waende, und beim Boden stehen Quelle/
         // Hoerer ohnehin so gut wie immer auf derselben Seite (oberhalb).
+        // Auf welcher Seite der Wand der EMPFAENGER steht, entscheidet, ob es
+        // die Reflexion ueberhaupt gibt - beim Abgriffpunkt ist das nicht der
+        // Hoerer, sondern der Punkt selbst.
         if (r.first >= 2)
-            t.gain *= (float) wallSideGain (r.first - 2);
+            t.gain *= (float) wallSideGain (r.first - 2,
+                                            r.tap >= 0 ? tapPosition (r.tap) : listener.head);
 
         return t;
     }
@@ -924,7 +958,7 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
     return t;
 }
 
-double DopplerEngine::wallSideGain (int wallIndex) const
+double DopplerEngine::wallSideGain (int wallIndex, Vec3 receiverPos) const
 {
     if (wallIndex < 0 || wallIndex >= maxWalls)
         return 1.0;
@@ -932,8 +966,8 @@ double DopplerEngine::wallSideGain (int wallIndex) const
     const Surface& s      = surfaces[(size_t) (2 + wallIndex)];
     const Vec3&    anchor = wallGeometry[(size_t) wallIndex].anchor;
 
-    const double dSrc = s.normal.dot (sourceTarget  - anchor);
-    const double dLis = s.normal.dot (listener.head - anchor);
+    const double dSrc = s.normal.dot (sourceTarget - anchor);
+    const double dLis = s.normal.dot (receiverPos  - anchor);
 
     // Vorzeichen von dSrc und dLis gleich => Quelle und Hoerer auf derselben
     // Seite der Wandebene, genau die Bedingung, unter der eine
@@ -1168,7 +1202,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         const Surface& surf = surfaces[(size_t) (2 + w)];
 
         wf.active = surf.enabled;
-        wf.gain   = (float) wallSideGain (w);   // nur sichtbar, wo es auch klaenge
+        wf.gain   = (float) wallSideGain (w, listener.head);   // nur sichtbar, wo es auch klaenge
 
         if (wf.active)
             for (int i = 0; i < s.wavefrontCount; ++i)
@@ -1181,7 +1215,7 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         // Beide Wandseiten muessen stimmen, sonst kann die doppelte Reflexion
         // gar nicht entstehen - dieselbe Multiplikations-Logik wie bei zwei
         // Daempfungsstufen in Serie (siehe recipeDamping).
-        const float pairGain = (float) (wallSideGain (0) * wallSideGain (1));
+        const float pairGain = (float) (wallSideGain (0, listener.head) * wallSideGain (1, listener.head));
 
         const PathTransform orderAB = composeTransforms (surfaces[2].transform, surfaces[3].transform);
         const PathTransform orderBA = composeTransforms (surfaces[3].transform, surfaces[2].transform);
