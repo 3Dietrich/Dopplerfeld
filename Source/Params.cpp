@@ -1,5 +1,6 @@
 #include "Params.h"
 
+#include "Reverb/ReverbParts.h"
 #include "Util/Utf8.h"
 
 #include <cmath>
@@ -396,15 +397,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         // 0,23 % gegen 0,40 % Echtzeit.
         layout.add (choiceParam (tapId (t, TapPart::type).toRawUTF8(),
                                  "Tap " + juce::String (t + 1) + " Type",
-                                 { "Diffusor", "Schroeder", "FDN", "Draussen" }, 0));
+                                 { "Diffusor", "Schroeder", "FDN", Text::utf8 ("Draußen") }, 0));
 
-        // Der Raum ist auf 200 m gedeckelt, und zwar nicht aus Geschmack: die
-        // Verzoegerungsleitungen aller drei Bauarten werden danach bemessen und
-        // liegen dauerhaft im Speicher (siehe reverbparts::maxRoomMetres). Die
-        // ENTFERNUNG des Punktes ist davon unberuehrt - die steckt im Vorlauf.
-        layout.add (floatParam (tapId (t, TapPart::room).toRawUTF8(),
-                                "Tap " + juce::String (t + 1) + " Room",
-                                { 0.5f, 200.0f, 0.1f }, 30.0f, "m"));
+        // Ein halber Meter bis zwei Kilometer, mit 60 m in der Reglermitte
+        // (@dpa 20260829: "Raum-Regler leicht logarithmisch, 0.5 bis 2000 m").
+        // Die Kennlinie ist der eigentliche Punkt: linear laegen die Raeume,
+        // in denen man arbeitet, auf den ersten drei Prozent des Weges.
+        //
+        // Der Speicher haengt daran und wird deshalb nicht mehr fest bemessen,
+        // sondern nach dem, was wirklich eingestellt ist - siehe
+        // reverbparts::capacityFor und DopplerEngine::growTapRoomCapacity.
+        // Die ENTFERNUNG des Punktes ist davon unberuehrt, die steckt im
+        // Vorlauf.
+        {
+            auto range = juce::NormalisableRange<float> ((float) reverbparts::minRoomMetres,
+                                                         (float) reverbparts::maxRoomMetres, 0.1f);
+            range.setSkewForCentre (60.0f);
+
+            layout.add (floatParam (tapId (t, TapPart::room).toRawUTF8(),
+                                    "Tap " + juce::String (t + 1) + " Room",
+                                    range, 30.0f, "m"));
+        }
 
         layout.add (floatParam (tapId (t, TapPart::decay).toRawUTF8(),
                                 "Tap " + juce::String (t + 1) + " Decay",

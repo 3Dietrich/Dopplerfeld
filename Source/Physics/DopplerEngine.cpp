@@ -245,7 +245,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     renderBuffer.setSize (renderChannels, maxBlock, false, true, true);
 
     for (auto& bus : tapBus)
-        bus.prepare (sr, maxBlock);
+        bus.prepare (sr, maxBlock, tapRoomCapacity);
 
     geometry.active().prepare  (sr, maxBlock, recipes.size(), trajectoryRateHz, maxHistorySeconds);
     geometry.pending().prepare (sr, maxBlock, recipes.size(), trajectoryRateHz, maxHistorySeconds);
@@ -732,6 +732,47 @@ void DopplerEngine::setTapReverb (int index, int type, double roomMetres,
     bus.setWidth (width);
 
     taps[(size_t) index].predelay = predelayEnabled;
+}
+
+// Groesster Raum, den ein Abgriffpunkt seit dem letzten Bemessen verlangt hat
+// und seine Puffer nicht tragen - 0, wenn alle reichen.
+//
+// Der Raumregler darf bis 2000 m; die Leitungen dafuer dauerhaft
+// bereitzuhalten kostete ein halbes Gigabyte (siehe reverbparts::capacityFor).
+// Stattdessen wird der Raum vorerst geklemmt und hier gemeldet.
+double DopplerEngine::tapRoomShortfall() const
+{
+    double worst = 0.0;
+
+    for (const auto& bus : tapBus)
+        worst = std::max (worst, bus.roomShortfall());
+
+    return worst;
+}
+
+// Puffer der zu klein bemessenen Abgriffpunkte neu anlegen. ALLOKIERT, gehoert
+// also in den Nachrichtenthread und nur bei angehaltenem Audiothread (siehe
+// DopplerfeldProcessor::growTapCapacityIfNeeded).
+//
+// Der Nachhall des betroffenen Punktes ist danach leer - ein neu bemessener
+// Puffer ist ein leerer Puffer. Hoerbar wird das nur in dem Moment, in dem der
+// Raumregler ueber eine Stufe hinausgeht, und dort aendert sich der Hall
+// ohnehin.
+void DopplerEngine::growTapRoomCapacity()
+{
+    if (sr <= 0.0 || maxBlock <= 0)
+        return;
+
+    for (auto& bus : tapBus)
+    {
+        const double wanted = bus.roomShortfall();
+
+        if (wanted > bus.roomCapacity())
+        {
+            tapRoomCapacity = std::max (tapRoomCapacity, reverbparts::capacityFor (wanted));
+            bus.prepare (sr, maxBlock, wanted);
+        }
+    }
 }
 
 void DopplerEngine::setPropellers (bool enabled, double gainLinear)

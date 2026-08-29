@@ -26,11 +26,13 @@ class FdnReverb : public ReverbUnit
 public:
     static constexpr int lines = 8;
 
-    void prepare (double sampleRate, int /*maxBlock*/) override
+    void prepare (double sampleRate, int /*maxBlock*/, double capacityMetres) override
     {
         sr = sampleRate;
 
-        const double maxBase = reverbparts::maxRoomMetres / reverbparts::soundSpeed * sr;
+        capacity = std::clamp (capacityMetres, reverbparts::minRoomMetres, reverbparts::maxRoomMetres);
+
+        const double maxBase = capacity / reverbparts::soundSpeed * sr;
         const int    maxLen  = (int) (maxBase * (2500.0 / 1400.0)) + 2;
 
         for (int i = 0; i < lines; ++i)
@@ -111,7 +113,7 @@ public:
 
     void setRoomSize (double metres) override
     {
-        roomMetres = std::clamp (metres, 0.5, reverbparts::maxRoomMetres);
+        roomMetres = std::clamp (metres, reverbparts::minRoomMetres, capacity);
         update();
     }
 
@@ -217,5 +219,11 @@ private:
     float  fb[lines]    {};
     double sr           = 48000.0;
     double roomMetres   = 30.0;
+
+    // Groesster Raum, den die Puffer tragen. In prepare() bemessen; darueber
+    // hinaus wird der Raumregler geklemmt, bis die Kapazitaet ausserhalb des
+    // Audiothreads nachgezogen ist (siehe TapBus::roomShortfall).
+    double capacity = reverbparts::baseCapacityMetres;
+
     double decaySeconds = 2.0;
 };

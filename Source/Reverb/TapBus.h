@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <vector>
 
 // Was an einem Abgriffpunkt haengt: Vorlauf, Hall, Breite, Pegel.
@@ -20,9 +21,16 @@
 // danach laeuft NICHT noch einmal durch die Physik, und genau das macht ihn
 // bezahlbar.
 //
-// Alle drei Bauarten liegen gleichzeitig bereit. Das kostet RAM (siehe
-// maxRoomMetres), erlaubt aber einen Typwechsel im Audiothread ohne
-// Allokation - und ohne den koennte man den Typ nicht automatisieren.
+// Alle vier Bauarten liegen gleichzeitig bereit. Das kostet RAM, erlaubt aber
+// einen Typwechsel im Audiothread ohne Allokation - und ohne den koennte man
+// den Typ nicht automatisieren.
+//
+// Wie viel RAM, entscheidet die Kapazitaet: die Leitungen sind nicht auf den
+// groessten einstellbaren Raum bemessen, sondern auf den, der wirklich
+// gebraucht wird (reverbparts::capacityFor). Verlangt der Regler mehr, wird
+// der Raum bis auf Weiteres geklemmt und der Mehrbedarf in roomShortfall
+// gemeldet; das Nachbemessen selbst allokiert und gehoert deshalb in den
+// Nachrichtenthread (DopplerfeldProcessor::growTapCapacityIfNeeded).
 class TapBus
 {
 public:
@@ -33,15 +41,18 @@ public:
     // damit ist jede Feldgroesse abgedeckt, die das Plugin kennt.
     static constexpr double maxPredelayMetres = 5000.0;
 
-    void prepare (double sampleRate, int maxBlock)
+    void prepare (double sampleRate, int maxBlock, double capacityMetres)
     {
         sr = sampleRate;
 
-        early.prepare (sampleRate, maxBlock);
-        diffuser.prepare (sampleRate, maxBlock);
-        schroeder.prepare (sampleRate, maxBlock);
-        fdn.prepare (sampleRate, maxBlock);
-        openAir.prepare (sampleRate, maxBlock);
+        capacity = reverbparts::capacityFor (capacityMetres);
+        shortfall.store (0.0);
+
+        early.prepare (sampleRate, maxBlock, capacity);
+        diffuser.prepare (sampleRate, maxBlock, capacity);
+        schroeder.prepare (sampleRate, maxBlock, capacity);
+        fdn.prepare (sampleRate, maxBlock, capacity);
+        openAir.prepare (sampleRate, maxBlock, capacity);
 
         const int maxDelay = (int) (maxPredelayMetres / reverbparts::soundSpeed * sr) + 2;
 
@@ -85,11 +96,24 @@ public:
 
     void setRoomSize (double metres)
     {
+        // Ueber der Kapazitaet wird geklemmt und der Bedarf gemeldet. Die
+        // Bauarten klemmen selbst noch einmal - hier steht es, damit der
+        // Mehrbedarf ueberhaupt jemand erfaehrt.
+        if (metres > capacity)
+            shortfall.store (metres);
+
         early.setRoomSize (metres);
 
         for (auto* u : units())
             u->setRoomSize (metres);
     }
+
+    // Groesster Raum, den die Puffer derzeit tragen.
+    double roomCapacity() const { return capacity; }
+
+    // Groesster Raum, der seit dem letzten Bemessen verlangt wurde - 0, wenn
+    // die Kapazitaet reicht. Wird vom Nachrichtenthread gelesen.
+    double roomShortfall() const { return shortfall.load(); }
 
     // Staerke der fruehen Einzelechos. 0 = reiner Nachhall wie vorher.
     void setEarlyAmount (double amount)
@@ -327,6 +351,10 @@ private:
 
     Type   type         = Type::fdn;
     double sr           = 48000.0;
+    double capacity     = reverbparts::baseCapacityMetres;
+
+    // Audiothread schreibt, Nachrichtenthread liest.
+    std::atomic<double> shortfall { 0.0 };
     int    targetLength = 1;
     int    fadePos      = -1;
     float  width        = 1.0f;

@@ -518,6 +518,22 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     sourceHolder.reset();
 
     dopplerEngine.setSource (&sourceHolder);
+
+    // Hallpuffer nach dem groessten eingestellten Raum bemessen, bevor die
+    // Engine sie anlegt. Sonst faengt ein geladener Zustand mit 800-m-Punkten
+    // bei der Grundgroesse an und muesste sich beim ersten Block ueber
+    // growTapCapacityIfNeeded() hocharbeiten - mit einem hoerbaren Abriss
+    // gleich zu Beginn.
+    {
+        double biggestRoom = reverbparts::baseCapacityMetres;
+
+        for (int t = 0; t < Params::tapCount; ++t)
+            if (const auto* p = apvts.getRawParameterValue (Params::tapId (t, Params::TapPart::room)))
+                biggestRoom = std::max (biggestRoom, (double) p->load());
+
+        dopplerEngine.setTapRoomCapacity (biggestRoom);
+    }
+
     dopplerEngine.prepare (sampleRate, maxBlock, maxFieldMetres);
 
     sourceSmoothers.prepare (DopplerEngine::trajectoryRateHz);
@@ -616,6 +632,24 @@ void DopplerfeldProcessor::restartEngine()
 
     suspendProcessing (true);
     prepareToPlay (sr, bs);
+    suspendProcessing (false);
+}
+
+// Hallpuffer nachbemessen. Laeuft im Nachrichtenthread (AsyncUpdater), weil
+// das Anlegen der Leitungen allokiert, und haelt den Audiothread dafuer an -
+// derselbe Weg wie beim Motor-Neustart darueber.
+//
+// Kosten: der Nachhall der betroffenen Punkte ist danach leer. Das passiert
+// nur beim Ueberschreiten einer Kapazitaetsstufe (25, 50, 100 ... 2000 m),
+// also hoechstens sieben Mal auf dem ganzen Reglerweg, und dort aendert sich
+// der Hall ohnehin gerade.
+void DopplerfeldProcessor::growTapCapacityIfNeeded()
+{
+    if (dopplerEngine.tapRoomShortfall() <= 0.0)
+        return;
+
+    suspendProcessing (true);
+    dopplerEngine.growTapRoomCapacity();
     suspendProcessing (false);
 }
 
@@ -2529,6 +2563,11 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
                                         tap.early, tap.gainLinear, tap.width, tap.predelay,
                                         tap.echoes, tap.seed);
         }
+
+        // Verlangt ein Punkt mehr Raum, als seine Puffer tragen, wird er
+        // vorerst geklemmt; das Nachbemessen laeuft im Nachrichtenthread.
+        if (dopplerEngine.tapRoomShortfall() > 0.0)
+            tapCapacityGrower.nudge();
 
         // Fenster auf den Ausgabepuffer, keine Kopie und keine Allokation.
         juce::AudioBuffer<float> chunk (buffer.getArrayOfWritePointers(),

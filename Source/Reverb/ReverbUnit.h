@@ -19,7 +19,11 @@ class ReverbUnit
 public:
     virtual ~ReverbUnit() = default;
 
-    virtual void prepare (double sampleRate, int maxBlock) = 0;
+    // capacityMetres ist der groesste Raum, den die Puffer nach diesem Aufruf
+    // tragen koennen. Er bemisst den Speicher und wird ausserhalb des
+    // Audiothreads nachgezogen, wenn der Regler darueber hinausgeht (siehe
+    // reverbparts::capacityFor).
+    virtual void prepare (double sampleRate, int maxBlock, double capacityMetres) = 0;
     virtual void reset() = 0;
 
     // Schreibt nach outL/outR, addiert nicht. Der Aufrufer mischt selbst zu,

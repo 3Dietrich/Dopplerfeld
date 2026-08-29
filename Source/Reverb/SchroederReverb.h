@@ -21,11 +21,13 @@ public:
     static constexpr int combs    = 8;
     static constexpr int allpasses = 4;
 
-    void prepare (double sampleRate, int /*maxBlock*/) override
+    void prepare (double sampleRate, int /*maxBlock*/, double capacityMetres) override
     {
         sr = sampleRate;
 
-        const double maxBase = reverbparts::maxRoomMetres / reverbparts::soundSpeed * sr;
+        capacity = std::clamp (capacityMetres, reverbparts::minRoomMetres, reverbparts::maxRoomMetres);
+
+        const double maxBase = capacity / reverbparts::soundSpeed * sr;
         const int    maxComb = (int) (maxBase * (2100.0 / 1400.0)) + 2;
         const int    maxAp   = (int) (maxBase * (0.12)) + 2;
 
@@ -103,7 +105,7 @@ public:
 
     void setRoomSize (double metres) override
     {
-        roomMetres = std::clamp (metres, 0.5, reverbparts::maxRoomMetres);
+        roomMetres = std::clamp (metres, reverbparts::minRoomMetres, capacity);
         update();
     }
 
@@ -176,6 +178,12 @@ private:
 
     double sr           = 48000.0;
     double roomMetres   = 10.0;
+
+    // Groesster Raum, den die Puffer tragen. In prepare() bemessen; darueber
+    // hinaus wird der Raumregler geklemmt, bis die Kapazitaet ausserhalb des
+    // Audiothreads nachgezogen ist (siehe TapBus::roomShortfall).
+    double capacity = reverbparts::baseCapacityMetres;
+
     double decaySeconds = 1.5;
     float  fb           = 0.8f;
 };

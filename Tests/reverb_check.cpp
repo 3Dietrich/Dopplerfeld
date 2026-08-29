@@ -156,7 +156,7 @@ double correlation (const std::vector<float>& a, const std::vector<float>& b)
 
 void checkDecay (ReverbUnit& unit, const char* label, double wanted)
 {
-    unit.prepare (sr, block);
+    unit.prepare (sr, block, 30.0);
     unit.setRoomSize (30.0);
     unit.setDamping (0.0);
     unit.setDecaySeconds (wanted);
@@ -194,7 +194,7 @@ void checkNetworkStability()
 {
     FdnReverb fdn;
 
-    fdn.prepare (sr, block);
+    fdn.prepare (sr, block, 30.0);
     fdn.setRoomSize (30.0);
     fdn.setDamping (0.0);
 
@@ -241,7 +241,7 @@ void checkDampingTakesTreble()
 
     for (auto* u : { (ReverbUnit*) &open, (ReverbUnit*) &closed })
     {
-        u->prepare (sr, block);
+        u->prepare (sr, block, 30.0);
         u->setRoomSize (30.0);
         u->setDecaySeconds (2.0);
     }
@@ -276,7 +276,10 @@ void checkExtremes()
 
     for (auto* u : units)
     {
-        u->prepare (sr, block);
+        // Grosszuegig bemessen, damit die Grenzwerte unten nicht schon an der
+        // Kapazitaet haengen bleiben - geprueft wird hier die Stabilitaet der
+        // Bauart, nicht die Puffergroesse.
+        u->prepare (sr, block, 500.0);
 
         bool clean = true;
 
@@ -309,7 +312,7 @@ void checkPredelay()
 
     TapBus bus;
 
-    bus.prepare (sr, block);
+    bus.prepare (sr, block, 10.0);
     bus.setType (TapBus::Type::diffuser);
     bus.setRoomSize (10.0);
     bus.setDecaySeconds (0.5);
@@ -358,7 +361,7 @@ void checkAdds()
 {
     TapBus bus;
 
-    bus.prepare (sr, block);
+    bus.prepare (sr, block, 20.0);
     bus.setType (TapBus::Type::fdn);
     bus.setRoomSize (20.0);
     bus.setDecaySeconds (1.0);
@@ -379,6 +382,71 @@ void checkAdds()
             untouched = false;
 
     check (untouched, "stummer Abgriffpunkt laesst den Ausgang unberuehrt", "Pegel 0");
+}
+
+// Die Puffer sind nach dem bemessen, was eingestellt IST, nicht nach dem
+// groessten einstellbaren Raum (reverbparts::capacityFor). Geprueft wird
+// beides: dass ein Raum ueber der Kapazitaet vorerst geklemmt UND gemeldet
+// wird, und dass er nach dem Nachbemessen wirklich laenger klingt.
+void checkRoomCapacity()
+{
+    {
+        char detail[160];
+        std::snprintf (detail, sizeof detail, "30 m -> %.0f, 200 m -> %.0f, 3000 m -> %.0f",
+                       reverbparts::capacityFor (30.0),
+                       reverbparts::capacityFor (200.0),
+                       reverbparts::capacityFor (3000.0));
+
+        check (reverbparts::capacityFor (30.0)   == 50.0
+               && reverbparts::capacityFor (200.0) == 200.0
+               && reverbparts::capacityFor (3000.0) == reverbparts::maxRoomMetres,
+               "Kapazitaetstreppe verdoppelt bis zum Deckel", detail);
+    }
+
+    TapBus bus;
+
+    bus.prepare (sr, block, 25.0);
+    bus.setRoomSize (400.0);
+
+    {
+        char detail[160];
+        std::snprintf (detail, sizeof detail, "Kapazitaet %.0f m, verlangt %.0f m",
+                       bus.roomCapacity(), bus.roomShortfall());
+
+        check (bus.roomShortfall() >= 400.0, "zu kleiner Puffer meldet den Mehrbedarf", detail);
+    }
+
+    // Wie lange die Flaeche antwortet, haengt bei Draussen unmittelbar an ihrer
+    // Ausdehnung - deshalb laesst sich am Ende der Antwort ablesen, ob der Raum
+    // geklemmt war.
+    auto lastSoundSeconds = [] (double capacityMetres)
+    {
+        OpenAirReverb air;
+
+        air.prepare (sr, block, capacityMetres);
+        air.setRoomSize (400.0);
+        air.setDecaySeconds (0.0);
+        air.setDamping (0.0);
+        air.reset();
+
+        const Impulse ir = renderImpulse (air, 2.0);
+
+        double last = 0.0;
+
+        for (size_t i = 0; i < ir.l.size(); ++i)
+            if (std::fabs (ir.l[i]) > 1.0e-4)
+                last = (double) i / sr;
+
+        return last;
+    };
+
+    const double clamped = lastSoundSeconds (25.0);
+    const double full    = lastSoundSeconds (400.0);
+
+    char detail[160];
+    std::snprintf (detail, sizeof detail, "geklemmt %.3f s, nachbemessen %.3f s", clamped, full);
+
+    check (full > clamped * 4.0, "nachbemessener Puffer traegt den ganzen Raum", detail);
 }
 
 } // namespace
@@ -402,7 +470,7 @@ int main()
         // Der Diffusor hat keinen Nachhallschwanz, eine Abklingzeit ist bei ihm
         // nicht definiert. Geprueft wird nur, dass er beschraenkt bleibt und
         // zwei verschiedene Seiten liefert.
-        dif.prepare (sr, block);
+        dif.prepare (sr, block, 30.0);
         dif.setRoomSize (30.0);
         dif.setDecaySeconds (2.0);
         dif.reset();
@@ -422,7 +490,7 @@ int main()
 
         constexpr double extent = 60.0;   // Meter
 
-        air.prepare (sr, block);
+        air.prepare (sr, block, extent);
         air.setRoomSize (extent);
         air.setDecaySeconds (0.0);        // keine Rueckkopplung
         air.setDamping (0.3);
@@ -464,7 +532,7 @@ int main()
     {
         OpenAirReverb air;
 
-        air.prepare (sr, block);
+        air.prepare (sr, block, 60.0);
         air.setRoomSize (60.0);
         air.setDecaySeconds (3.0);
         air.setDamping (0.2);
@@ -502,6 +570,7 @@ int main()
     checkNetworkStability();
     checkDampingTakesTreble();
     checkExtremes();
+    checkRoomCapacity();
 
     std::printf (failures == 0 ? "\nalles gruen\n" : "\n%d Pruefung(en) fehlgeschlagen\n", failures);
 

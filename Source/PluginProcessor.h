@@ -360,6 +360,31 @@ public:
     BypassDirectLink bypassDirectLink { apvts };
 
 private:
+    // Hallpuffer nachbemessen, wenn der Raumregler ueber die derzeitige
+    // Kapazitaet hinausgeht (siehe reverbparts::capacityFor). Haelt den
+    // Audiothread dafuer an - prepare() der Bauarten allokiert.
+    void growTapCapacityIfNeeded();
+
+    // Der Anstoss kommt aus dem Audiothread, das Nachbemessen gehoert in den
+    // Nachrichtenthread. Ein AsyncUpdater und kein Editor-Timer, weil das auch
+    // ohne offenes Fenster geschehen muss - Automation dreht am Raum, und ein
+    // Offline-Bounce hat gar keine Oberflaeche.
+    struct TapCapacityGrower : private juce::AsyncUpdater
+    {
+        explicit TapCapacityGrower (DopplerfeldProcessor& p) : owner (p) {}
+        ~TapCapacityGrower() override { cancelPendingUpdate(); }
+
+        // Mehrfaches Anstossen kostet nichts: solange eine Nachricht
+        // aussteht, verwirft der AsyncUpdater weitere.
+        void nudge() { triggerAsyncUpdate(); }
+
+    private:
+        void handleAsyncUpdate() override { owner.growTapCapacityIfNeeded(); }
+
+        DopplerfeldProcessor& owner;
+    };
+
+    TapCapacityGrower tapCapacityGrower { *this };
 
     //==================================================================
     // Die vier Glättungsverfahren aus Plan 3.8, alle vier fertig gebaut, plus

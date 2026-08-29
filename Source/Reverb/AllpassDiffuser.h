@@ -21,13 +21,15 @@ class AllpassDiffuser : public ReverbUnit
 public:
     static constexpr int stages = 4;
 
-    void prepare (double sampleRate, int /*maxBlock*/) override
+    void prepare (double sampleRate, int /*maxBlock*/, double capacityMetres) override
     {
         sr = sampleRate;
 
         // Die Stufen sind kurz: der Diffusor streut, er speichert nicht. Ein
         // Zehntel der Raumlaufzeit reicht dafuer und haelt den Puffer klein.
-        const int maxLen = (int) (reverbparts::maxRoomMetres / reverbparts::soundSpeed * sr * 0.12) + 2;
+        capacity = std::clamp (capacityMetres, reverbparts::minRoomMetres, reverbparts::maxRoomMetres);
+
+        const int maxLen = (int) (capacity / reverbparts::soundSpeed * sr * 0.12) + 2;
 
         for (int i = 0; i < stages; ++i)
         {
@@ -71,7 +73,7 @@ public:
 
     void setRoomSize (double metres) override
     {
-        roomMetres = std::clamp (metres, 0.5, reverbparts::maxRoomMetres);
+        roomMetres = std::clamp (metres, reverbparts::minRoomMetres, capacity);
         updateLengths();
     }
 
@@ -140,5 +142,11 @@ private:
 
     double sr         = 48000.0;
     double roomMetres = 10.0;
+
+    // Groesster Raum, den die Puffer tragen. In prepare() bemessen; darueber
+    // hinaus wird der Raumregler geklemmt, bis die Kapazitaet ausserhalb des
+    // Audiothreads nachgezogen ist (siehe TapBus::roomShortfall).
+    double capacity = reverbparts::baseCapacityMetres;
+
     float  gain       = 0.62f;
 };

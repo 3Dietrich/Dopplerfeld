@@ -25,12 +25,14 @@ class EarlyReflections
 public:
     static constexpr int taps = 16;
 
-    void prepare (double sampleRate, int /*maxBlock*/)
+    void prepare (double sampleRate, int /*maxBlock*/, double capacityMetres)
     {
         sr = sampleRate;
 
         // Der spaeteste Tap liegt bei der doppelten Raumlaufzeit.
-        const int maxLen = (int) (reverbparts::maxRoomMetres / reverbparts::soundSpeed * sr * 2.2) + 2;
+        capacity = std::clamp (capacityMetres, reverbparts::minRoomMetres, reverbparts::maxRoomMetres);
+
+        const int maxLen = (int) (capacity / reverbparts::soundSpeed * sr * 2.2) + 2;
 
         line.prepare (maxLen);
         update();
@@ -47,7 +49,7 @@ public:
 
     void setRoomSize (double metres)
     {
-        roomMetres = std::clamp (metres, 0.5, reverbparts::maxRoomMetres);
+        roomMetres = std::clamp (metres, reverbparts::minRoomMetres, capacity);
         update();
     }
 
@@ -153,6 +155,12 @@ private:
 
     double sr         = 48000.0;
     double roomMetres = 30.0;
+
+    // Groesster Raum, den die Puffer tragen. In prepare() bemessen; darueber
+    // hinaus wird der Raumregler geklemmt, bis die Kapazitaet ausserhalb des
+    // Audiothreads nachgezogen ist (siehe TapBus::roomShortfall).
+    double capacity = reverbparts::baseCapacityMetres;
+
     double damping    = 0.0;
     float  amount     = 0.0f;
 };

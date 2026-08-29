@@ -306,7 +306,7 @@ int main (int argc, char** argv)
     {
         TapBus bus;
 
-        bus.prepare (sampleRate, block);
+        bus.prepare (sampleRate, block, size);
         bus.setType (e.type);
         bus.setRoomSize (size);
         bus.setDecaySeconds (decay);

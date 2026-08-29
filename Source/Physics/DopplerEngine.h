@@ -327,6 +327,21 @@ public:
                        double damping01, double earlyAmount, double gainLinear, double width,
                        bool predelayEnabled, int echoCount, int seed);
 
+    // Groesster Raum, den ein Punkt verlangt hat und seine Puffer nicht
+    // tragen (0 = alles passt). Der Audiothread meldet ihn beim Setzen,
+    // gelesen wird er vom Nachrichtenthread.
+    double tapRoomShortfall() const;
+
+    // Zu klein bemessene Punkte neu anlegen. Allokiert - nur vom
+    // Nachrichtenthread und nur bei angehaltenem Audiothread aufrufen.
+    void growTapRoomCapacity();
+
+    // Bemessung der Hallpuffer vor einem prepare() festlegen, damit ein
+    // geladener Zustand mit grossen Raeumen sofort richtig anfaengt statt
+    // sich ueber growTapRoomCapacity() hochzuarbeiten. Setzt hart: nur so
+    // gibt ein Zustand mit kleinen Raeumen den Speicher wieder her.
+    void setTapRoomCapacity (double metres) { tapRoomCapacity = reverbparts::capacityFor (metres); }
+
     bool isTapEnabled (int index) const
     {
         return ! tapsBypassed
@@ -689,6 +704,12 @@ private:
 
     double sr       = 0.0;
     int    maxBlock = 0;
+
+    // Raumgroesse, auf die die Hallpuffer der Abgriffpunkte bemessen sind.
+    // Waechst mit dem, was verlangt wird (growTapRoomCapacity), und bleibt
+    // ueber ein prepare() hinweg erhalten - sonst faenge ein Puffergroessen-
+    // wechsel des Hosts wieder klein an und muesste sich neu hocharbeiten.
+    double tapRoomCapacity = reverbparts::baseCapacityMetres;
 
     // Fortlaufender Sample-Zähler, nie gewrappt - deckungsgleich mit
     // SourceSignalBuffer::writePosition(), damit timeToIndex() und die

@@ -23,21 +23,43 @@ namespace reverbparts
 // Wetterregler neu bemessen, ohne dass man es hoert.
 inline constexpr double soundSpeed = 343.0;
 
-// Groesster gedachter Raum, in Metern. Das ist eine Puffergrenze, kein
-// Klangregler: die Verzoegerungsleitungen werden in prepare() auf diese Laenge
-// bemessen und danach nie wieder allokiert.
+// Groesster einstellbarer Raum, in Metern. Reiner Deckel des Reglers, keine
+// Pufferbemessung mehr: 2000 m sind knapp sechs Sekunden Grundlaufzeit, und
+// damit ist jede Talflanke abgedeckt, die das Feld hergibt.
+inline constexpr double maxRoomMetres = 2000.0;
+
+// Kleinster Raum. Darunter waeren die Leitungen kuerzer als ein Sample.
+inline constexpr double minRoomMetres = 0.5;
+
+// Womit ein Abgriffpunkt anfaengt, solange niemand mehr verlangt hat.
+inline constexpr double baseCapacityMetres = 25.0;
+
+// Wie gross die Verzoegerungsleitungen bemessen werden, um einen Raum von
+// `metres` zu tragen.
 //
-// Der Preis steht in RAM, und er ist der einzige Punkt am ganzen Hall, an dem
-// RAM ueberhaupt zaehlt. Ein Abgriffpunkt haelt alle drei Bauarten gleichzeitig
-// bereit, damit ein Typwechsel im Audiothread nichts allokiert; das sind bei
-// 200 m und 48 kHz rund 4,4 MB, bei acht Abgriffpunkten also gut 35 MB.
-// Bei 500 m waeren es 90 MB, und dafuer ist der Gewinn zu klein: 200 m
-// Raumgroesse sind bereits eine Grundlaufzeit von 583 ms.
+// Der Speicher waechst linear mit der Raumgroesse, und er waechst pro
+// Abgriffpunkt: bei Draussen liegen bis zu 48 eigene Leitungen nebeneinander.
+// Fest auf den groessten Raum bemessen kostete ein Punkt bei 2000 m rund
+// 54 MB, acht davon knapp ein halbes Gigabyte - fuer Puffer, die in fast jeder
+// Einstellung fast leer bleiben.
 //
-// Die ENTFERNUNG eines Abgriffpunkts ist davon nicht betroffen. Sie steckt im
-// Vorlauf des TapBus, und der ist eine einzelne Monoleitung - die darf
-// kilometerweit reichen, ohne dass es auffaellt.
-inline constexpr double maxRoomMetres = 200.0;
+// Deshalb: bemessen wird nach dem, was wirklich eingestellt ist, und zwar in
+// Verdopplungsschritten. Die Treppe ist der Punkt an der Sache - eine Leitung,
+// die bei jedem Reglerpixel exakt neu bemessen wuerde, muesste beim Ziehen
+// hunderte Male neu angelegt werden; so passiert es beim Weg von 25 auf 2000 m
+// genau sieben Mal.
+//
+// Neu bemessen wird ausserhalb des Audiothreads, siehe TapBus::roomShortfall
+// und DopplerfeldProcessor::growTapCapacityIfNeeded.
+inline double capacityFor (double metres)
+{
+    double c = baseCapacityMetres;
+
+    while (c < metres && c < maxRoomMetres)
+        c *= 2.0;
+
+    return std::min (c, maxRoomMetres);
+}
 
 // Ringpuffer mit ganzzahliger Verzoegerung.
 //
