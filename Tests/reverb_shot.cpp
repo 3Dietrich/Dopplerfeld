@@ -17,7 +17,7 @@ namespace
 // Breite wie die Panelspalte im Editor, Hoehe aus
 // DopplerfeldEditor::reverbContentHeight.
 constexpr int panelWidth  = 462;
-constexpr int panelHeight = 8 + 26 + 6 + 2 * Theme::knobHeight + 4 + 6 + 26 + 8;
+constexpr int panelHeight = 8 + Theme::knobHeight + 6 + 2 * Theme::knobHeight + 4 + 8;
 }
 
 int main()

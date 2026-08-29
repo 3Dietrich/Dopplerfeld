@@ -413,48 +413,48 @@ int main()
         check (std::fabs (correlation (ir.l, ir.r)) < 0.9, "Diffusor ist zweiseitig", dif.name());
     }
 
-    // Draussen soll gerade NICHT dicht werden - das ist sein Zweck. Geprueft
-    // wird deshalb das Gegenteil dessen, was man von einem Hall erwartet: die
-    // Zahl der Ausschlaege je Sekunde darf zum Ende hin nicht steigen.
+    // Draussen darf keine Nachechos haben - das ist sein Zweck. Ein
+    // Abgriffpunkt steht fuer EINE Flaeche; weitere Rueckwuerfe sind Sache der
+    // anderen Punkte, die dafuer ihren eigenen Ort und ihre eigene Laufzeit
+    // mitbringen. Geprueft wird deshalb das Gegenteil dessen, was man von einem
+    // Hall erwartet: nach der Ausdehnung der Flaeche muss Ruhe sein.
     {
         OpenAirReverb air;
 
+        constexpr double extent = 60.0;   // Meter
+
         air.prepare (sr, block);
-        air.setRoomSize (60.0);
-        air.setDecaySeconds (4.0);
+        air.setRoomSize (extent);
+        air.setDecaySeconds (6.0);        // volle Rauigkeit, laengste Streuung
         air.setDamping (0.3);
         air.reset();
 
-        const Impulse ir = renderImpulse (air, 5.0);
+        const Impulse ir = renderImpulse (air, 3.0);
 
-        auto pulseCount = [&] (double fromSec, double toSec)
+        // Die Antwort reicht hoechstens ueber die Ausdehnung der Flaeche,
+        // hin und zurueck. Alles danach waere ein Nachecho.
+        const double spanSec = extent / 343.0;
+
+        double inside = 0.0, after = 0.0;
+
+        for (size_t i = 0; i < ir.l.size(); ++i)
         {
-            const size_t a = (size_t) (fromSec * sr);
-            const size_t b = std::min (ir.l.size(), (size_t) (toSec * sr));
+            const double v = std::fabs (ir.l[i]);
+            const double t = (double) i / sr;
 
-            double thresh = 0.0;
-
-            for (size_t i = a; i < b; ++i)
-                thresh = std::max (thresh, (double) std::fabs (ir.l[i]));
-
-            int n = 0;
-
-            for (size_t i = a + 1; i + 1 < b; ++i)
-                if (std::fabs (ir.l[i]) > thresh * 0.25
-                    && std::fabs (ir.l[i]) >= std::fabs (ir.l[i - 1])
-                    && std::fabs (ir.l[i]) > std::fabs (ir.l[i + 1]))
-                    ++n;
-
-            return n;
-        };
-
-        const int early = pulseCount (0.0, 1.5);
-        const int late  = pulseCount (2.5, 4.0);
+            if (t <= spanSec * 1.5)
+                inside = std::max (inside, v);
+            else
+                after = std::max (after, v);
+        }
 
         char detail[160];
-        std::snprintf (detail, sizeof detail, "%d Ausschlaege frueh, %d spaet", early, late);
+        std::snprintf (detail, sizeof detail,
+                       "nach %.0f ms noch %.1f dB unter der Antwort",
+                       spanSec * 1500.0,
+                       20.0 * std::log10 (std::max (1.0e-9, after / std::max (1.0e-9, inside))));
 
-        check (late <= early + 2, "Draussen wird nicht dichter", detail);
+        check (after < inside * 0.01, "Draussen hat keine Nachechos", detail);
         check (allFinite (ir.l) && peak (ir.l) < 4.0, "Draussen bleibt beschraenkt", air.name());
     }
 

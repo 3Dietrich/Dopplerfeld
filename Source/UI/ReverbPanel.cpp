@@ -265,27 +265,41 @@ void ReverbPanel::resized()
 
     groupRules.clear();
 
-    // Reihe 1: Nummernwahl, An-Schalter, Bauart.
-    auto head = area.removeFromTop (26);
+    // Der Direktschall steht VORN und allein, nicht am Ende der Reglerreihen
+    // (@dpa 20260829: "der Regler soll nicht hinter den ganzen Reglern der 8
+    // Reverbs stehen, sondern irgendwo zentral/vorne/unabhaengig"). Er ist der
+    // einzige hier, der nicht zum gewaehlten Punkt gehoert, sondern fuers ganze
+    // Plugin gilt - und wer ihn zwischen acht Punkt-Reglern sucht, haelt ihn
+    // fuer einen davon.
+    auto head = area.removeFromTop (knobH);
+
+    layoutKnob (direct, head.removeFromLeft (knobW));
+    head.removeFromLeft (10);
+
+    // Rechts daneben, zweizeilig: Punktwahl oben, Bauart darunter. Beide
+    // Zeilen sind nur 26 hoch und passen deshalb neben den Regler, statt eine
+    // eigene Zeile zu kosten.
+    auto pick = head.removeFromTop (26);
 
     for (auto& b : selectButtons)
-        b.setBounds (head.removeFromLeft (28));
+        b.setBounds (pick.removeFromLeft (28));
 
-    head.removeFromLeft (10);
-    onButton.setBounds (head.removeFromLeft (56));
+    pick.removeFromLeft (10);
+    onButton.setBounds (pick.removeFromLeft (56));
 
-    // Die Bauart rechts aussen: sie aendert den Klang am staerksten und soll
-    // deshalb nicht zwischen den Zahlenreglern untergehen.
-    typeBox.setBounds (head.removeFromRight (110));
-    typeLabel.setBounds (head.removeFromRight (60));
+    head.removeFromTop (4);
 
-    groupRules.push_back ({ head, head.getX() + 6 });
+    auto typeRow = head.removeFromTop (26);
+    typeLabel.setBounds (typeRow.removeFromLeft (54));
+    typeRow.removeFromLeft (4);
+    typeBox.setBounds (typeRow.removeFromLeft (128));
+
+    groupRules.push_back ({ typeRow, typeRow.getX() + 6 });
 
     area.removeFromTop (6);
 
-    // Zwei Reglerreihen. Oben, was zum gewaehlten Punkt gehoert und wie er im
-    // Ausgang steht; unten sein Hall - und ganz rechts der Direktschall, der
-    // als einziger fuers ganze Plugin gilt.
+    // Die Werte des gewaehlten Punktes, in zwei Reihen: oben wie er im Ausgang
+    // steht, unten sein Hall.
     constexpr int perRow = 5;
 
     static_assert (perRow * (knobW + 4) < 470 - 16,
@@ -308,11 +322,10 @@ void ReverbPanel::resized()
     placeRow ({ &z, &gain, &width, &room, &early });
     area.removeFromTop (4);
 
-    auto rest = placeRow ({ &decay, &damp, &direct });
+    auto rest = placeRow ({ &decay, &damp });
 
-    // Der Vorlauf und die zwei Uebertragungsknoepfe stehen im freien Rest der
-    // unteren Reihe, statt eine dritte Zeile zu oeffnen - das Panel ist ohnehin
-    // das hoechste in der Spalte.
+    // Vorlauf und die zwei Uebertragungsknoepfe im freien Rest der unteren
+    // Reihe, statt eine weitere Zeile zu oeffnen.
     rest.removeFromLeft (6);
 
     auto buttons = rest.removeFromTop (24);

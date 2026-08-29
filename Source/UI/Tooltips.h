@@ -1160,19 +1160,28 @@ namespace Tooltips
                     return lang == Language::De
                         ? "Bauart des Halls. Diffusor streut kurz ohne Nachhall, Schroeder ist der "
                           "klassische Kammfilter-Hall, FDN klingt dichter und kostet trotzdem "
-                          "weniger."
+                          "weniger. Draussen ist kein Raum, sondern die Antwort EINER Flaeche - "
+                          "ohne Nachechos, weil die anderen Punkte die uebernehmen."
                         : "Reverb type. Diffuser scatters briefly without a tail, Schroeder is the "
-                          "classic comb-filter reverb, FDN sounds denser and still costs less.";
+                          "classic comb-filter reverb, FDN sounds denser and still costs less. "
+                          "Outdoors is not a room but the answer of ONE surface - without later "
+                          "echoes, because the other points take care of those.";
                 case Key::TapRoom:
                     return lang == Language::De
                         ? "Kantenlaenge des gedachten Raums in Metern. Bestimmt Echodichte und "
-                          "Faerbung. Die ENTFERNUNG des Punktes steckt im Vorlauf, nicht hier."
+                          "Faerbung. Bei der Bauart Draussen die Ausdehnung der Flaeche: ihre "
+                          "Raender antworten spaeter als ihre Mitte."
                         : "Edge length of the imagined room in metres. Sets echo density and "
-                          "colour. The DISTANCE of the point sits in the pre-delay, not here.";
+                          "colour. For the Outdoors type it is the extent of the surface: its "
+                          "edges answer later than its centre.";
                 case Key::TapDecay:
                     return lang == Language::De
-                        ? "Zeit, bis der Nachhall auf ein Tausendstel gefallen ist."
-                        : "Time until the tail has dropped to a thousandth.";
+                        ? "Zeit, bis der Nachhall auf ein Tausendstel gefallen ist. Bei der "
+                          "Bauart Draussen die Rauigkeit der Flaeche: klein wie ein Fels, gross "
+                          "wie Geroell oder Bewuchs."
+                        : "Time until the tail has dropped to a thousandth. For the Outdoors type "
+                          "it is the roughness of the surface: small like rock, large like scree "
+                          "or vegetation.";
                 case Key::TapDamp:
                     return lang == Language::De
                         ? "Wie viel Hoehen der Hall je Umlauf verliert. Der Nachhall wird damit "

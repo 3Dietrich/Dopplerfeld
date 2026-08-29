@@ -834,13 +834,26 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
     if (r.order() == 0)
     {
         PathTransform t;
-        t.gain = (float) directGain;
+
+        // Abgriffpunkte sind zwar Wege ohne Spiegelung, gehoeren aber NICHT
+        // unter den Direktschall-Pegel: sie sind die Quelle des Halls, und der
+        // soll gerade stehen bleiben, wenn man den Direktschall zudreht. Ohne
+        // diese Ausnahme wird mit dem Regler auch der Hall stumm.
+        t.gain = (r.tap >= 0) ? 1.0f : (float) directGain;
         return t;
     }
 
     if (r.order() == 1)
     {
         PathTransform t = surfaces[(size_t) r.first].transform;
+
+        // Der Boden gehoert zum Direktschall (@dpa 20260829: "es soll auch
+        // Bodenreflexion beinhalten"). Er ist keine gestaltete Flaeche,
+        // sondern immer da - wer den Direktschall zudreht, will die Quelle
+        // loswerden, und der Boden wirft genau sie zurueck. Die Waende bleiben
+        // stehen, sie sind die Flaechen, die man absichtlich hinstellt.
+        if (r.first == 1)
+            t.gain *= (float) directGain;
 
         // Seitenerkennung nur bei Waenden (Index >= 2), nicht beim Boden -
         // @dpa wollte ausdruecklich die Waende, und beim Boden stehen Quelle/

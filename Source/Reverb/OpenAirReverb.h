@@ -5,39 +5,46 @@
 
 #include <cmath>
 
-// Draussen: einzelne, klar getrennte Rueckwuerfe statt eines Nachhalls.
+// Draussen: die Antwort EINER Flaeche, nicht die eines ganzen Tals.
 //
-// Der Unterschied zu den drei anderen Bauarten steckt nicht im Klangregler,
-// sondern im Aufbau, und er hat einen physikalischen Grund. In einem Raum
-// treffen die Wellen immer wieder auf Waende, die Zahl der Wege verdoppelt
-// sich mit jeder Reflexion, und die Echodichte WAECHST - nach ein paar hundert
-// Millisekunden ist nichts mehr einzeln hoerbar, es ist Hall.
+// Ein Abgriffpunkt steht fuer eine Stelle im Gelaende - eine Bergflanke, eine
+// Hauswand, einen Waldrand. Was von dort zurueckkommt, ist EIN Rueckwurf. Dass
+// es in einem Tal mehrere gibt, ist die Sache der acht Abgriffpunkte, von denen
+// jeder an seinem eigenen Ort sitzt und seine eigene Laufzeit und Richtung
+// mitbringt.
 //
-// Draussen gibt es diese Vervielfachung nicht. Es gibt eine Handvoll weit
-// entfernter Flaechen - eine Bergflanke, eine Hauswand, ein Waldrand - und
-// jede wirft genau einmal zurueck. Die Dichte bleibt konstant und niedrig, und
-// man hoert bis zuletzt einzelne Antworten statt eines Teppichs.
+// Deshalb hat diese Bauart ausdruecklich KEINE Nachechos (@dpa 20260829: "Es
+// hat seine eigenen Nachechos, was ungünstig ist, weil das die 8 Reverbs das ja
+// eigentlich in 'richtig' machen sollten"). Ein Punkt, der sich selbst weitere
+// Rueckwuerfe ausdenkt, macht die Arbeit der anderen sieben noch einmal - nur
+// ohne deren Ort, Richtung und Laufzeit, also falsch.
 //
-// Deshalb hier: keine Rueckkopplung, keine Diffusion, keine Allpaesse. Nur
-// eine getappte Leitung mit wenigen, weit gestreuten Lesekoepfen.
+// Was bleibt, ist die Streuung der einen Flaeche. Eine Bergflanke ist kein
+// Spiegel: sie ist Fels, Geroell, Bewuchs, und sie ist gross. Die Mitte
+// antwortet zuerst, die Raender kommen spaeter, weil sie weiter weg sind - eine
+// Flanke von hundert Metern Ausdehnung verschmiert den Rueckwurf ueber knapp
+// dreihundert Millisekunden. Das ist kein Nachhall, das ist eine einzige
+// Antwort mit Tiefe.
 //
-// Was stattdessen dazukommt, ist die Luftdaempfung. Ueber hunderte Meter
-// schluckt Luft die Hoehen messbar - bei einem Kilometer liegen 10 kHz rund
-// vierzig Dezibel unter dem Tiefton. Drinnen ist der Effekt zu klein, um ihn
-// zu bauen; draussen ist er der Grund, warum ein fernes Echo dumpf
-// zurueckkommt und ein nahes hell.
+// Keine Rueckkopplung, keine Allpaesse, keine Wiederholung. Nur eine getappte
+// Leitung, deren Lesekoepfe die Flaeche abtasten, und ein Tiefpass fuer das,
+// was Luft und Bewuchs von den Hoehen uebrig lassen.
+
 class OpenAirReverb : public ReverbUnit
 {
 public:
-    static constexpr int taps = 12;
+    // Genug Abtastpunkte, dass die Flaeche als Flaeche klingt und nicht als
+    // Reihe einzelner Echos. Vierundzwanzig sind der Punkt, ab dem man bei
+    // grossen Flaechen keine einzelnen Anschlaege mehr heraushoert - darunter
+    // klingt es nach Kamm, darueber wird es nicht mehr besser, nur teurer.
+    static constexpr int taps = 24;
 
     void prepare (double sampleRate, int /*maxBlock*/) override
     {
         sr = sampleRate;
 
-        // Bis zu sechzig Sekunden Streuung: draussen sind die Wege lang, und
-        // ein Echo nach zehn Sekunden ist in den Bergen nichts Besonderes.
-        line.prepare ((int) (maxSpreadSeconds * sr) + 2);
+        // Die groesste Flaeche verschmiert ueber ihre eigene Ausdehnung.
+        line.prepare ((int) (reverbparts::maxRoomMetres / reverbparts::soundSpeed * sr * 1.2) + 2);
 
         update();
         reset();
@@ -73,79 +80,85 @@ public:
         }
     }
 
-    // Entfernung der naechsten reflektierenden Flaeche. Sie bestimmt, wann die
-    // erste Antwort kommt.
+    // Ausdehnung der Flaeche in Metern. Sie bestimmt, ueber welche Zeit der
+    // Rueckwurf verschmiert: die Raender einer hundert Meter breiten Flanke
+    // liegen knapp dreihundert Millisekunden hinter ihrer Mitte.
     void setRoomSize (double metres) override
     {
-        roomMetres = std::clamp (metres, 0.5, reverbparts::maxRoomMetres);
+        extentMetres = std::clamp (metres, 0.5, reverbparts::maxRoomMetres);
         update();
     }
 
-    // Wie weit die Antworten zeitlich reichen. Anders als bei den
-    // rueckgekoppelten Bauarten ist das keine Abklingzeit, sondern eine
-    // Spreizung: das letzte Echo liegt dort, danach ist nichts mehr. Ein
-    // Ausklang, der sich totlaeuft, waere wieder ein Saal.
+    // Rauigkeit der Flaeche. Bei kleinen Werten antwortet sie fast wie ein
+    // Spiegel - ein harter Fels, ein Betonwall -, bei grossen wie Geroell oder
+    // dichter Bewuchs, der den Rueckwurf ueber seine ganze Ausdehnung
+    // ausschmiert.
+    //
+    // Es ist ausdruecklich KEINE Abklingzeit. Diese Bauart klingt nicht aus,
+    // sie antwortet einmal; der Regler heisst nur so, weil alle Bauarten
+    // dieselben vier Regler zeigen.
     void setDecaySeconds (double seconds) override
     {
-        spreadSeconds = std::clamp (seconds, 0.05, maxSpreadSeconds);
+        roughness = std::clamp (seconds / 6.0, 0.0, 1.0);
         update();
     }
 
+    // Was Luft und Bewuchs von den Hoehen uebrig lassen. Anders als bei den
+    // Raumbauarten wirkt es auf ALLE Abtastpunkte gleich stark: der Weg zur
+    // Flaeche und zurueck ist fuer sie derselbe, nur die Raender liegen etwas
+    // weiter.
     void setDamping (double amount01) override
     {
         damping = std::clamp (amount01, 0.0, 1.0);
         update();
     }
 
-    double      relativeCost() const override { return 1.5; }
+    double      relativeCost() const override { return 2.0; }
     const char* name()         const override { return "Draussen"; }
 
 private:
-    static constexpr double maxSpreadSeconds = 60.0;
-
     void update()
     {
-        const double firstSec = roomMetres * 2.0 / reverbparts::soundSpeed;
+        // Ausdehnung als Laufzeit: der Rand einer Flaeche liegt um ihre
+        // halbe Ausdehnung weiter weg, hin und zurueck also um die ganze.
+        const double spanSec = extentMetres / reverbparts::soundSpeed;
 
         for (int t = 0; t < taps; ++t)
         {
             const double frac = (double) t / (double) (taps - 1);
 
-            // GLEICHMAESSIG gestreut, nicht verdichtend - das ist der
-            // Unterschied zu EarlyReflections, wo die Echos mit der Zeit
-            // zusammenruecken. Die Unregelmaessigkeit kommt aus einem festen
-            // Versatz je Tap, damit die Antworten nicht als Takt hoerbar
-            // werden; gewuerfelt wird nichts, sonst klaenge jedes Laden anders.
-            const double jitter = 0.35 * std::sin (7.7 * (double) t + 1.3);
-            const double when   = firstSec + (spreadSeconds - firstSec)
-                                             * std::clamp (frac + jitter / (double) taps, 0.0, 1.0);
+            // Eine glatte Flaeche antwortet fast auf einen Schlag, eine raue
+            // ueber ihre ganze Ausdehnung. Die Rauigkeit stellt also ein, wie
+            // weit die Abtastpunkte auseinanderruecken.
+            //
+            // Die Unregelmaessigkeit kommt aus einem festen Versatz je Punkt.
+            // Ein gleichmaessiges Raster waere ein Kammfilter und klaenge nach
+            // Metallrohr; gewuerfelt wird trotzdem nichts, sonst klaenge jedes
+            // Laden anders.
+            const double jitter = 0.4 * std::sin (12.9898 * (double) t + 0.7);
+            const double when   = spanSec * (0.02 + (0.05 + 0.95 * roughness)
+                                                    * std::clamp (frac + jitter / (double) taps, 0.0, 1.0));
 
             delaySamples[t] = std::max (1, (int) std::lround (when * sr));
 
-            // Pegel nach dem Weg, also 1/r. Der Bezug ist die erste Antwort:
-            // sie ist die lauteste, alles Weitere kommt von weiter her.
-            const double relative = std::max (1.0, when / std::max (1.0e-6, firstSec));
+            // Zum Rand hin leiser: diese Teile der Flaeche stehen schraeger
+            // zum Schall und liegen weiter weg. Ohne dieses Gefaelle klaenge
+            // die Flaeche wie ein Rechteckfenster - mit hoerbarem Ende.
+            const float shape = (float) std::cos (frac * 1.5707963);
 
-            const float sign = ((t * 3 + t / 2) % 2 == 0) ? 1.0f : -1.0f;
+            const float sign = ((t * 7 + t / 3) % 2 == 0) ? 1.0f : -1.0f;
 
-            gain[t] = (float) (sign / relative);
+            // Auf die Zahl der Punkte normiert, damit die Rauigkeit den Pegel
+            // nicht mitzieht: eine raue Flaeche wirft nicht weniger zurueck als
+            // eine glatte, sie verteilt es nur anders.
+            gain[t] = sign * shape * (1.6f / (float) taps);
 
-            // Luftdaempfung: sie waechst mit dem Weg, nicht mit der Zahl der
-            // Reflexionen. Der Regler stellt ein, wie stark die Luft nimmt -
-            // bei 0 ist sie trocken und kalt, bei 1 dunstig.
-            //
-            // Der Weg steckt in "when": ein Echo nach zwei Sekunden ist rund
-            // 680 m gelaufen. Der Bezugswert 3 s ist so gewaehlt, dass ein
-            // ferner Rueckwurf bei voller Reglerstellung deutlich dumpf, aber
-            // nicht tonlos ankommt.
-            const double perTap = std::clamp (damping * (when / 3.0), 0.0, 1.0);
+            damp[t].setCoefficient (reverbparts::dampingCoefficient (damping, sr));
 
-            damp[t].setCoefficient (reverbparts::dampingCoefficient (perTap, sr));
-
-            // Jede Antwort kommt aus ihrer eigenen Richtung. Draussen liegen
-            // die Flaechen weit auseinander, das Stereobild ist deshalb weit
-            // und nicht diffus - eine Flanke ist links, die andere rechts.
-            const float side = (float) std::sin (2.4 * (double) t + 0.7);
+            // Die Flaeche hat eine Breite, also kommt ihre Antwort nicht aus
+            // einem Punkt. Die Streuung waechst zum Rand hin - dort ist der
+            // Winkel zum Hoerer am groessten.
+            const float side = (float) (std::sin (2.4 * (double) t + 0.7) * frac);
 
             panL[t] = 0.5f * (1.0f + side);
             panR[t] = 0.5f * (1.0f - side);
@@ -160,8 +173,8 @@ private:
     float panL[taps] {};
     float panR[taps] {};
 
-    double sr            = 48000.0;
-    double roomMetres    = 60.0;
-    double spreadSeconds = 3.0;
-    double damping       = 0.35;
+    double sr           = 48000.0;
+    double extentMetres = 60.0;
+    double roughness    = 0.5;
+    double damping      = 0.35;
 };
