@@ -32,6 +32,12 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         setParameter (Params::lisY, normY);
     };
 
+    field.onTapDragged = [this] (int index, double normX, double normY)
+    {
+        setParameter (Params::tapId (index, Params::TapPart::x).toRawUTF8(), normX);
+        setParameter (Params::tapId (index, Params::TapPart::y).toRawUTF8(), normY);
+    };
+
     // Nur in der perspektivischen Ansicht: dort ist Ziehen nach oben "hoeher".
     // Das ist der einzige Weg, die Hoehe mit der Maus zu setzen - die
     // Draufsicht hat dafuer keine Achse.

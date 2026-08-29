@@ -1229,6 +1229,12 @@ void DopplerEngine::publishSnapshot (const MediumState& medium)
         info.tiltRad    = wallGeometry[w].tiltRad;
     }
 
+    for (int t = 0; t < maxTaps && t < FieldSnapshot::maxTaps; ++t)
+    {
+        s.taps[(size_t) t].on  = taps[(size_t) t].enabled;
+        s.taps[(size_t) t].pos = taps[(size_t) t].pos;
+    }
+
     snapshotIndex.store (snapshotWriteSlot, std::memory_order_release);
     snapshotWriteSlot = 1 - snapshotWriteSlot;
 

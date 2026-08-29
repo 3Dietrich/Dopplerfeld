@@ -24,6 +24,7 @@ struct FieldSnapshot
     // Wege; aufgerundet, damit die Anzeige nichts abschneidet.
     static constexpr int maxPaths       = 24;
     static constexpr int maxWalls       = 2;    // frei platzierbare Wände, siehe DopplerEngine
+    static constexpr int maxTaps        = 8;    // Abgriffpunkte, siehe DopplerEngine::maxTaps
 
     // Quellposition, dezimierte Spur der letzten Sekunden.
     Vec3 sourcePos;
@@ -181,6 +182,16 @@ struct FieldSnapshot
         double tiltRad    = 0.0;
     };
     std::array<WallInfo, maxWalls> walls {};
+
+    // Abgriffpunkte: Orte im Feld, die hoeren, was dort ankommt, und es durch
+    // einen Hall schicken. Anders als eine Wand sind sie wirklich Punkte -
+    // gezeichnet wird deshalb eine Marke und keine Gerade.
+    struct TapInfo
+    {
+        bool on = false;
+        Vec3 pos;
+    };
+    std::array<TapInfo, maxTaps> taps {};
 
     // Vorbeiflug-Wegvorschau (@dpa-Feedback), nur bei laufendem Vorbeiflug
     // gueltig (flyByActive). Geschlossene Geometrie, keine Suche: die Bahn

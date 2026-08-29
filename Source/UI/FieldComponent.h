@@ -177,6 +177,12 @@ public:
     // (0 = Nase in +y, siehe Listener.h).
     std::function<void (double normX, double normY)> onSourceDragged;
     std::function<void (double normX, double normY)> onListenerDragged;
+
+    // Ein Abgriffpunkt wurde im Feld verschoben. x/y auf die Feldflaeche
+    // normiert wie bei Quelle und Hoerer, die Hoehe bleibt unberuehrt: sie
+    // ist in der Draufsicht nicht bedienbar, und ein Zug nach oben wuerde
+    // sonst unbeabsichtigt die Hoehe mitnehmen.
+    std::function<void (int index, double normX, double normY)> onTapDragged;
     std::function<void (double yawRadians)> onListenerRotated;
 
     // Nur in der perspektivischen Ansicht: dort bedeutet Ziehen nach oben
@@ -227,6 +233,7 @@ private:
     // -- Zeichenteile --
     void drawGrid (juce::Graphics& g) const;
     void drawWalls (juce::Graphics& g) const;
+    void drawTaps (juce::Graphics& g) const;
 
     // -- Perspektivische Ansicht --
     //
@@ -384,7 +391,7 @@ private:
     float listenerScreenYaw() const;
 
     // -- Maus / Drag --
-    enum class DragTarget { none, source, listenerHead, listenerNose };
+    enum class DragTarget { none, source, listenerHead, listenerNose, tap };
     DragTarget dragTargetAt (juce::Point<float> screenPx) const;
     void handleDragTo (juce::Point<float> screenPx);
     void reportNormalisedDrag (Vec3 worldPos, bool isSource) const;
@@ -467,6 +474,11 @@ private:
     // Hoerer L soll dadurch nicht schwerer greifbar werden, s. dragTargetAt().
     static constexpr float sourceDragHitRadiusPx = 28.0f;
 
+    // Fangradius eines Abgriffpunkts. Kleiner als der der Quelle: acht davon
+    // im Feld mit je 28 px Fangradius wuerden einander und alles andere
+    // zudecken.
+    static constexpr float tapDragHitRadiusPx = 16.0f;
+
     // Ruhende Ankerposition der Quelle OHNE das Jitter-Wackeln, nur fuers
     // Greifen per Mausklick (dragTargetAt()) - der gezeichnete Punkt darf
     // weiter zappeln, getroffen wird dort, wo M "eigentlich" ist. FieldSnapshot
@@ -491,6 +503,16 @@ private:
     Vec3 sourceDragWorldOverride;
 
     DragTarget dragTarget = DragTarget::none;
+
+    // Welcher Abgriffpunkt gerade gezogen wird. Der Zielbezeichner allein
+    // reicht bei ihnen nicht - es gibt acht davon, und sie unterscheiden sich
+    // nur durch den Index.
+    int dragTapIndex = -1;
+
+    // Welcher Abgriffpunkt an dieser Bildstelle liegt, oder -1. Eigene
+    // Funktion und kein Nebenbei-Ergebnis von dragTargetAt(): die ist const
+    // und darf sich nichts merken.
+    int tapIndexAt (juce::Point<float> screenPx) const;
 
     // Versatz zwischen Mauszeiger und der Stelle, an der das gegriffene
     // Symbol tatsaechlich steht. Beim Anfassen einmal gemerkt und danach bei

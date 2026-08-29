@@ -261,6 +261,7 @@ void FieldComponent::paint (juce::Graphics& g)
     g.fillAll (juce::Colours::black);
     drawGrid (g);
     drawWalls (g);
+    drawTaps (g);
     drawWavefronts (g);
     drawReflectionWavefronts (g);
     drawMachFronts (g);
@@ -430,6 +431,62 @@ void FieldComponent::drawDistanceReadout (juce::Graphics& g) const
                 box.getX() + sidePad, box.getY() + topPad + numberRowHeight,
                 contentWidth, unitRowHeight,
                 juce::Justification::centred, false);
+}
+
+// Die Abgriffpunkte. Anders als eine Wand ist ein Abgriffpunkt wirklich ein
+// Punkt, deshalb eine Marke und keine Gerade.
+//
+// Gezeichnet als offener Ring mit Fadenkreuz: er HOERT dort, er sendet nicht.
+// Ein gefuellter Punkt sieht aus wie eine Quelle, und im Feld stehen ohnehin
+// schon Quelle und Klone als gefuellte Punkte - eine dritte Sorte davon waere
+// nicht mehr auseinanderzuhalten.
+//
+// Die Hoehe steckt im Durchmesser: ein hoch stehender Punkt bekommt einen
+// groesseren Ring. In der Draufsicht ist Hoehe sonst unsichtbar, und ein Punkt
+// auf zwanzig Meter klaenge voellig anders als einer auf zwei, ohne dass man
+// den Unterschied saehe.
+void FieldComponent::drawTaps (juce::Graphics& g) const
+{
+    const auto view = getLocalBounds().toFloat();
+
+    for (size_t i = 0; i < snapshot.taps.size(); ++i)
+    {
+        const auto& tap = snapshot.taps[i];
+
+        if (! tap.on)
+            continue;
+
+        const auto p = worldToScreen (tap.pos);
+
+        if (! view.expanded (24.0f).contains (p))
+            continue;
+
+        // Grundgroesse plus Hoehenanteil. Der Zuschlag saettigt, sonst waere
+        // ein Punkt in grosser Hoehe eine bildfuellende Scheibe.
+        const float base = 7.0f;
+        const float r    = base + 5.0f * (float) std::tanh (std::abs (tap.pos.z) / 12.0);
+
+        // Derselbe Ton wie das Hall-Panel, damit die Zuordnung ohne
+        // Beschriftung sitzt (Theme::Panel::wall).
+        const auto colour = juce::Colour (0xff55c99a);
+
+        g.setColour (colour.withAlpha (0.75f));
+        g.drawEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (p), 1.4f);
+
+        // Fadenkreuz: es macht den Mittelpunkt genau lesbar, auch wenn der Ring
+        // gross ist. Ohne das laege der Ort irgendwo in der Scheibe.
+        g.setColour (colour.withAlpha (0.45f));
+        g.drawLine (p.x - r, p.y, p.x + r, p.y, 1.0f);
+        g.drawLine (p.x, p.y - r, p.x, p.y + r, 1.0f);
+
+        // Die Nummer daneben, damit sich der Ring im Feld dem Regler im Panel
+        // zuordnen laesst. Acht Punkte ohne Nummer waeren acht gleiche Ringe.
+        g.setColour (colour.withAlpha (0.85f));
+        g.setFont (11.0f);
+        g.drawText (juce::String ((int) i + 1),
+                    juce::Rectangle<float> (p.x + r + 2.0f, p.y - 8.0f, 16.0f, 16.0f),
+                    juce::Justification::centredLeft, false);
+    }
 }
 
 void FieldComponent::drawWalls (juce::Graphics& g) const
@@ -1580,6 +1637,19 @@ FieldComponent::GrabAnchor FieldComponent::grabAnchorPx() const
         return { px, px, sourceRadiusPx + sourceDragHitRadiusPx, true };
     }
 
+    if (dragTarget == DragTarget::tap)
+    {
+        // Der Punkt steht still, gezeichneter Ort und Anker fallen zusammen.
+        // Der Anker sorgt dafuer, dass Anfassen nichts bewegt: der Abstand
+        // zwischen Klick und Mittelpunkt wird gemerkt, nicht eingeebnet.
+        if (dragTapIndex < 0 || dragTapIndex >= (int) snapshot.taps.size())
+            return {};
+
+        const auto px = worldToScreen (snapshot.taps[(size_t) dragTapIndex].pos);
+
+        return { px, px, tapDragHitRadiusPx, true };
+    }
+
     if (dragTarget == DragTarget::listenerHead)
     {
         const auto px = worldToScreen (snapshot.listener.head);
@@ -1612,6 +1682,9 @@ FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> scre
         return DragTarget::none;
     }
 
+    // Abgriffpunkte werden ZULETZT geprueft (unten, nach Quelle und Hoerer):
+    // sie sind Zubehoer, Quelle und Hoerer sind die Sache selbst. Liegt ein
+    // Punkt unter M, soll ein Klick M greifen.
     const auto headPx = worldToScreen (snapshot.listener.head);
     const float yaw = listenerScreenYaw();
     const auto nosePx = HeadSymbol::noseTip (headPx, headRadiusPx, yaw);
@@ -1653,7 +1726,26 @@ FieldComponent::DragTarget FieldComponent::dragTargetAt (juce::Point<float> scre
     if (screenPx.getDistanceFrom (headPx) <= headRadiusPx + dragHitRadiusPx * 0.6f)
         return DragTarget::listenerHead;
 
+    // Abgriffpunkte: Fangradius knapp groesser als der gezeichnete Ring, damit
+    // man ihn trifft, ohne die Marke selbst zu verdecken.
+    if (tapIndexAt (screenPx) >= 0)
+        return DragTarget::tap;
+
     return DragTarget::none;
+}
+
+int FieldComponent::tapIndexAt (juce::Point<float> screenPx) const
+{
+    for (size_t i = 0; i < snapshot.taps.size(); ++i)
+    {
+        if (! snapshot.taps[i].on)
+            continue;
+
+        if (screenPx.getDistanceFrom (worldToScreen (snapshot.taps[i].pos)) <= tapDragHitRadiusPx)
+            return (int) i;
+    }
+
+    return -1;
 }
 
 // Umkehrung von project() bei FESTGEHALTENER Tiefe (entlang cameraForward()):
@@ -1747,6 +1839,19 @@ void FieldComponent::handleDragTo (juce::Point<float> screenPx)
 
     switch (dragTarget)
     {
+        case DragTarget::tap:
+        {
+            if (dragTapIndex < 0 || ! onTapDragged)
+                break;
+
+            const Vec3 worldPos = screenToWorld (screenPx);
+
+            onTapDragged (dragTapIndex,
+                          juce::jlimit (0.0, 1.0, worldPos.x / juce::jmax (1.0e-6, fieldMetres)),
+                          juce::jlimit (0.0, 1.0, worldPos.y / juce::jmax (1.0e-6, fieldHeightMetres())));
+            break;
+        }
+
         case DragTarget::source:
         {
             const Vec3 worldPos = screenToWorld (screenPx);
@@ -1804,6 +1909,11 @@ void FieldComponent::mouseDown (const juce::MouseEvent& e)
     grabKeyboardFocus(); // Tastatur-Kurzbefehle (z.B. 'L', s. keyPressed()) brauchen den Fokus
 
     dragTarget = dragTargetAt (e.position);
+
+    // Den Index merken, solange die Klickstelle noch bekannt ist -
+    // dragTargetAt() ist const und kann das nicht.
+    dragTapIndex = (dragTarget == DragTarget::tap) ? tapIndexAt (e.position) : -1;
+
     haveDragVelocity = false;
     grabOffsetPx     = {};
 
