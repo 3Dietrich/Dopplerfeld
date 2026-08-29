@@ -7465,6 +7465,70 @@ int main()
         }
     }
 
+    // Der Hall-Bypass stellt den Direktschall auf 0 dB und beim Ausschalten
+    // den gemerkten Wert zurueck (@dpa 20260829: "Bypass muss Direkt=0
+    // setzen"). Der Rueckweg verfaellt, sobald jemand selbst am Direktschall
+    // dreht - sonst ueberschriebe das Ausschalten eine bewusste Eingabe.
+    {
+        DopplerfeldProcessor proc;
+
+        proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+        proc.prepareToPlay (sampleRate, blockSize);
+
+        const auto* direct = proc.apvts.getRawParameterValue (Params::directGain);
+
+        // Geschrieben wird im Nachrichtenthread (BypassDirectLink); hier dreht
+        // sich keine Nachrichtenschleife, also wird die ausstehende Aenderung
+        // von Hand abgeholt.
+        auto settle = [&proc] { proc.bypassDirectLink.flushPendingForTest(); };
+
+        setParam (proc, Params::directGain, -24.0f);
+        settle();
+
+        setParam (proc, Params::reverbBypass, 1.0f);
+        settle();
+
+        const float duringBypass = direct->load();
+
+        setParam (proc, Params::reverbBypass, 0.0f);
+        settle();
+
+        const float afterBypass = direct->load();
+
+        std::printf ("%-22s vorher -24.0 dB, im Bypass %.1f dB, danach %.1f dB\n",
+                     "Bypass/Direkt", (double) duringBypass, (double) afterBypass);
+
+        if (std::abs (duringBypass) > 0.01f)
+        {
+            std::printf ("FEHLGESCHLAGEN: der Bypass stellt den Direktschall nicht auf 0 dB\n");
+            failed = true;
+        }
+
+        if (std::abs (afterBypass + 24.0f) > 0.01f)
+        {
+            std::printf ("FEHLGESCHLAGEN: nach dem Bypass steht der Direktschall auf %.1f dB "
+                         "statt wieder auf -24 dB\n", (double) afterBypass);
+            failed = true;
+        }
+
+        // Eigene Eingabe im Bypass: sie muss stehen bleiben.
+        setParam (proc, Params::reverbBypass, 1.0f);
+        settle();
+        setParam (proc, Params::directGain, -12.0f);
+        settle();
+        setParam (proc, Params::reverbBypass, 0.0f);
+        settle();
+
+        const float afterOwnEdit = direct->load();
+
+        if (std::abs (afterOwnEdit + 12.0f) > 0.01f)
+        {
+            std::printf ("FEHLGESCHLAGEN: eigene Eingabe im Bypass (-12 dB) wurde beim "
+                         "Ausschalten auf %.1f dB ueberschrieben\n", (double) afterOwnEdit);
+            failed = true;
+        }
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }

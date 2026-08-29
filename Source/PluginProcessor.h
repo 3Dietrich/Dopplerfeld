@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "BypassDirectLink.h"
 #include "Motion/CriticallyDampedSpring.h"
 #include "Motion/MotionPlayer.h"
 #include "Motion/FlyByGenerator.h"
@@ -355,7 +356,11 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
+    // Muss NACH apvts stehen: die Kopplung meldet sich im Konstruktor dort an.
+    BypassDirectLink bypassDirectLink { apvts };
+
 private:
+
     //==================================================================
     // Die vier Glättungsverfahren aus Plan 3.8, alle vier fertig gebaut, plus
     // die Auswahl. Ein umgeschalteter std::unique_ptr müsste beim Typwechsel
