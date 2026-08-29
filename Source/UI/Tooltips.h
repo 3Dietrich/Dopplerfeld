@@ -129,6 +129,7 @@ namespace Tooltips
         TapCopy,
         TapPaste,
         DirectGain,
+        ReverbBypass,
         SecondOrder,
         BounceGain,
         BounceGainBoost,
@@ -1176,18 +1177,22 @@ namespace Tooltips
                           "edges answer later than its centre.";
                 case Key::TapDecay:
                     return lang == Language::De
-                        ? "Zeit, bis der Nachhall auf ein Tausendstel gefallen ist. Bei der "
-                          "Bauart Draussen die Rauigkeit der Flaeche: klein wie ein Fels, gross "
-                          "wie Geroell oder Bewuchs."
-                        : "Time until the tail has dropped to a thousandth. For the Outdoors type "
-                          "it is the roughness of the surface: small like rock, large like scree "
-                          "or vegetation.";
+                        ? "Zeit, bis der Nachhall auf ein Tausendstel gefallen ist. Bei Draussen "
+                          "oeffnet der Regler den Weg der Flaeche zurueck auf sich selbst: bei "
+                          "null eine freistehende Flanke, aufgedreht ein Talkessel mit Echos der "
+                          "Echos."
+                        : "Time until the tail has dropped to a thousandth. For Outdoors it opens "
+                          "the surface's path back onto itself: at zero a free-standing slope, "
+                          "turned up a bowl-shaped valley with echoes of echoes.";
                 case Key::TapDamp:
                     return lang == Language::De
-                        ? "Wie viel Hoehen der Hall je Umlauf verliert. Der Nachhall wird damit "
-                          "mit der Zeit dunkler."
-                        : "How much treble the reverb loses per round trip. The tail grows darker "
-                          "over time.";
+                        ? "Wie viel Hoehen der Hall je Umlauf verliert. Bei Draussen zusaetzlich "
+                          "ein Phasenverdreher je Rueckwurf - er aendert, wie sich die "
+                          "Rueckwuerfe gegenseitig ausloeschen, und faerbt damit den Klang weit "
+                          "staerker als ein Tiefpass allein."
+                        : "How much treble the reverb loses per round trip. For Outdoors also a "
+                          "phase rotator per reflection - it changes how the reflections cancel "
+                          "each other, colouring the sound far more than a low-pass alone.";
                 case Key::TapEarly:
                     return lang == Language::De
                         ? "Staerke der ersten Einzelechos, bevor der Hall diffus wird. Sie machen "
@@ -1208,6 +1213,12 @@ namespace Tooltips
                     return lang == Language::De
                         ? "Setzt die gemerkten Halleinstellungen auf den gewaehlten Punkt."
                         : "Applies the remembered reverb settings to the selected point.";
+                case Key::ReverbBypass:
+                    return lang == Language::De
+                        ? "Legt alle acht Abgriffpunkte auf einmal still. Ein echter Bypass: die "
+                          "Wege werden uebersprungen und kosten dann auch keine Rechenzeit."
+                        : "Silences all eight pickup points at once. A real bypass: the paths are "
+                          "skipped and cost no CPU time while off.";
                 case Key::DirectGain:
                     return lang == Language::De
                         ? "Pegel des Direktschalls, also der Wege ohne Reflexion. Zugedreht bleiben "

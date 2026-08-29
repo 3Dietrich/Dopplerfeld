@@ -370,7 +370,8 @@ DopplerfeldProcessor::DopplerfeldProcessor()
 
     pp.imbalanceOctave = raw (Params::imbalanceOctave);
     pp.groundGain = raw (Params::groundGain);
-    pp.directGain = raw (Params::directGain);
+    pp.directGain   = raw (Params::directGain);
+    pp.reverbBypass = raw (Params::reverbBypass);
     pp.panAmount  = raw (Params::panAmount);
     pp.outputGain = raw (Params::outputGain);
     pp.limiterOn  = raw (Params::limiterOn);
@@ -2510,6 +2511,8 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
         // -60 dB gilt als stumm, damit sich der Direktschall wirklich abstellen
         // laesst und nicht nur sehr leise wird.
+        dopplerEngine.setTapsBypassed (pp.reverbBypass->load() > 0.5f);
+
         dopplerEngine.setDirectGain (
             juce::Decibels::decibelsToGain ((double) pp.directGain->load(), -60.0));
 

@@ -159,6 +159,72 @@ inline double feedbackForDecay (double delaySeconds, double decaySeconds)
     return std::clamp (std::pow (10.0, -3.0 * delaySeconds / decaySeconds), 0.0, 0.999);
 }
 
+// Einpol-Allpass, gebaut als Hochpass minus Tiefpass.
+//
+// Ein Einpol-Tiefpass und der zugehoerige Hochpass (x - lp) ergeben addiert
+// wieder x. Zieht man sie stattdessen VONEINANDER ab, bleibt der Betragsgang
+// bei eins, aber die Phase dreht sich: unterhalb der Eckfrequenz laeuft das
+// Signal durch, oberhalb kommt es verpolt heraus, und genau an der Eckfrequenz
+// steht es in der Mitte, um neunzig Grad gedreht.
+//
+//   ap = hp - lp = (x - lp) - lp = x - 2 lp
+//
+// Fuer sich allein hoert man das nicht - der Betragsgang aendert sich ja
+// nicht. Hoerbar wird es, sobald mehrere so behandelte Signale ZUSAMMEN-
+// kommen: dann loeschen und verstaerken sich ihre Anteile je nach Frequenz
+// verschieden, und aus einer Phasendrehung wird ein Klang. Deshalb sitzt der
+// Verdreher in OpenAirReverb je Abtastpunkt und nicht einmal am Eingang -
+// vierundzwanzig gleich gedrehte Signale klaengen wie eines.
+//
+// Mehrere Stufen hintereinander drehen weiter, jede um bis zu hundertachtzig
+// Grad, und machen das Muster dichter.
+class PhaseRotator
+{
+public:
+    void setFrequency (double hz, double sampleRate)
+    {
+        // TPT-Form: sie bleibt bis dicht unter die Nyquistfrequenz stabil und
+        // trifft die Eckfrequenz genau, waehrend die naive Form dort
+        // wegdriftet.
+        const double f = std::clamp (hz, 10.0, sampleRate * 0.45);
+        const double g = std::tan (3.14159265358979323846 * f / sampleRate);
+
+        coeff = (float) (g / (1.0 + g));
+    }
+
+    void reset()
+    {
+        for (auto& s : state)
+            s = 0.0f;
+    }
+
+    float process (float x)
+    {
+        float v = x;
+
+        for (auto& z : state)
+        {
+            const float lp = z + coeff * (v - z);
+
+            // Zustand des TPT-Integrators fortschreiben.
+            z = lp + coeff * (v - z);
+
+            // hp - lp, ausgeschrieben: (v - lp) - lp
+            v = v - 2.0f * lp;
+        }
+
+        return v;
+    }
+
+    // Vier Stufen: genug, dass sich das Muster ueber den ganzen Hoerbereich
+    // zieht, und wenig genug, dass vierundzwanzig davon noch bezahlbar sind.
+    static constexpr int stages = 4;
+
+private:
+    float state[stages] {};
+    float coeff = 0.5f;
+};
+
 // Schroeder-Allpass: streut die Phase, ohne den Betragsgang zu aendern. Er
 // macht aus einzelnen Echos eine Flaeche und ist der Grund, warum ein Hall
 // nicht nach Flatterecho klingt.

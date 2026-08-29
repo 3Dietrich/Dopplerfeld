@@ -64,6 +64,20 @@ void CollapsiblePanel::paint (juce::Graphics& g)
     g.drawRoundedRectangle (area.reduced (0.5f), Theme::cornerRadius, 1.0f);
 }
 
+void CollapsiblePanel::setHeaderControl (juce::Component* control, int widthPx)
+{
+    if (headerControl != nullptr)
+        removeChildComponent (headerControl);
+
+    headerControl      = control;
+    headerControlWidth = juce::jmax (0, widthPx);
+
+    if (headerControl != nullptr)
+        addAndMakeVisible (headerControl);
+
+    resized();
+}
+
 void CollapsiblePanel::setContent (juce::Component* content)
 {
     if (contentComponent != nullptr)
@@ -102,7 +116,20 @@ void CollapsiblePanel::setExpanded (bool shouldBeExpanded)
 void CollapsiblePanel::resized()
 {
     auto area = getLocalBounds();
-    headerButton.setBounds (area.removeFromTop (headerHeight));
+    auto header = area.removeFromTop (headerHeight);
+
+    // Die Kopfzeilen-Bedienung zuerst vom rechten Rand abziehen, damit der
+    // Kopfknopf danach nur noch den Rest bekommt. Laege sie darueber, fiele
+    // ihr Klick trotzdem an den Knopf und klappte das Panel um.
+    if (headerControl != nullptr)
+    {
+        auto slot = header.removeFromRight (headerControlWidth + 6);
+        slot.removeFromRight (6);
+
+        headerControl->setBounds (slot.reduced (0, 3));
+    }
+
+    headerButton.setBounds (header);
 
     // Eigene Hoehe wird laut Klassenkommentar vom Aufrufer gesetzt; hier wird
     // nur das zur Verfuegung stehende Rechteck ausgefuellt. Im eingeklappten

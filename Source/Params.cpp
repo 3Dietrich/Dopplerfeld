@@ -363,6 +363,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // als stumm gilt, und nicht nur bis -36 wie bei den Flaechen.
     layout.add (floatParam (directGain, "Direct (L)", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
 
+    // Bypass fuer alle Abgriffpunkte zusammen. Sitzt in der Kopfzeile des
+    // Hall-Panels und ist deshalb auch im zugeklappten Zustand erreichbar -
+    // der eine Schalter, den man im Vergleich braucht, ohne erst aufzuklappen.
+    layout.add (boolParam (reverbBypass, "Reverb Bypass", false));
+
     // --- Abgriffpunkte ---
     //
     // Der Ort liegt in denselben Koordinaten wie Quelle und Hoerer: x/y auf die

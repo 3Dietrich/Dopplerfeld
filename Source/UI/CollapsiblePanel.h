@@ -56,6 +56,17 @@ public:
     // als Kind entfernt, nicht geloescht).
     void setContent (juce::Component* content);
 
+    // Eine kleine Bedienung RECHTS in der Kopfzeile, die auch im zugeklappten
+    // Zustand sichtbar und bedienbar bleibt - gedacht fuer den einen Schalter,
+    // den man erreichen will, ohne das Panel aufzuklappen.
+    //
+    // Sie wird als eigenes Kind gefuehrt und nicht in den Kopfknopf gelegt:
+    // nur so faengt sie ihre eigenen Klicks ab, statt das Panel auf- und
+    // zuzuklappen. Der Kopfknopf wird entsprechend schmaler.
+    //
+    // Kein Besitz, wie bei setContent().
+    void setHeaderControl (juce::Component* control, int widthPx);
+
     bool isExpanded() const noexcept { return expanded; }
     void setExpanded (bool shouldBeExpanded);
 
@@ -94,6 +105,9 @@ private:
     juce::Colour accent = Theme::cyan;
     juce::TextButton headerButton;
     juce::Component* contentComponent = nullptr;
+
+    juce::Component* headerControl      = nullptr;
+    int              headerControlWidth = 0;
 
     // @dpa-Feedback: alle Panels starten zugeklappt, damit die Spalte beim
     // Oeffnen nicht sofort voll steht - der Aufrufer muss also NICHT mehr pro

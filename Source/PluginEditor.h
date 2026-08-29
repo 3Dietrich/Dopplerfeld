@@ -298,6 +298,13 @@ private:
     FieldPanel  fieldPanel;
     WallPanel   wallPanel;
     ReverbPanel reverbPanel;
+
+    // Bypass fuer alle Abgriffpunkte, in der Kopfzeile des Hall-Panels. Er
+    // gehoert dem Editor und nicht dem Panel: das Panel ist der INHALT, die
+    // Kopfzeile gehoert der CollapsiblePanel-Huelle, und nur so bleibt der
+    // Schalter im zugeklappten Zustand sichtbar.
+    juce::TextButton reverbBypassButton { "Bypass" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> reverbBypassAttachment;
     SwarmPanel  swarmPanel;
 
     // Quellwahl ist kein Parameter (siehe DopplerfeldProcessor), deshalb ein

@@ -26,6 +26,10 @@ namespace Params
     // Abgriffpunkt: er regelt das, was OHNE Abgriffpunkte herauskaeme.
     constexpr const char* directGain = "directGain";
 
+    // Alle Abgriffpunkte auf einmal stillegen. Kein Pegelregler, sondern ein
+    // echter Bypass: die Wege werden gar nicht erst gerechnet.
+    constexpr const char* reverbBypass = "reverbBypass";
+
     constexpr int tapCount = 8;
 
     namespace TapPart

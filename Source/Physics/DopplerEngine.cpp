@@ -1394,7 +1394,7 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
     //    Vorlauf.
     for (int t = 0; t < maxTaps; ++t)
     {
-        if (! taps[(size_t) t].enabled)
+        if (tapsBypassed || ! taps[(size_t) t].enabled)
             continue;
 
         const double back = taps[(size_t) t].predelay

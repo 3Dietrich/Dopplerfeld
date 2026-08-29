@@ -329,8 +329,16 @@ public:
 
     bool isTapEnabled (int index) const
     {
-        return index >= 0 && index < maxTaps && taps[(size_t) index].enabled;
+        return ! tapsBypassed
+               && index >= 0 && index < maxTaps && taps[(size_t) index].enabled;
     }
+
+    // Alle Abgriffpunkte auf einmal stillegen. Ein echter Bypass, kein
+    // Pegelregler: die Wege werden uebersprungen und kosten dann auch keine
+    // Loeserzeit. Beim Wiedereinschalten saeen sich ihre Loeser von selbst neu
+    // und die Zweige rampen ueber den Anti-Klick-Envelope ein.
+    void setTapsBypassed (bool shouldBeBypassed) { tapsBypassed = shouldBeBypassed; }
+    bool areTapsBypassed() const { return tapsBypassed; }
 
     // Pegel des Direktschalls, linear. Wirkt NUR auf die Wege ohne Spiegelung
     // (order() == 0), also auf den Direktschall selbst samt Klonen und
@@ -580,7 +588,8 @@ private:
     // Feldgroessenwechsel springen.
     juce::AudioBuffer<float> renderBuffer;
 
-    double directGain = 1.0;
+    double directGain   = 1.0;
+    bool   tapsBypassed = false;
 
     DualPathCrossfader<PathSet> geometry;
 

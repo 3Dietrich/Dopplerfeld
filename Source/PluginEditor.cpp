@@ -76,6 +76,21 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     fieldPanelBox.setContent (&fieldPanel);
     wallPanelBox.setContent (&wallPanel);
     reverbPanelBox.setContent (&reverbPanel);
+
+    // Der Bypass sitzt in der Kopfzeile und bleibt damit auch zugeklappt
+    // erreichbar (@dpa 20260829: "am coolsten waere auf dem Header der ja auch
+    // zugeklappt sichtbar ist").
+    reverbBypassButton.setClickingTogglesState (true);
+    reverbBypassButton.setTooltip (Tooltips::text (Tooltips::Key::ReverbBypass));
+    reverbBypassButton.setColour (juce::TextButton::buttonColourId, Theme::panelHeader);
+    reverbBypassButton.setColour (juce::TextButton::buttonOnColourId, Theme::Panel::wall.withAlpha (0.9f));
+    reverbBypassButton.setColour (juce::TextButton::textColourOffId, Theme::muted);
+    reverbBypassButton.setColour (juce::TextButton::textColourOnId, Theme::panel);
+
+    reverbBypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+        p.apvts, Params::reverbBypass, reverbBypassButton);
+
+    reverbPanelBox.setHeaderControl (&reverbBypassButton, 62);
     swarmPanelBox.setContent (&swarmPanel);
 
     // Alle Panels starten zugeklappt (CollapsiblePanel-Default, @dpa-Feedback)
@@ -551,6 +566,8 @@ void DopplerfeldEditor::refreshAllTooltips()
     fieldPanel.refreshTooltips();
     wallPanel.refreshTooltips();
     reverbPanel.refreshTooltips();
+    reverbBypassButton.setTooltip (Tooltips::text (Tooltips::Key::ReverbBypass));
+    reverbBypassButton.setButtonText (Labels::text ("Bypass"));
     swarmPanel.refreshTooltips();
 }
 

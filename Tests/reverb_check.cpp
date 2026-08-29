@@ -413,11 +413,10 @@ int main()
         check (std::fabs (correlation (ir.l, ir.r)) < 0.9, "Diffusor ist zweiseitig", dif.name());
     }
 
-    // Draussen darf keine Nachechos haben - das ist sein Zweck. Ein
-    // Abgriffpunkt steht fuer EINE Flaeche; weitere Rueckwuerfe sind Sache der
-    // anderen Punkte, die dafuer ihren eigenen Ort und ihre eigene Laufzeit
-    // mitbringen. Geprueft wird deshalb das Gegenteil dessen, was man von einem
-    // Hall erwartet: nach der Ausdehnung der Flaeche muss Ruhe sein.
+    // Draussen bei Abkling NULL: eine Antwort, danach Ruhe. Das ist sein
+    // Grundfall - ein Abgriffpunkt steht fuer EINE Flaeche, weitere Rueckwuerfe
+    // sind Sache der anderen Punkte, die dafuer ihren eigenen Ort und ihre
+    // eigene Laufzeit mitbringen.
     {
         OpenAirReverb air;
 
@@ -425,7 +424,7 @@ int main()
 
         air.prepare (sr, block);
         air.setRoomSize (extent);
-        air.setDecaySeconds (6.0);        // volle Rauigkeit, laengste Streuung
+        air.setDecaySeconds (0.0);        // keine Rueckkopplung
         air.setDamping (0.3);
         air.reset();
 
@@ -454,8 +453,48 @@ int main()
                        spanSec * 1500.0,
                        20.0 * std::log10 (std::max (1.0e-9, after / std::max (1.0e-9, inside))));
 
-        check (after < inside * 0.01, "Draussen hat keine Nachechos", detail);
+        check (after < inside * 0.01, "Draussen ohne Abkling hat keine Nachechos", detail);
         check (allFinite (ir.l) && peak (ir.l) < 4.0, "Draussen bleibt beschraenkt", air.name());
+    }
+
+    // Aufgedrehte Abklingzeit oeffnet den Weg der Flaeche auf sich selbst -
+    // dann MUSS nach der einen Antwort noch etwas kommen, und es muss
+    // beschraenkt bleiben. Beides gehoert geprueft: eine Rueckkopplung, die
+    // nichts tut, waere so falsch wie eine, die aufschwingt.
+    {
+        OpenAirReverb air;
+
+        air.prepare (sr, block);
+        air.setRoomSize (60.0);
+        air.setDecaySeconds (3.0);
+        air.setDamping (0.2);
+        air.reset();
+
+        const Impulse ir = renderImpulse (air, 6.0);
+
+        const double spanSec = 60.0 / 343.0;
+
+        double inside = 0.0, after = 0.0;
+
+        for (size_t i = 0; i < ir.l.size(); ++i)
+        {
+            const double v = std::fabs (ir.l[i]);
+            const double t = (double) i / sr;
+
+            if (t <= spanSec * 1.5)
+                inside = std::max (inside, v);
+            else
+                after = std::max (after, v);
+        }
+
+        char detail[160];
+        std::snprintf (detail, sizeof detail, "nach der Antwort noch %.1f dB darunter",
+                       20.0 * std::log10 (std::max (1.0e-9, after / std::max (1.0e-9, inside))));
+
+        check (after > inside * 0.02, "Abkling erzeugt Echos der Echos", detail);
+
+        std::snprintf (detail, sizeof detail, "Spitze %.3f nach 6 s", peak (ir.l));
+        check (peak (ir.l) < 4.0 && allFinite (ir.l), "die Rueckkopplung schwingt nicht auf", detail);
     }
 
     checkPredelay();
