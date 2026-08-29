@@ -39,9 +39,16 @@ inline constexpr double baseCapacityMetres = 25.0;
 //
 // Der Speicher waechst linear mit der Raumgroesse, und er waechst pro
 // Abgriffpunkt: bei Draussen liegen bis zu 48 eigene Leitungen nebeneinander.
-// Fest auf den groessten Raum bemessen kostete ein Punkt bei 2000 m rund
-// 54 MB, acht davon knapp ein halbes Gigabyte - fuer Puffer, die in fast jeder
-// Einstellung fast leer bleiben.
+// Gemessen bei 48 kHz, acht Punkte, alle Bauarten bereitliegend:
+//
+//     25 m       6,8 MB je Punkt      55 MB
+//    200 m      16,4 MB je Punkt     131 MB
+//   2000 m     104,6 MB je Punkt     837 MB
+//
+// Fest auf den groessten Raum bemessen zahlte also jede Einstellung den
+// Extremfall - fuer Leitungen, die dabei fast leer bleiben. (Bei 96 kHz noch
+// einmal die Haelfte mehr; im 25-m-Fall sind fast sechs der 6,8 MB der
+// Vorlauf, der bis 5 km reicht und nicht an der Raumgroesse haengt.)
 //
 // Deshalb: bemessen wird nach dem, was wirklich eingestellt ist, und zwar in
 // Verdopplungsschritten. Die Treppe ist der Punkt an der Sache - eine Leitung,
