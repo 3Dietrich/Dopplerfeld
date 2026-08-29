@@ -8,7 +8,8 @@
 // starten.
 //
 //   reverb_probe [--in datei.wav] [--out ordner] [--size m] [--decay s]
-//                [--damp 0..1] [--early x] [--gain x] [--echoes n] [--seed n]
+//                [--damp 0..1] [--phase 0..1] [--early x] [--gain x] [--echoes n]
+//                [--seed n]
 //                [--seconds t] [--sr hz]
 //
 // Gemessen wird die VOLLE Kette eines Abgriffpunkts (TapBus), also samt
@@ -240,6 +241,7 @@ int main (int argc, char** argv)
     const double      size    = std::stod (argValue (argc, argv, "--size",    "30"));
     const double      decay   = std::stod (argValue (argc, argv, "--decay",   "2.0"));
     const double      damp    = std::stod (argValue (argc, argv, "--damp",    "0.35"));
+    const double      phase   = std::stod (argValue (argc, argv, "--phase",   "0.35"));
     const double      early   = std::stod (argValue (argc, argv, "--early",   "1.0"));
     const double      gain    = std::stod (argValue (argc, argv, "--gain",    "1.0"));
     const int         echoes  = std::stoi (argValue (argc, argv, "--echoes",  "24"));
@@ -311,6 +313,7 @@ int main (int argc, char** argv)
         bus.setRoomSize (size);
         bus.setDecaySeconds (decay);
         bus.setDamping (damp);
+        bus.setPhaseAmount (phase);
         bus.setEarlyAmount (early);
         bus.setEchoCount (echoes);
         bus.setSeed (seedArg);

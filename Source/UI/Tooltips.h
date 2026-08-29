@@ -122,6 +122,7 @@ namespace Tooltips
         TapRoom,
         TapDecay,
         TapDamp,
+        TapPhase,
         TapEarly,
         TapEchoes,
         TapSeed,
@@ -1188,13 +1189,20 @@ namespace Tooltips
                           "turned up a bowl-shaped valley with echoes of echoes.";
                 case Key::TapDamp:
                     return lang == Language::De
-                        ? "Wie viel Hoehen der Hall je Umlauf verliert. Bei Draussen zusaetzlich "
-                          "ein Phasenverdreher je Rueckwurf - er aendert, wie sich die "
-                          "Rueckwuerfe gegenseitig ausloeschen, und faerbt damit den Klang weit "
-                          "staerker als ein Tiefpass allein."
-                        : "How much treble the reverb loses per round trip. For Outdoors also a "
-                          "phase rotator per reflection - it changes how the reflections cancel "
-                          "each other, colouring the sound far more than a low-pass alone.";
+                        ? "Wie viel Hoehen der Hall je Umlauf verliert - ein Tiefpass im Umlauf, "
+                          "sonst nichts. Das Verdrehen der Rueckwuerfe sitzt daneben im Regler "
+                          "Phase."
+                        : "How much treble the reverb loses per round trip - a low-pass in the "
+                          "loop, nothing else. Phase rotation sits next to it in the Phase "
+                          "control.";
+                case Key::TapPhase:
+                    return lang == Language::De
+                        ? "Wie stark die Rueckwuerfe der Flaeche gegeneinander verdreht werden. "
+                          "Aufgedreht loeschen sie sich gegenseitig anders aus, der Klang wird "
+                          "hohler und breiter. Nur bei der Bauart Draussen."
+                        : "How strongly the surface's reflections are phase-rotated against each "
+                          "other. Turned up they cancel each other differently, the sound gets "
+                          "hollower and wider. Outdoors type only.";
                 case Key::TapEarly:
                     return lang == Language::De
                         ? "Staerke der ersten Einzelechos, bevor der Hall diffus wird. Sie machen "

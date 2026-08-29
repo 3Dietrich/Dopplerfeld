@@ -324,8 +324,8 @@ public:
     // Hallwerte eines Punktes. Getrennt vom Ort, weil der Ort die Physik
     // betrifft und der Rest nur den Hall dahinter.
     void setTapReverb (int index, int type, double roomMetres, double decaySeconds,
-                       double damping01, double earlyAmount, double gainLinear, double width,
-                       bool predelayEnabled, int echoCount, int seed);
+                       double damping01, double phase01, double earlyAmount, double gainLinear,
+                       double width, bool predelayEnabled, int echoCount, int seed);
 
     // Groesster Raum, den ein Punkt verlangt hat und seine Puffer nicht
     // tragen (0 = alles passt). Der Audiothread meldet ihn beim Setzen,

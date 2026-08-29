@@ -143,6 +143,11 @@ public:
             u->setDamping (amount01);
     }
 
+    // Staerke der Phasenverdreher im Umlauf. Nur die Bauart Draussen hat
+    // welche - die Raumbauarten faerben ueber ihre Leitungslaengen, dort waere
+    // ein zusaetzlicher Verdreher nur Matsch.
+    void setPhaseAmount (double amount01) { openAir.setPhaseAmount (amount01); }
+
     // Der Rueckweg vom Abgriffpunkt zum Hoerer, als Laufzeit.
     //
     // Ohne ihn kaeme der Hall gleichzeitig mit dem Direktschall, egal wie weit

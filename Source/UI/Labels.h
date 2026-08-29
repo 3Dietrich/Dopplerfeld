@@ -169,8 +169,11 @@ namespace Labels
             { "Raum",           "Space"       },
 
             // --- Hall-Panel ---
-            { "Höhe",           "Height"      },
-            { "Würfel",         "Seed"        },
+            { "Höhe (Z)",       "Height (Z)"  },
+            { "LR-Breite",      "L/R Width"   },
+            { "Weite",          "Extent"      },
+            { "Abkling",        "Decay"       },
+            { "Energie",        "Energy"      },
             { "Draußen",        "Outdoors"    },
             { "Luft",           "Air"         },
             { "Boden",          "Ground"      },

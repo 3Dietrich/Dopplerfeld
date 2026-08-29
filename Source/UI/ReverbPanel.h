@@ -66,6 +66,11 @@ private:
     // Aenderung nicht von hier kommt, sondern aus einem geladenen Preset.
     void refreshRunningMarks();
 
+    // Der Pegelregler des Punktes traegt dessen Nummer ("3 Gain"), damit er
+    // nicht mit dem Direktschall daneben verwechselt wird - beides sind
+    // Pegel, aber nur einer gehoert zum gewaehlten Punkt.
+    void updateGainLabel();
+
     juce::AudioProcessorValueTreeState& state;
 
     static constexpr int tapCount = Params::tapCount;
@@ -85,7 +90,7 @@ private:
     // X und Y stehen bewusst NICHT hier: der Ort wird im Feld gezogen
     // (@dpa 20260829: "x und Y braucht es nicht wenn man es so cool auf dem
     // Panel verschieben kann"). Die Hoehe bleibt, die hat im Feld keine Achse.
-    Knob z, room, early, decay, damp, gain, width;
+    Knob z, room, early, decay, damp, phase, gain, width;
 
     // Nur fuer die Bauart Draussen. Bei den Raumbauarten steht die
     // Leitungszahl fest, dort sind sie ausgegraut statt versteckt: ein Regler,
@@ -116,6 +121,7 @@ private:
         float  early    = 1.0f;
         float  decay    = 2.0f;
         float  damp     = 0.35f;
+        float  phase    = 35.0f;
         float  gain     = -6.0f;
         float  width    = 1.0f;
         bool   predelay = true;

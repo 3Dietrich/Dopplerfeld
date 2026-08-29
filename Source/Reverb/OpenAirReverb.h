@@ -136,6 +136,18 @@ public:
         update();
     }
 
+    // Wie stark die Rueckwuerfe gegeneinander verdreht werden.
+    //
+    // Frueher hing das am Daempfungsregler mit dran, und damit waren zwei
+    // verschiedene Dinge an einem Regler: Hoehen wegnehmen hoert man sofort,
+    // die Verdrehung hoert man kaum, sie faerbt aber die Ausloeschungen
+    // zwischen den Rueckwuerfen. Wer das eine wollte, bekam das andere dazu.
+    void setPhaseAmount (double amount01)
+    {
+        phaseAmount = std::clamp (amount01, 0.0, 1.0);
+        update();
+    }
+
     // Wie viele Rueckwuerfe die Flaeche liefert. Weniger heisst einzeln
     // hoerbare Anschlaege, mehr heisst Flaeche.
     void setEchoCount (int count)
@@ -248,7 +260,12 @@ private:
             // Die Eckfrequenz des Verdrehers ist je Leitung VERSCHIEDEN -
             // darauf kommt es an. Gleich gedreht waere gar nicht gedreht, weil
             // sich am Verhaeltnis der Rueckwuerfe zueinander nichts aenderte.
-            const double baseHz = 12000.0 * std::pow (60.0 / 12000.0, damping);
+            // Ganz oben (12 kHz) betrifft die Drehung fast nichts von dem, was
+            // man hoert; nach unten hin wandert sie durch das ganze Spektrum.
+            // Bei voll aufgedrehtem Regler liegt sie unter dem Bass, dann ist
+            // ALLES gedreht - das ist die Stellung, in der sich die Rueckwuerfe
+            // hoerbar gegenseitig ausloeschen.
+            const double baseHz = 12000.0 * std::pow (30.0 / 12000.0, phaseAmount);
             const double spread = 3.2 * (frac - 0.5) * (0.4 + 0.6 * rng.uniform());
 
             rotator[(size_t) i].setFrequency (baseHz * std::pow (2.0, spread), sr);
@@ -304,6 +321,9 @@ private:
     // hinaus wird der Raumregler geklemmt, bis die Kapazitaet ausserhalb des
     // Audiothreads nachgezogen ist (siehe TapBus::roomShortfall).
     double capacity = reverbparts::baseCapacityMetres;
+
+    // Staerke der Phasenverdreher, siehe setPhaseAmount.
+    double phaseAmount = 0.35;
 
     double decaySeconds = 0.0;
     double damping      = 0.35;

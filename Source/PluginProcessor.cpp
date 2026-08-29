@@ -361,6 +361,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
             pp.tapRoom[t]     = raw (Params::tapId (t, room).toRawUTF8());
             pp.tapDecay[t]    = raw (Params::tapId (t, decay).toRawUTF8());
             pp.tapDamp[t]     = raw (Params::tapId (t, damp).toRawUTF8());
+            pp.tapPhase[t]    = raw (Params::tapId (t, phase).toRawUTF8());
             pp.tapEarly[t]    = raw (Params::tapId (t, early).toRawUTF8());
             pp.tapEchoes[t]   = raw (Params::tapId (t, echoes).toRawUTF8());
             pp.tapSeed[t]     = raw (Params::tapId (t, seed).toRawUTF8());
@@ -1150,6 +1151,7 @@ void DopplerfeldProcessor::applyTapParameters()
         target.room       = (double) pp.tapRoom[t]->load();
         target.decay      = (double) pp.tapDecay[t]->load();
         target.damping    = (double) pp.tapDamp[t]->load();
+        target.phase      = (double) pp.tapPhase[t]->load() * 0.01;   // Prozent -> 0..1
         target.early      = (double) pp.tapEarly[t]->load();
         target.echoes     = (int) std::lround (pp.tapEchoes[t]->load());
         target.seed       = (int) std::lround (pp.tapSeed[t]->load());
@@ -2560,8 +2562,8 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
             dopplerEngine.setTap (t, tap.on, tap.pos);
             dopplerEngine.setTapReverb (t, tap.type, tap.room, tap.decay, tap.damping,
-                                        tap.early, tap.gainLinear, tap.width, tap.predelay,
-                                        tap.echoes, tap.seed);
+                                        tap.phase, tap.early, tap.gainLinear, tap.width,
+                                        tap.predelay, tap.echoes, tap.seed);
         }
 
         // Verlangt ein Punkt mehr Raum, als seine Puffer tragen, wird er

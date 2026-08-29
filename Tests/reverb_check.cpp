@@ -449,6 +449,58 @@ void checkRoomCapacity()
     check (full > clamped * 4.0, "nachbemessener Puffer traegt den ganzen Raum", detail);
 }
 
+// Phase und Damp sind zwei verschiedene Dinge und muessen es bleiben: der eine
+// dreht die Rueckwuerfe gegeneinander (aendert das Signal stark, nimmt aber
+// keine Hoehen), der andere ist ein Tiefpass (nimmt Hoehen). Frueher hingen
+// beide an einem Regler.
+void checkPhaseIsNotDamping()
+{
+    auto render = [] (double damping, double phase)
+    {
+        OpenAirReverb air;
+
+        air.prepare (sr, block, 60.0);
+        air.setRoomSize (60.0);
+        air.setDecaySeconds (2.5);
+        air.setDamping (damping);
+        air.setPhaseAmount (phase);
+        air.reset();
+
+        return renderImpulse (air, 3.0);
+    };
+
+    auto hfEnergy = [] (const std::vector<float>& x)
+    {
+        double e = 0.0;
+
+        for (size_t i = 1; i < x.size(); ++i)
+        {
+            const double d = (double) x[i] - (double) x[i - 1];
+            e += d * d;
+        }
+
+        return e;
+    };
+
+    const Impulse flat    = render (0.0, 0.0);
+    const Impulse twisted = render (0.0, 1.0);
+
+    const double r = std::fabs (correlation (flat.l, twisted.l));
+
+    char detail[160];
+    std::snprintf (detail, sizeof detail, "Korrelation zwischen Phase 0 und 100: %.3f", r);
+
+    check (r < 0.7, "Phase aendert den Klang hoerbar", detail);
+
+    const double hf0 = hfEnergy (flat.l);
+    const double hf1 = hfEnergy (twisted.l);
+    const double rel = hf1 / std::max (1.0e-12, hf0);
+
+    std::snprintf (detail, sizeof detail, "Hochtonanteil bei Phase 100 auf %.2fx", rel);
+
+    check (rel > 0.5 && rel < 2.0, "Phase nimmt keine Hoehen weg", detail);
+}
+
 } // namespace
 
 int main()
@@ -571,6 +623,7 @@ int main()
     checkDampingTakesTreble();
     checkExtremes();
     checkRoomCapacity();
+    checkPhaseIsNotDamping();
 
     std::printf (failures == 0 ? "\nalles gruen\n" : "\n%d Pruefung(en) fehlgeschlagen\n", failures);
 

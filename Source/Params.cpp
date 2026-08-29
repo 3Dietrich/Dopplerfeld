@@ -426,6 +426,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
         layout.add (floatParam (tapId (t, TapPart::damp).toRawUTF8(),
                                 "Tap " + juce::String (t + 1) + " Damp", unitRange(), 0.35f));
 
+        // Der Phasenverdreher hing bisher am Daempfungsregler mit dran und war
+        // dort nicht zu treffen: Damp macht zwei verschiedene Dinge - Hoehen
+        // wegnehmen (hoert man sofort) und die Rueckwuerfe gegeneinander
+        // verdrehen (hoert man kaum, faerbt aber). Als eigener Regler laesst
+        // sich das eine ohne das andere haben (@dpa 20260829).
+        //
+        // In Prozent statt 0..1, weil der Regler nichts Physikalisches misst,
+        // sondern eine Staerke. 35 als Vorgabe ist genau das, was der alte
+        // Damp-Wert 0,35 bisher mitgedreht hat - vorhandene Zustaende klingen
+        // damit weiter wie bisher.
+        layout.add (floatParam (tapId (t, TapPart::phase).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Phase",
+                                { 0.0f, 100.0f, 1.0f }, 35.0f, "%"));
+
         // Staerke der fruehen Einzelechos. Sie sind das, was einen Knall
         // wuchtig macht: ein Nachhallnetz verteilt seine Energie auf tausende
         // winzige Echos, eine reale Talflanke wirft EINES zurueck, das fast so

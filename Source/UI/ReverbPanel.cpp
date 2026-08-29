@@ -63,16 +63,17 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
     typeLabel.setTooltip (Tooltips::text (Tooltips::Key::TapType));
     addAndMakeVisible (typeLabel);
 
-    setupKnob (z,     "Höhe",    Tooltips::Key::TapZ);
-    setupKnob (room,  "Raum",    Tooltips::Key::TapRoom);
-    setupKnob (early, "Energie", Tooltips::Key::TapEarly);
-    setupKnob (decay, "Abkling", Tooltips::Key::TapDecay);
-    setupKnob (damp,  "Damp",    Tooltips::Key::TapDamp);
-    setupKnob (gain,  "Gain",    Tooltips::Key::TapGain);
-    setupKnob (width, "Breite",  Tooltips::Key::TapWidth);
-    setupKnob (echoes, "Echos",   Tooltips::Key::TapEchoes);
-    setupKnob (seed,   "Würfel",  Tooltips::Key::TapSeed);
-    setupKnob (direct, "Direkt",  Tooltips::Key::DirectGain);
+    setupKnob (gain,  "Gain",      Tooltips::Key::TapGain);
+    setupKnob (z,     "Höhe (Z)",  Tooltips::Key::TapZ);
+    setupKnob (width, "LR-Breite", Tooltips::Key::TapWidth);
+    setupKnob (room,  "Weite",     Tooltips::Key::TapRoom);
+    setupKnob (early, "Energie",   Tooltips::Key::TapEarly);
+    setupKnob (decay, "Abkling",   Tooltips::Key::TapDecay);
+    setupKnob (damp,  "Damp",      Tooltips::Key::TapDamp);
+    setupKnob (phase, "Phase",     Tooltips::Key::TapPhase);
+    setupKnob (echoes, "Echos",    Tooltips::Key::TapEchoes);
+    setupKnob (seed,   "Seed",     Tooltips::Key::TapSeed);
+    setupKnob (direct, "Direkt",   Tooltips::Key::DirectGain);
 
     typeBox.onChange = [this] { updateTypeDependentControls(); };
 
@@ -106,7 +107,7 @@ void ReverbPanel::selectTap (int index)
     predelayAttachment.reset();
     typeAttachment.reset();
 
-    for (auto* k : { &z, &room, &early, &decay, &damp, &gain, &width, &echoes, &seed })
+    for (auto* k : { &z, &room, &early, &decay, &damp, &phase, &gain, &width, &echoes, &seed })
         k->attachment.reset();
 
     onAttachment = std::make_unique<ButtonAttachment> (
@@ -124,6 +125,7 @@ void ReverbPanel::selectTap (int index)
         { &early, Params::TapPart::early },
         { &decay, Params::TapPart::decay },
         { &damp,  Params::TapPart::damp },
+        { &phase, Params::TapPart::phase },
         { &gain,  Params::TapPart::gain },
         { &width, Params::TapPart::width },
         { &echoes, Params::TapPart::echoes },
@@ -136,16 +138,26 @@ void ReverbPanel::selectTap (int index)
 
     updateTypeDependentControls();
     refreshRunningMarks();
+    updateGainLabel();
 }
 
-// Echos und Wuerfelbecher beschreiben, wie eine FLAECHE abgetastet wird - das
-// gibt es nur bei Draussen. Ausgegraut statt versteckt, damit das Panel beim
-// Umschalten nicht springt.
+// "3 Gain" statt nur "Gain": daneben steht der Direktschall, und ohne die
+// Nummer sieht man zwei Pegelregler, von denen einer unerklaerlich woanders
+// hinwirkt.
+void ReverbPanel::updateGainLabel()
+{
+    gain.label.setText (juce::String (selected + 1) + " " + Labels::text ("Gain"),
+                        juce::dontSendNotification);
+}
+
+// Echos, Wuerfelbecher und der Phasenverdreher beschreiben, wie eine FLAECHE
+// abgetastet wird - das gibt es nur bei Draussen. Ausgegraut statt versteckt,
+// damit das Panel beim Umschalten nicht springt.
 void ReverbPanel::updateTypeDependentControls()
 {
     const bool isOpenAir = (typeBox.getSelectedItemIndex() == 3);
 
-    for (auto* k : { &echoes, &seed })
+    for (auto* k : { &echoes, &seed, &phase })
     {
         k->slider.setEnabled (isOpenAir);
         k->label.setEnabled (isOpenAir);
@@ -213,6 +225,7 @@ void ReverbPanel::copyFromSelected()
     clipboard.early    = read (TP::early, 1.0f);
     clipboard.decay    = read (TP::decay, 2.0f);
     clipboard.damp     = read (TP::damp,  0.35f);
+    clipboard.phase    = read (TP::phase, 35.0f);
     clipboard.gain     = read (TP::gain,  -6.0f);
     clipboard.width    = read (TP::width, 1.0f);
     clipboard.predelay = read (TP::predelay, 1.0f) > 0.5f;
@@ -248,6 +261,7 @@ void ReverbPanel::pasteToSelected()
     write (TP::early, clipboard.early);
     write (TP::decay, clipboard.decay);
     write (TP::damp,  clipboard.damp);
+    write (TP::phase, clipboard.phase);
     write (TP::gain,  clipboard.gain);
     write (TP::width, clipboard.width);
     write (TP::predelay, clipboard.predelay ? 1.0f : 0.0f);
@@ -278,7 +292,7 @@ void ReverbPanel::refreshTooltips()
     // haengt.
     typeBox.changeItemText (4, Labels::text ("Draußen"));
 
-    for (auto* k : { &z, &room, &early, &decay, &damp, &gain, &width, &echoes, &seed, &direct })
+    for (auto* k : { &z, &room, &early, &decay, &damp, &phase, &gain, &width, &echoes, &seed, &direct })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
 
@@ -286,6 +300,9 @@ void ReverbPanel::refreshTooltips()
         k->label.setTooltip (tooltip);
         k->label.setText (Labels::text (k->labelSource), juce::dontSendNotification);
     }
+
+    // Muss NACH der Schleife stehen: die setzt "Gain" ohne Nummer.
+    updateGainLabel();
 }
 
 void ReverbPanel::resized()
@@ -318,6 +335,14 @@ void ReverbPanel::resized()
 
     pick.removeFromLeft (10);
     onButton.setBounds (pick.removeFromLeft (56));
+
+    // Uebernehmen und Einsetzen gehoeren zur Punktwahl und stehen deshalb
+    // daneben (@dpa 20260829): kopiert wird von einem Punkt zum anderen, und
+    // die Nummern sind das, worauf man dabei schaut.
+    pick.removeFromLeft (4);
+    copyButton.setBounds (pick.removeFromLeft (26));
+    pick.removeFromLeft (4);
+    pasteButton.setBounds (pick.removeFromLeft (26));
 
     head.removeFromTop (4);
 
@@ -356,19 +381,12 @@ void ReverbPanel::resized()
         return row;
     };
 
-    placeRow ({ &z, &gain, &width, &room, &early });
+    // Oben, was den Punkt im Ausgang beschreibt - vom Pegel ueber seinen Ort
+    // bis zur Weite des Raums. Unten, was danach mit dem Hall passiert.
+    placeRow ({ &gain, &z, &width, &room, &early });
     area.removeFromTop (4);
 
-    auto rest = placeRow ({ &decay, &damp, &echoes, &seed });
-
-    // Vorlauf und die zwei Uebertragungsknoepfe im freien Rest der unteren
-    // Reihe, statt eine weitere Zeile zu oeffnen.
-    rest.removeFromLeft (6);
-
-    auto buttons = rest.removeFromTop (24);
-    copyButton.setBounds (buttons.removeFromLeft (26));
-    buttons.removeFromLeft (4);
-    pasteButton.setBounds (buttons.removeFromLeft (26));
+    placeRow ({ &decay, &damp, &phase, &echoes, &seed });
 }
 
 void ReverbPanel::paint (juce::Graphics& g)

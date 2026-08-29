@@ -528,6 +528,7 @@ private:
         std::atomic<float>* tapRoom[DopplerEngine::maxTaps]     {};
         std::atomic<float>* tapDecay[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapDamp[DopplerEngine::maxTaps]     {};
+        std::atomic<float>* tapPhase[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapEarly[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapEchoes[DopplerEngine::maxTaps]   {};
         std::atomic<float>* tapSeed[DopplerEngine::maxTaps]     {};
@@ -1128,6 +1129,10 @@ private:
         double room       = 30.0;
         double decay      = 2.0;
         double damping    = 0.35;
+
+        // Staerke des Phasenverdrehers, 0..1 (der Regler steht in Prozent).
+        double phase      = 0.35;
+
         double early      = 1.0;
         int    echoes     = 24;
         int    seed       = 137;
