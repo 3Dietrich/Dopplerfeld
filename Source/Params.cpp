@@ -165,6 +165,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // erst, wenn jemand ihn aufdreht - bestehende Presets klingen unveraendert.
     layout.add (boolParam (srcJitterOn, "Source Jitter On", true));
 
+    // Default aus: bestehende Presets sollen klingen wie bisher.
+    layout.add (boolParam (srcJitterSmooth, "Source Jitter Smooth", false));
+
     // Default 1: der Wackler ist damit auf allen drei Achsen gleich stark.
     // Kleinere Werte druecken allein den Hoehenanteil.
     layout.add (floatParam (srcJitterZAmount, "Source Jitter Z Amount", unitRange(), 1.0f));

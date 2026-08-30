@@ -162,6 +162,12 @@ private:
     juce::ToggleButton srcJitterOnButton { "Jitter An" };
     std::unique_ptr<ButtonAttachment> srcJitterOnAttachment;
 
+    // Laesst den Wackler durch die Bewegungsglaettung laufen (siehe
+    // Params::srcJitterSmooth). Steht unter "Jitter An" in derselben Spalte -
+    // er schaltet dasselbe Wackeln, nur dessen Weg.
+    juce::ToggleButton srcJitterSmoothButton { "Jit glatt" };
+    std::unique_ptr<ButtonAttachment> srcJitterSmoothAttachment;
+
     // Nachlauf beim Loslassen von Quelle/Hoerer im Feld (siehe
     // FieldComponent::setCoastEnabled) - hat mit Record/Play NICHTS zu tun,
     // wirkt gleichermassen im Vorbeiflug-Reiter. Frueher faelschlich in der

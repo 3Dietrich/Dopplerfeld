@@ -150,6 +150,11 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
     addAndMakeVisible (srcJitterOnButton);
     srcJitterOnAttachment = std::make_unique<ButtonAttachment> (apvts, Params::srcJitterOn, srcJitterOnButton);
+
+    srcJitterSmoothButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterSmooth));
+    addAndMakeVisible (srcJitterSmoothButton);
+    srcJitterSmoothAttachment = std::make_unique<ButtonAttachment> (apvts, Params::srcJitterSmooth,
+                                                                   srcJitterSmoothButton);
     // Klick UND Presetwechsel loesen onClick aus (ButtonAttachment schaltet
     // per sendNotificationSync um) - deshalb reicht dieser eine Ort, um die
     // Regler in beiden Faellen richtig auszugrauen.
@@ -294,6 +299,7 @@ void MotionPanel::updateJitterEnabledState()
     srcJitterSpeedKnob.label.setEnabled (jitterOn);
     srcJitterZKnob.slider.setEnabled (jitterOn);
     srcJitterZKnob.label.setEnabled (jitterOn);
+    srcJitterSmoothButton.setEnabled (jitterOn);
 
     // Der Tempo-Deckel des Wacklers bremst seine Bahngeschwindigkeit.
 
@@ -428,6 +434,7 @@ void MotionPanel::refreshTooltips()
 
     // Beschriftungen mit dem Sprachumschalter mitnehmen.
     srcJitterOnButton.setButtonText (Labels::text ("Jitter An"));
+    srcJitterSmoothButton.setButtonText (Labels::text ("Jit glatt"));
     flyLoopButton.setButtonText (Labels::text ("Loop"));
     liveTabButton.setButtonText (Labels::text ("Live"));
     flyTabButton.setButtonText (Labels::text ("Vorbeiflug"));
@@ -457,6 +464,7 @@ void MotionPanel::refreshTooltips()
 
     flyLoopButton.setTooltip (Tooltips::text (Tooltips::Key::FlyLoop));
     srcJitterOnButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterOn));
+    srcJitterSmoothButton.setTooltip (Tooltips::text (Tooltips::Key::SrcJitterSmooth));
     smootherTypeLabel.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
     smootherTypeCombo.setTooltip (Tooltips::text (Tooltips::Key::SmootherType));
     playInterpLabel.setTooltip (Tooltips::text (Tooltips::Key::PlayInterp));
@@ -640,7 +648,17 @@ void MotionPanel::resized()
     auto toggleColumn = sharedRow.removeFromLeft (toggleW);
     sharedRow.removeFromLeft (4);
 
-    srcJitterOnButton.setBounds (toggleColumn.withSizeKeepingCentre (toggleW, 18));
+    // Zwei Schalter uebereinander in einer Spalte: "Jitter An" oben,
+    // "Jit glatt" darunter. Die Spalte ist knobH hoch, zwei Zeilen a 18 Pixel
+    // mit 3 dazwischen passen hinein, ohne der Reihe Breite zu nehmen - die
+    // ist mit 440 von 446 Pixeln voll.
+    {
+        auto stack = toggleColumn.withSizeKeepingCentre (toggleW, 18 + 3 + 18);
+
+        srcJitterOnButton.setBounds (stack.removeFromTop (18));
+        stack.removeFromTop (3);
+        srcJitterSmoothButton.setBounds (stack.removeFromTop (18));
+    }
 
     for (auto* k : { &srcJitterAmountKnob, &srcJitterSpeedKnob, &srcJitterZKnob })
     {

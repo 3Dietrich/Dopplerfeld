@@ -10,6 +10,9 @@
 //   rjitter  Wackler der Drehzahl (jitterAmount = 0)
 //   verb     Nachhall (reverbBypass)
 //
+// Zusaetzlich schaltet "smooth" den Wackler DURCH die Bewegungsglaettung
+// (srcJitterSmooth), statt etwas abzuschalten.
+//
 //   cmake --build build --target pitch_probe && build/pitch_probe [Preset] [s] [aus,aus,...]
 
 #include "Params.h"
@@ -58,6 +61,7 @@ int main (int argc, char** argv)
     if (off.contains ("jitter"))  set (Params::srcJitterOn, 0.0f);
     if (off.contains ("rjitter")) set (Params::jitterAmount, 0.0f);
     if (off.contains ("verb"))    set (Params::reverbBypass, 1.0f);
+    if (off.contains ("smooth"))  set (Params::srcJitterSmooth, 1.0f);
 
     auto show = [&proc] (const juce::String& id)
     {

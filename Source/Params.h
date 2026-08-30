@@ -102,6 +102,16 @@ namespace Params
     // ohne den Regler neu zu suchen.
     constexpr const char* srcJitterOn = "srcJitterOn";
 
+    // Laesst den Wackler durch die Bewegungsglaettung laufen statt an ihr
+    // vorbei (@dpa 20260830: "die Jitter bewegung sollte sich an die
+    // Live-Geschwindigkeit-Glaettung anpassen koennen"). Aus = wie bisher:
+    // der Wackler kommt erst hinter Glaettung und Tempo-Deckel auf die Bahn
+    // und behaelt seinen vollen Ausschlag. An = er wird auf das Bewegungsziel
+    // addiert, teilt sich also Zeitkonstante, Verfahren und Deckel mit Maus,
+    // Vorbeiflug und Wiedergabe - runder, aber schwaecher, je traeger die
+    // Glaettung steht.
+    constexpr const char* srcJitterSmooth = "srcJitterSmooth";
+
     // Anteil der Hoehe am Wackeln, siehe PositionJitter::setZFactor().
     constexpr const char* srcJitterZAmount = "srcJitterZAmount";
 

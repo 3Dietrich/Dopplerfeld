@@ -214,6 +214,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.srcJitterSpeed  = raw (Params::srcJitterSpeed);
     pp.srcJitterZAmount = raw (Params::srcJitterZAmount);
     pp.srcJitterOn     = raw (Params::srcJitterOn);
+    pp.srcJitterSmooth = raw (Params::srcJitterSmooth);
     pp.masterOn        = raw (Params::masterOn);
 
     pp.rpm = raw (Params::rpm);
@@ -1959,8 +1960,37 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         // der Abzug im Klon-Versatz hebt ihn also exakt auf statt nur naeherungsweise.
         const Vec3 sourceJitterNow = sourceJitter.tick (tickDt);
 
+        // Schalter "Jit glatt" (Params::srcJitterSmooth): der Wackler laeuft
+        // wahlweise DURCH die Bewegungsglaettung. Dann wird er auf das Ziel
+        // addiert und nimmt denselben Weg wie Maus, Vorbeiflug und Wiedergabe -
+        // mit deren Zeitkonstante, deren Verfahren und deren Tempo-Deckel. Das
+        // rundet ihn und schwaecht ihn zugleich: bei tau 0,145 s bleiben von
+        // einem 2-Hz-Wackeln rund 23 Prozent, und der Deckel klemmt die
+        // Schrittweite. Genau deshalb ist der Weg daran vorbei die Voreinstellung
+        // (@dpa 20260820: "kaum Bewegung, obwohl es sich stark bewegen muesste") -
+        // aber wer eine ruhigere, traegere Bewegung will, bekommt sie hier.
+        // Umgeschaltet wird als Blende, nicht als Schnitt: der Wackler sitzt
+        // je nach Weg an einer anderen Stelle der Kette, und ein harter Wechsel
+        // liesse die Quelle um den vollen Ausschlag springen - bei ein paar
+        // Metern ist das formal Ueberschall und knallt. Waehrend der Blende
+        // laeuft ein Teil des Wacklers durch die Glaettung und der Rest wie
+        // bisher daran vorbei; die Summe bleibt dabei stetig.
+        {
+            const double wanted = pp.srcJitterSmooth->load() > 0.5f ? 1.0 : 0.0;
+            const double step   = tickDt / jitterSmoothBlendSeconds;
+
+            jitterSmoothBlend += juce::jlimit (-step, step, wanted - jitterSmoothBlend);
+        }
+
+        const Vec3 jitterSmoothed = sourceJitterNow * jitterSmoothBlend;
+        const Vec3 jitterDirect   = sourceJitterNow - jitterSmoothed;
+
         // Fuer den naechsten Schnitt merken, siehe lastSourceJitter im Header.
-        lastSourceJitter = sourceJitterNow;
+        // Was durch die Glaettung laeuft, steckt bereits in der Position und
+        // darf dort nicht ein zweites Mal aufgeschlagen werden.
+        lastSourceJitter = jitterDirect;
+
+        target = target + jitterSmoothed;
 
         // Die Klone wackeln auf derselben Rate wie die Quelle, jeder fuer sich.
         // Ihr Versatz sitzt in der Geometrie der Engine, nicht in der Bahn -
@@ -2264,7 +2294,7 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             dopplerEngine.setPropellerOffset (1, side * (-halfSpan));
         }
 
-        dopplerEngine.pushSourceTick (smoothedSourcePos + sourceJitterNow);
+        dopplerEngine.pushSourceTick (smoothedSourcePos + jitterDirect);
     }
 }
 

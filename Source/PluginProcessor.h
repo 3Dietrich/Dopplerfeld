@@ -549,6 +549,7 @@ private:
         std::atomic<float>* srcJitterSpeed = nullptr;
         std::atomic<float>* srcJitterZAmount = nullptr;
         std::atomic<float>* srcJitterOn     = nullptr;
+        std::atomic<float>* srcJitterSmooth = nullptr;
 
         std::atomic<float>* masterOn        = nullptr;
 
@@ -928,6 +929,13 @@ private:
     // aufgezeichneten Bahn darin untergehen, klein genug, dass ein Gasstoss
     // noch als Gasstoss ankommt.
     static constexpr double accelSpanFactor = 4.0;
+
+    // Stand der Blende zwischen den beiden Wegen des Wacklers (siehe
+    // Params::srcJitterSmooth): 0 = an der Glaettung vorbei, 1 = durch sie
+    // hindurch. Eine halbe Sekunde ist lang genug, dass der wandernde
+    // Ausschlag als Bewegung durchgeht und nicht als Sprung.
+    double jitterSmoothBlend = 0.0;
+    static constexpr double jitterSmoothBlendSeconds = 0.5;
 
     // Wie lang ausgelaufen wird. Der Weg haengt linear daran (s.o.), das
     // Ende ist trotzdem weich: unter coastRestSpeed gilt die Quelle als

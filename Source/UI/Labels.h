@@ -112,6 +112,7 @@ namespace Labels
             { "Nachlauf",       "Coast"       },
             { "Maus glatt",     "Smooth Mouse" },
             { "Jitter An",      "Jitter On"   },
+            { "Jit glatt",      "Smooth Jit"  },
 
             // --- Feld / Physik / Ausgang ---
             { "Meereshöhe",     "Altitude"    },

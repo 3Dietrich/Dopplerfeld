@@ -78,6 +78,7 @@ namespace Tooltips
         SrcJitterAmount,
         SrcJitterSpeed,
         SrcJitterOn,
+        SrcJitterSmooth,
         EngineSine,
         EngineOscOn,
         ShockDuckRange,
@@ -947,6 +948,15 @@ namespace Tooltips
                           "The same control sits next to \"Spread\" in the swarm panel and "
                           "governs the height of the clones there - one parameter, two "
                           "knobs, always in step.";
+                case Key::SrcJitterSmooth:
+                    return lang == Language::De
+                        ? "Schickt das Wackeln durch die Bewegungsglaettung, statt daran vorbei. "
+                          "Aus: voller Ausschlag, wie eingestellt. An: runder und traeger, mit der "
+                          "Zeitkonstante der Glaettung und unter dem Tempo-Deckel."
+                        : "Runs the wobble through the motion smoothing instead of past it. Off: "
+                          "full amount as set. On: rounder and more sluggish, with the smoothing's "
+                          "time constant and under the speed cap.";
+
                 case Key::SrcJitterOn:
                     return lang == Language::De
                         ? "Schaltet das Wackeln der Schallquelle M und aller Klone komplett ab. Die "
