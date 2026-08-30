@@ -236,6 +236,8 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.noiseGainLo  = raw (Params::noiseGainLo);
     pp.noiseGainHi  = raw (Params::noiseGainHi);
     pp.noiseQ       = raw (Params::noiseQ);
+    pp.windLevelDb      = raw (Params::windLevelDb);
+    pp.noiseSpeedAmount = raw (Params::noiseSpeedAmount);
     pp.jitterAmount = raw (Params::jitterAmount);
     pp.jitterRateHz = raw (Params::jitterRateHz);
     pp.imbalance    = raw (Params::imbalance);
@@ -929,6 +931,8 @@ void DopplerfeldProcessor::applyEngineParameters()
     engineGenerator.setNoiseParams (pp.noiseFcLo->load(), pp.noiseFcHi->load(),
                                     pp.noiseGainLo->load(), pp.noiseGainHi->load(),
                                     pp.noiseQ->load());
+    engineGenerator.setWindLevelDb (pp.windLevelDb->load());
+    engineGenerator.setNoiseSpeedAmount (pp.noiseSpeedAmount->load() * 0.01f);   // Prozent -> 0..1
     engineGenerator.setJitter (pp.jitterAmount->load(), pp.jitterRateHz->load());
     engineGenerator.setImbalance (pp.imbalance->load());
     engineGenerator.setImbalanceOctave (pp.imbalanceOctave->load());

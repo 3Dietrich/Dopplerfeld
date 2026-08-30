@@ -117,6 +117,15 @@ public:
     // Betriebsart das Rauschen mit, das allein vom Fliegen kommt.
     void setAirspeed (float metresPerSecond);
 
+    // Pegel des Fahrtwindrauschens in dB, bezogen auf den bisher fest
+    // eingebauten Wert: 0 dB laesst alles wie es war, -60 dB schaltet es ab.
+    void setWindLevelDb (float levelDb);
+
+    // Wie stark das RAUSCHBAND dem Tempo folgt, 0..1. Bei 0 haengt es allein
+    // an der Drehzahl wie bisher, bei 1 waechst es mit dem Quadrat der
+    // Geschwindigkeit (bezogen auf airspeedRefMps).
+    void setNoiseSpeedAmount (float amount01);
+
     // Stärke der Druckstöße aus der Raketendüse, 0..1 (@dpa: "aus einem
     // Raketenantrieb kann Überschall druck rauskommen. das mus einerseits
     // einstellbar sein, andererseits müssen diese noisy N-Waves zu hören sein
@@ -400,8 +409,15 @@ private:
     std::atomic<float> airspeedMps { 0.0f };
     static constexpr double airspeedRefMps = 120.0;
 
-    // Pegel des Fahrtwindrauschens bei der Bezugsgeschwindigkeit.
+    // Pegel des Fahrtwindrauschens bei der Bezugsgeschwindigkeit. Der Regler
+    // (setWindLevelDb) sitzt als Faktor davor, damit 0 dB genau diesen Wert
+    // ergibt - so klingt jeder vorhandene Zustand unveraendert weiter.
     static constexpr double windLevel = 0.35;
+
+    std::atomic<float> windLevelDb { 0.0f };
+
+    // Tempoanteil des Rauschbands, siehe setNoiseSpeedAmount.
+    std::atomic<float> noiseSpeedAmount { 0.0f };
 
     juce::dsp::StateVariableTPTFilter<float> windFilter;
     juce::Random windRandom;

@@ -142,6 +142,17 @@ namespace Params
     constexpr const char* noiseGainLo  = "noiseGainLo";
     constexpr const char* noiseGainHi  = "noiseGainHi";
     constexpr const char* noiseQ       = "noiseQ";
+
+    // Pegel des Fahrtwindrauschens, das jede Betriebsart von sich aus hat
+    // (siehe EngineGenerator::setAirspeed). Es war bisher fest eingebaut und
+    // damit nicht einstellbar - @dpa 20260830: "nichts neues, nur die Noises
+    // die es gibt via Regler geschwindigkeitabhaengig machen".
+    constexpr const char* windLevelDb  = "windLevelDb";
+
+    // Wie stark das Rauschband dem TEMPO folgt statt nur der Drehzahl, in
+    // Prozent. Bei 0 wie bisher; bei 100 waechst es mit dem Quadrat der
+    // Geschwindigkeit, bezogen auf EngineGenerator::airspeedRefMps.
+    constexpr const char* noiseSpeedAmount = "noiseSpeedAmount";
     constexpr const char* jitterAmount = "jitterAmount";
     constexpr const char* jitterRateHz = "jitterRateHz";
     constexpr const char* imbalance    = "imbalance";

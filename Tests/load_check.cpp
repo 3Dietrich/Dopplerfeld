@@ -7529,6 +7529,110 @@ int main()
         }
     }
 
+    // Geschwindigkeitsabhaengiges Rauschen (@dpa 20260830: "nur die Noises
+    // die es gibt via Regler geschwindigkeitabhaengig machen"). Geprueft wird,
+    // dass beide Regler ueberhaupt etwas tun - der Fahrtwind, den es schon
+    // gab, und der Tempoanteil des Rauschbands.
+    {
+        // Zwei verschiedene Betriebsarten, weil die beiden Rauschanteile in
+        // verschiedenen leben: das Rauschband gibt es in "Frei" und beim
+        // Hubschrauber, den Fahrtwind in jeder Betriebsart AUSSER "Frei"
+        // (siehe EngineGenerator - "Frei" ist die Betriebsart der alten
+        // Zustaende und sollte sich nicht von selbst aendern).
+        auto flyAndMeasure = [] (int kind, float noiseSpeedPercent, float windDb)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres,  2000.0f);
+            setParam (proc, Params::flyKind,      1.0f);
+            setParam (proc, Params::flySpeed,     300.0f);   // gut ueber den 120 m/s Bezug
+            setParam (proc, Params::flyDistance,  150.0f);
+            setParam (proc, Params::flyApproach,  400.0f);
+            setParam (proc, Params::groundReflectionOn, 0.0f);
+            setParam (proc, Params::reverbBypass, 1.0f);
+            setParam (proc, Params::nWaveOn,      0.0f);
+            // Die vier Teiltoene stumm: sonst deckt der Motorton das Rauschen
+            // zu, um das es hier geht.
+            setParam (proc, Params::harmLevel1, -60.0f);
+            setParam (proc, Params::harmLevel2, -60.0f);
+            setParam (proc, Params::harmLevel3, -60.0f);
+            setParam (proc, Params::harmLevel4, -60.0f);
+
+            // Und die Betriebsart selbst leise: der Duesenklang wuerde den
+            // Fahrtwind sonst zudecken. Er haengt nicht am Pegel der
+            // Betriebsart, bleibt also als einziges stehen.
+            setParam (proc, Params::engineLevelDb, -60.0f);
+
+            setParam (proc, Params::engineKind,       (float) kind);
+            setParam (proc, Params::noiseSpeedAmount, noiseSpeedPercent);
+            setParam (proc, Params::windLevelDb,      windDb);
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            juce::MidiBuffer midi;
+
+            for (int i = 0; i < 8; ++i)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+            }
+
+            proc.triggerFlyBy();
+
+            double sum = 0.0;
+            int    n   = 0;
+
+            const int blocks = (int) (5.0 * sampleRate / blockSize);
+
+            for (int b = 0; b < blocks; ++b)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                // Erst ab der zweiten Sekunde messen: davor ist der Schall der
+                // Quelle noch unterwegs.
+                if ((double) b * blockSize / sampleRate < 2.0)
+                    continue;
+
+                for (int i = 0; i < blockSize; ++i)
+                {
+                    const double v = buffer.getSample (0, i);
+                    sum += v * v;
+                    ++n;
+                }
+            }
+
+            return 20.0 * std::log10 (std::max (1.0e-9, std::sqrt (sum / std::max (1, n))));
+        };
+
+
+        // Rauschband in "Frei" (Index 0), Fahrtwind am Duesenantrieb (1).
+        const double plain     = flyAndMeasure (0, 0.0f,   0.0f);
+        const double withSpeed = flyAndMeasure (0, 100.0f, 0.0f);
+        const double jetWind   = flyAndMeasure (1, 0.0f,   0.0f);
+        const double noWind    = flyAndMeasure (1, 0.0f, -60.0f);
+
+        std::printf ("%-22s Rausch v 0 %%: %.1f dB | 100 %%: %.1f dB || Fahrtwind an: %.1f dB | "
+                     "aus: %.1f dB\n",
+                     "Tempo-Rauschen", plain, withSpeed, jetWind, noWind);
+
+        if (withSpeed <= plain + 1.0)
+        {
+            std::printf ("FEHLGESCHLAGEN: 'Rausch v' auf 100 %% aendert bei 300 m/s nichts "
+                         "(%.1f dB gegen %.1f dB)\n", withSpeed, plain);
+            failed = true;
+        }
+
+        if (noWind >= jetWind - 0.5)
+        {
+            std::printf ("FEHLGESCHLAGEN: zugedrehter Fahrtwind aendert nichts "
+                         "(%.1f dB gegen %.1f dB)\n", noWind, jetWind);
+            failed = true;
+        }
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }

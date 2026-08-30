@@ -139,6 +139,9 @@ MotionPanel::MotionPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (srcJitterSpeedKnob,  apvts, Params::srcJitterSpeed,  "Jit Tempo", Tooltips::Key::SrcJitterSpeed);
     setupKnob (srcJitterZKnob,      apvts, Params::srcJitterZAmount, "Z-Anteil", Tooltips::Key::SrcJitterZAmount);
 
+    setupKnob (windLevelKnob, apvts, Params::windLevelDb,      "Fahrtwind", Tooltips::Key::WindLevel);
+    setupKnob (noiseSpeedKnob, apvts, Params::noiseSpeedAmount, "Rausch v",  Tooltips::Key::NoiseSpeed);
+
 
     flyLoopButton.setTooltip (Tooltips::text (Tooltips::Key::FlyLoop));
     addAndMakeVisible (flyLoopButton);
@@ -439,7 +442,7 @@ void MotionPanel::refreshTooltips()
 
     for (auto* k : { &smootherTauKnob, &slewVmaxKnob, &playSpeedKnob,
                       &globalMaxSpeedKnob, &srcJitterAmountKnob, &srcJitterSpeedKnob,
-                      &srcJitterZKnob,
+                      &srcJitterZKnob, &windLevelKnob, &noiseSpeedKnob,
                       &flyDistanceKnob, &flyApproachKnob, &flySpeedKnob, &flyJumpBoomKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
@@ -643,6 +646,19 @@ void MotionPanel::resized()
     {
         layoutKnob (*k, sharedRow.removeFromLeft (knobW));
         sharedRow.removeFromLeft (4);
+    }
+
+    // Zweite gemeinsame Zeile: was das Tempo am Klang der Quelle aendert.
+    // Eigene Zeile und nicht in die obere gequetscht - die ist mit 440 von
+    // 446 Pixeln voll.
+    area.removeFromTop (4);
+
+    auto speedSoundRow = area.removeFromTop (knobH);
+
+    for (auto* k : { &windLevelKnob, &noiseSpeedKnob })
+    {
+        layoutKnob (*k, speedSoundRow.removeFromLeft (knobW));
+        speedSoundRow.removeFromLeft (4);
     }
 }
 

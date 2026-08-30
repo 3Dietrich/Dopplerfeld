@@ -9,6 +9,7 @@
 
 #include "PluginProcessor.h"
 #include "UI/MotionPanel.h"
+#include "UI/Theme.h"
 
 #include <cstdio>
 
@@ -17,7 +18,7 @@ namespace
 // Breite wie im Editor (Panelspalte), Hoehe aus
 // DopplerfeldEditor::motionContentHeight.
 constexpr int panelWidth  = 462;
-constexpr int panelHeight = 274;
+constexpr int panelHeight = 274 + 4 + Theme::knobHeight;
 
 void shoot (MotionPanel& panel, const juce::String& name)
 {

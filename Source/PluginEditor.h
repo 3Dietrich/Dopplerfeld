@@ -375,7 +375,9 @@ public:
     // des Motor-Panels (84 x 67): Reiterzeile 28 + 6, Reiterinhalt
     // 28 + 6 + 44 + 6 + 26 + 6 + 67 = 183, Abstand 6, gemeinsame Zeile 67,
     // dazu oben und unten je 8 Rand.
-    static constexpr int motionContentHeight = 274;
+    // 274 plus eine weitere Reglerzeile (Fahrtwind/Rausch v, siehe
+    // MotionPanel::resized).
+    static constexpr int motionContentHeight = 274 + 4 + Theme::knobHeight;
     static constexpr int fieldContentHeight  = 564;   // fuenf Gruppen (Raum/Luft/Boden/Knall/Ausgang) mit zusammen sechs Reglerreihen (s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // Der CPU-Balken sitzt in einer eigenen Zeile am unteren Fensterrand

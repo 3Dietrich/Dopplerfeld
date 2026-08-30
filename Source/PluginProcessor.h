@@ -563,6 +563,8 @@ private:
         std::atomic<float>* noiseGainLo  = nullptr;
         std::atomic<float>* noiseGainHi  = nullptr;
         std::atomic<float>* noiseQ       = nullptr;
+        std::atomic<float>* windLevelDb      = nullptr;
+        std::atomic<float>* noiseSpeedAmount = nullptr;
         std::atomic<float>* jitterAmount = nullptr;
         std::atomic<float>* jitterRateHz = nullptr;
         std::atomic<float>* imbalance    = nullptr;

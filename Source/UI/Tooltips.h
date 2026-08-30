@@ -84,6 +84,8 @@ namespace Tooltips
         JumpBoom,
         JumpBoomSize,
         SrcJitterZAmount,
+        WindLevel,
+        NoiseSpeed,
         MasterOn,
         GroundGain,
         GroundDamp,
@@ -1195,6 +1197,21 @@ namespace Tooltips
                         : "How much treble the reverb loses per round trip - a low-pass in the "
                           "loop, nothing else. Phase rotation sits next to it in the Phase "
                           "control.";
+                case Key::WindLevel:
+                    return lang == Language::De
+                        ? "Pegel des Fahrtwinds - das Rauschen, das die Quelle allein vom "
+                          "Fliegen hat. Es waechst mit dem Tempo, oberhalb von 120 m/s nur noch "
+                          "mit der Wurzel."
+                        : "Level of the slipstream - the noise a source makes just from moving. "
+                          "It grows with speed, above 120 m/s only with the square root.";
+                case Key::NoiseSpeed:
+                    return lang == Language::De
+                        ? "Wie stark das Rauschband dem Tempo folgt statt nur der Drehzahl. "
+                          "Aufgedreht waechst es mit dem Quadrat der Geschwindigkeit; bei "
+                          "120 m/s steht der eingestellte Pegel."
+                        : "How much the noise band follows speed instead of just RPM. Turned up "
+                          "it grows with the square of the speed; at 120 m/s the set level "
+                          "applies.";
                 case Key::TapPhase:
                     return lang == Language::De
                         ? "Wie stark die Rueckwuerfe der Flaeche gegeneinander verdreht werden. "

@@ -149,6 +149,13 @@ private:
     // und wer einen der drei drehte, verschob die Wirkung der anderen beiden.
     Knob srcJitterAmountKnob, srcJitterSpeedKnob, srcJitterZKnob;
 
+    // Was das Tempo am KLANG der Quelle aendert - beides Rauschen, das es
+    // schon gab, bisher aber ohne Regler bzw. ohne Tempobezug (@dpa 20260830:
+    // "nur die Noises die es gibt via Regler geschwindigkeitabhaengig
+    // machen"). Steht unter Bewegung und nicht beim Motor, weil die
+    // Geschwindigkeit hier eingestellt wird.
+    Knob windLevelKnob, noiseSpeedKnob;
+
 
     // Ganz-Aus fuer den Jitter, ohne die Regler Jitter/Tempo zurueckzusetzen
     // - deren Wert bleibt erhalten, siehe updateJitterEnabledState().

@@ -175,6 +175,10 @@ namespace Labels
             { "Abkling",        "Decay"       },
             { "Energie",        "Energy"      },
             { "Draußen",        "Outdoors"    },
+
+            // --- Bewegung ---
+            { "Fahrtwind",      "Slipstream"  },
+            { "Rausch v",       "Noise v"     },
             { "Luft",           "Air"         },
             { "Boden",          "Ground"      },
             { "Ausgang",        "Output"      },

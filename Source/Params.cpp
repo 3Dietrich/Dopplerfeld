@@ -228,6 +228,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (noiseGainLo, "Noise Gain Lo", { -48.0f, 24.0f, 0.1f }, -24.0f, "dB"));
     layout.add (floatParam (noiseGainHi, "Noise Gain Hi", { -60.0f, 0.0f, 0.1f }, -6.0f, "dB"));
     layout.add (floatParam (noiseQ, "Noise Q", { 0.1f, 10.0f, 0.01f }, 1.2f));
+
+    // Fahrtwind: das Rauschen, das eine Quelle allein vom Fliegen hat. Es gab
+    // es schon, aber mit fest eingebautem Pegel - jetzt am Regler, mit 0 dB
+    // als dem Wert, der genau dem bisherigen entspricht. Nach oben zwoelf
+    // Dezibel Luft, nach unten bis -60, wo es als aus gilt.
+    layout.add (floatParam (windLevelDb, "Wind Level", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+
+    // Wie stark das Rauschband dem Tempo folgt. Bisher hing es allein an der
+    // Drehzahl: ein Motor im Leerlauf, der mit 300 km/h vorbeigezogen wird,
+    // rauschte genauso wie im Stand. Bei 100 % waechst das Rauschen mit dem
+    // Quadrat der Geschwindigkeit - dieselbe Kennlinie, mit der auch der
+    // Fahrtwind rechnet, und derselbe Bezugswert.
+    layout.add (floatParam (noiseSpeedAmount, "Noise Speed", { 0.0f, 100.0f, 1.0f }, 0.0f, "%"));
     layout.add (floatParam (jitterAmount, "Jitter Amount", { 0.0f, 20.0f, 0.01f }, 1.5f, "%"));
     layout.add (floatParam (jitterRateHz, "Jitter Rate", { 3.0f, 15.0f, 0.01f }, 8.0f, "Hz"));
     layout.add (floatParam (imbalance, "Imbalance", unitRange(), 0.0f));
@@ -740,7 +753,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // gesehen. Ein Grundwert, der ein Loch in den Ton reisst, waere die
     // falsche Antwort - der Auftrag ist, die zusaetzlichen Hoerwege richtig
     // klingen zu lassen.
-    layout.add (floatParam (extraPathGainDb, "Extra Paths", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+    // Vorgabe still (@dpa 20260830: "die Fahne klingt fuer mich voellig
+    // unnatuerlich und ich muss sie immer runter (-60dB) drehen"). Gerechnet
+    // wird sie weiterhin richtig, sie ist nur nicht mehr das, was man
+    // ungefragt zu hoeren bekommt. Gespeicherte Zustaende bringen ihren
+    // eigenen Wert mit und aendern sich dadurch nicht.
+    layout.add (floatParam (extraPathGainDb, "Extra Paths", { -60.0f, 12.0f, 0.1f }, -60.0f, "dB"));
     // OHNE WIRKUNG, nur noch fuer gespeicherte Presets registriert. Die Tiefe
     // steht fest auf 1: waehrend eine Stossfront ueber den Hoerweg laeuft,
     // kommt nichts anderes durch, und alles darunter liess Motorton mitten im

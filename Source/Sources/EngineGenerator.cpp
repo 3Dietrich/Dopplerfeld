@@ -564,7 +564,22 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     const double gLoDb = (double) noiseGainLoDb.load();
     const double gHiDb = (double) noiseGainHiDb.load();
     const double gNoiseDb = gLoDb + (gHiDb - gLoDb) * std::pow (u, 1.5);
-    const double noiseGain = juce::Decibels::decibelsToGain (gNoiseDb);
+
+    // Tempoanteil des Rauschbands (@dpa 20260830). Bisher hing es allein an
+    // der Drehzahl - ein Leerlaufmotor, der mit 300 km/h vorbeigezogen wird,
+    // rauschte genauso wie im Stand.
+    //
+    // Aufgedreht waechst es mit dem QUADRAT der Geschwindigkeit: das ist
+    // dieselbe Kennlinie wie beim Fahrtwind darunter und bei
+    // airspeedRefMps gerade 1, dort bleibt der eingestellte Pegel also
+    // stehen. Unten wird bei einem Tausendstel geklemmt, damit eine stehende
+    // Quelle nicht in ein Minus-Unendlich laeuft.
+    const double vNorm = (double) airspeedMps.load() / airspeedRefMps;
+    const double speedShare = (double) noiseSpeedAmount.load();
+    const double speedFactor = (1.0 - speedShare) + speedShare * vNorm * vNorm;
+
+    const double noiseGain = juce::Decibels::decibelsToGain (gNoiseDb)
+                             * std::max (0.001, speedFactor);
 
     noiseFilter.setCutoffFrequency ((float) fcNoise);
     noiseFilter.setResonance (juce::jmax (0.05f, noiseQ.load()));
@@ -583,6 +598,10 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     // Geschwindigkeit, oberhalb der Bezugsgeschwindigkeit nur noch mit der
     // Wurzel - sonst deckte er bei Ueberschall alles andere zu.
     const double airspeed = (double) airspeedMps.load();
+
+    // Fester Grundpegel mal Regler (setWindLevelDb): bei 0 dB steht genau der
+    // Wert da, mit dem der Fahrtwind bisher fest eingebaut war.
+    const double windGain = windLevel * juce::Decibels::decibelsToGain ((double) windLevelDb.load(), -60.0);
     const double windNorm = airspeed / airspeedRefMps;
     const double windAmount = windNorm <= 1.0 ? windNorm : std::sqrt (windNorm);
 
@@ -1380,7 +1399,7 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         // Der Fahrtwind haengt am Fliegen, nicht am Motor - er laeuft deshalb
         // an der Unwucht vorbei und wird auch nicht vom Betriebsart-Pegel
         // skaliert, sondern nur von der Blende.
-        out[n] = (float) (((kindSample * kindGain) * imbalanceFactor + windSample * windLevel) * kindFade);
+        out[n] = (float) (((kindSample * kindGain) * imbalanceFactor + windSample * windGain) * kindFade);
     }
 }
 
@@ -1415,6 +1434,16 @@ void EngineGenerator::setNoiseParams (float fcLoHz, float fcHiHz, float gainLoDb
     noiseGainLoDb.store (gainLoDb);
     noiseGainHiDb.store (gainHiDb);
     noiseQ.store (q);
+}
+
+void EngineGenerator::setWindLevelDb (float levelDb)
+{
+    windLevelDb.store (levelDb);
+}
+
+void EngineGenerator::setNoiseSpeedAmount (float amount01)
+{
+    noiseSpeedAmount.store (juce::jlimit (0.0f, 1.0f, amount01));
 }
 
 void EngineGenerator::setJitter (float amountPercent, float rateHz)
