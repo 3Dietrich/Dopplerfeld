@@ -36,7 +36,7 @@ EngineControlPanel::EngineControlPanel (juce::AudioProcessorValueTreeState& apvt
 
     setupKnob (throttleKnob,    apvts, Params::throttleFromAccel, "Gas aus a",
                Tooltips::Key::ThrottleFromAccel);
-    setupKnob (throttleTauKnob, apvts, Params::throttleTau,       "Gas traeg",
+    setupKnob (throttleTauKnob, apvts, Params::throttleTau,       "Gas-Trägheit",
                Tooltips::Key::ThrottleTau);
 
     motorGateButton.setTooltip (Tooltips::text (Tooltips::Key::EngineMotorGate));

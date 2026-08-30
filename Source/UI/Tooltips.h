@@ -1229,9 +1229,13 @@ namespace Tooltips
                 case Key::ThrottleTau:
                     return lang == Language::De
                         ? "Traegheit dieser Nachfuehrung. Kurz klingt elektrisch - die Drehzahl "
-                          "folgt sofort. Lang klingt nach Verbrenner mit Schwungmasse."
+                          "folgt sofort. Lang klingt nach Verbrenner mit Schwungmasse. Zugleich das "
+                          "Messfenster der Beschleunigung: kurz eingestellt kommt auch das Zittern "
+                          "der Bewegung als Gas an."
                         : "Inertia of that response. Short sounds electric - the RPM follows at "
-                          "once. Long sounds like a combustion engine with flywheel.";
+                          "once. Long sounds like a combustion engine with flywheel. It is also the "
+                          "window the acceleration is measured over: set short, the jitter of the "
+                          "motion arrives as throttle too.";
                 case Key::WindLevel:
                     return lang == Language::De
                         ? "Pegel des Fahrtwinds - das Rauschen, das die Quelle allein vom "

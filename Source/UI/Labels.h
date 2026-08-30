@@ -181,7 +181,7 @@ namespace Labels
             { "Fahrtwind",      "Slipstream"  },
             { "Knall-Sperre",   "Bang hold"   },
             { "Gas aus a",      "Accel gas"   },
-            { "Gas traeg",      "Gas inertia" },
+            { "Gas-Trägheit",   "Gas inertia" },
             { "Rausch v",       "Noise v"     },
             { "Luft",           "Air"         },
             { "Boden",          "Ground"      },
