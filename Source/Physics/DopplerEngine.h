@@ -616,10 +616,10 @@ private:
     TapBus   tapBus[maxTaps];
 
     // Arbeitsflaechen der Kette (siehe TapState::chainTo). chainStereo nimmt
-    // den Hall einer Stufe auf, chainInput haelt je Ziel dessen Summe - das
-    // ist der Eingang der naechsten Stufe. Mono, weil eine Hallbauart einen
-    // Punkt hoert, keinen Stereopegel; die Breite entsteht ohnehin in der
-    // letzten Stufe neu.
+    // den Hall einer Stufe auf, chainInput haelt ihn je Ziel bereit - das ist
+    // der Eingang der naechsten Stufe, beide Seiten getrennt. Eine Mono-Summe
+    // waere hier ein Verlust: die zwei Seiten einer Hallbauart sind
+    // absichtlich unkorreliert, und ihre Summe loescht sie stellenweise aus.
     //
     // Je Ziel ein eigener Abschnitt, nicht eine gemeinsame Flaeche: es koennen
     // mehrere Ketten gleichzeitig laufen (1 in 3 und 2 in 4), und die zweite
@@ -627,7 +627,7 @@ private:
     // der Reihe ist.
     //
     // Bemessen in prepare(), im Renderpfad wird daran nichts allokiert.
-    std::vector<float> chainStereoL, chainStereoR, chainInput;
+    std::vector<float> chainStereoL, chainStereoR, chainInputL, chainInputR;
     bool chainHasInput[maxTaps] {};
 
     // Renderziel der Pfade: zwei Ohrkanaele plus je einer je Abgriffpunkt.

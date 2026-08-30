@@ -28,7 +28,23 @@ public:
 
     // Schreibt nach outL/outR, addiert nicht. Der Aufrufer mischt selbst zu,
     // weil nur er Pegel und Breite kennt.
-    virtual void process (const float* in, float* outL, float* outR, int numSamples) = 0;
+    //
+    // Mono ist der Normalfall: was an einem Abgriffpunkt im Feld ankommt, ist
+    // ein Punkt. Stereo braucht nur die Kette (siehe TapState::chainTo im
+    // DopplerEngine), wo eine Bauart in die naechste geht - dort waere eine
+    // Mono-Summe ein Verlust: die beiden Seiten einer Hallbauart sind
+    // absichtlich unkorreliert, und ihre Summe loescht sich stellenweise aus.
+    //
+    // Jede Bauart setzt NUR die Stereofassung um; die Mono-Fassung ist ihr
+    // Sonderfall mit inL == inR und liefert deshalb weiterhin Zeichen fuer
+    // Zeichen dasselbe wie vorher.
+    void process (const float* in, float* outL, float* outR, int numSamples)
+    {
+        processStereo (in, in, outL, outR, numSamples);
+    }
+
+    virtual void processStereo (const float* inL, const float* inR,
+                                float* outL, float* outR, int numSamples) = 0;
 
     // Kantenlaenge des gedachten Raums in Metern. Bestimmt die Laufzeiten im
     // Netz, also Echodichte und Faerbung.

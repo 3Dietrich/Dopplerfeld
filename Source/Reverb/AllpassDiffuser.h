@@ -53,12 +53,15 @@ public:
         dampR.reset();
     }
 
-    void process (const float* in, float* outL, float* outR, int numSamples) override
+    void processStereo (const float* inL, const float* inR,
+                        float* outL, float* outR, int numSamples) override
     {
+        // Zwei getrennte Allpass-Ketten gibt es hier ohnehin - sie bekommen
+        // jetzt je ihre Seite statt zweimal dasselbe.
         for (int n = 0; n < numSamples; ++n)
         {
-            float l = in[n];
-            float r = in[n];
+            float l = inL[n];
+            float r = inR[n];
 
             for (int i = 0; i < stages; ++i)
             {

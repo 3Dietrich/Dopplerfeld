@@ -64,7 +64,8 @@ public:
         }
     }
 
-    void process (const float* in, float* outL, float* outR, int numSamples) override
+    void processStereo (const float* inL, const float* inR,
+                        float* outL, float* outR, int numSamples) override
     {
         // Der Eingang wird auf die Zahl der Kaemme normiert, damit die Summe
         // unabhaengig von combs denselben Pegel hat.
@@ -72,7 +73,10 @@ public:
 
         for (int n = 0; n < numSamples; ++n)
         {
-            const float x = in[n] * inScale;
+            // Kaemme und Allpaesse liegen ohnehin doppelt vor, einmal je
+            // Seite - sie bekommen jetzt je ihre.
+            const float xL = inL[n] * inScale;
+            const float xR = inR[n] * inScale;
 
             float l = 0.0f;
             float r = 0.0f;
@@ -88,8 +92,8 @@ public:
                 // Daempfung IM Rueckkopplungsweg, nicht am Ausgang: nur so
                 // verliert jede Wiederholung erneut Hoehen, und der Nachhall
                 // wird mit der Zeit dunkler statt von Anfang an dumpf.
-                combL[i].write (x + dampL[i].process (dl) * fb);
-                combR[i].write (x + dampR[i].process (dr) * fb);
+                combL[i].write (xL + dampL[i].process (dl) * fb);
+                combR[i].write (xR + dampR[i].process (dr) * fb);
             }
 
             for (int i = 0; i < allpasses; ++i)

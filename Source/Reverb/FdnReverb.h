@@ -64,8 +64,15 @@ public:
         }
     }
 
-    void process (const float* in, float* outL, float* outR, int numSamples) override
+    void processStereo (const float* inL, const float* inR,
+                        float* outL, float* outR, int numSamples) override
     {
+        // Mono ist derselbe Zeiger zweimal (siehe ReverbUnit::process). Dann
+        // laeuft nur die eine Eingangsstreuung, und das Netz bekommt Leitung
+        // fuer Leitung genau das, was es immer bekommen hat - der Klang
+        // bestehender Zustaende aendert sich also nicht.
+        const bool mono = (inL == inR);
+
         // Energetisch normiert, nicht arithmetisch: die acht Leitungen sind
         // untereinander unkorreliert, ihre Summe waechst deshalb mit der
         // WURZEL aus der Zahl der Leitungen und nicht mit ihr selbst. Ein
@@ -79,11 +86,22 @@ public:
             // Eingangsstreuung vor dem Netz. Ohne sie waeren die ersten
             // Millisekunden acht einzelne Echos statt eines Einsatzes - das
             // Netz braucht ein paar Umlaeufe, bis es von selbst dicht ist.
-            float d = in[n];
+            float dL = inL[n];
             for (int i = 0; i < diffusers; ++i)
-                d = inDiffL[i].process (d);
+                dL = inDiffL[i].process (dL);
 
-            const float x = d * inScale;
+            float dR = dL;
+
+            if (! mono)
+            {
+                dR = inR[n];
+
+                for (int i = 0; i < diffusers; ++i)
+                    dR = inDiffR[i].process (dR);
+            }
+
+            const float xL = dL * inScale;
+            const float xR = dR * inScale;
 
             for (int i = 0; i < lines; ++i)
                 state[i] = delay[i].read();
@@ -106,8 +124,16 @@ public:
 
             hadamard8 (state);
 
+            // Gespeist wird nach demselben Vorzeichenmuster, nach dem oben
+            // abgegriffen wird: was links hereinkommt, geht in die Leitungen,
+            // die links wieder herauskommen. Bei Mono stehen in xL und xR
+            // dieselben Zahlen, das Netz sieht also den alten Zustand.
             for (int i = 0; i < lines; ++i)
-                delay[i].write (x + damp[i].process (state[i]) * fb[i]);
+            {
+                const bool inA = (i == 0 || i == 2 || i == 5 || i == 7);
+
+                delay[i].write ((inA ? xL : xR) + damp[i].process (state[i]) * fb[i]);
+            }
         }
     }
 

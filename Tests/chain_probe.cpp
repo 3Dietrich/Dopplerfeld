@@ -25,10 +25,11 @@ constexpr int    blockSize  = 512;
 
 struct Result
 {
-    double rms = 0.0;   // Pegel des Hallanteils am Ausgang
+    double rms = 0.0;           // Pegel des Hallanteils am Ausgang
+    double correlation = 0.0;   // 1 = beide Seiten gleich, 0 = unabhaengig
 };
 
-Result run (bool chained, bool muteSecond = false)
+Result run (bool chained, bool muteSecond = false, double firstWidth = 1.0)
 {
     DopplerfeldProcessor proc;
     proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
@@ -67,6 +68,12 @@ Result run (bool chained, bool muteSecond = false)
     // Auswahl 1.
     set (Params::tapId (2, chain), chained ? 1.0f : 0.0f);
 
+    // Breite der ERSTEN Stufe. Sie ist der scharfe Test der Weitergabe: die
+    // Breite spreizt die Seite und laesst die Mitte stehen, eine Mono-Summe
+    // ist von ihr also gar nicht beruehrt. Kommt sie in der zweiten Stufe an,
+    // wird tatsaechlich stereo weitergereicht.
+    set (Params::tapId (2, width), (float) firstWidth);
+
     // Schaerfster Nachweis: den ZWEITEN stumm stellen. Als Kette laeuft alles
     // durch ihn, es darf also fast nichts mehr herauskommen; nebeneinander
     // bleibt der erste unveraendert hoerbar.
@@ -87,6 +94,7 @@ Result run (bool chained, bool muteSecond = false)
     }
 
     double sum = 0.0;
+    double sumL = 0.0, sumR = 0.0, sumLR = 0.0;
     long long count = 0;
 
     for (int b = 0; b < measureBlocks; ++b)
@@ -99,12 +107,16 @@ Result run (bool chained, bool muteSecond = false)
             const double l = buffer.getSample (0, i);
             const double r = buffer.getSample (1, i);
             sum += 0.5 * (l * l + r * r);
+            sumL += l * l;
+            sumR += r * r;
+            sumLR += l * r;
             count += 1;
         }
     }
 
     Result result;
     result.rms = count > 0 ? std::sqrt (sum / (double) count) : 0.0;
+    result.correlation = sumLR / std::max (1.0e-18, std::sqrt (sumL * sumR));
 
     return result;
 }
@@ -118,18 +130,30 @@ int main()
     const auto chained = run (true);
     const auto apartMuted   = run (false, true);
     const auto chainedMuted = run (true,  true);
+    const auto chainedNarrow = run (true, false, 0.0);
+    const auto chainedWide   = run (true, false, 2.0);
 
     auto db = [] (double a, double b) { return 20.0 * std::log10 (std::max (1.0e-12, a)
                                                                 / std::max (1.0e-12, b)); };
 
     std::printf ("Nur der Hall der Punkte 3 und 4 (Direktschall stumm):\n");
-    std::printf ("  nebeneinander            RMS %.6f\n", apart.rms);
-    std::printf ("  als Kette                RMS %.6f  (%+.1f dB)\n", chained.rms,
-                 db (chained.rms, apart.rms));
+    std::printf ("  nebeneinander            RMS %.8f  L/R-Korrelation %+.3f\n",
+                 apart.rms, apart.correlation);
+    std::printf ("  als Kette                RMS %.8f  L/R-Korrelation %+.3f  (%+.1f dB)\n",
+                 chained.rms, chained.correlation, db (chained.rms, apart.rms));
     std::printf ("  zweiter stumm, nebeneinander RMS %.6f  (%+.1f dB)\n", apartMuted.rms,
                  db (apartMuted.rms, apart.rms));
     std::printf ("  zweiter stumm, als Kette     RMS %.6f  (%+.1f dB)  <- muss fast still sein\n",
                  chainedMuted.rms, db (chainedMuted.rms, apart.rms));
+
+    std::printf ("Breite der ersten Stufe, in der Kette gemessen:\n");
+    std::printf ("  erste Stufe schmal (0)   RMS %.8f  L/R-Korrelation %+.3f\n",
+                 chainedNarrow.rms, chainedNarrow.correlation);
+    std::printf ("  erste Stufe breit  (2)   RMS %.8f  L/R-Korrelation %+.3f\n",
+                 chainedWide.rms, chainedWide.correlation);
+    std::printf ("  Unterschied %+.2f dB, Korrelation %+.3f  <- bei Mono-Weitergabe waere beides null\n",
+                 db (chainedWide.rms, chainedNarrow.rms),
+                 chainedWide.correlation - chainedNarrow.correlation);
 
     return 0;
 }

@@ -273,7 +273,8 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     // Arbeitsflaechen der Hallkette, siehe chainStereoL im Header.
     chainStereoL.assign ((size_t) maxBlock, 0.0f);
     chainStereoR.assign ((size_t) maxBlock, 0.0f);
-    chainInput.assign   ((size_t) maxBlock * (size_t) maxTaps, 0.0f);
+    chainInputL.assign  ((size_t) maxBlock * (size_t) maxTaps, 0.0f);
+    chainInputR.assign  ((size_t) maxBlock * (size_t) maxTaps, 0.0f);
 
     for (auto& bus : tapBus)
         bus.prepare (sr, maxBlock, tapRoomCapacity);
@@ -1517,11 +1518,14 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
         tapBus[(size_t) t].setPredelayMetres (back);
         tapBus[(size_t) t].setPanorama (tapPanorama (t));
 
-        // Eingang: das Kettensignal des Vorgaengers, sonst das, was am Ort
-        // dieses Punktes ankommt.
-        const float* in = chainHasInput[(size_t) t]
-                            ? chainInput.data() + (size_t) t * (size_t) maxBlock
-                            : renderView.getReadPointer (2 + t);
+        // Eingang: das Kettensignal des Vorgaengers (beide Seiten), sonst das,
+        // was am Ort dieses Punktes ankommt (ein Ort hoert mono).
+        const bool   fromChain = chainHasInput[(size_t) t];
+        const size_t slot      = (size_t) t * (size_t) maxBlock;
+
+        const float* inL = fromChain ? chainInputL.data() + slot
+                                     : renderView.getReadPointer (2 + t);
+        const float* inR = fromChain ? chainInputR.data() + slot : nullptr;
 
         const int target = taps[(size_t) t].chainTo;
         const bool feedsChain = target > t && target < maxTaps
@@ -1530,7 +1534,7 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
         if (! feedsChain)
         {
             // Letzte Stufe (oder gar keine Kette): direkt auf die Ohren.
-            tapBus[(size_t) t].processAdd (in,
+            tapBus[(size_t) t].processAdd (inL, inR,
                                            renderView.getWritePointer (0),
                                            renderView.getWritePointer (1),
                                            rendered);
@@ -1538,17 +1542,19 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
         }
 
         // Zwischenstufe: in die Arbeitsflaeche statt auf die Ohren, und von
-        // dort als Summe weiter. processAdd addiert, die Flaeche wird also
+        // dort beidseitig weiter. processAdd addiert, die Flaeche wird also
         // erst geleert.
         std::fill (chainStereoL.begin(), chainStereoL.begin() + rendered, 0.0f);
         std::fill (chainStereoR.begin(), chainStereoR.begin() + rendered, 0.0f);
 
-        tapBus[(size_t) t].processAdd (in, chainStereoL.data(), chainStereoR.data(), rendered);
+        tapBus[(size_t) t].processAdd (inL, inR, chainStereoL.data(), chainStereoR.data(), rendered);
 
-        float* into = chainInput.data() + (size_t) target * (size_t) maxBlock;
+        const size_t targetSlot = (size_t) target * (size_t) maxBlock;
 
-        for (int i = 0; i < rendered; ++i)
-            into[i] = 0.5f * (chainStereoL[(size_t) i] + chainStereoR[(size_t) i]);
+        std::copy (chainStereoL.begin(), chainStereoL.begin() + rendered,
+                   chainInputL.begin() + (std::ptrdiff_t) targetSlot);
+        std::copy (chainStereoR.begin(), chainStereoR.begin() + rendered,
+                   chainInputR.begin() + (std::ptrdiff_t) targetSlot);
 
         chainHasInput[(size_t) target] = true;
     }

@@ -69,12 +69,19 @@ public:
         for (auto& s : state)     s = 0.0f;
     }
 
-    void process (const float* in, float* outL, float* outR, int numSamples) override
+    void processStereo (const float* inL, const float* inR,
+                        float* outL, float* outR, int numSamples) override
     {
         const int n = lines;
 
         for (int k = 0; k < numSamples; ++k)
         {
+            // Was von links kommt, trifft die linken Reflektoren staerker.
+            // Ueber Mitte und Seite gerechnet, damit bei Mono (Seite = 0)
+            // jede Leitung genau das bekommt, was sie immer bekommen hat.
+            const float mid  = 0.5f * (inL[k] + inR[k]);
+            const float side = 0.5f * (inL[k] - inR[k]);
+
             float l   = 0.0f;
             float r   = 0.0f;
             float sum = 0.0f;
@@ -104,7 +111,9 @@ public:
                 // Der Eingang geht in ALLE Leitungen. Beim allerersten
                 // Durchlauf tasten sie damit die Flaeche ab - das ist der
                 // Rueckwurf, den es auch ohne jede Rueckkopplung gibt.
-                line[(size_t) i].write (in[k] * inGain[(size_t) i]
+                const float feed = mid + side * (panL[(size_t) i] - panR[(size_t) i]);
+
+                line[(size_t) i].write (feed * inGain[(size_t) i]
                                         + (state[(size_t) from] - share) * feedback);
             }
 

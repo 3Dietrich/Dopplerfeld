@@ -65,6 +65,8 @@ public:
         erL.assign  ((size_t) std::max (1, maxBlock), 0.0f);
         erR.assign  ((size_t) std::max (1, maxBlock), 0.0f);
         erSum.assign((size_t) std::max (1, maxBlock), 0.0f);
+        chainL.assign ((size_t) std::max (1, maxBlock), 0.0f);
+        chainR.assign ((size_t) std::max (1, maxBlock), 0.0f);
 
         reset();
     }
@@ -209,14 +211,41 @@ public:
     // Signalquelle fuer den Hoerer, kein Ersatz fuer irgendetwas.
     void processAdd (const float* in, float* outL, float* outR, int numSamples)
     {
+        processAdd (in, nullptr, outL, outR, numSamples);
+    }
+
+    // Stereo rein - das ist der Fall der Kette, wo eine Hallbauart in die
+    // naechste geht (siehe DopplerEngine::setTapChain). Zwei Unterschiede zum
+    // Mono-Fall, beide aus der Sache heraus:
+    //
+    //   - Kein Vorlauf. Er bildet den Weg vom Abgriffpunkt zurueck zum Hoerer
+    //     ab; dieser Punkt hat keinen eigenen Ort mehr, sein Weg steckt schon
+    //     im Vorgaenger.
+    //   - Die fruehen Echos hoeren die Mono-Summe. Sie sind Rueckwuerfe einer
+    //     Flaeche, also selbst kein Stereovorgang; der Regler "Energie" bleibt
+    //     damit wirksam.
+    //
+    // Die Bauart selbst bekommt beide Seiten. Genau darum geht es: die zwei
+    // Seiten einer Hallbauart sind absichtlich unkorreliert, und eine
+    // Mono-Summe loescht sie stellenweise aus.
+    void processAdd (const float* inL, const float* inR,
+                     float* outL, float* outR, int numSamples)
+    {
         const int n = std::min (numSamples, (int) dry.size());
 
         if (n <= 0)
             return;
 
+        const bool stereoIn = (inR != nullptr);
+        const float* in = inL;
+
         // 1) Vorlauf. Zwei Lesekoepfe, damit eine Laengenaenderung ueberblendet
-        //    statt zu springen.
-        for (int i = 0; i < n; ++i)
+        //    statt zu springen. In der Kette entfaellt er (s.o.); dort steht
+        //    in dry die Mono-Summe der beiden Eingaenge.
+        for (int i = 0; stereoIn && i < n; ++i)
+            dry[(size_t) i] = 0.5f * (inL[i] + inR[i]);
+
+        for (int i = 0; ! stereoIn && i < n; ++i)
         {
             const float a = preA.read();
             const float b = preB.read();
@@ -271,8 +300,26 @@ public:
                 dry[(size_t) i] += erSum[(size_t) i];
         }
 
-        // 3) Die Bauart.
-        activeUnit()->process (dry.data(), wetL.data(), wetR.data(), n);
+        // 3) Die Bauart. In der Kette mit beiden Seiten, sonst wie bisher mit
+        //    dem einen Signal. Die fruehen Echos stecken in dry und gehen
+        //    deshalb auf beide Seiten - sie sind ohnehin dieselben.
+        if (stereoIn)
+        {
+            for (int i = 0; i < n; ++i)
+            {
+                const float extra = dry[(size_t) i] - 0.5f * (inL[i] + inR[i]);
+
+                chainL[(size_t) i] = inL[i] + extra;
+                chainR[(size_t) i] = inR[i] + extra;
+            }
+
+            activeUnit()->processStereo (chainL.data(), chainR.data(),
+                                         wetL.data(), wetR.data(), n);
+        }
+        else
+        {
+            activeUnit()->process (dry.data(), wetL.data(), wetR.data(), n);
+        }
 
         if (ownsEarly)
         {
@@ -353,6 +400,10 @@ private:
     reverbparts::DelayLine preA, preB;
 
     std::vector<float> wetL, wetR, dry, erL, erR, erSum;
+
+    // Nur fuer den Stereo-Eingang der Kette: die beiden Seiten samt der
+    // fruehen Echos, so wie die Bauart sie bekommt.
+    std::vector<float> chainL, chainR;
 
     Type   type         = Type::fdn;
     double sr           = 48000.0;
