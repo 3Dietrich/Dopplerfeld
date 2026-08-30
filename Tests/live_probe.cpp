@@ -54,6 +54,11 @@ int main (int argc, char** argv)
     if (off.contains ("verb"))
         set (Params::reverbBypass, 1.0f);
 
+    // "motor" schaltet den Motor ab - stehen bleiben soll dann der Fahrtwind
+    // und der Tempoanteil des Rauschbands.
+    if (off.contains ("motor"))
+        set (Params::engineOn, 0.0f);
+
     // Der Motor wird auf EINEN Sinus reduziert: dann bildet die Frequenz des
     // Mitschnitts die Drehzahl (mal Doppler) exakt ab, und die Messung
     // draussen braucht keine Annahmen ueber Teiltoene, Rauschband oder Wind.
@@ -65,10 +70,21 @@ int main (int argc, char** argv)
     set (Params::harmLevel3, -120.0f);
     set (Params::harmLevel4, -120.0f);
 
-    set (Params::noiseGainLo, -120.0f);
-    set (Params::noiseGainHi, -120.0f);
-    set (Params::windLevelDb,   -36.0f);
-    set (Params::noiseSpeedAmount, 0.0f);
+    if (off.contains ("luft"))
+    {
+        // Luftanteile hoerbar lassen, um sie messen zu koennen.
+        set (Params::noiseGainLo, -18.0f);
+        set (Params::noiseGainHi, -6.0f);
+        set (Params::windLevelDb, 0.0f);
+        set (Params::noiseSpeedAmount, 100.0f);
+    }
+    else
+    {
+        set (Params::noiseGainLo, -120.0f);
+        set (Params::noiseGainHi, -120.0f);
+        set (Params::windLevelDb,   -36.0f);
+        set (Params::noiseSpeedAmount, 0.0f);
+    }
 
     set (Params::srcX, 0.15f);
     set (Params::srcY, 0.5f);
@@ -85,7 +101,7 @@ int main (int argc, char** argv)
 
     const double blockSeconds  = (double) blockSize / sampleRate;
     const int    blocks        = (int) (seconds / blockSeconds);
-    const double dragSpeed     = 40.0;   // m/s, ein zuegiger Zug quer durchs Feld
+    const double dragSpeed     = argc > 5 ? std::atof (argv[5]) : 40.0;   // m/s
 
     juce::AudioBuffer<float> recorded (1, blocks * blockSize);
     recorded.clear();
@@ -135,7 +151,17 @@ int main (int argc, char** argv)
 
     std::printf ("Zug %.0f m/s, Raster %.1f ms, %.1f s, Gas-Traegheit %.3f s, abgeschaltet: %s\n",
                  dragSpeed, rasterMs, seconds, throttleTau, off.isEmpty() ? "nichts" : off.toRawUTF8());
+    // Pegel des Mitschnitts, damit sich "kommt da noch was" beantworten laesst.
+    double sum = 0.0;
+
+    for (int i = 0; i < recorded.getNumSamples(); ++i)
+    {
+        const double v = recorded.getSample (0, i);
+        sum += v * v;
+    }
+
     std::printf ("Mitschnitt %s\n", out.getFullPathName().toRawUTF8());
+    std::printf ("RMS %.6f\n", std::sqrt (sum / std::max (1, recorded.getNumSamples())));
 
     return 0;
 }

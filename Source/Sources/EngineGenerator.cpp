@@ -606,6 +606,13 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     const double noiseGain = juce::Decibels::decibelsToGain (gNoiseDb)
                              * std::max (0.001, speedFactor);
 
+    // Was vom Rauschband uebrig bleibt, wenn der Motor aus ist (siehe
+    // setEngineOn): der Pegel bei stehender Drehzahl, aber mit dem vollen
+    // Tempoanteil. Das ist die Luft am fahrenden Koerper und nicht der Motor -
+    // sie hoert nicht auf, nur weil er es tut.
+    const double airNoiseGain = juce::Decibels::decibelsToGain (gLoDb)
+                                * std::max (0.001, speedFactor);
+
     noiseFilter.setCutoffFrequency ((float) fcNoise);
     noiseFilter.setResonance (juce::jmax (0.05f, noiseQ.load()));
 
@@ -971,9 +978,17 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         // liegen (@dpa 20260824: "Alle 'alten' Snapshots bleiben einfach in
         // 'frei'"), und ein zusätzliches Rauschen darin würde sie hörbar
         // verändern. Wer den Fahrtwind will, wählt eine Betriebsart.
-        const double windSample = (activeKind == KindFree)
+        // In "Frei" gibt es keinen Fahrtwind - AUSSER der Motor ist aus. Dann
+        // ist er das Einzige, was die Quelle noch macht, und genau darum geht
+        // es beim Abschalten (@dpa 20260830: "motor aus: kommt nichts mehr!
+        // was ist mit Fahrwind, Rausch v usw?"). Ueber engineGain geblendet,
+        // also ohne Sprung.
+        const double windGate = (activeKind == KindFree) ? (1.0 - engineGain) : 1.0;
+
+        const double windSample = windGate <= 0.0
                                 ? 0.0
-                                : (double) windFilter.processSample (0, (float) whiteNoise (windRandom)) * windAmount;
+                                : (double) windFilter.processSample (0, (float) whiteNoise (windRandom))
+                                      * windAmount * windGate;
 
         // Motorband-Rauschen durch das RPM-abhängige Bandpassfilter.
         const double noiseFiltered = (double) noiseFilter.processSample (0, (float) whiteNoise (noiseRandom));
@@ -1440,8 +1455,14 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         // Der Fahrtwind haengt am Fliegen, nicht am Motor - er laeuft deshalb
         // an der Unwucht vorbei und wird auch nicht vom Betriebsart-Pegel
         // skaliert, sondern nur von der Blende.
+        // Der Motor wird ausgeblendet, die Luft nicht: Fahrtwind steht ohnehin
+        // hinter engineGain, und vom Rauschband bleibt sein Tempoanteil
+        // stehen, waehrend der Drehzahlanteil mit dem Motor verschwindet.
+        const double airNoise = (1.0 - engineGain) * noiseFiltered * airNoiseGain;
+
         out[n] = (float) (((kindSample * kindGain * engineGain) * imbalanceFactor
-                              + windSample * windGain) * kindFade);
+                              + windSample * windGain
+                              + airNoise) * kindFade);
     }
 }
 
