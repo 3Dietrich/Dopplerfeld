@@ -573,6 +573,7 @@ private:
         std::atomic<float>* masterOn        = nullptr;
 
         std::atomic<float>* rpm = nullptr;
+        std::atomic<float>* engineOn = nullptr;
         std::atomic<float>* harmRatio[4]  {};
         std::atomic<float>* harmDetune[4] {};
         std::atomic<float>* harmTrack[4]  {};

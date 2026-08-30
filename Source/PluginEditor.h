@@ -371,6 +371,12 @@ private:
     juce::ToggleButton masterOnButton { "An" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> masterOnAttachment;
 
+    // Der Motor allein, siehe Params::engineOn. Sitzt in der Kopfzeile des
+    // Motor-Panels und bleibt damit auch zugeklappt erreichbar - dieselbe
+    // Machart wie der Bypass beim Hall.
+    juce::TextButton engineOnButton { "An" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> engineOnAttachment;
+
         juce::ToggleButton tooltipsButton { "Hilfehinweise" };
 
     // Sprache der Hilfehinweise (deutsch/englisch, siehe Tooltips.h) - der

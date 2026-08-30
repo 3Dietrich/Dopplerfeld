@@ -399,6 +399,7 @@ void EngineGenerator::reset()
     // Nach einem reset() steht der Sammelschalter sofort da, wo er hingehoert -
     // sonst blendeten die Teiltoene nach jedem Neuanlassen erst wieder auf.
     harmonicsGain = harmonicsOn.load() ? 1.0 : 0.0;
+    engineGain    = engineOn.load() ? 1.0 : 0.0;
 
     noiseFilter.reset();
     jitterFilter.reset();
@@ -463,6 +464,11 @@ void EngineGenerator::setRocketShockDuck (float amount01, float rangeMetres)
 {
     rocketDuckAmount = juce::jlimit (0.0f, 1.0f, amount01);
     rocketDuckRange  = std::max (0.0f, rangeMetres);
+}
+
+void EngineGenerator::setEngineOn (bool shouldSound)
+{
+    engineOn.store (shouldSound);
 }
 
 void EngineGenerator::setHarmonicsOn (bool shouldSound)
@@ -922,6 +928,11 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         // damit beim Wiedereinschalten kein Neustart der Wellenform zu hören
         // ist.
         harmonicsGain += ((harmonicsOn.load() ? 1.0 : 0.0) - harmonicsGain) * sineBlendCoeff;
+
+        // Der Motor als Ganzes, mit derselben Blende. Er steht VOR dem
+        // Fahrtwind in der Summe unten, deshalb bleibt der stehen, wenn hier
+        // abgeschaltet wird.
+        engineGain += ((engineOn.load() ? 1.0 : 0.0) - engineGain) * sineBlendCoeff;
 
         if (activeKind == KindFree || activeKind == KindHeli)
         {
@@ -1429,7 +1440,8 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         // Der Fahrtwind haengt am Fliegen, nicht am Motor - er laeuft deshalb
         // an der Unwucht vorbei und wird auch nicht vom Betriebsart-Pegel
         // skaliert, sondern nur von der Blende.
-        out[n] = (float) (((kindSample * kindGain) * imbalanceFactor + windSample * windGain) * kindFade);
+        out[n] = (float) (((kindSample * kindGain * engineGain) * imbalanceFactor
+                              + windSample * windGain) * kindFade);
     }
 }
 

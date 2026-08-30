@@ -629,6 +629,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // klingen unveraendert, und wer den Schalter nie anfasst, merkt nicht,
     // dass es ihn gibt.
     layout.add (boolParam (oscOn, "OSC", true));
+    layout.add (boolParam (engineOn, "Motor", true));
 
     // Pegel der Betriebsart. Grosszuegiger Bereich, denn hier geht es um den
     // Unterschied zwischen einem Modellflugzeug und einem Hubschrauber in drei

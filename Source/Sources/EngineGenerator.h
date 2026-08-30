@@ -88,6 +88,12 @@ public:
     // Unwucht laufen weiter, und das ist der ganze Zweck: hoeren, was ohne
     // die Oszillatoren uebrig bleibt.
     void setHarmonicsOn (bool shouldSound);
+
+    // Der Motor selbst, ohne den Fahrtwind (@dpa 20260830: "den Motor
+    // ausschalten und nur noch die Wind und Luftgeraeusche"). Abgeschaltet
+    // verstummen Teiltoene, Motorband und die Betriebsart; was bleibt, ist,
+    // was die Luft am fahrenden Koerper macht.
+    void setEngineOn (bool shouldSound);
     // Oktavlage der Unwucht, siehe Params::imbalanceOctave.
     void setImbalanceOctave (float octaves);
 
@@ -647,6 +653,11 @@ private:
     static constexpr double rpmMaxForNormalisation = 12000.0;
 
     std::array<Harmonic, numHarmonics> harmonics;
+
+    // Motor an/aus, siehe setEngineOn. Geblendet, nicht geschaltet: ein Sprung
+    // im Pegel ist ein Knacken.
+    std::atomic<bool> engineOn { true };
+    double engineGain = 1.0;
 
     std::atomic<float> rpm { 1000.0f };
 

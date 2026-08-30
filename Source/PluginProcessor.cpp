@@ -218,6 +218,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.masterOn        = raw (Params::masterOn);
 
     pp.rpm = raw (Params::rpm);
+    pp.engineOn = raw (Params::engineOn);
 
     const char* const ratioIds[4]  { Params::harmRatio1,  Params::harmRatio2,  Params::harmRatio3,  Params::harmRatio4 };
     const char* const detuneIds[4] { Params::harmDetune1, Params::harmDetune2, Params::harmDetune3, Params::harmDetune4 };
@@ -934,6 +935,7 @@ void DopplerfeldProcessor::applyEngineParameters()
 
         engineGenerator.setRpm ((float) (pp.rpm->load() * factor));
     }
+    engineGenerator.setEngineOn (pp.engineOn->load() > 0.5f);
     engineGenerator.setKindLevelDb (pp.engineLevelDb->load());
     engineGenerator.setRocketShock (pp.rocketShock->load());
     engineGenerator.setRotorSlap (pp.rotorSlap->load());

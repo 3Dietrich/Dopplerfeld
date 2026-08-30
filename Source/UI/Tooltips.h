@@ -93,6 +93,7 @@ namespace Tooltips
         ThrottleFromAccel,
         ThrottleTau,
         MasterOn,
+        EngineOn,
         GroundGain,
         GroundDamp,
         GroundReflection,
@@ -950,6 +951,17 @@ namespace Tooltips
                           "The same control sits next to \"Spread\" in the swarm panel and "
                           "governs the height of the clones there - one parameter, two "
                           "knobs, always in step.";
+                case Key::EngineOn:
+                    return lang == Language::De
+                        ? "Schaltet den Motor ab - Teiltoene, Motorband und die gewaehlte "
+                          "Betriebsart. Stehen bleibt, was die Luft an der fahrenden Quelle macht: "
+                          "Fahrtwind und die geschwindigkeitsabhaengigen Geraeusche. Die Quelle "
+                          "faehrt weiter, sie treibt nur nichts mehr an."
+                        : "Switches the engine off - partials, engine noise band and the selected "
+                          "mode. What remains is what the air does at the moving source: airflow "
+                          "and the speed-dependent noises. The source keeps moving, it just no "
+                          "longer drives itself.";
+
                 case Key::TapMotion:
                     return lang == Language::De
                         ? "Laesst die Verzoegerungsleitungen des Halls langsam wandern, jede in "

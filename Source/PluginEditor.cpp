@@ -92,6 +92,24 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
 
     reverbPanelBox.setHeaderControl (&reverbBypassButton, 62);
 
+    // Der Motor an seiner eigenen Kopfzeile (@dpa 20260830: "Motor on/off auf
+    // header ... so wie Bypass bei Hall") - zugeklappt erreichbar, aus
+    // demselben Grund wie dort. Abgeschaltet bleiben Fahrtwind und
+    // Luftgeraeusche stehen, siehe Params::engineOn.
+    engineOnButton.setClickingTogglesState (true);
+    engineOnButton.setTooltip (Tooltips::text (Tooltips::Key::EngineOn));
+    engineOnButton.setColour (juce::TextButton::buttonColourId, Theme::panelHeader);
+    engineOnButton.setColour (juce::TextButton::buttonOnColourId, Theme::Panel::engine.withAlpha (0.9f));
+    engineOnButton.setColour (juce::TextButton::textColourOffId, Theme::muted);
+    engineOnButton.setColour (juce::TextButton::textColourOnId, Theme::panel);
+
+    engineOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+        p.apvts, Params::engineOn, engineOnButton);
+
+    // Schmal wie der Bypass drueben: in der Zeile steht ohnehin schon "Motor",
+    // der Knopf sagt nur noch, ob er laeuft.
+    enginePanelBox.setHeaderControl (&engineOnButton, 44);
+
     // Dieselbe Machart fuer die Waende: "1", "2", "++" in ihrer Kopfzeile.
     {
         struct Entry { juce::TextButton* button; const char* id; Tooltips::Key key; };
@@ -592,6 +610,8 @@ void DopplerfeldEditor::refreshAllTooltips()
         box->refreshTitle();
 
     masterOnButton.setButtonText (Labels::text ("An"));
+    engineOnButton.setButtonText (Labels::text ("An"));
+    engineOnButton.setTooltip (Tooltips::text (Tooltips::Key::EngineOn));
     tooltipsButton.setButtonText (Labels::text ("Hilfehinweise"));
     scopeSaveButton.setButtonText (Labels::text ("Speichern"));
     engineResetButton.setButtonText (Labels::text ("Engine Restart"));

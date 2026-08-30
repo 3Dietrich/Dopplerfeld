@@ -364,6 +364,10 @@ namespace Params
     // Siehe EngineGenerator::setHarmonicsOn().
     constexpr const char* oscOn = "oscOn";
 
+    // Der Motor als Ganzes. Aus bleiben Fahrtwind und Luftgeraeusche stehen -
+    // die Quelle faehrt weiter, sie treibt nur nichts mehr an.
+    constexpr const char* engineOn = "engineOn";
+
     // Gesamtpegel der Betriebsart in dB. Gilt für alles außer "Frei" - dort
     // machen die vier Teilton-Pegel den Pegel, und daran darf sich nichts
     // ändern, sonst klängen alte Snapshots anders.
