@@ -566,6 +566,7 @@ private:
         std::atomic<float>* windLevelDb      = nullptr;
         std::atomic<float>* throttleFromAccel = nullptr;
         std::atomic<float>* throttleTau       = nullptr;
+        std::atomic<float>* boomHoldMs        = nullptr;
         std::atomic<float>* noiseSpeedAmount = nullptr;
         std::atomic<float>* jitterAmount = nullptr;
         std::atomic<float>* jitterRateHz = nullptr;

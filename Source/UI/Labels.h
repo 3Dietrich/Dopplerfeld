@@ -178,11 +178,9 @@ namespace Labels
 
             // --- Bewegung ---
             { "Fahrtwind",      "Slipstream"  },
+            { "Knall-Sperre",   "Bang hold"   },
             { "Gas aus a",      "Accel gas"   },
             { "Gas traeg",      "Gas inertia" },
-            { "Hilfe: alles",   "Help: all"   },
-            { "Hilfe: Regler",  "Help: knobs" },
-            { "Hilfe: aus",     "Help: off"   },
             { "Rausch v",       "Noise v"     },
             { "Luft",           "Air"         },
             { "Boden",          "Ground"      },

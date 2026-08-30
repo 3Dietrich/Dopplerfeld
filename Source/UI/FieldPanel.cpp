@@ -33,6 +33,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
 {
     setupKnob (fieldMetresKnob, apvts, Params::fieldMetres,     "Field Size",    Tooltips::Key::FieldSize);
     setupKnob (boomLimitKnob,   apvts, Params::boomLimitDb,     "Boom Limit",    Tooltips::Key::BoomLimit);
+    setupKnob (boomHoldKnob,    apvts, Params::boomHoldMs,      "Knall-Sperre",  Tooltips::Key::BoomHold);
     setupKnob (airAbsorbKnob,   apvts, Params::airAbsorbAmount, "Air Absorb",    Tooltips::Key::AirAbsorb);
     setupKnob (outputGainKnob,  apvts, Params::outputGain,      "Output Gain",   Tooltips::Key::OutputGain);
 
@@ -77,7 +78,7 @@ void FieldPanel::refreshTooltips()
     groundReflectionButton.setButtonText (Labels::text ("Bodenreflexion"));
     nWaveButton.setButtonText (Labels::text ("N-Welle"));
 
-    for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &airAbsorbKnob, &outputGainKnob,
+    for (auto* k : { &fieldMetresKnob, &boomLimitKnob, &boomHoldKnob, &airAbsorbKnob, &outputGainKnob,
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
                       &airTempKnob, &airAltitudeKnob,
@@ -173,7 +174,7 @@ void FieldPanel::resized()
     groupHeader ("Knall", &nWaveButton, 100);
     knobRow ({ &nWaveSizeKnob, &nWaveGainKnob, &nWaveEdgeKnob, &nWavePressureKnob, &boomLimitKnob });
     area.removeFromTop (4);
-    knobRow ({ &extraPathKnob, &shockDuckRangeKnob });
+    knobRow ({ &extraPathKnob, &shockDuckRangeKnob, &boomHoldKnob });
 
     // Ausgang: was das Plugin am Ende abgibt.
     area.removeFromTop (groupGap);

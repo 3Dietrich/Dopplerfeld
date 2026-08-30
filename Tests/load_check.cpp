@@ -7645,7 +7645,7 @@ int main()
             proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
             proc.prepareToPlay (sampleRate, blockSize);
 
-            setParam (proc, Params::fieldMetres, 200.0f);
+            setParam (proc, Params::fieldMetres, 2000.0f);
             setParam (proc, Params::groundReflectionOn, 0.0f);
             setParam (proc, Params::reverbBypass, 1.0f);
             setParam (proc, Params::nWaveOn, 0.0f);
@@ -7653,9 +7653,11 @@ int main()
             setParam (proc, Params::throttleTau, 0.2f);
             setParam (proc, Params::rpm, 2400.0f);
 
-            // Nah am Hoerer und ohne Glaettungsbremse, damit das Anschieben
-            // wirklich als Beschleunigung ankommt.
-            setParam (proc, Params::smootherTau, 0.08f);
+            // Weites Feld und traege Glaettung: das Anschieben muss als
+            // Beschleunigung ankommen, die Quelle dabei aber weit unter der
+            // Schallmauer bleiben - ein Ueberschall-Sprung kostet im Loeser
+            // das Tausendfache und macht aus dem Test einen Stundenlaeufer.
+            setParam (proc, Params::smootherTau, 0.35f);
             setParam (proc, Params::srcX, 0.45f);
             setParam (proc, Params::srcY, 0.5f);
 
@@ -7668,9 +7670,9 @@ int main()
                 proc.processBlock (buffer, midi);
             }
 
-            // Losfahren: das Ziel springt, der Glaetter zieht die Quelle
-            // beschleunigt hinterher.
-            setParam (proc, Params::srcX, 0.9f);
+            // Losfahren: das Ziel rueckt ein Stueck weiter, der Glaetter zieht
+            // die Quelle beschleunigt hinterher.
+            setParam (proc, Params::srcX, 0.52f);
 
             int crossings = 0;
             int counted   = 0;
@@ -7707,6 +7709,72 @@ int main()
         {
             std::printf ("FEHLGESCHLAGEN: 'Gas aus a' zieht die Drehzahl beim Anfahren nicht hoch "
                          "(%.0f Hz gegen %.0f Hz)\n", gassing, idle);
+            failed = true;
+        }
+    }
+
+    // Knall-Sperre (@dpa 20260830). Der Wackler schiebt die Quelle ueber die
+    // Schallmauer und gleich zurueck; die zwei Fronten kommen ueber
+    // VERSCHIEDENE Hoerwege herein, deshalb liegt die Sperre je Ohr und nicht
+    // im einzelnen Weg. Genau das war beim ersten Anlauf falsch und blieb
+    // wirkungslos - hier faellt es kuenftig auf.
+    {
+        auto whipBlocks = [] (float holdMs)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            // Der Fall selbst kommt aus dem Zustand "peitschentest" - er ist
+            // der, an dem @dpa die Doppelhiebe gehoert hat. Nachgebaut waere
+            // er eine zweite Wahrheit, die auseinanderlaufen kann.
+            const juce::File preset = juce::File (DOPPLERFELD_SOURCE_DIR)
+                                          .getChildFile ("presets")
+                                          .getChildFile ("peitschentest");
+
+            juce::MemoryBlock block;
+
+            if (preset.existsAsFile() && preset.loadFileAsData (block))
+                proc.setStateInformation (block.getData(), (int) block.getSize());
+
+            setParam (proc, Params::boomHoldMs, holdMs);
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            juce::MidiBuffer midi;
+
+            // Gezaehlt wird, wie viele Bloecke ueberhaupt einen Schlag
+            // enthalten - nicht der Spitzenwert. Die Sperre nimmt Knalle weg,
+            // sie macht den einzelnen nicht leiser.
+            int loudBlocks = 0;
+
+            for (int b = 0; b < (int) (4.0 * sampleRate / blockSize); ++b)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                double peak = 0.0;
+
+                for (int i = 0; i < blockSize; ++i)
+                    peak = std::max (peak, std::abs ((double) buffer.getSample (0, i)));
+
+                if (peak > 0.25)
+                    ++loudBlocks;
+            }
+
+            return loudBlocks;
+        };
+
+        const int open  = whipBlocks (0.0f);
+        const int gated = whipBlocks (80.0f);
+
+        std::printf ("%-22s Bloecke mit Schlag: ohne Sperre %d | mit 80 ms %d\n",
+                     "Knall-Sperre", open, gated);
+
+        if (gated >= open)
+        {
+            std::printf ("FEHLGESCHLAGEN: die Knall-Sperre nimmt keine Knalle weg "
+                         "(%d gegen %d Bloecke)\n", gated, open);
             failed = true;
         }
     }

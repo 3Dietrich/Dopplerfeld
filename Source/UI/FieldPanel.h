@@ -101,6 +101,10 @@ private:
     // Jitter An im Bewegungs-Panel liegen (nicht hier) -
     // alle drei sind Amplituden-/Pegelthemen, keine Positionsregler wie Reihe 2.
     Knob nWaveSizeKnob;
+
+    // Sperrzeit nach einem Knall (@dpa 20260830), steht in der Knall-Gruppe
+    // neben der Fahne - beides betrifft, was NACH der Stossfront passiert.
+    Knob boomHoldKnob;
     Knob nWaveGainKnob;
 
     // Vierte Reihe: die Form des Knalls und was nach ihm passiert. Die

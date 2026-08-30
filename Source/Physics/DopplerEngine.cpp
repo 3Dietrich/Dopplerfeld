@@ -121,6 +121,12 @@ void DopplerEngine::PathSet::renderInto (juce::AudioBuffer<float>& dest, int num
         paths[i].setPanning (recipe.tap >= 0 ? 0.0 : engine->panoramaAmount(),
                              listenerRight (prevListener), rightEar);
 
+        // Welche Knall-Sperre fuer diesen Weg gilt (siehe boomGateFor): eine
+        // je Ohr, eine fuer die Abgriffpunkte. Hier gesetzt und nicht in
+        // prepare(), weil erst an dieser Stelle Weg und Rezept nebeneinander
+        // liegen - es kostet eine Zeigerzuweisung je Block.
+        paths[i].setBoomGate (engine->boomGateFor (recipe));
+
         // Der Abgriffpunkt steht fest, seine Geschwindigkeit ist deshalb
         // null - anders als ein Ohr, das sich mit dem Kopf bewegt und dreht.
         const bool isTap = (recipe.tap >= 0);
@@ -601,6 +607,12 @@ void DopplerEngine::setWall (int index, bool enabled, Vec3 anchorMetres,
     // Mehrfachreflexion automatisch mit (siehe recipeTransform()), ohne dass
     // die Verkettung dafuer extra angefasst werden muesste.
     s.transform.gain = (float) gainLinear;
+}
+
+void DopplerEngine::setBoomHold (double seconds)
+{
+    for (auto& gate : boomGates)
+        gate.holdSeconds = std::max (0.0, seconds);
 }
 
 void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,

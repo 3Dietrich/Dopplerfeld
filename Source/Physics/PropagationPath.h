@@ -237,6 +237,31 @@ public:
     //              physikalisch eine Druckwelle ab. Nutzt dieselbe N-Wellen-
     //              Schicht wie der Ueberschallknall, mit einer Amplitude, die
     //              mit der Sprunghoehe waechst.
+    // Sperrzeit nach einem Knall (@dpa 20260830). Solange sie laeuft, loest
+    // hier kein zweiter aus.
+    //
+    // Grund: der Wackler schiebt die Quelle ueber die Schallmauer und gleich
+    // wieder zurueck - gemessen im Peitschentest liegen die kuerzesten
+    // Abstaende bei 17, 34 und 51 ms. Beide Fronten sind echt (Ein- und
+    // Austritt), zusammen klingen sie aber wie ein Stolpern statt wie ein
+    // Hieb. Die Sperre laesst den ersten stehen und wirft die Nachzuegler weg.
+    //
+    // Der Zustand liegt NICHT im einzelnen Hoerweg, sondern in einer Sperre,
+    // die sich mehrere teilen. Ein Weg allein bringt es nicht: die zwei
+    // Fronten eines Wackel-Durchgangs kommen ueber verschiedene Wege herein
+    // (gemessen: vier verschiedene Pfadobjekte innerhalb einer Millisekunde),
+    // und jeder haette seine eigene Sperre. Wer sie dagegen ganz global macht,
+    // wirft das zweite Ohr weg - der Knall trifft es eine halbe Millisekunde
+    // spaeter, und das ist die Ortung. Deshalb eine Sperre JE OHR (siehe
+    // DopplerEngine::boomGates).
+    struct BoomGate
+    {
+        double holdSeconds = 0.0;
+        double lastTime    = -1.0e18;
+    };
+
+    void setBoomGate (BoomGate* gate) { boomGate = gate; }
+
     void setJumpBoom (double amount01);
 
     // Zeitpunkt (in Quellzeit), an dem die Bahn umgeschrieben wurde, und die
@@ -777,6 +802,10 @@ private:
     // N-Wellen-Schicht. Default aus - eine Druckwelle, die immer mitläuft,
     // wollen die wenigsten.
     bool   nWaveOn        = false;
+
+    // Siehe setBoomGate. Ohne Sperre (nullptr oder holdSeconds 0) loest jeder
+    // Durchgang aus wie bisher.
+    BoomGate* boomGate = nullptr;
     double nWaveSizeM     = 15.0;
 
     // Schaerfe der Stossfronten, 0..1 (siehe setNWave). 0,5 ist die Mitte und

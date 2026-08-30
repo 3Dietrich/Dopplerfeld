@@ -86,6 +86,7 @@ namespace Tooltips
         SrcJitterZAmount,
         WindLevel,
         NoiseSpeed,
+        BoomHold,
         ThrottleFromAccel,
         ThrottleTau,
         MasterOn,
@@ -1199,6 +1200,14 @@ namespace Tooltips
                         : "How much treble the reverb loses per round trip - a low-pass in the "
                           "loop, nothing else. Phase rotation sits next to it in the Phase "
                           "control.";
+                case Key::BoomHold:
+                    return lang == Language::De
+                        ? "Sperrzeit nach einem Knall: was so kurz danach noch einmal ausloesen "
+                          "wuerde, faellt weg. Gegen das Stolpern, wenn die Quelle die "
+                          "Schallmauer hin und gleich wieder zurueck durchquert."
+                        : "Hold time after a bang: anything that would trigger again this soon is "
+                          "dropped. Against the stumble when the source crosses the sound barrier "
+                          "and back again.";
                 case Key::ThrottleFromAccel:
                     return lang == Language::De
                         ? "Wie stark die Beschleunigung der Quelle die Drehzahl mitzieht. Anziehen "

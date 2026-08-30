@@ -218,6 +218,19 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
                                     bool ducksOthers, bool singleSided,
                                     double radiusOverride, double sizeOverride)
 {
+    // Sperrzeit: was zu dicht auf den vorigen Knall folgt, faellt weg (siehe
+    // setBoomHoldSeconds). Vor allem anderen, damit ein verworfener Knall
+    // auch keine halben Zustaende hinterlaesst.
+    // Sperrzeit: was zu dicht auf den vorigen Knall folgt, faellt weg (siehe
+    // setBoomGate). Vor allem anderen, damit ein verworfener Knall auch keine
+    // halben Zustaende hinterlaesst.
+    if (boomGate != nullptr && boomGate->holdSeconds > 0.0
+        && listenerTimeNow - boomGate->lastTime < boomGate->holdSeconds)
+        return;
+
+    if (boomGate != nullptr)
+        boomGate->lastTime = listenerTimeNow;
+
     b.nSingleSided = singleSided;
 
     // Entfernung, mit der gerechnet wird: normalerweise die des Zweigs, beim

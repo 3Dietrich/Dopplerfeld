@@ -254,9 +254,13 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     engineResetButton.onClick = [this] { dopplerfeldProcessor.restartEngine(); };
     addAndMakeVisible (engineResetButton);
 
-    // Was als "Anzeige" gilt: Feld und Scope samt allem, was darin liegt.
-    // Der Vergleich laeuft ueber die Elternkette, damit auch die Kinder (etwa
-    // das Kopfsymbol im Feld) dazugehoeren.
+    // Feld und Scope bekommen gar keine Hinweise (@dpa 20260830: "erstmal die
+    // 2 displays ohne hints"). Auf einer Anzeige deckt der Hinweis genau das
+    // zu, worauf man schaut, und er kommt nach jeder Mausbewegung erneut - an
+    // einem Regler ist beides kein Problem. Der Vergleich laeuft ueber die
+    // Elternkette, damit auch die Kinder (etwa das Kopfsymbol im Feld)
+    // dazugehoeren.
+    tooltipWindow.enabledOnDisplays = false;
     tooltipWindow.isDisplay = [this] (juce::Component& c)
     {
         for (juce::Component* p = &c; p != nullptr; p = p->getParentComponent())
@@ -266,14 +270,9 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         return false;
     };
 
+    tooltipsButton.setToggleState (true, juce::dontSendNotification);
     tooltipsButton.setTooltip (Tooltips::text (Tooltips::Key::TooltipsToggle));
-    tooltipsButton.onClick = [this]
-    {
-        tooltipScope = (TooltipScope) (((int) tooltipScope + 1) % 3);
-        applyTooltipScope();
-    };
-
-    applyTooltipScope();
+    tooltipsButton.onClick = [this] { tooltipWindow.enabled = tooltipsButton.getToggleState(); };
     addAndMakeVisible (tooltipsButton);
 
     // Sprachumschalter DE/EN fuer die Hilfehinweise (@dpa-Auftrag). Setzt nur
@@ -553,20 +552,6 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     startTimerHz (30);
 }
 
-// Setzt Beschriftung und Wirkung des Hinweis-Knopfes aus tooltipScope. Eine
-// Stelle fuer beides, damit der Knopf nie etwas anderes sagt, als er tut.
-void DopplerfeldEditor::applyTooltipScope()
-{
-    tooltipWindow.enabled           = (tooltipScope != TooltipScope::off);
-    tooltipWindow.enabledOnDisplays = (tooltipScope == TooltipScope::all);
-
-    const char* label = tooltipScope == TooltipScope::all          ? "Hilfe: alles"
-                      : tooltipScope == TooltipScope::controlsOnly ? "Hilfe: Regler"
-                                                                   : "Hilfe: aus";
-
-    tooltipsButton.setButtonText (Labels::text (label));
-}
-
 void DopplerfeldEditor::refreshAllTooltips()
 {
     // FieldComponent selbst setzt keine Tooltips (siehe grep), field traegt
@@ -607,7 +592,7 @@ void DopplerfeldEditor::refreshAllTooltips()
         box->refreshTitle();
 
     masterOnButton.setButtonText (Labels::text ("An"));
-    applyTooltipScope();
+    tooltipsButton.setButtonText (Labels::text ("Hilfehinweise"));
     scopeSaveButton.setButtonText (Labels::text ("Speichern"));
     engineResetButton.setButtonText (Labels::text ("Engine Restart"));
 

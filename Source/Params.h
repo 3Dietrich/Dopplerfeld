@@ -419,6 +419,11 @@ namespace Params
     // jumpBoom setzt die Druckwelle darauf, die dabei entsteht.
     constexpr const char* jumpBoom = "jumpBoom";
 
+    // Sperrzeit nach einem Knall, in Millisekunden (@dpa 20260830). Was in
+    // dieser Zeit noch einmal ausloesen wuerde, faellt weg - siehe
+    // PropagationPath::setBoomHoldSeconds.
+    constexpr const char* boomHoldMs = "boomHoldMs";
+
     // Laenge des Startknalls in Metern, siehe PropagationPath::setJumpSize().
     // Getrennt von nWaveSize: der Ueberschallknall bildet einen KOERPER ab,
     // der Startknall eine BESCHLEUNIGUNG - zwei verschiedene Dinge mit je

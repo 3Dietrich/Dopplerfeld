@@ -358,17 +358,7 @@ private:
     juce::ToggleButton masterOnButton { "An" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> masterOnAttachment;
 
-    // Drei Stufen statt An/Aus (@dpa 20260830: Hinweise auf den Anzeigen
-    // "verdecken Dinge" und kommen "nach jeder Bewegung wieder und wieder"):
-    // alles, nur die Regler, gar nichts. Ein Knopf statt zweier - die
-    // Kopfzeile ist voll.
-    juce::TextButton tooltipsButton;
-
-    enum class TooltipScope { all = 0, controlsOnly = 1, off = 2 };
-
-    TooltipScope tooltipScope = TooltipScope::all;
-
-    void applyTooltipScope();
+        juce::ToggleButton tooltipsButton { "Hilfehinweise" };
 
     // Sprache der Hilfehinweise (deutsch/englisch, siehe Tooltips.h) - der
     // Text selbst liegt zentral in Tooltips.h, hier nur der Umschalter.

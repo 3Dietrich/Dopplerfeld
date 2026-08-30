@@ -62,15 +62,25 @@ int main (int argc, char** argv)
             p->setValueNotifyingHost (p->convertTo0to1 (value));
     };
 
+    // Sperrzeit von der Kommandozeile, damit sich ihre Wirkung im selben
+    // Preset vergleichen laesst.
+    if (argc > 5)
+        set (Params::boomHoldMs, (float) std::atof (argv[5]));
+
     if (off.contains ("jitter"))   set (Params::srcJitterOn, 0.0f);
     if (off.contains ("nwave"))    set (Params::nWaveOn,     0.0f);
     if (off.contains ("jump"))     set (Params::jumpBoom,    0.0f);
+
+    if (const auto* v = proc.apvts.getRawParameterValue (Params::boomHoldMs))
+        std::printf ("(Parameter boomHoldMs steht auf %.0f ms)\n", (double) v->load());
 
     juce::AudioBuffer<float> buffer (2, blockSize);
     juce::MidiBuffer midi;
 
     FieldSnapshot snap;
     double        lastMach = 0.0;
+
+    std::uint64_t boomsRising = 0, boomsFalling = 0, boomsPairs = 0;
 
     std::vector<float> out;
     std::vector<double> crossings;   // Sample-Positionen, an denen M_r die Eins kreuzt
@@ -89,6 +99,10 @@ int main (int argc, char** argv)
 
         // Groesstes |M_r| ueber alle Direktschall-Wege dieses Blocks.
         proc.fillFieldSnapshot (snap);
+
+        boomsRising  = snap.nWaveRising;
+        boomsFalling = snap.nWaveFalling;
+        boomsPairs   = snap.nWavePairBirths;
 
         double worst = 0.0;
 
@@ -146,10 +160,13 @@ int main (int argc, char** argv)
         }
     }
 
-    std::printf ("%s, %.1f s, linkes Ohr%s%s, Spitze %.3f, Schwelle %.3f\n",
-                 name.toRawUTF8(), seconds,
+    std::printf ("%s, %.1f s, Sperre %.0f ms, linkes Ohr%s%s, Spitze %.3f, Schwelle %.3f\n",
+                 name.toRawUTF8(), seconds, argc > 5 ? std::atof (argv[5]) : 0.0,
                  off.isEmpty() ? "" : ", ohne ", off.toRawUTF8(), peak, threshold);
-    std::printf ("%d Schlaege gefunden\n\n", (int) hits.size());
+    std::printf ("%d Schlaege gefunden\n", (int) hits.size());
+    std::printf ("N-Wellen-Durchgaenge: aufsteigend %llu, absteigend %llu, Kegelankunft %llu\n\n",
+                 (unsigned long long) boomsRising, (unsigned long long) boomsFalling,
+                 (unsigned long long) boomsPairs);
 
     struct Bin { double loMs, hiMs; int count; };
 

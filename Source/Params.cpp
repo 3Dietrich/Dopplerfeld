@@ -347,6 +347,22 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
     // --- Physik ---
     layout.add (floatParam (boomLimitDb, "Boom Limit", { 0.0f, 60.0f, 0.1f }, 30.0f, "dB"));
+
+    // Sperrzeit nach einem Knall (@dpa 20260830: "eine einstellbare Sperrzeit
+    // waere gut"). Der Wackler schiebt die Quelle ueber die Schallmauer und
+    // gleich wieder zurueck; beide Fronten sind echt, die kuerzesten Abstaende
+    // liegen im Peitschentest bei 17, 34 und 51 ms. Zusammen klingen sie wie
+    // ein Stolpern statt wie ein Hieb.
+    //
+    // Vorgabe 0: ohne ausdrueckliches Einstellen aendert sich nichts. Nach
+    // oben eine halbe Sekunde, Skew auf 30 ms - der Bereich, in dem zwei
+    // Schlaege zu einem verschmelzen, liegt unten.
+    {
+        auto range = juce::NormalisableRange<float> (0.0f, 500.0f, 1.0f);
+        range.setSkewForCentre (30.0f);
+
+        layout.add (floatParam (boomHoldMs, "Boom Hold", range, 0.0f, "ms"));
+    }
     layout.add (floatParam (airAbsorbAmount, "Air Absorption", unitRange(), 1.0f));
 
     // Lufttemperatur (Params::airTempC) - bestimmt c(T) in MediumState, siehe

@@ -139,6 +139,10 @@ public:
 
     // Druckwellen-/N-Wellen-Schicht, siehe PropagationPath::setNWave().
     // edge01 ist die Schaerfe der Stossfronten, 0,5 = Mitte.
+    // Sperrzeit nach einem Knall, in Sekunden - siehe
+    // PropagationPath::setBoomHoldSeconds.
+    void setBoomHold (double seconds);
+
     void setNWave (bool shouldBeEnabled, double sizeMetres, double gainLinear,
                    double edge01, double pressure);
 
@@ -717,6 +721,25 @@ private:
     // ueber ein prepare() hinweg erhalten - sonst faenge ein Puffergroessen-
     // wechsel des Hosts wieder klein an und muesste sich neu hocharbeiten.
     double tapRoomCapacity = reverbparts::baseCapacityMetres;
+
+    // Sperrzeit nach einem Knall, siehe setBoomHold. Drei Sperren: eine je
+    // Ohr und eine fuer die Abgriffpunkte. Je Ohr, weil derselbe Knall beide
+    // trifft - eine halbe Millisekunde versetzt, und genau daran hoert man,
+    // von wo er kommt. Eine gemeinsame Sperre wuerde das zweite Ohr
+    // wegwerfen.
+    std::array<PropagationPath::BoomGate, 3> boomGates {};
+
+    // Welche Sperre ein Weg benutzt: sein Ohr, oder die dritte, wenn er an
+    // einem Abgriffpunkt endet.
+    // const, weil die Render-Schleife die Engine nur lesend kennt: die Sperre
+    // selbst ist Zustand des Audiothreads und wird beim Ausloesen fortgezaehlt,
+    // nicht hier.
+    PropagationPath::BoomGate* boomGateFor (const PathRecipe& r) const
+    {
+        const size_t index = (size_t) (r.tap >= 0 ? 2 : (r.ear != 0 ? 1 : 0));
+
+        return const_cast<PropagationPath::BoomGate*> (&boomGates[index]);
+    }
 
     // Fortlaufender Sample-Zähler, nie gewrappt - deckungsgleich mit
     // SourceSignalBuffer::writePosition(), damit timeToIndex() und die

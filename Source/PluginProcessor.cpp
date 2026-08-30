@@ -239,6 +239,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.windLevelDb      = raw (Params::windLevelDb);
     pp.throttleFromAccel = raw (Params::throttleFromAccel);
     pp.throttleTau       = raw (Params::throttleTau);
+    pp.boomHoldMs        = raw (Params::boomHoldMs);
     pp.noiseSpeedAmount = raw (Params::noiseSpeedAmount);
     pp.jitterAmount = raw (Params::jitterAmount);
     pp.jitterRateHz = raw (Params::jitterRateHz);
@@ -1058,6 +1059,8 @@ void DopplerfeldProcessor::applyNWaveAndShockParameters()
                                 juce::Decibels::decibelsToGain (nWaveGainDb),
                                 nWaveEdge, nWavePressure);
     }
+
+    dopplerEngine.setBoomHold (0.001 * (double) pp.boomHoldMs->load());
 
     // Rueckwaerts-Pegel, Stossfront-Absenkung und Schattenausklang: dieselbe
     // Wiedervorlage wie bei der N-Welle, denn auch diese Setter laufen ueber
