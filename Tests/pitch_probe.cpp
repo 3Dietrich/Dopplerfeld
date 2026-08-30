@@ -110,6 +110,13 @@ int main (int argc, char** argv)
             writer->writeFromAudioSampleBuffer (recorded, 0, recorded.getNumSamples());
             writer.reset();
             std::printf ("Mitschnitt %s\n", out.getFullPathName().toRawUTF8());
+
+    // Woran die Rechenzeit haengt - fuer die Frage, was eine Verteilung auf
+    // mehrere Kerne ueberhaupt brechen koennte.
+    std::printf ("Last: gesamt %.1f %% des Echtzeit-Budgets, davon Quelle %.1f %%, Physik %.1f %%\n",
+                 (double) proc.cpuLoadPercent(),
+                 (double) proc.cpuLoadSourcePercent(),
+                 (double) proc.cpuLoadPhysicsPercent());
         }
     }
 
