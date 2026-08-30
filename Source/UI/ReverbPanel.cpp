@@ -77,6 +77,17 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
 
     typeBox.onChange = [this] { updateTypeDependentControls(); };
 
+    chainLabel.setText (Labels::text ("Kette"), juce::dontSendNotification);
+    chainLabel.setJustificationType (juce::Justification::centredRight);
+    addAndMakeVisible (chainLabel);
+
+    chainBox.setTooltip (Tooltips::text (Tooltips::Key::TapChain));
+    addAndMakeVisible (chainBox);
+
+    // Nach einer Aenderung stimmt die Nummernreihe nicht mehr: dort steht, wer
+    // in wen geht.
+    chainBox.onChange = [this] { refreshRunningMarks(); };
+
     // Der Direktschall haengt fest am globalen Parameter und wird beim
     // Umschalten des Punktes nicht neu gebunden.
     direct.attachment = std::make_unique<SliderAttachment> (apvts, Params::directGain, direct.slider);
@@ -118,6 +129,24 @@ void ReverbPanel::selectTap (int index)
 
     typeAttachment = std::make_unique<ComboAttachment> (
         state, Params::tapId (selected, type), typeBox);
+
+    // Die Kettenliste ist je Punkt eine andere - sie zeigt nur, was NACH ihm
+    // kommt. Deshalb wird sie hier neu gefuellt, bevor das Attachment sie auf
+    // den gespeicherten Wert stellt.
+    chainAttachment.reset();
+    chainBox.clear (juce::dontSendNotification);
+    chainBox.addItem (Labels::text ("aus"), 1);
+
+    for (int other = selected + 1; other < tapCount; ++other)
+        chainBox.addItem (juce::String::fromUTF8 ("→ ") + juce::String (other + 1),
+                          other - selected + 1);
+
+    // Der letzte Punkt hat nichts, in das er gehen koennte.
+    chainBox.setEnabled (selected + 1 < tapCount);
+    chainLabel.setEnabled (selected + 1 < tapCount);
+
+    chainAttachment = std::make_unique<ComboAttachment> (
+        state, Params::tapId (selected, chain), chainBox);
 
     const std::pair<Knob*, const char*> bindings[] {
         { &z,     Params::TapPart::z },
@@ -168,11 +197,39 @@ void ReverbPanel::updateTypeDependentControls()
 
 void ReverbPanel::refreshRunningMarks()
 {
+    // Erst sammeln, wer in wen geht: die Beschriftung eines Knopfes haengt an
+    // seinem Nachbarn, nicht an ihm selbst.
+    int chainTargetOf[tapCount];
+    bool isChainTarget[tapCount] {};
+
+    for (int t = 0; t < tapCount; ++t)
+    {
+        const auto* c = state.getRawParameterValue (Params::tapId (t, Params::TapPart::chain));
+        const int   choice = c != nullptr ? (int) std::lround (c->load()) : 0;
+
+        chainTargetOf[t] = choice > 0 && t + choice < tapCount ? t + choice : -1;
+
+        if (chainTargetOf[t] >= 0)
+            isChainTarget[chainTargetOf[t]] = true;
+    }
+
     for (int t = 0; t < tapCount; ++t)
     {
         const auto* p = state.getRawParameterValue (Params::tapId (t, Params::TapPart::on));
         const bool running  = p != nullptr && p->load() > 0.5f;
         const bool isChosen = (t == selected);
+
+        // Die Nummer sagt, wo der Punkt in einer Kette steht: "3›" gibt weiter,
+        // "›4" bekommt (@dpa 20260830: "die Nummer des zweiten verschwindet
+        // oder setzt sich auf den ersten"). Beide bleiben waehlbar - auch die
+        // zweite Stufe will eingestellt werden.
+        const juce::String number (t + 1);
+
+        selectButtons[t].setButtonText (chainTargetOf[t] >= 0
+                                            ? number + juce::String::fromUTF8 ("›")
+                                        : isChainTarget[t]
+                                            ? juce::String::fromUTF8 ("›") + number
+                                            : number);
 
         // BEIDE Farbkennungen setzen. Ein Knopf mit setClickingTogglesState()
         // zeichnet im eingeschalteten Zustand mit buttonOnColourId, sonst mit
@@ -292,6 +349,10 @@ void ReverbPanel::refreshTooltips()
     // haengt.
     typeBox.changeItemText (4, Labels::text ("Draußen"));
 
+    chainLabel.setText (Labels::text ("Kette"), juce::dontSendNotification);
+    chainBox.setTooltip (Tooltips::text (Tooltips::Key::TapChain));
+    chainBox.changeItemText (1, Labels::text ("aus"));
+
     for (auto* k : { &z, &room, &early, &decay, &damp, &phase, &gain, &width, &echoes, &seed, &direct })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
@@ -355,6 +416,11 @@ void ReverbPanel::resized()
     // braucht und danach nur noch Platz fuer die zwei Uebertragungsknoepfe hat.
     typeRow.removeFromLeft (10);
     predelayButton.setBounds (typeRow.removeFromLeft (96));
+
+    typeRow.removeFromLeft (10);
+    chainLabel.setBounds (typeRow.removeFromLeft (44));
+    typeRow.removeFromLeft (2);
+    chainBox.setBounds (typeRow.removeFromLeft (66));
 
     groupRules.push_back ({ typeRow, typeRow.getX() + 6 });
 

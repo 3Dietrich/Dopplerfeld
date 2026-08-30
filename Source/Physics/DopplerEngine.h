@@ -327,6 +327,10 @@ public:
 
     // Hallwerte eines Punktes. Getrennt vom Ort, weil der Ort die Physik
     // betrifft und der Rest nur den Hall dahinter.
+    // Ziel der Kette setzen, -1 oder ein spaeterer Index (siehe
+    // TapState::chainTo). Alles andere wird verworfen.
+    void setTapChain (int index, int target);
+
     void setTapReverb (int index, int type, double roomMetres, double decaySeconds,
                        double damping01, double phase01, double earlyAmount, double gainLinear,
                        double width, bool predelayEnabled, int echoCount, int seed);
@@ -593,6 +597,12 @@ private:
         // klingt der Hall, als saesse er am Ohr - manchmal gewollt, meist
         // nicht.
         bool predelay = true;
+
+        // Ziel der Kette (siehe Params::TapPart::chain): -1 = keines, sonst
+        // der Index eines SPAETEREN Punktes. Wer ein Ziel hat, geht nicht mehr
+        // auf die Ohren, sondern in dessen Eingang; wer Ziel ist, hoert nicht
+        // mehr das Feld, sondern nur noch seinen Vorgaenger.
+        int chainTo = -1;
     };
 
     // Wo der Hall eines Punktes im Stereobild sitzt, aus seinem Ort gegenueber
@@ -604,6 +614,21 @@ private:
 
     TapState taps[maxTaps];
     TapBus   tapBus[maxTaps];
+
+    // Arbeitsflaechen der Kette (siehe TapState::chainTo). chainStereo nimmt
+    // den Hall einer Stufe auf, chainInput haelt je Ziel dessen Summe - das
+    // ist der Eingang der naechsten Stufe. Mono, weil eine Hallbauart einen
+    // Punkt hoert, keinen Stereopegel; die Breite entsteht ohnehin in der
+    // letzten Stufe neu.
+    //
+    // Je Ziel ein eigener Abschnitt, nicht eine gemeinsame Flaeche: es koennen
+    // mehrere Ketten gleichzeitig laufen (1 in 3 und 2 in 4), und die zweite
+    // wuerde der ersten sonst ihr Signal ueberschreiben, bevor deren Ziel an
+    // der Reihe ist.
+    //
+    // Bemessen in prepare(), im Renderpfad wird daran nichts allokiert.
+    std::vector<float> chainStereoL, chainStereoR, chainInput;
+    bool chainHasInput[maxTaps] {};
 
     // Renderziel der Pfade: zwei Ohrkanaele plus je einer je Abgriffpunkt.
     //

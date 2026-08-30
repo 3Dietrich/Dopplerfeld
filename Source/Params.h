@@ -49,6 +49,18 @@ namespace Params
         constexpr const char* gain     = "Gain";
         constexpr const char* width    = "Width";
         constexpr const char* predelay = "Predelay";
+
+        // In welchen SPAETEREN Abgriffpunkt dieser hier hineingeht, statt
+        // direkt auf die Ohren zu gehen (@dpa 20260830: "geht es, dass man
+        // einen Hall (z.B. 3: Draussen) in den folgenden (z.B. 4: Diffusor)
+        // direkt schalten kann ... so koennte man komplexe Hallversionen
+        // kreieren"). 0 = aus, sonst die Nummer des Ziels (1-basiert).
+        //
+        // Nur nach hinten: das Ziel muss eine hoehere Nummer haben als die
+        // Quelle. Damit ist die Reihenfolge, in der die Punkte gerechnet
+        // werden, zugleich die Reihenfolge der Kette, und ein Kreis kann gar
+        // nicht erst entstehen.
+        constexpr const char* chain    = "Chain";
     }
 
     inline juce::String tapId (int index, const char* part)

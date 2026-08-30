@@ -542,6 +542,7 @@ private:
         std::atomic<float>* tapY[DopplerEngine::maxTaps]        {};
         std::atomic<float>* tapZ[DopplerEngine::maxTaps]        {};
         std::atomic<float>* tapType[DopplerEngine::maxTaps]     {};
+        std::atomic<float>* tapChain[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapRoom[DopplerEngine::maxTaps]     {};
         std::atomic<float>* tapDecay[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapDamp[DopplerEngine::maxTaps]     {};
@@ -1231,6 +1232,9 @@ private:
         double gainLinear = 0.5;
         double width      = 1.0;
         bool   predelay   = true;
+
+        // Ziel der Kette, -1 = keines (siehe Params::TapPart::chain).
+        int    chainTo    = -1;
     };
 
     TapState tapTarget[DopplerEngine::maxTaps];

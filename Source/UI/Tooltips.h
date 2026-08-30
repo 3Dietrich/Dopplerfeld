@@ -79,6 +79,7 @@ namespace Tooltips
         SrcJitterSpeed,
         SrcJitterOn,
         SrcJitterSmooth,
+        TapChain,
         EngineSine,
         EngineOscOn,
         ShockDuckRange,
@@ -948,6 +949,18 @@ namespace Tooltips
                           "The same control sits next to \"Spread\" in the swarm panel and "
                           "governs the height of the clones there - one parameter, two "
                           "knobs, always in step.";
+                case Key::TapChain:
+                    return lang == Language::De
+                        ? "Schickt diesen Abgriffpunkt in einen spaeteren, statt ihn direkt auf die "
+                          "Ohren zu geben - aus zwei Hallbauarten wird eine Kette. Der Empfaenger "
+                          "hoert dann nicht mehr das Feld, sondern nur noch diesen Punkt; seine "
+                          "Lage im Feld spielt dann keine Rolle mehr. Nur nach hinten, damit kein "
+                          "Kreis entsteht."
+                        : "Feeds this tap into a later one instead of sending it straight to the "
+                          "ears - two reverb types become a chain. The receiving tap no longer "
+                          "hears the field, only this tap; its position then no longer matters. "
+                          "Forward only, so no loop can form.";
+
                 case Key::SrcJitterSmooth:
                     return lang == Language::De
                         ? "Schickt das Wackeln durch die Bewegungsglaettung, statt daran vorbei. "

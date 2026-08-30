@@ -448,6 +448,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
                                  "Tap " + juce::String (t + 1) + " Type",
                                  { "Diffusor", "Schroeder", "FDN", Text::utf8 ("Draußen") }, 0));
 
+        // Kette: dieser Punkt geht in einen spaeteren hinein (siehe
+        // TapPart::chain). Die Liste zeigt nur, was danach kommt - "aus" plus
+        // die Punkte mit hoeherer Nummer.
+        {
+            juce::StringArray targets { Text::utf8 ("aus") };
+
+            for (int other = t + 1; other < tapCount; ++other)
+                targets.add (Text::utf8 ("→ ") + juce::String (other + 1));
+
+            layout.add (choiceParam (tapId (t, TapPart::chain).toRawUTF8(),
+                                     "Tap " + juce::String (t + 1) + " Chain",
+                                     targets, 0));
+        }
+
         // Ein halber Meter bis zwei Kilometer, mit 60 m in der Reglermitte
         // (@dpa 20260829: "Raum-Regler leicht logarithmisch, 0.5 bis 2000 m").
         // Die Kennlinie ist der eigentliche Punkt: linear laegen die Raeume,

@@ -45,6 +45,8 @@ namespace Labels
             // --- Statuszeile ---
             { "Aufnahme",                   "Recording"     },
             { "Wiedergabe",                 "Playback"      },
+            { "Kette",                      "Chain"         },
+            { "aus",                        "off"           },
             { "Hörweg abgerissen",          "Path cut"      },
             { "bei vollem Pegel, kann knacken", "at full level, may click" },
             { "halb ausgeklungen",          "half faded"    },

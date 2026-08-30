@@ -270,6 +270,11 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
 
     renderBuffer.setSize (renderChannels, maxBlock, false, true, true);
 
+    // Arbeitsflaechen der Hallkette, siehe chainStereoL im Header.
+    chainStereoL.assign ((size_t) maxBlock, 0.0f);
+    chainStereoR.assign ((size_t) maxBlock, 0.0f);
+    chainInput.assign   ((size_t) maxBlock * (size_t) maxTaps, 0.0f);
+
     for (auto& bus : tapBus)
         bus.prepare (sr, maxBlock, tapRoomCapacity);
 
@@ -737,6 +742,16 @@ void DopplerEngine::setTap (int index, bool enabled, Vec3 posMetres)
 
     t.enabled = enabled;
     t.pos     = posMetres;
+}
+
+void DopplerEngine::setTapChain (int index, int target)
+{
+    if (index < 0 || index >= maxTaps)
+        return;
+
+    // Nur nach hinten (siehe TapState::chainTo): damit ist die Rechenreihen-
+    // folge zugleich die Reihenfolge der Kette und ein Kreis unmoeglich.
+    taps[(size_t) index].chainTo = (target > index && target < maxTaps) ? target : -1;
 }
 
 void DopplerEngine::setTapReverb (int index, int type, double roomMetres,
@@ -1485,6 +1500,11 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
     //    zusaetzliche Signalquelle auf die Ohrkanaele. Der Hall laeuft nicht
     //    noch einmal durch die Physik; sein Weg zurueck zum Hoerer steckt im
     //    Vorlauf.
+    // Wer in diesem Durchgang schon ein Kettensignal bekommen hat: dann kommt
+    // sein Eingang von dort und nicht mehr aus dem Feld.
+    for (int t = 0; t < maxTaps; ++t)
+        chainHasInput[(size_t) t] = false;
+
     for (int t = 0; t < maxTaps; ++t)
     {
         if (tapsBypassed || ! taps[(size_t) t].enabled)
@@ -1497,10 +1517,40 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
         tapBus[(size_t) t].setPredelayMetres (back);
         tapBus[(size_t) t].setPanorama (tapPanorama (t));
 
-        tapBus[(size_t) t].processAdd (renderView.getReadPointer (2 + t),
-                                       renderView.getWritePointer (0),
-                                       renderView.getWritePointer (1),
-                                       rendered);
+        // Eingang: das Kettensignal des Vorgaengers, sonst das, was am Ort
+        // dieses Punktes ankommt.
+        const float* in = chainHasInput[(size_t) t]
+                            ? chainInput.data() + (size_t) t * (size_t) maxBlock
+                            : renderView.getReadPointer (2 + t);
+
+        const int target = taps[(size_t) t].chainTo;
+        const bool feedsChain = target > t && target < maxTaps
+                              && taps[(size_t) target].enabled;
+
+        if (! feedsChain)
+        {
+            // Letzte Stufe (oder gar keine Kette): direkt auf die Ohren.
+            tapBus[(size_t) t].processAdd (in,
+                                           renderView.getWritePointer (0),
+                                           renderView.getWritePointer (1),
+                                           rendered);
+            continue;
+        }
+
+        // Zwischenstufe: in die Arbeitsflaeche statt auf die Ohren, und von
+        // dort als Summe weiter. processAdd addiert, die Flaeche wird also
+        // erst geleert.
+        std::fill (chainStereoL.begin(), chainStereoL.begin() + rendered, 0.0f);
+        std::fill (chainStereoR.begin(), chainStereoR.begin() + rendered, 0.0f);
+
+        tapBus[(size_t) t].processAdd (in, chainStereoL.data(), chainStereoR.data(), rendered);
+
+        float* into = chainInput.data() + (size_t) target * (size_t) maxBlock;
+
+        for (int i = 0; i < rendered; ++i)
+            into[i] = 0.5f * (chainStereoL[(size_t) i] + chainStereoR[(size_t) i]);
+
+        chainHasInput[(size_t) target] = true;
     }
 
     // 6) Die zwei Ohrkanaele nach draussen. Die Kanaele der Abgriffpunkte
