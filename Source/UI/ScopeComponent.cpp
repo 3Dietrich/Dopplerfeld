@@ -465,34 +465,82 @@ void ScopeComponent::feed (const float* rawLeft, const float* rawRight, std::uin
             repaint();
         }
 
-        const int captureLen = captureWindowSampleCount();
+        const int    captureLen = captureWindowSampleCount();
+        const double sr         = sampleRateHint > 0.0 ? sampleRateHint : 48000.0;
 
-        // Das Ereignis soll MITTIG stehen, es braucht hinter dem Fund also
-        // noch ein halbes Anzeigefenster an Nachlauf. Und davor genauso viel,
-        // damit der Vorlauf zu sehen ist.
-        const int searchLo = displaySamples / 2;
-        const int searchHi = captureLen - displaySamples / 2;
+        // Nur die Samples einspeisen, die seit dem letzten Fenster wirklich
+        // dazugekommen sind. Die Rohfenster ueberlappen stark; wer sie ganz
+        // durch die Folger schickt, misst denselben Anstieg immer wieder.
+        int fresh = captureLen;
 
-        const int trigger = findLevelRise (rawLeft, rawRight, searchLo, searchHi);
+        if (hasFedOnce)
+        {
+            const std::uint32_t advanced = windowEndSample - lastFedEnd;
 
-        if (trigger < 0)
+            fresh = (int) juce::jlimit ((std::uint32_t) 0, (std::uint32_t) captureLen, advanced);
+        }
+
+        lastFedEnd = windowEndSample;
+        hasFedOnce = true;
+
+        const double aFast = 1.0 - std::exp (-1.0 / (envFastSeconds * sr));
+        const double aSlow = 1.0 - std::exp (-1.0 / (envSlowSeconds * sr));
+
+        // Zwei Einsaetze gelten als derselbe, wenn sie naeher als diese
+        // Zeitspanne beieinander liegen - der Detektor darf an einer Flanke
+        // nicht mehrfach anschlagen. Das ist eine Eigenschaft der Flanke und
+        // hat mit der Zeitbasis des Bildes nichts zu tun.
+        const auto refractory = (std::uint32_t) juce::jmax (16.0, 0.003 * sr);
+
+        for (int k = captureLen - fresh; k < captureLen; ++k)
+        {
+            const double mag = juce::jmax (std::abs ((double) rawLeft[k]),
+                                            std::abs ((double) rawRight[k]));
+
+            envFastState += aFast * (mag - envFastState);
+            envSlowState += aSlow * (mag - envSlowState);
+
+            if (envFastState <= (double) riseFloor || envFastState <= riseFactor * envSlowState)
+                continue;
+
+            const std::uint32_t absolute =
+                windowEndSample - (std::uint32_t) captureLen + (std::uint32_t) k;
+
+            if (hasTriggeredOnce && (std::uint32_t) (absolute - lastTriggerAbsolute) < refractory)
+                continue;
+
+            // Den ERSTEN wartenden Einsatz behalten, nicht den letzten. Bei
+            // langer Zeitbasis dauert es viele Bildtakte, bis hinter einem
+            // Einsatz genug Nachlauf steht - wuerde er dabei von jedem
+            // folgenden Knall ueberschrieben, waere nie einer reif und das
+            // Bild bliebe stehen. Genau daran lag es, dass die Knall-Ansicht
+            // bei grossem Zoom gar nichts mehr zeigte.
+            if (hasPendingTrigger)
+                continue;
+
+            pendingTriggerAbsolute = absolute;
+            hasPendingTrigger      = true;
+        }
+
+        if (! hasPendingTrigger)
             return;                          // nichts Neues, Bild stehen lassen
 
-        // Ist das derselbe Einsatz wie beim letzten Mal? Die Rohfenster
-        // ueberlappen bei 30 Hz Anzeigetakt stark, ein Knall steht deshalb in
-        // mehreren hintereinander. Verglichen wird auf der absoluten
-        // Zeitachse des Ringpuffers.
-        const std::uint32_t triggerAbsolute =
-            windowEndSample - (std::uint32_t) captureLen + (std::uint32_t) trigger;
+        // Der Einsatz soll MITTIG stehen: dahinter muss ein halbes
+        // Anzeigefenster an Nachlauf vorliegen, davor genauso viel Vorlauf.
+        const std::uint32_t behind = windowEndSample - pendingTriggerAbsolute;
 
-        if (hasTriggeredOnce
-            && (std::uint32_t) (triggerAbsolute - lastTriggerAbsolute) < (std::uint32_t) displaySamples)
+        if (behind < (std::uint32_t) (displaySamples / 2))
+            return;                          // Nachlauf fehlt noch, naechstes Fenster
+
+        // Zu alt fuer dieses Rohfenster - dann ist er nicht mehr zu holen.
+        if (behind + (std::uint32_t) (displaySamples / 2) > (std::uint32_t) captureLen)
+        {
+            hasPendingTrigger = false;
             return;
+        }
 
-        lastTriggerAbsolute = triggerAbsolute;
-        hasTriggeredOnce    = true;
-
-        const int start = trigger - displaySamples / 2;
+        const int trigger = captureLen - (int) behind;
+        const int start   = trigger - displaySamples / 2;
 
         for (int n = 0; n < displaySamples; ++n)
         {
@@ -500,6 +548,12 @@ void ScopeComponent::feed (const float* rawLeft, const float* rawRight, std::uin
             shownRight[(size_t) n] = rawRight[start + n];
         }
 
+        lastTriggerAbsolute = pendingTriggerAbsolute;
+        hasTriggeredOnce    = true;
+        hasPendingTrigger   = false;
+        ++triggerCount;
+
+        shownSampleCount   = displaySamples;
         lastFrameWasSynced = true;
         holding            = true;
         holdUntilMs        = nowMs + 1000.0 * holdSeconds;
@@ -518,7 +572,10 @@ void ScopeComponent::feed (const float* rawLeft, const float* rawRight, std::uin
     // grossem Zoom-Out mehrere hundert ms - @dpa: "zeigt den Inhalt immer
     // erst sehr spaet an, aber beim Freeze ist es ploetzlich weiter vorn",
     // weil enterHistoryMode() unten korrekt das aktuelle Ende zeigt).
-    int start = displaySamples;
+    // Das Bild endet am juengsten Sample des Rohfensters. Frueher stand hier
+    // displaySamples - das stimmte nur, solange das Rohfenster genau zwei
+    // Anzeigefenster lang war (siehe captureWindowSampleCount).
+    int start = captureWindowSampleCount() - displaySamples;
     lastFrameWasSynced = false;
     lastPeriodSamples  = 0.0;
     shownSampleCount   = displaySamples;

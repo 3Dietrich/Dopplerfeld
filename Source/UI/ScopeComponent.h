@@ -114,7 +114,19 @@ public:
     }
 
     int displaySampleCount() const { return displaySamples; }
-    int captureWindowSampleCount() const { return displaySamples * 2; }
+    // Wie viel Rohsignal je Bildtakt geliefert werden muss.
+    //
+    // Zwei Anzeigefenster, aber mindestens ein Achtelsekunde: bei kurzer
+    // Zeitbasis waeren zwei Fenster kuerzer als der Abstand zweier
+    // Bildtakte (33 ms), und alles dazwischen saehe die Knall-Erkennung nie -
+    // ein Knall in dieser Luecke fehlt einfach. Die Untergrenze deckt zwei
+    // Bildtakte mit Reserve ab.
+    int captureWindowSampleCount() const
+    {
+        const double sr = sampleRateHint > 0.0 ? sampleRateHint : 48000.0;
+
+        return juce::jmax (displaySamples * 2, (int) (0.125 * sr));
+    }
 
     // Ein Zoom-Schritt, multiplikativ: factor < 1 verkuerzt die Zeitbasis
     // (reinzoomen), factor > 1 verlaengert sie (rauszoomen). Oeffentlich,
@@ -205,6 +217,11 @@ public:
     // Zuletzt gemessene Periodenlaenge der Grundwelle, in Samples. 0 = keine
     // erkannt.
     double periodSamplesForTest() const { return lastPeriodSamples; }
+
+    // Wie oft die Knall-Ansicht seit dem Anlegen ausgeloest hat. Nur zum
+    // Messen: ob ein Knall wirklich ins Bild kommt, sieht man dem Bild selbst
+    // nicht an (er kann auch der vorige gewesen sein).
+    int triggerCountForTest() const { return triggerCount; }
 
 private:
     // Sucht in [searchLo, searchHi) den steigenden Nulldurchgang von left,
@@ -326,6 +343,32 @@ private:
     // Verhindert, dass dasselbe Ereignis nach Ablauf der Haltezeit erneut
     // feuert - die Anzeigefenster ueberlappen stark, und ein Knall steht
     // deshalb in mehreren aufeinanderfolgenden Rohfenstern.
+    // Der Knall-Detektor laeuft DURCH, nicht je Rohfenster von vorn. Das ist
+    // der Unterschied zwischen "findet die Knalle" und "findet sie manchmal":
+    //
+    // Frueher wurden beide Huellkurvenfolger in jedem gelieferten Fenster bei
+    // null gestartet. Bei kurzer Zeitbasis ist so ein Fenster wenige
+    // Millisekunden lang - der langsame Folger (150 ms) kam nie aus dem
+    // Anlauf, und schon Rauschen sah aus wie ein Einsatz. Bei langer
+    // Zeitbasis wiederum galt jeder Fund als "derselbe Knall wie zuletzt",
+    // solange er naeher als ein volles Anzeigefenster lag - bei 2,7 s Bild
+    // fiel damit fast jeder Knall aus.
+    //
+    // Jetzt: die Folger behalten ihren Stand ueber die Fenster hinweg, es
+    // werden nur die wirklich NEUEN Samples eingespeist, und ein Einsatz gilt
+    // als derselbe, wenn er innerhalb weniger Millisekunden am selben Ort der
+    // absoluten Zeitachse liegt.
+    double        envFastState  = 0.0;
+    double        envSlowState  = 0.0;
+    std::uint32_t lastFedEnd    = 0;
+    bool          hasFedOnce    = false;
+
+    // Erkannter, aber noch nicht gezeigter Einsatz: er kommt erst ins Bild,
+    // wenn hinter ihm ein halbes Anzeigefenster an Nachlauf im Rohfenster
+    // steht.
+    std::uint32_t pendingTriggerAbsolute = 0;
+    bool          hasPendingTrigger      = false;
+
     std::uint32_t lastTriggerAbsolute = 0;
     bool          hasTriggeredOnce    = false;
 
@@ -334,6 +377,9 @@ private:
 
     int displaySamples    = 4096;          // Default bis der Editor die Samplerate kennt
     int maxDisplaySamples = 1 << 20;        // vorlaeufig grosszuegig, s. setMaxDisplaySampleCount()
+
+    // Zaehler der Knall-Ausloesungen, siehe triggerCountForTest().
+    int triggerCount = 0;
     double sampleRateHint = 48000.0;
 
     std::vector<float> shownLeft, shownRight;   // Live-Anzeige

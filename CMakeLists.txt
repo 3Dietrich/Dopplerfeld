@@ -251,6 +251,26 @@ target_compile_definitions(trail_probe PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(trail_probe PRIVATE cxx_std_20)
 
+# Knall-Ansicht des Scopes (Tests/scope_boom_probe.cpp). Anders als die
+# uebrigen Messprogramme ist das ein TEST: er misst nichts, was von der
+# Maschine abhaengt, sondern ob die Ansicht in jeder Zoomstufe regelmaessig
+# nachfuehrt - das war zweimal kaputt und faellt im Betrieb erst spaet auf.
+add_executable(scope_boom_probe Tests/scope_boom_probe.cpp)
+target_link_libraries(scope_boom_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(scope_boom_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(scope_boom_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(scope_boom_probe PRIVATE cxx_std_20)
+
+add_test(NAME scope_boom_probe COMMAND scope_boom_probe)
+
 # Messprogramm zu den Doppelhieben im Peitschentest (Tests/whip_probe.cpp),
 # kein Test.
 add_executable(whip_probe EXCLUDE_FROM_ALL Tests/whip_probe.cpp)
