@@ -564,6 +564,8 @@ private:
         std::atomic<float>* noiseGainHi  = nullptr;
         std::atomic<float>* noiseQ       = nullptr;
         std::atomic<float>* windLevelDb      = nullptr;
+        std::atomic<float>* throttleFromAccel = nullptr;
+        std::atomic<float>* throttleTau       = nullptr;
         std::atomic<float>* noiseSpeedAmount = nullptr;
         std::atomic<float>* jitterAmount = nullptr;
         std::atomic<float>* jitterRateHz = nullptr;
@@ -909,6 +911,12 @@ private:
     // Damit faengt das Auslaufen genau dort an, wo die gezogene Bewegung
     // aufgehoert hat - ohne Knick in f'.
     Vec3 lastSourceVelocity;
+
+    // Fuer das Gas aus der Beschleunigung (siehe advanceMotion): das Tempo des
+    // vorigen Ticks und der geglaettete Faktor, mit dem die Drehzahl
+    // nachgefuehrt wird. Beide gehoeren dem Audiothread.
+    double lastSourceSpeed = 0.0;
+    double throttleFactor  = 0.0;
 
     // Wie lang ausgelaufen wird. Der Weg haengt linear daran (s.o.), das
     // Ende ist trotzdem weich: unter coastRestSpeed gilt die Quelle als

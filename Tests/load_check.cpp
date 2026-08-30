@@ -7633,6 +7633,84 @@ int main()
         }
     }
 
+    // Gas aus der Beschleunigung (@dpa 20260830: "anhand der Beschleunigung
+    // die Gaspedale schliessen"). Die Quelle wird angeschoben; bei
+    // aufgedrehtem Regler muss die Drehzahl waehrend des Anziehens steigen -
+    // messbar an der Nulldurchgangsrate, die mit der Tonhoehe waechst.
+    {
+        auto pushAndMeasure = [] (float throttlePercent)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            setParam (proc, Params::fieldMetres, 200.0f);
+            setParam (proc, Params::groundReflectionOn, 0.0f);
+            setParam (proc, Params::reverbBypass, 1.0f);
+            setParam (proc, Params::nWaveOn, 0.0f);
+            setParam (proc, Params::throttleFromAccel, throttlePercent);
+            setParam (proc, Params::throttleTau, 0.2f);
+            setParam (proc, Params::rpm, 2400.0f);
+
+            // Nah am Hoerer und ohne Glaettungsbremse, damit das Anschieben
+            // wirklich als Beschleunigung ankommt.
+            setParam (proc, Params::smootherTau, 0.08f);
+            setParam (proc, Params::srcX, 0.45f);
+            setParam (proc, Params::srcY, 0.5f);
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            juce::MidiBuffer midi;
+
+            for (int i = 0; i < 40; ++i)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+            }
+
+            // Losfahren: das Ziel springt, der Glaetter zieht die Quelle
+            // beschleunigt hinterher.
+            setParam (proc, Params::srcX, 0.9f);
+
+            int crossings = 0;
+            int counted   = 0;
+
+            float previous = 0.0f;
+
+            for (int b = 0; b < 60; ++b)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                for (int i = 0; i < blockSize; ++i)
+                {
+                    const float v = buffer.getSample (0, i);
+
+                    if ((v >= 0.0f) != (previous >= 0.0f))
+                        ++crossings;
+
+                    previous = v;
+                    ++counted;
+                }
+            }
+
+            return (double) crossings / std::max (1, counted) * sampleRate * 0.5;
+        };
+
+        const double idle    = pushAndMeasure (0.0f);
+        const double gassing = pushAndMeasure (100.0f);
+
+        std::printf ("%-22s ohne Gas %.0f Hz | mit Gas %.0f Hz\n",
+                     "Gas aus Beschleunigung", idle, gassing);
+
+        if (gassing <= idle * 1.02)
+        {
+            std::printf ("FEHLGESCHLAGEN: 'Gas aus a' zieht die Drehzahl beim Anfahren nicht hoch "
+                         "(%.0f Hz gegen %.0f Hz)\n", gassing, idle);
+            failed = true;
+        }
+    }
+
     std::printf (failed ? "FEHLGESCHLAGEN\n" : "OK\n");
     return failed ? 1 : 0;
 }

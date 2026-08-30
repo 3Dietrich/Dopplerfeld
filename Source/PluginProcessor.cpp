@@ -237,6 +237,8 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.noiseGainHi  = raw (Params::noiseGainHi);
     pp.noiseQ       = raw (Params::noiseQ);
     pp.windLevelDb      = raw (Params::windLevelDb);
+    pp.throttleFromAccel = raw (Params::throttleFromAccel);
+    pp.throttleTau       = raw (Params::throttleTau);
     pp.noiseSpeedAmount = raw (Params::noiseSpeedAmount);
     pp.jitterAmount = raw (Params::jitterAmount);
     pp.jitterRateHz = raw (Params::jitterRateHz);
@@ -894,7 +896,14 @@ void DopplerfeldProcessor::applyFlyByAndPlaybackParameters()
 void DopplerfeldProcessor::applyEngineParameters()
 {
     // --- Motor ---
-    engineGenerator.setRpm (pp.rpm->load());
+    // Drehzahl mal Gas aus der Beschleunigung. Bei abgedrehtem Regler steht
+    // hier genau der Reglerwert - der Faktor ist dann exakt eins.
+    {
+        const double amount = 0.01 * (double) pp.throttleFromAccel->load();
+        const double factor = juce::jlimit (0.1, 4.0, 1.0 + amount * throttleFactor);
+
+        engineGenerator.setRpm ((float) (pp.rpm->load() * factor));
+    }
     engineGenerator.setKindLevelDb (pp.engineLevelDb->load());
     engineGenerator.setRocketShock (pp.rocketShock->load());
     engineGenerator.setRotorSlap (pp.rotorSlap->load());
@@ -2171,6 +2180,29 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // haben alle, vielleicht unterschiedlich, aber je schneller um so
             // lauter").
             engineGenerator.setAirspeed ((float) (stepLen / tickDt));
+
+            // Gas aus der Beschleunigung (@dpa 20260830). Gemeint ist die
+            // LAENGSbeschleunigung, also der Anteil in Fahrtrichtung: eine
+            // Kurve bei gleichbleibendem Tempo ist kein Gasgeben, auch wenn
+            // der Beschleunigungsvektor dabei gross wird.
+            //
+            // Geglaettet wird mit der eingestellten Traegheit, und zwar der
+            // FAKTOR, nicht die Beschleunigung: so faellt die Drehzahl nach
+            // dem Anziehen mit derselben Zeitkonstante zurueck, mit der sie
+            // gestiegen ist - das ist es, was den Verbrenner vom Elektromotor
+            // unterscheidet.
+            const double speedNow = stepLen / tickDt;
+            const double accel    = (speedNow - lastSourceSpeed) / tickDt;
+
+            lastSourceSpeed = speedNow;
+
+            constexpr double accelReference = 9.81;   // ein g
+
+            const double wanted = juce::jlimit (-0.9, 3.0, accel / accelReference);
+            const double tau    = juce::jmax (0.01, (double) pp.throttleTau->load());
+            const double coeff  = 1.0 - std::exp (-tickDt / tau);
+
+            throttleFactor += (wanted - throttleFactor) * coeff;
 
             if (stepLen > 1.0e-9)
             {

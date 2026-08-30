@@ -468,6 +468,7 @@ void ScopeComponent::feed (const float* rawLeft, const float* rawRight, std::uin
         const int    captureLen = captureWindowSampleCount();
         const double sr         = sampleRateHint > 0.0 ? sampleRateHint : 48000.0;
 
+
         // Nur die Samples einspeisen, die seit dem letzten Fenster wirklich
         // dazugekommen sind. Die Rohfenster ueberlappen stark; wer sie ganz
         // durch die Folger schickt, misst denselben Anstieg immer wieder.
@@ -478,6 +479,21 @@ void ScopeComponent::feed (const float* rawLeft, const float* rawRight, std::uin
             const std::uint32_t advanced = windowEndSample - lastFedEnd;
 
             fresh = (int) juce::jlimit ((std::uint32_t) 0, (std::uint32_t) captureLen, advanced);
+        }
+        else
+        {
+            // Beide Folger auf den vorgefundenen Pegel setzen, statt bei null
+            // anzufangen. Ein von null anlaufender schneller Folger ueberholt
+            // den langsamen zwangslaeufig - das erste Fenster meldete sonst
+            // seinen eigenen Anlauf als Einsatz, egal was darin steht.
+            const int prime = juce::jmin (captureLen, (int) (0.01 * sr));
+
+            double sum = 0.0;
+
+            for (int k = 0; k < prime; ++k)
+                sum += juce::jmax (std::abs ((double) rawLeft[k]), std::abs ((double) rawRight[k]));
+
+            envFastState = envSlowState = sum / juce::jmax (1, prime);
         }
 
         lastFedEnd = windowEndSample;

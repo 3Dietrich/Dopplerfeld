@@ -242,6 +242,22 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Quadrat der Geschwindigkeit - dieselbe Kennlinie, mit der auch der
     // Fahrtwind rechnet, und derselbe Bezugswert.
     layout.add (floatParam (noiseSpeedAmount, "Noise Speed", { 0.0f, 100.0f, 1.0f }, 0.0f, "%"));
+
+    // Gas aus der Beschleunigung. Bezug ist ein g (9,81 m/s^2): wer damit
+    // anzieht, bekommt bei 100 % die doppelte Drehzahl, wer genauso stark
+    // bremst, die halbe. Vorgabe 0 - der Motor haengt weiterhin allein am
+    // RPM-Regler, bis jemand das hier aufdreht.
+    layout.add (floatParam (throttleFromAccel, "Throttle from Accel",
+                            { 0.0f, 100.0f, 1.0f }, 0.0f, "%"));
+
+    // Traegheit: 30 ms sind elektrisch, eine Sekunde ist ein schwerer
+    // Verbrenner. Skew auf 0,25 s, weil der interessante Bereich unten liegt.
+    {
+        auto range = juce::NormalisableRange<float> (0.02f, 3.0f, 0.01f);
+        range.setSkewForCentre (0.25f);
+
+        layout.add (floatParam (throttleTau, "Throttle Tau", range, 0.3f, "s"));
+    }
     layout.add (floatParam (jitterAmount, "Jitter Amount", { 0.0f, 20.0f, 0.01f }, 1.5f, "%"));
     layout.add (floatParam (jitterRateHz, "Jitter Rate", { 3.0f, 15.0f, 0.01f }, 8.0f, "Hz"));
     layout.add (floatParam (imbalance, "Imbalance", unitRange(), 0.0f));

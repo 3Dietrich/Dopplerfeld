@@ -60,6 +60,11 @@ private:
     // Oktavlage der Unwucht, siehe Params::imbalanceOctave.
     Knob imbalanceOctaveKnob;
 
+    // Gas aus der Beschleunigung (@dpa 20260830): wie stark sie die Drehzahl
+    // mitzieht und wie traege das geschieht. Die Traegheit ist der Unterschied
+    // zwischen elektrisch und Verbrenner.
+    Knob throttleKnob, throttleTauKnob;
+
     juce::ToggleButton motorGateButton { "Motor bei Griff" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EngineControlPanel)

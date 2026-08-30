@@ -34,6 +34,11 @@ EngineControlPanel::EngineControlPanel (juce::AudioProcessorValueTreeState& apvt
     setupKnob (imbalanceOctaveKnob, apvts, Params::imbalanceOctave, "Imb Octave",
                Tooltips::Key::EngineImbalanceOctave);
 
+    setupKnob (throttleKnob,    apvts, Params::throttleFromAccel, "Gas aus a",
+               Tooltips::Key::ThrottleFromAccel);
+    setupKnob (throttleTauKnob, apvts, Params::throttleTau,       "Gas traeg",
+               Tooltips::Key::ThrottleTau);
+
     motorGateButton.setTooltip (Tooltips::text (Tooltips::Key::EngineMotorGate));
     motorGateButton.onClick = [this]
     {
@@ -54,7 +59,7 @@ void EngineControlPanel::refreshTooltips()
     // Beschriftungen mit dem Sprachumschalter mitnehmen.
     motorGateButton.setButtonText (Labels::text ("Motor bei Griff"));
 
-    for (auto* k : { &rpmKnob, &imbalanceKnob, &imbalanceOctaveKnob })
+    for (auto* k : { &rpmKnob, &imbalanceKnob, &imbalanceOctaveKnob, &throttleKnob, &throttleTauKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
         k->slider.setTooltip (tooltip);
@@ -77,7 +82,7 @@ void EngineControlPanel::resized()
     auto area = getLocalBounds().reduced (8);
 
     auto row = area.removeFromTop (knobH);
-    for (auto* k : { &rpmKnob, &imbalanceKnob, &imbalanceOctaveKnob })
+    for (auto* k : { &rpmKnob, &imbalanceKnob, &imbalanceOctaveKnob, &throttleKnob, &throttleTauKnob })
     {
         layoutKnob (*k, row.removeFromLeft (knobW));
         row.removeFromLeft (4);

@@ -149,6 +149,17 @@ namespace Params
     // die es gibt via Regler geschwindigkeitabhaengig machen".
     constexpr const char* windLevelDb  = "windLevelDb";
 
+    // Wie stark die BESCHLEUNIGUNG der Quelle auf die Drehzahl schlaegt, in
+    // Prozent (@dpa 20260830: "Man kann ja auch anhand der Beschleunigung die
+    // 'Gaspedale' schliessen"). Wer anzieht, dreht hoch; wer ausrollt, faellt
+    // zurueck.
+    constexpr const char* throttleFromAccel = "throttleFromAccel";
+
+    // Traegheit dieser Nachfuehrung in Sekunden. Sie ist der Unterschied
+    // zwischen elektrisch (folgt fast sofort) und Verbrenner (haengt nach und
+    // faellt langsam ab) - ein Regler statt zweier Betriebsarten.
+    constexpr const char* throttleTau = "throttleTau";
+
     // Wie stark das Rauschband dem TEMPO folgt statt nur der Drehzahl, in
     // Prozent. Bei 0 wie bisher; bei 100 waechst es mit dem Quadrat der
     // Geschwindigkeit, bezogen auf EngineGenerator::airspeedRefMps.

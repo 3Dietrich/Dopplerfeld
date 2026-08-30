@@ -86,6 +86,8 @@ namespace Tooltips
         SrcJitterZAmount,
         WindLevel,
         NoiseSpeed,
+        ThrottleFromAccel,
+        ThrottleTau,
         MasterOn,
         GroundGain,
         GroundDamp,
@@ -1197,6 +1199,20 @@ namespace Tooltips
                         : "How much treble the reverb loses per round trip - a low-pass in the "
                           "loop, nothing else. Phase rotation sits next to it in the Phase "
                           "control.";
+                case Key::ThrottleFromAccel:
+                    return lang == Language::De
+                        ? "Wie stark die Beschleunigung der Quelle die Drehzahl mitzieht. Anziehen "
+                          "dreht hoch, Ausrollen faellt zurueck; bei einem g und voll aufgedrehtem "
+                          "Regler ist es die doppelte Drehzahl."
+                        : "How much the source's acceleration pulls the RPM along. Speeding up "
+                          "revs up, coasting falls back; at one g with the control full up it is "
+                          "double the RPM.";
+                case Key::ThrottleTau:
+                    return lang == Language::De
+                        ? "Traegheit dieser Nachfuehrung. Kurz klingt elektrisch - die Drehzahl "
+                          "folgt sofort. Lang klingt nach Verbrenner mit Schwungmasse."
+                        : "Inertia of that response. Short sounds electric - the RPM follows at "
+                          "once. Long sounds like a combustion engine with flywheel.";
                 case Key::WindLevel:
                     return lang == Language::De
                         ? "Pegel des Fahrtwinds - das Rauschen, das die Quelle allein vom "
