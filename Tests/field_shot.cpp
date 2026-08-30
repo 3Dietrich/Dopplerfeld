@@ -212,5 +212,69 @@ int main()
         shoot (field, "field_topdown_mach_turn");
     }
 
+    // 9) Verkettete Abgriffpunkte (@dpa: "die *Positionen* der Reverbs auf
+    // der Anzeige muessen klar sein"): Punkt 1 (Index 0) kettet aktiv in
+    // Punkt 2 (Index 1) - Punkt 2 darf keine eigene Marke bekommen, Punkt 1
+    // traegt die Kette in seiner Beschriftung ("1›2"). Punkt 4 (Index 3)
+    // bleibt unverkettet zur Kontrolle, dass er wie gewohnt aussieht.
+    {
+        field.setViewMode (FieldComponent::ViewMode::TopDown);
+        field.setFieldMetres (100.0);
+
+        std::array<int, FieldSnapshot::maxTaps> chain { 0, 0, 0, 0, 0, 0, 0, 0 };
+        chain[0] = 1; // Index 0 kettet in den unmittelbar folgenden (Index 1)
+        field.setTapChainTargets (chain);
+
+        FieldSnapshot taps;
+        taps.sourcePos = { 50.0, 25.0, 0.0 };
+
+        taps.taps[0].on  = true;
+        taps.taps[0].pos = { 20.0, 40.0, 2.0 };
+
+        taps.taps[1].on  = true;
+        taps.taps[1].pos = { 70.0, 10.0, 2.0 }; // muesste hier auftauchen, wenn der Ausblendtest fehlschlaegt
+
+        taps.taps[3].on  = true;
+        taps.taps[3].pos = { 80.0, 45.0, 2.0 };
+
+        field.setSnapshot (taps);
+        shoot (field, "field_topdown_tap_chain");
+
+        // Kette wieder loeschen (choice 0 = "aus"), damit sie den naechsten
+        // Test nicht mehr faerbt.
+        field.setTapChainTargets ({ 0, 0, 0, 0, 0, 0, 0, 0 });
+    }
+
+    // 10) Wandreflexion hinter der Wand ausgeblendet (@dpa: "hinter den
+    // Waenden die Spiegelungen nicht anzeigen"): eine Wand bei x = 50 m,
+    // Hoerer und Quelle rechts davon (x = 80). Die Bildquelle liegt gespiegelt
+    // links (x = 20), ihr Kreis reicht mit einer kleinen Kappe ueber die Wand
+    // auf die Hoererseite (x > 50) hinueber - der grosse Rest des Kreises
+    // (auf der dem Hoerer abgewandten Seite, x < 50) darf nicht zu sehen sein,
+    // nur die Kappe.
+    {
+        field.setFieldMetres (100.0);
+
+        FieldSnapshot wallSnap;
+        wallSnap.sourcePos     = { 80.0, 25.0, 0.0 };
+        wallSnap.listener.head = { 80.0, 20.0, 1.7 };
+        wallSnap.now           = 1.0;
+
+        wallSnap.walls[0].on         = true;
+        wallSnap.walls[0].anchor     = { 50.0, 0.0, 0.0 };
+        wallSnap.walls[0].azimuthRad = juce::MathConstants<double>::halfPi; // Wandgerade entlang y, Normale in x
+
+        wallSnap.wavefrontCount        = 1;
+        wallSnap.wavefrontEmitTimes[0] = 1.0 - 38.0 / 343.2; // Radius 38 m bei c = 343,2 m/s
+        wallSnap.wavefrontPositions[0] = wallSnap.sourcePos;
+
+        wallSnap.wallWavefronts[0].active       = true;
+        wallSnap.wallWavefronts[0].gain         = 1.0f;
+        wallSnap.wallWavefronts[0].positions[0] = { 20.0, 25.0, 0.0 }; // Spiegelbild von x=80 an x=50
+
+        field.setSnapshot (wallSnap);
+        shoot (field, "field_topdown_wall_reflection_clip");
+    }
+
     return 0;
 }

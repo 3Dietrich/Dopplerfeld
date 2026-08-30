@@ -150,6 +150,34 @@ void FieldComponent::setSpeedOfSound (double metresPerSecond)
     repaint();
 }
 
+void FieldComponent::setTapChainTargets (std::array<int, FieldSnapshot::maxTaps> rawChainChoice)
+{
+    bool changed = false;
+
+    // Dieselbe Umrechnung wie ReverbPanel::refreshRunningMarks(): choice 0
+    // heisst "aus", sonst zaehlt sie ab dem naechsten Punkt (Params.h,
+    // Params::TapPart::chain) - t + choice ist deshalb der 0-basierte
+    // Zielindex. Die Kette geht laut Params.h nur nach hinten, t + choice
+    // bleibt also automatisch innerhalb des Feldes; die Bereichspruefung ist
+    // trotzdem da, weil hier ein roher Parameterwert ankommt statt einer
+    // schon geprueften Groesse.
+    for (size_t t = 0; t < tapChainTargets.size(); ++t)
+    {
+        const int choice = rawChainChoice[t];
+        const int target = (choice > 0 && (int) t + choice < (int) tapChainTargets.size())
+                                ? (int) t + choice
+                                : -1;
+
+        if (target != tapChainTargets[t])
+            changed = true;
+
+        tapChainTargets[t] = target;
+    }
+
+    if (changed)
+        repaint();
+}
+
 double FieldComponent::convertSpeed (double sourceSpeedMps, double speedOfSoundMps, SpeedUnit unit)
 {
     switch (unit)
@@ -456,6 +484,14 @@ void FieldComponent::drawTaps (juce::Graphics& g) const
         if (! tap.on)
             continue;
 
+        // Ziel einer aktiven Kette: hoert nur noch seinen Vorgaenger, nicht
+        // mehr das Feld - die eigene Lage ist damit bedeutungslos und bekommt
+        // keine eigene Marke (@dpa: "die *Positionen* der Reverbs ... muessen
+        // klar sein"). Der Geber traegt die Verkettung stattdessen in seiner
+        // eigenen Beschriftung mit, siehe die Nummer weiter unten.
+        if (isActiveChainTarget ((int) i))
+            continue;
+
         const auto p = worldToScreen (tap.pos);
 
         if (! view.expanded (24.0f).contains (p))
@@ -514,10 +550,35 @@ void FieldComponent::drawTaps (juce::Graphics& g) const
 
         // Die Nummer daneben, damit sich der Ring im Feld dem Regler im Panel
         // zuordnen laesst. Acht Punkte ohne Nummer waeren acht gleiche Ringe.
+        //
+        // Haengt an diesem Punkt eine aktive Kette, kommt sie mit in die
+        // Beschriftung ("3›4" statt nur "3") - bei mehrstufigen Ketten
+        // entsprechend weiter ("3›4›5"), denn deren Zwischenziele sind oben
+        // gerade UEBERSPRUNGEN worden und stehen sonst nirgends mehr im Bild
+        // (@dpa: "Am Geber muss erkennbar sein, dass eine Kette an ihm
+        // haengt"). Dieselbe Pfeilmarke wie in ReverbPanel::
+        // refreshRunningMarks() ("3›"/"›4"), hier nur am Stueck statt auf
+        // zwei Knoepfe verteilt. Die Schleife terminiert von selbst: die
+        // Kette zeigt laut Params.h nur nach hinten, der Index waechst also
+        // bei jedem Schritt.
+        juce::String label ((int) i + 1);
+
+        for (int cur = (int) i;;)
+        {
+            const int target = tapChainTargets[(size_t) cur];
+
+            if (target < 0 || ! snapshot.taps[(size_t) cur].on || ! snapshot.taps[(size_t) target].on)
+                break;
+
+            label << juce::String::fromUTF8 ("›") << juce::String (target + 1);
+            cur = target;
+        }
+
         g.setColour (colour.withAlpha (0.85f));
         g.setFont (11.0f);
-        g.drawText (juce::String ((int) i + 1),
-                    juce::Rectangle<float> (p.x + r + 2.0f, p.y - 8.0f, 16.0f, 16.0f),
+        const float labelWidth = juce::jmax (16.0f, juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), label) + 4.0f);
+        g.drawText (label,
+                    juce::Rectangle<float> (p.x + r + 2.0f, p.y - 8.0f, labelWidth, 16.0f),
                     juce::Justification::centredLeft, false);
     }
 }
@@ -647,6 +708,42 @@ void FieldComponent::drawWavefronts (juce::Graphics& g) const
     }
 }
 
+// Siehe Deklaration (FieldComponent.h) fuer den Zweck. Die Rechnung laeuft
+// bewusst in Weltkoordinaten (Vec3) und geht erst am Ende durch
+// worldToScreen(): der ist affin (Skalierung + y-Flip), das Vorzeichen einer
+// Halbebenen-Seite bleibt dabei erhalten - ein zweites, eigens fuer den
+// Bildschirm hergeleitetes Normalenvorzeichen waere nur eine Fehlerquelle
+// mehr (vgl. Klassenkommentar zur einzigen Stelle mit dem Vorzeichenwechsel).
+juce::Path FieldComponent::wallListenerSideClip (const FieldSnapshot::WallInfo& wall) const
+{
+    const Vec3 dir    { std::cos (wall.azimuthRad), std::sin (wall.azimuthRad), 0.0 };
+    const Vec3 normal { -dir.y, dir.x, 0.0 }; // 90 Grad gedreht, Richtung erstmal beliebig
+
+    // Auf welcher Seite der Hoerer steht, entscheidet, welche Haelfte das
+    // Rechteck abdeckt - die andere Seite ist die dem Hoerer abgewandte und
+    // bleibt aussen vor.
+    const Vec3 toListener      = snapshot.listener.head - wall.anchor;
+    const Vec3 towardListener  = (dot (normal, toListener) >= 0.0) ? normal : -normal;
+
+    // Weit genug, um bei jedem Zoomstand ueber den sichtbaren Bereich
+    // hinauszureichen - dieselbe Ueberlegung wie beim Verlaengern der
+    // Wandlinie in drawWalls(), nur grosszuegiger, weil hier zwei Richtungen
+    // (Wandlinie UND Normale) den Rand erreichen muessen.
+    const double diagonal = std::hypot ((double) getWidth(), (double) getHeight());
+    const double reach    = 2.0 * diagonal / (double) juce::jmax (1.0e-6f, pixelsPerMetre());
+
+    const Vec3 a = wall.anchor - dir * reach;
+    const Vec3 b = wall.anchor + dir * reach;
+
+    juce::Path clip;
+    clip.startNewSubPath (worldToScreen (a));
+    clip.lineTo (worldToScreen (b));
+    clip.lineTo (worldToScreen (b + towardListener * reach));
+    clip.lineTo (worldToScreen (a + towardListener * reach));
+    clip.closeSubPath();
+    return clip;
+}
+
 void FieldComponent::drawReflectionWavefronts (juce::Graphics& g) const
 {
     // Bildquellen-Kreise fuer Wandreflexionen (@dpa: "kannst Du die
@@ -693,13 +790,42 @@ void FieldComponent::drawReflectionWavefronts (juce::Graphics& g) const
         }
     };
 
-    for (const auto& wf : snapshot.wallWavefronts)
-        drawSet (wf, juce::Colours::violet, 1.6f);
+    // Die Rechnung unten (wallPairWavefronts) geht davon aus, dass es genau
+    // zwei Waende gibt - stimmt das nicht mehr, faellt das hier auf statt
+    // still eine falsche Wand zu clippen.
+    static_assert (FieldSnapshot::maxWalls == 2 && FieldSnapshot::maxWallPairs == 2,
+                   "wallPairWavefronts-Zuordnung unten geht von genau zwei Waenden aus");
+
+    // Was hinter der Wand liegt (auf der dem Hoerer abgewandten Seite),
+    // gehoert nicht ins Bild - dort ist akustisch nichts (@dpa: "hinter den
+    // Waenden die Spiegelungen nicht anzeigen"). Die Wandebene steht schon in
+    // drawWalls() fest, hier nur als Bildschirm-Halbebene fuer den Clip.
+    for (size_t w = 0; w < snapshot.wallWavefronts.size(); ++w)
+    {
+        juce::Graphics::ScopedSaveState clipScope (g);
+
+        if (snapshot.walls[w].on)
+            g.reduceClipRegion (wallListenerSideClip (snapshot.walls[w]));
+
+        drawSet (snapshot.wallWavefronts[w], juce::Colours::violet, 1.6f);
+    }
 
     // Mehrfachreflexion etwas duenner (eigene Farbe) - sonst wird das Feld
-    // bei zwei aktiven Waenden schnell unruhig.
-    for (const auto& wf : snapshot.wallPairWavefronts)
-        drawSet (wf, juce::Colours::hotpink, 1.3f);
+    // bei zwei aktiven Waenden schnell unruhig. Fuer die Abwandtseite zaehlt
+    // die ZULETZT getroffene Wand: wallPairWavefronts[0] ist Wand0->Wand1 und
+    // kommt zuletzt von Wand1, wallPairWavefronts[1] ist Wand1->Wand0 und
+    // kommt zuletzt von Wand0 (FieldSnapshot::wallPairWavefronts) - bei zwei
+    // Waenden ist das jeweils die andere.
+    for (size_t p = 0; p < snapshot.wallPairWavefronts.size(); ++p)
+    {
+        const size_t finalWall = snapshot.walls.size() - 1 - p;
+        juce::Graphics::ScopedSaveState clipScope (g);
+
+        if (snapshot.walls[finalWall].on)
+            g.reduceClipRegion (wallListenerSideClip (snapshot.walls[finalWall]));
+
+        drawSet (snapshot.wallPairWavefronts[p], juce::Colours::hotpink, 1.3f);
+    }
 }
 
 std::vector<std::vector<Vec3>> FieldComponent::machFrontAtHeight (double height) const
@@ -1771,7 +1897,10 @@ int FieldComponent::tapIndexAt (juce::Point<float> screenPx) const
 {
     for (size_t i = 0; i < snapshot.taps.size(); ++i)
     {
-        if (! snapshot.taps[i].on)
+        // Ziel einer aktiven Kette: keine eigene Marke im Bild (drawTaps()),
+        // also auch nicht greifbar - ein Fangkreis ohne sichtbaren Ring waere
+        // eine unsichtbare Falle.
+        if (! snapshot.taps[i].on || isActiveChainTarget ((int) i))
             continue;
 
         if (screenPx.getDistanceFrom (worldToScreen (snapshot.taps[i].pos)) <= tapDragHitRadiusPx)
@@ -1779,6 +1908,18 @@ int FieldComponent::tapIndexAt (juce::Point<float> screenPx) const
     }
 
     return -1;
+}
+
+bool FieldComponent::isActiveChainTarget (int tapIndex) const
+{
+    if (tapIndex < 0 || tapIndex >= (int) snapshot.taps.size() || ! snapshot.taps[(size_t) tapIndex].on)
+        return false;
+
+    for (size_t giver = 0; giver < tapChainTargets.size(); ++giver)
+        if (tapChainTargets[giver] == tapIndex && snapshot.taps[giver].on)
+            return true;
+
+    return false;
 }
 
 // Umkehrung von project() bei FESTGEHALTENER Tiefe (entlang cameraForward()):

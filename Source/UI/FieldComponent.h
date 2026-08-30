@@ -5,6 +5,7 @@
 #include "../Physics/Vec3.h"
 #include "../Physics/Listener.h"
 
+#include <array>
 #include <functional>
 #include <vector>
 
@@ -136,6 +137,21 @@ public:
     // durchreichen will (siehe Params::airTempC, in Phase 1 nicht in der UI).
     void setSpeedOfSound (double metresPerSecond);
 
+    // Kettenziel je Abgriffpunkt (@dpa 20260830: Reverbs koennen hintereinander
+    // geschaltet werden). Der FieldSnapshot fuehrt das nicht mit - er ist
+    // audiothread-berechneter Klangzustand, die Kette ist ein reiner
+    // APVTS-Parameter (Params::TapPart::chain) ohne Rueckwirkung auf die
+    // Physik-Groessen dort. Deshalb ein eigener, schlanker Kanal statt einer
+    // Snapshot-Erweiterung.
+    //
+    // rawChainChoice[t] ist der ROHE Wert des Chain-Parameters von Punkt t:
+    // 0 = "aus", 1 = der unmittelbar folgende Punkt, 2 = der uebernaechste,
+    // und so weiter (Params.h) - dieselbe Zahl, die
+    // ReverbPanel::refreshRunningMarks() schon zu chainTargetOf() verrechnet.
+    // Die Umrechnung auf den tatsaechlichen Zielindex (oder -1, falls aus
+    // oder ausserhalb) passiert hier drin, nicht beim Aufrufer.
+    void setTapChainTargets (std::array<int, FieldSnapshot::maxTaps> rawChainChoice);
+
     void paint (juce::Graphics& g) override;
     void resized() override {}
 
@@ -234,6 +250,16 @@ private:
     void drawGrid (juce::Graphics& g) const;
     void drawWalls (juce::Graphics& g) const;
     void drawTaps (juce::Graphics& g) const;
+
+    // Halbebene auf der Hoererseite einer Wandebene, in Bildschirmkoordinaten
+    // (fuer g.reduceClipRegion()) - was jenseits davon liegt, ist die dem
+    // Hoerer abgewandte Seite und gehoert nicht ins Bild (@dpa: "hinter den
+    // Waenden die Spiegelungen nicht anzeigen"). Genutzt von
+    // drawReflectionWavefronts(), das die Bildquellen-Kreise/-Boegen der
+    // Wandreflexionen zeichnet. Wie bei drawWalls() aendert die Neigung
+    // nichts an der Lage der Wandgeraden in der Draufsicht - nur der Azimut
+    // zaehlt.
+    juce::Path wallListenerSideClip (const FieldSnapshot::WallInfo& wall) const;
 
     // -- Perspektivische Ansicht --
     //
@@ -438,6 +464,11 @@ private:
     double fieldMetres = 100.0;
     double speedOfSound = 343.2; // Plan 2.2: c(20 C) = 343,21 m/s
 
+    // Zielindex (0-basiert) je Abgriffpunkt, oder -1 ohne Kette - vom Editor
+    // ueber setTapChainTargets() gefuellt, ausserhalb des Snapshots (siehe
+    // dort). -1 vorbelegt, bevor der erste Aufruf kommt.
+    std::array<int, FieldSnapshot::maxTaps> tapChainTargets { -1, -1, -1, -1, -1, -1, -1, -1 };
+
     // Fuers Cockpit-HUD (drawSpeedReadout), separat vom 30Hz-Snapshot oben -
     // s. setDisplaySpeed(). Startwert egal, wird vor dem ersten Zeichnen vom
     // Editor gesetzt.
@@ -513,6 +544,13 @@ private:
     // Funktion und kein Nebenbei-Ergebnis von dragTargetAt(): die ist const
     // und darf sich nichts merken.
     int tapIndexAt (juce::Point<float> screenPx) const;
+
+    // Ob Punkt tapIndex das Ziel einer AKTIVEN Kette ist: der Geber existiert
+    // und ist an, das Ziel ist an, und die Verkettung steht (Params::TapPart::
+    // chain). Dann hoert das Ziel nur noch seinen Vorgaenger statt des Felds -
+    // seine eigene Lage ist bedeutungslos, deshalb bekommt es in drawTaps()
+    // keine eigene Marke und ist in tapIndexAt() nicht greifbar.
+    bool isActiveChainTarget (int tapIndex) const;
 
     // Versatz zwischen Mauszeiger und der Stelle, an der das gegriffene
     // Symbol tatsaechlich steht. Beim Anfassen einmal gemerkt und danach bei

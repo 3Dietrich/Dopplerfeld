@@ -692,6 +692,25 @@ void DopplerfeldEditor::refreshDisplay()
 
     field.setFieldMetres ((double) *dopplerfeldProcessor.apvts.getRawParameterValue (Params::fieldMetres));
     field.setSnapshot (snapshot);
+
+    // Wer in wen geht: das steht in den Parametern und nicht im Snapshot, weil
+    // es die Bahn nichts angeht - die Kette aendert, WO ein Hall sein Signal
+    // herbekommt, nicht wo etwas im Feld ist. Die Anzeige braucht es
+    // trotzdem: ein Punkt, der nur noch seinen Vorgaenger hoert, hat keinen
+    // Ort mehr (siehe FieldComponent::setTapChainTargets).
+    {
+        std::array<int, FieldSnapshot::maxTaps> chains {};
+
+        for (int t = 0; t < (int) chains.size(); ++t)
+        {
+            const auto* p = dopplerfeldProcessor.apvts.getRawParameterValue (
+                                Params::tapId (t, Params::TapPart::chain));
+
+            chains[(size_t) t] = p != nullptr ? (int) std::lround (p->load()) : 0;
+        }
+
+        field.setTapChainTargets (chains);
+    }
     field.setDisplaySpeed (displayAverages.speedMps, displayAverages.speedOfSoundMps);
 
     {
