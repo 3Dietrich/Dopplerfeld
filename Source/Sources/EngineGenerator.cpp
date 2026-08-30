@@ -306,6 +306,9 @@ void EngineGenerator::prepare (double sampleRate, int maxBlockSize)
     // Zeitkonstante der Wellenform-Ueberblendung, siehe sineBlendSeconds.
     sineBlendCoeff = 1.0 - std::exp (-1.0 / std::max (1.0, sineBlendSeconds * sampleRate));
 
+    // Zeitkonstante des Drehzahl-Gleitwegs, siehe rpmGlideSeconds im Header.
+    rpmGlideCoeff = 1.0 - std::exp (-1.0 / std::max (1.0, rpmGlideSeconds * sampleRate));
+
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) maxBlockSize, 1 };
 
     noiseFilter.prepare (spec);
@@ -385,6 +388,10 @@ void EngineGenerator::reset()
 
     activeKind = engineKind.load();
     kindFade   = 1.0;
+
+    // Nach einem reset() steht die Drehzahl sofort da, wo der Regler steht -
+    // ein Neuanlassen soll nicht erst hochglissandieren.
+    rpmLogSmoothed = std::log (std::max (rpmGlideMin, (double) rpm.load()));
 
     for (auto& h : harmonics)
         h.sineBlend = (double) h.sineTarget.load();
@@ -551,7 +558,19 @@ void EngineGenerator::renderMono (float* out, int numSamples)
     // --- Block-Snapshot der Reglerwerte (Plan/Codebase-Konvention: wie
     // apvts-Parameter in granular/PluginProcessor.cpp einmal pro Block lesen,
     // nicht pro Sample - RPM-Änderungen per Automation sind langsam genug). ---
-    const double rpmTarget = (double) rpm.load();
+    // Zieldrehzahl und ihr Gleitweg (siehe rpmGlideSeconds im Header): der
+    // Regler liefert Stufen, gehoert wird eine Rampe.
+    const double rpmCommanded = juce::jmax (rpmGlideMin, (double) rpm.load());
+    const double rpmLogTarget = std::log (rpmCommanded);
+    const bool   rpmGliding   = std::abs (rpmLogTarget - rpmLogSmoothed) > 1.0e-9;
+
+    if (! rpmGliding)
+        rpmLogSmoothed = rpmLogTarget;   // eingeschwungen: einrasten statt ewig kriechen
+
+    // Alles, was nur einmal je Block gerechnet wird - Rauschband, Filter, die
+    // angezeigte Grundfrequenz - haengt am Stand zu Blockbeginn und wandert
+    // damit auf derselben Rampe mit wie die Tonhoehe.
+    const double rpmTarget = rpmGliding ? std::exp (rpmLogSmoothed) : rpmCommanded;
     const double u = juce::jlimit (0.0, 1.0, rpmTarget / rpmMaxForNormalisation);
 
     const double fBaseNominal = rpmTarget / 60.0;
@@ -674,7 +693,7 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         // Auf das naechste ganzzahlige Verhaeltnis zur Motorgrundfrequenz
         // rasten (siehe setRotorQuantise). Der Rotor ist fast immer der
         // langsamere von beiden, deshalb steht der Teiler zuerst.
-        const double base  = juce::jmax (0.01, (double) rpm.load() / 60.0);
+        const double base  = juce::jmax (0.01, rpmTarget / 60.0);
         const double ratio = rotorRps / base;
 
         rotorRps = ratio >= 1.0
@@ -847,8 +866,19 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         snap[(size_t) i].levelGain = juce::Decibels::decibelsToGain (levelDb);
     }
 
+    // Stand des Gleitwegs, je Sample nachgefuehrt.
+    double rpmNow = rpmTarget;
+
     for (int n = 0; n < numSamples; ++n)
     {
+        // Drehzahl dem Regler hinterherziehen. Steht sie schon auf dem Ziel,
+        // kostet das nichts - dann laeuft der Block mit dem festen Wert.
+        if (rpmGliding)
+        {
+            rpmLogSmoothed += (rpmLogTarget - rpmLogSmoothed) * rpmGlideCoeff;
+            rpmNow = std::exp (rpmLogSmoothed);
+        }
+
         // --- Betriebsart blenden ---
         //
         // Erst herunterfahren, dann umschalten, dann wieder hoch. Umgeschaltet
@@ -877,7 +907,7 @@ void EngineGenerator::renderMono (float* out, int numSamples)
         // f_base wird um ±j Prozent moduliert, indem die RPM selbst dafür
         // instantan verschoben wird - das zieht die Track-Formel aller
         // Teiltöne konsistent mit, statt nur die Grundfrequenz zu wackeln.
-        double rpmJit = rpmTarget * (1.0 + (jitterDepthPercent / 100.0) * jitterNorm);
+        double rpmJit = rpmNow * (1.0 + (jitterDepthPercent / 100.0) * jitterNorm);
         rpmJit = juce::jmax (0.0, rpmJit);
 
         // --- Bausteine, die mehrere Betriebsarten brauchen ---

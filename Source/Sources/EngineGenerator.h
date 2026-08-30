@@ -4,6 +4,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <vector>
 
 // Motorgenerator (Plan 3.10): vier PolyBLEP-Sägezahn-Teiltöne mit RPM-Tracking,
@@ -648,6 +649,23 @@ private:
     std::array<Harmonic, numHarmonics> harmonics;
 
     std::atomic<float> rpm { 1000.0f };
+
+    // Gleitweg der Drehzahl (@dpa 20260830: "RPM drehen klingt immer treppig").
+    // Der Reglerwert kommt in Stufen an - einmal je Block, und die Maus liefert
+    // ohnehin nur rund 60 Werte in der Sekunde. Roh uebernommen springt die
+    // Tonhoehe deshalb alle paar Millisekunden, und genau das hoert man als
+    // Treppe. Die Drehzahl laeuft dem Regler darum je Sample als Ein-Pol
+    // hinterher - im LOGARITHMUS, dann ist das Glissando in Halbtoenen je
+    // Sekunde gleich schnell, ob unten bei 300 oder oben bei 30000 gedreht wird.
+    static constexpr double rpmGlideSeconds = 0.05;
+
+    // Untere Klemme des Log-Wegs. Bei 0.01 RPM liegt f_base bei einem
+    // Sechstausendstel Hertz, klanglich also bei null - der Wert existiert nur,
+    // damit der Logarithmus einen endlichen Boden hat.
+    static constexpr double rpmGlideMin = 0.01;
+
+    double rpmLogSmoothed = std::log (1000.0);
+    double rpmGlideCoeff = 1.0;
 
     std::atomic<float> noiseFcLo { 400.0f };
     std::atomic<float> noiseFcHi { 3000.0f };

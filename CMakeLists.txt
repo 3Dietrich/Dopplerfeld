@@ -287,6 +287,37 @@ target_compile_definitions(whip_probe PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(whip_probe PRIVATE cxx_std_20)
 
+# Messprogramm zu springenden Tonhoehen (Tests/pitch_probe.cpp), kein Test.
+add_executable(pitch_probe EXCLUDE_FROM_ALL Tests/pitch_probe.cpp)
+target_link_libraries(pitch_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(pitch_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(pitch_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(pitch_probe PRIVATE cxx_std_20)
+
+# Messprogramm zur Treppigkeit der Drehzahl (Tests/rpm_glide_probe.cpp),
+# kein Test.
+add_executable(rpm_glide_probe EXCLUDE_FROM_ALL Tests/rpm_glide_probe.cpp)
+target_link_libraries(rpm_glide_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(rpm_glide_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(rpm_glide_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(rpm_glide_probe PRIVATE cxx_std_20)
+
 # Messprogramm dazu, WOMIT ein Abgriffpunkt gespeist wird
 # (Tests/tapfeed_probe.cpp), kein Test.
 add_executable(tapfeed_probe EXCLUDE_FROM_ALL Tests/tapfeed_probe.cpp)

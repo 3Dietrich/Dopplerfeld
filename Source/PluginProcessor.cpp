@@ -2195,15 +2195,43 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // gestiegen ist - das ist es, was den Verbrenner vom Elektromotor
             // unterscheidet.
             const double speedNow = stepLen / tickDt;
-            const double accel    = (speedNow - lastSourceSpeed) / tickDt;
+            const double tau      = juce::jmax (0.01, (double) pp.throttleTau->load());
+            const double coeff    = 1.0 - std::exp (-tickDt / tau);
 
-            lastSourceSpeed = speedNow;
+            // Beschleunigung als Abstand zweier verschieden traeger Glaetter
+            // desselben Tempos (@dpa 20260830: "die Pitches springen").
+            //
+            // Der naheliegende Weg - Tempo von Tick zu Tick abziehen und durch
+            // die Tickdauer teilen - ist hier unbrauchbar: die Bahn tickt mit
+            // 1000 Hz, geteilt wird also durch eine Millisekunde, und schon ein
+            // Zentimeter Zappeln zwischen zwei Ticks steht als 10 m/s² da. Eine
+            // Bahn aus der Aufzeichnung hat an jedem Stuetzpunkt einen Knick,
+            // der Wackler setzt noch einen drauf - die Drehzahl sprang im Takt
+            // dieser Knicke.
+            //
+            // Der Abstand eines schnellen und eines langsamen Glaetters
+            // dagegen braucht gar keine Division durch die Tickdauer: bei
+            // gleichmaessigem Anziehen bleibt der langsame genau um
+            // a * tauSlow zurueck, das IST die Beschleunigung. Rauschen laeuft
+            // dabei durch zwei Tiefpaesse statt durch einen Differenzierer.
+            const double tauSlow   = accelSpanFactor * tau;
+            const double coeffSlow = 1.0 - std::exp (-tickDt / tauSlow);
+
+            // Der schnelle Zweig ist ZWEIpolig. Eine aufgezeichnete Bahn hat
+            // an jedem Stuetzpunkt einen Knick, und deren Folge liegt bei 60 Hz
+            // - ein einzelner Pol laesst davon noch genug durch, um die
+            // Drehzahl im Stuetzpunkttakt zu ruetteln. Zwei Pole draengen es
+            // um eine weitere Zehnerpotenz zurueck, ohne dem eigentlichen
+            // Gasgeben (Bruchteile von Hertz) etwas zu nehmen.
+            speedFastStage += (speedNow       - speedFastStage) * coeff;
+            speedFast      += (speedFastStage - speedFast)      * coeff;
+            speedSlow      += (speedFast      - speedSlow)      * coeffSlow;
+
+            const double accel = (speedFast - speedSlow) / tauSlow;
 
             constexpr double accelReference = 9.81;   // ein g
 
             const double wanted = juce::jlimit (-0.9, 3.0, accel / accelReference);
-            const double tau    = juce::jmax (0.01, (double) pp.throttleTau->load());
-            const double coeff  = 1.0 - std::exp (-tickDt / tau);
 
             throttleFactor += (wanted - throttleFactor) * coeff;
 

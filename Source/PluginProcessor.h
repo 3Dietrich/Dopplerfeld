@@ -916,8 +916,18 @@ private:
     // Fuer das Gas aus der Beschleunigung (siehe advanceMotion): das Tempo des
     // vorigen Ticks und der geglaettete Faktor, mit dem die Drehzahl
     // nachgefuehrt wird. Beide gehoeren dem Audiothread.
-    double lastSourceSpeed = 0.0;
-    double throttleFactor  = 0.0;
+    // Die beiden Glaetter, aus deren Abstand die Beschleunigung entsteht
+    // (siehe advanceMotion), und der geglaettete Faktor selbst.
+    double speedFastStage = 0.0;
+    double speedFast      = 0.0;
+    double speedSlow      = 0.0;
+    double throttleFactor = 0.0;
+
+    // Wie viel traeger der langsame Glaetter ist. Der Abstand der beiden ist
+    // das Messfenster der Beschleunigung: gross genug, dass die Knicke einer
+    // aufgezeichneten Bahn darin untergehen, klein genug, dass ein Gasstoss
+    // noch als Gasstoss ankommt.
+    static constexpr double accelSpanFactor = 4.0;
 
     // Wie lang ausgelaufen wird. Der Weg haengt linear daran (s.o.), das
     // Ende ist trotzdem weich: unter coastRestSpeed gilt die Quelle als
