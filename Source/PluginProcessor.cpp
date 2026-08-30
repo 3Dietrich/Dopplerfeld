@@ -1454,44 +1454,35 @@ void DopplerfeldProcessor::handlePendingRequests()
         // lastSourceVelocity im Header).
         const Vec3 v = lastSourceVelocity;
 
-        coastPos = smoothedSourcePos;
-
-        // Beide Stufen auf die Anfangsgeschwindigkeit: so beginnt die zweite
-        // (die zaehlt) mit Steigung null statt mit einem Knick.
-        coastVelocityStage1 = v;
-        coastVelocityStage2 = v;
+        coastPos          = smoothedSourcePos;
+        coastRampPos      = smoothedSourcePos;
+        coastVelocity     = v;
+        coastTargetMetres = sourceTargetMetres;
 
         const double speed = v.length();
 
-        // Restweg bis zum Loslasspunkt, PROJIZIERT auf die Fahrtrichtung: nur
-        // der Anteil, den der Nachlauf ueberhaupt zuruecklegen kann. Was quer
-        // dazu fehlt, bleibt liegen - die Richtung zu drehen waere der Knick,
-        // den die zwei Stufen gerade vermeiden sollen.
-        //
-        // Ein negativer Anteil heisst, die Quelle ist schon ueber den Punkt
-        // hinaus; dann gilt die Untergrenze und sie kommt zuegig zur Ruhe.
+        // Die Rampe faehrt mit dem Tempo weiter, mit dem losgelassen wurde.
+        coastRampSpeed = speed;
+
+        // Wie weich das Ende wird, haengt an der Zeit, die die Fahrt ueberhaupt
+        // dauert: der Weg zum Loslasspunkt, geteilt durch das Tempo. Ein langer
+        // Nachlauf darf weicher auslaufen als ein kurzer.
         if (speed > coastRestSpeed)
         {
-            const Vec3   toTarget = sourceTargetMetres - smoothedSourcePos;
-            const double along    = toTarget.dot (v) / speed;
+            const double distance = (coastTargetMetres - smoothedSourcePos).length();
 
-            coastTau = juce::jlimit (coastTauMin, coastTauMax,
-                                     along / (2.0 * speed));
+            coastTau = juce::jlimit (coastTauMin, coastTauMax, distance / speed);
         }
         else
             coastTau = coastTauSeconds;
 
         coastActive = speed > coastRestSpeed;
 
-        // Das Ziel bleibt der LOSLASSPUNKT, nicht die Stelle, an der der
-        // Nachlauf gerade steht. Das ist der zweite Teil derselben Sache:
-        // schafft der Nachlauf den Rueckstand nicht ganz, laeuft die Quelle
-        // danach mit dem gewohnten Glaetter dorthin weiter, statt auf halbem
-        // Weg stehenzubleiben. Gehalten wird es, damit ein Griff an den Regler
-        // den Nachlauf weiterhin beendet (siehe knobsUntouched in
-        // applyParameters) - ohne das Halten waere er nach einem Block vorbei.
+        // Das Ziel wird gehalten, damit ein Griff an den Regler den Nachlauf
+        // beendet (siehe knobsUntouched in applyParameters) - ohne das Halten
+        // waere er nach einem Block vorbei.
         if (coastActive)
-            holdSourceTargetAt (sourceTargetMetres);
+            holdSourceTargetAt (coastTargetMetres);
     }
 
     if (sourceSwitchRequest.exchange (false))
@@ -1868,15 +1859,43 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         }
         else if (coastActive)
         {
-            // Auslaufen nach dem Loslassen: die Geschwindigkeit laeuft durch
-            // zwei Ein-Pol-Stufen gegen null, die Position ist ihr Integral
-            // (Herleitung und Kurve stehen bei coastVelocityStage1 im Header).
-            const double coeff = 1.0 - std::exp (-tickDt / coastTau);
+            // Auslaufen nach dem Loslassen: gerade Fahrt zum Loslasspunkt,
+            // zweipolig gefiltert (Herleitung siehe coastRampPos im Header).
+            //
+            // Erst die Fahrt. Sie geht geradewegs auf den Punkt zu, mit dem
+            // Tempo vom Loslassen - gedrosselt auf Abstand/coastTau, sobald
+            // der Punkt naeher liegt als diese Strecke. Dadurch faellt das
+            // Tempo zum Schluss stetig gegen null, statt am Ziel anzuschlagen.
+            Vec3 rampVelocity {};
 
-            coastVelocityStage1 -= coastVelocityStage1 * coeff;
-            coastVelocityStage2 += (coastVelocityStage1 - coastVelocityStage2) * coeff;
+            {
+                const Vec3   toTarget = coastTargetMetres - coastRampPos;
+                const double distance = toTarget.length();
 
-            coastPos += coastVelocityStage2 * tickDt;
+                if (distance > 1.0e-9)
+                {
+                    const double speed = std::min (coastRampSpeed, distance / coastTau);
+                    const double step  = std::min (speed * tickDt, distance);
+
+                    rampVelocity = toTarget * (step / (distance * tickDt));
+                    coastRampPos = coastRampPos + toTarget * (step / distance);
+                }
+                else
+                    coastRampPos = coastTargetMetres;
+            }
+
+            // Dann der Filter: kritisch gedaempft auf die Fahrt, gedaempft
+            // gegen DEREN Geschwindigkeit. So bleibt kein Rueckstand stehen -
+            // steht die Rampe, steht die Quelle auf ihr.
+            {
+                const double omega = 1.0 / (coastFilterShare * coastTau);
+
+                const Vec3 pull = (coastRampPos - coastPos) * (omega * omega);
+                const Vec3 drag = (coastVelocity - rampVelocity) * (2.0 * omega);
+
+                coastVelocity = coastVelocity + (pull - drag) * tickDt;
+                coastPos      = coastPos + coastVelocity * tickDt;
+            }
 
             // Weder Glaetter noch Slew-Waechter: die Kurve IST die fertige
             // Bewegung. Der Waechter begrenzt jeden Tick auf seine
@@ -1889,14 +1908,13 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             target          = coastPos;
             positionIsFinal = true;
 
-            // Das Ziel wird hier NICHT mitgefuehrt: es steht auf dem
-            // Loslasspunkt (gesetzt beim Start des Nachlaufs) und bleibt
-            // dort. Endet der Nachlauf davor, uebernimmt der Glaetter den
-            // Rest - genau das, was ohne Nachlauf von selbst passiert waere.
-            // Wuerde das Ziel mitwandern, waere der Rueckstand des Glaetters
-            // beim Loslassen endgueltig verloren.
-
-            if (coastVelocityStage2.length() < coastRestSpeed)
+            // Beendet wird erst, wenn die Quelle langsam UND angekommen ist.
+            // Nur langsam reicht nicht: gegen Ende ist sie das immer, und
+            // wer dort abbricht, laesst den Glaetter den Rest als zweite
+            // Anfahrt fahren - genau das Gasgeben nach dem Stillstand, das
+            // hier nicht sein soll.
+            if (coastVelocity.length() < coastRestSpeed
+                && (coastPos - coastTargetMetres).length() < coastRestDistance)
                 coastActive = false;
         }
         else if (motionPlayer.isPlaying())

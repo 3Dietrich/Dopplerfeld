@@ -887,24 +887,40 @@ private:
     //==================================================================
     // Nachlauf nach dem Loslassen (siehe startSourceCoast).
     //
-    // Zwei Ein-Pol-Stufen hintereinander auf die Geschwindigkeit: die erste
-    // faellt exponentiell, die zweite folgt ihr. Zusammen ergibt das
-    // v(t) = v0 * (1 + t/tau) * exp(-t/tau) - eine Kurve, die bei v0 mit der
-    // Steigung NULL beginnt und dann ausklingt. Genau darum zwei Stufen: eine
-    // einzelne faellt vom ersten Moment an mit voller Steigung, und dieser
-    // Knick ist die Kante, die es nicht sein soll.
+    // Der Nachlauf ist eine gerade Fahrt zum Loslasspunkt, zweipolig gefiltert
+    // (@dpa 20260830: "Es soll sich nach dem Mouse release an dem Punkt des
+    // releases in einer f'' glatten Bewegung hin bewegen ... ein linearer
+    // Verlauf 2pol gefiltert").
     //
-    // Der zurueckgelegte Weg ist das Integral, also v0 * 2 * tau: bei 20 m/s
-    // und 0,45 s rund 18 m.
+    // Zwei Teile:
     //
-    // Die Position ist das Integral der Geschwindigkeit und geht als ZIEL in
-    // dieselbe Kette wie jede andere Bewegung. Weil die Kurve schon glatt ist,
-    // laeuft sie an der Bewegungsglaettung vorbei (bypassSmoothing) - sonst
-    // legte sich deren Zeitkonstante ein zweites Mal darueber und aus dem
-    // Auslaufen wuerde ein Kriechen.
-    Vec3 coastVelocityStage1;
-    Vec3 coastVelocityStage2;
+    //   coastRampPos  faehrt schnurgerade auf den Loslasspunkt zu, mit dem
+    //                 Tempo, mit dem losgelassen wurde. Nahe am Punkt wird
+    //                 dieses Tempo auf Abstand/coastTau gedrosselt, laeuft
+    //                 also stetig gegen null statt dort anzuschlagen.
+    //
+    //   coastPos      folgt dieser Fahrt kritisch gedaempft (zwei Pole auf
+    //                 derselben Stelle), gedaempft wird gegen die
+    //                 Rampengeschwindigkeit. Damit gibt es keinen bleibenden
+    //                 Rueckstand: steht die Rampe, steht die Quelle auf ihr.
+    //
+    // Beim Start liegen Quelle und Rampe aufeinander und haben dieselbe
+    // Geschwindigkeit - die Beschleunigung beginnt also bei null, und die
+    // Bewegung geht ohne Knick aus dem Ziehen hervor. Danach wird sie nur noch
+    // langsamer: die Quelle faehrt nie schneller als beim Loslassen, holt also
+    // nichts auf, was nach Gasgeben klaenge (@dpa 20260830: "nach dem
+    // Stillstand dann nocheinmal an den Releasepunkt geschickt, was ein
+    // erneutes 'Gasgeben' bedeutet - das ist falsch").
+    //
+    // Die Position geht als ZIEL in dieselbe Kette wie jede andere Bewegung.
+    // Weil die Kurve schon glatt ist, laeuft sie an der Bewegungsglaettung
+    // vorbei (bypassSmoothing) - sonst legte sich deren Zeitkonstante ein
+    // zweites Mal darueber und aus dem Auslaufen wuerde ein Kriechen.
+    Vec3 coastVelocity;
     Vec3 coastPos;
+    Vec3 coastRampPos;
+    Vec3 coastTargetMetres;
+    double coastRampSpeed = 0.0;
     bool coastActive = false;
 
     std::atomic<bool> coastRequest { false };
@@ -914,11 +930,9 @@ private:
     // aufgehoert hat - ohne Knick in f'.
     Vec3 lastSourceVelocity;
 
-    // Fuer das Gas aus der Beschleunigung (siehe advanceMotion): das Tempo des
-    // vorigen Ticks und der geglaettete Faktor, mit dem die Drehzahl
-    // nachgefuehrt wird. Beide gehoeren dem Audiothread.
-    // Die beiden Glaetter, aus deren Abstand die Beschleunigung entsteht
-    // (siehe advanceMotion), und der geglaettete Faktor selbst.
+    // Fuer das Gas aus der Beschleunigung (siehe advanceMotion): die beiden
+    // Glaetter, aus deren Abstand die Beschleunigung entsteht, und der
+    // geglaettete Faktor selbst. Alle drei gehoeren dem Audiothread.
     double speedFastStage = 0.0;
     double speedFast      = 0.0;
     double speedSlow      = 0.0;
@@ -937,15 +951,18 @@ private:
     double jitterSmoothBlend = 0.0;
     static constexpr double jitterSmoothBlendSeconds = 0.5;
 
-    // Wie lang ausgelaufen wird. Der Weg haengt linear daran (s.o.), das
-    // Ende ist trotzdem weich: unter coastRestSpeed gilt die Quelle als
-    // stehend, und was dann noch fehlt, ist unter einem Millimeter je Tick.
-    //
-    // Wird nicht fest verwendet, sondern je Nachlauf aus dem Restweg
-    // gerechnet - siehe coastTau. Der Wert hier ist nur der Rueckfall, wenn
-    // kein Restweg bekannt ist.
+    // Rueckfall fuer coastTau, wenn sich aus Restweg und Tempo keine
+    // Zeitkonstante rechnen laesst.
     static constexpr double coastTauSeconds  = 0.45;
-    static constexpr double coastRestSpeed   = 0.05;   // m/s
+
+    // Wann der Nachlauf als angekommen gilt: langsamer als coastRestSpeed UND
+    // naeher als coastRestDistance am Loslasspunkt. Beides zusammen, denn
+    // langsam allein heisst hier nichts - die Bewegung ist zum Schluss
+    // naturgemaess langsam. Was danach noch fehlt, ist ein knapper Zentimeter;
+    // den holt der Glaetter so traege nach, dass keine zweite Anfahrt daraus
+    // wird.
+    static constexpr double coastRestSpeed    = 0.05;   // m/s
+    static constexpr double coastRestDistance = 0.01;   // m
 
     // Die Zeitkonstante DIESES Nachlaufs (@dpa 20260827: "bei Critically
     // Damped Spring und slew limiter bremst es direkt ab dort wo es gerade
@@ -962,25 +979,19 @@ private:
     // One-Pole mit 1,8 m praktisch traf - genau der Unterschied, den @dpa
     // hoert.
     //
-    // Der Weg des Nachlaufs ist v0 * 2 * tau (s.o.). Aufgeloest nach tau
-    // trifft er den Loslasspunkt: tau = Restweg / (2 * v0). Die
-    // Anfangsgeschwindigkeit bleibt dabei unangetastet, die Naht ist also
-    // weiterhin knickfrei - gestreckt wird die ZEIT, nicht das Tempo.
+    // Das Einlaufen am Ende der Fahrt: die letzten coastTau * v0 Meter werden
+    // aus dem Tempo herausgenommen. Sie haengt am zurueckzulegenden Weg -
+    // ein langer Nachlauf darf weicher enden als ein kurzer -, bleibt aber
+    // in engen Grenzen, damit weder ein Abriss noch ein Kriechen daraus wird.
     double coastTau = coastTauSeconds;
 
-    // Grenzen dafuer. Unten, damit ein winziger Restweg bei hohem Tempo nicht
-    // zum Abriss wird; oben, damit ein grosser Rueckstand bei kleinem Tempo
-    // nicht in ein minutenlanges Kriechen laeuft. Wer die Obergrenze
-    // erreicht, kommt nicht ganz an - "ungefaehr" ist ausdruecklich gewollt.
-    // Unten, damit ein winziger Restweg bei hohem Tempo nicht zum Abriss
-    // wird. Oben nicht viel groesser als coastTauSeconds selbst: der
-    // Weg des Nachlaufs ist v0 * 2 * tau, die ZEIT bis dorthin aber ein
-    // Vielfaches von tau - bei 1,3 s waeren 90 % des Weges erst nach fuenf
-    // Sekunden zurueckgelegt, und das ist kein Auslaufen mehr, sondern
-    // Kriechen. Was der Nachlauf in dieser Zeit nicht schafft, uebernimmt
-    // danach der Glaetter (siehe coastRequest in handlePendingRequests).
-    static constexpr double coastTauMin = 0.06;
-    static constexpr double coastTauMax = 0.60;
+    static constexpr double coastTauMin = 0.10;
+    static constexpr double coastTauMax = 0.45;
+
+    // Wie eng die Quelle der Rampe folgt: die Zeitkonstante des Filters ist
+    // dieser Anteil von coastTau. Deutlich kleiner, sonst rundete der Filter
+    // die Fahrt so weit ab, dass sie den Punkt gar nicht mehr erreicht.
+    static constexpr double coastFilterShare = 0.35;
 
     // Additive Mikrobewegung der Quelle M, vor sourceSmoothers eingehakt
     // (siehe advanceMotion()) - "echter Chorus" bei Stillstand.

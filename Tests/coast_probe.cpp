@@ -171,6 +171,31 @@ void run (const char* label, double dragSpeed, int smootherType,
     std::printf ("    Weg %.2f m, Stillstand nach %.2f s\n",
                  total, stopTime < 0.0 ? (double) speeds.size() * blockSeconds : stopTime);
 
+    // Wiederanfahrt: schnellste Stelle, nachdem das Tempo einmal unter die
+    // Haelfte gefallen war. Der Nachlauf soll nur langsamer werden - steigt es
+    // danach wieder, wird nachgesetzt statt ausgerollt, und genau das hoert
+    // man als zweites Gasgeben.
+    {
+        double slowest = firstAfter;
+        double rise    = 0.0;
+        double atTime  = 0.0;
+
+        for (const auto& [t, v] : speeds)
+        {
+            if (v - slowest > rise)
+            {
+                rise   = v - slowest;
+                atTime = t;
+            }
+
+            slowest = std::min (slowest, v);
+        }
+
+        std::printf ("    groesster Wiederanstieg des Tempos: %+.2f m/s bei %.2f s (%.0f %% des "
+                     "Loslasstempos)\n",
+                     rise, atTime, firstAfter > 1.0e-9 ? 100.0 * rise / firstAfter : 0.0);
+    }
+
     std::printf ("    Rueckstand beim Loslassen %.2f m | am Ende %+.2f m vom "
                  "Loslasspunkt (%.0f %% aufgeholt)\n",
                  gapAtRelease, last.x - releaseTargetX,
