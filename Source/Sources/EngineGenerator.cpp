@@ -601,7 +601,7 @@ void EngineGenerator::renderMono (float* out, int numSamples)
 
     // Fester Grundpegel mal Regler (setWindLevelDb): bei 0 dB steht genau der
     // Wert da, mit dem der Fahrtwind bisher fest eingebaut war.
-    const double windGain = windLevel * juce::Decibels::decibelsToGain ((double) windLevelDb.load(), -60.0);
+    const double windGain = windLevel * juce::Decibels::decibelsToGain ((double) windLevelDb.load(), -36.0);
     const double windNorm = airspeed / airspeedRefMps;
     const double windAmount = windNorm <= 1.0 ? windNorm : std::sqrt (windNorm);
 

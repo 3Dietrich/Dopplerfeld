@@ -231,9 +231,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
 
     // Fahrtwind: das Rauschen, das eine Quelle allein vom Fliegen hat. Es gab
     // es schon, aber mit fest eingebautem Pegel - jetzt am Regler, mit 0 dB
-    // als dem Wert, der genau dem bisherigen entspricht. Nach oben zwoelf
-    // Dezibel Luft, nach unten bis -60, wo es als aus gilt.
-    layout.add (floatParam (windLevelDb, "Wind Level", { -60.0f, 12.0f, 0.1f }, 0.0f, "dB"));
+    // als dem Wert, der genau dem bisherigen entspricht. Sechsunddreissig
+    // Dezibel in beide Richtungen (@dpa 20260830), also derselbe Bereich wie
+    // bei den Flaechen.
+    layout.add (floatParam (windLevelDb, "Wind Level", { -36.0f, 36.0f, 0.1f }, 0.0f, "dB"));
 
     // Wie stark das Rauschband dem Tempo folgt. Bisher hing es allein an der
     // Drehzahl: ein Motor im Leerlauf, der mit 300 km/h vorbeigezogen wird,

@@ -91,6 +91,40 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
         p.apvts, Params::reverbBypass, reverbBypassButton);
 
     reverbPanelBox.setHeaderControl (&reverbBypassButton, 62);
+
+    // Dieselbe Machart fuer die Waende: "1", "2", "++" in ihrer Kopfzeile.
+    {
+        struct Entry { juce::TextButton* button; const char* id; Tooltips::Key key; };
+
+        const Entry entries[]
+        {
+            { &wallHeaderSwitches.wall1,  Params::wall1On,     Tooltips::Key::WallOn },
+            { &wallHeaderSwitches.wall2,  Params::wall2On,     Tooltips::Key::WallOn },
+            { &wallHeaderSwitches.second, Params::reflect2ndOn, Tooltips::Key::SecondOrder }
+        };
+
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>* slots[]
+        {
+            &wall1HeaderAttachment, &wall2HeaderAttachment, &secondOrderHeaderAttachment
+        };
+
+        int i = 0;
+
+        for (const auto& e : entries)
+        {
+            e.button->setClickingTogglesState (true);
+            e.button->setTooltip (Tooltips::text (e.key));
+            e.button->setColour (juce::TextButton::buttonColourId,   Theme::panelHeader);
+            e.button->setColour (juce::TextButton::buttonOnColourId, Theme::Panel::wall.withAlpha (0.9f));
+            e.button->setColour (juce::TextButton::textColourOffId,  Theme::muted);
+            e.button->setColour (juce::TextButton::textColourOnId,   Theme::panel);
+
+            *slots[i++] = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+                p.apvts, e.id, *e.button);
+        }
+    }
+
+    wallPanelBox.setHeaderControl (&wallHeaderSwitches, 84);
     swarmPanelBox.setContent (&swarmPanel);
 
     // Alle Panels starten zugeklappt (CollapsiblePanel-Default, @dpa-Feedback)
@@ -567,6 +601,10 @@ void DopplerfeldEditor::refreshAllTooltips()
     wallPanel.refreshTooltips();
     reverbPanel.refreshTooltips();
     reverbBypassButton.setTooltip (Tooltips::text (Tooltips::Key::ReverbBypass));
+
+    wallHeaderSwitches.wall1.setTooltip (Tooltips::text (Tooltips::Key::WallOn));
+    wallHeaderSwitches.wall2.setTooltip (Tooltips::text (Tooltips::Key::WallOn));
+    wallHeaderSwitches.second.setTooltip (Tooltips::text (Tooltips::Key::SecondOrder));
     reverbBypassButton.setButtonText (Labels::text ("Bypass"));
     swarmPanel.refreshTooltips();
 }

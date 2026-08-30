@@ -251,6 +251,22 @@ target_compile_definitions(trail_probe PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(trail_probe PRIVATE cxx_std_20)
 
+# Messprogramm zu den Doppelhieben im Peitschentest (Tests/whip_probe.cpp),
+# kein Test.
+add_executable(whip_probe EXCLUDE_FROM_ALL Tests/whip_probe.cpp)
+target_link_libraries(whip_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(whip_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(whip_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(whip_probe PRIVATE cxx_std_20)
+
 # Messprogramm dazu, WOMIT ein Abgriffpunkt gespeist wird
 # (Tests/tapfeed_probe.cpp), kein Test.
 add_executable(tapfeed_probe EXCLUDE_FROM_ALL Tests/tapfeed_probe.cpp)

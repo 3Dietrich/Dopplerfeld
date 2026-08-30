@@ -305,6 +305,45 @@ private:
     // Schalter im zugeklappten Zustand sichtbar.
     juce::TextButton reverbBypassButton { "Bypass" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> reverbBypassAttachment;
+
+    // Drei Schalter in der Kopfzeile des Waende-Panels: Wand 1, Wand 2 und die
+    // Mehrfachreflexion (@dpa 20260830: "wie der Bypass in Hall"). Dieselbe
+    // Ueberlegung wie dort - was man im Vergleich staendig ein- und ausschaltet,
+    // darf nicht erst ein Aufklappen kosten.
+    //
+    // Ein eigener Behaelter, weil setHeaderControl EINE Komponente aufnimmt und
+    // hier drei nebeneinander stehen.
+    struct WallHeaderSwitches : public juce::Component
+    {
+        juce::TextButton wall1 { "1" }, wall2 { "2" }, second { "++" };
+
+        WallHeaderSwitches()
+        {
+            for (auto* b : { &wall1, &wall2, &second })
+                addAndMakeVisible (*b);
+        }
+
+        void resized() override
+        {
+            auto row = getLocalBounds();
+
+            const int w = (row.getWidth() - 2 * gap) / 3;
+
+            wall1.setBounds (row.removeFromLeft (w));
+            row.removeFromLeft (gap);
+            wall2.setBounds (row.removeFromLeft (w));
+            row.removeFromLeft (gap);
+            second.setBounds (row);
+        }
+
+        static constexpr int gap = 3;
+    };
+
+    WallHeaderSwitches wallHeaderSwitches;
+
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> wall1HeaderAttachment,
+                                                                          wall2HeaderAttachment,
+                                                                          secondOrderHeaderAttachment;
     SwarmPanel  swarmPanel;
 
     // Quellwahl ist kein Parameter (siehe DopplerfeldProcessor), deshalb ein

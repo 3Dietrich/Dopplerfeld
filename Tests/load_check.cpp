@@ -7612,7 +7612,7 @@ int main()
         const double plain     = flyAndMeasure (0, 0.0f,   0.0f);
         const double withSpeed = flyAndMeasure (0, 100.0f, 0.0f);
         const double jetWind   = flyAndMeasure (1, 0.0f,   0.0f);
-        const double noWind    = flyAndMeasure (1, 0.0f, -60.0f);
+        const double noWind    = flyAndMeasure (1, 0.0f, -36.0f);
 
         std::printf ("%-22s Rausch v 0 %%: %.1f dB | 100 %%: %.1f dB || Fahrtwind an: %.1f dB | "
                      "aus: %.1f dB\n",
