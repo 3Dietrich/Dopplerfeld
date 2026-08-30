@@ -491,6 +491,11 @@ private:
     // zurueckzulaufen. Gilt, bis jemand den Regler bewegt.
     void holdSourceTargetAt (Vec3 posMetres);
 
+    // Das entrasterte Live-Ziel zum aktuellen Stand der Rampe (siehe
+    // targetRampFrom), und das Setzen ohne Ausrollen.
+    Vec3 liveTargetNow() const;
+    void setLiveTargetTo (Vec3 posMetres);
+
     // Fluggeschwindigkeit, die der gemeinsame Tempo-Deckel wirklich durchlaesst.
     double effectiveFlySpeed() const;
     void applyOutputStage (juce::AudioBuffer<float>& buffer);
@@ -925,6 +930,34 @@ private:
 
     std::atomic<bool> coastRequest { false };
 
+    // Entrasterung des Live-Ziels (@dpa 20260830: "Live bewegen ist ganz
+    // schoen kantig ... recorded ist es dann glatt, aber Live hoert es sich
+    // sprunghaft an").
+    //
+    // Die Oberflaeche meldet eine neue Stelle nur im Bildtakt, der Parameter
+    // steht dazwischen still. Fuer die Bahn, die mit 1000 Hz tickt, ist das
+    // eine Treppe: alle 17 ms ein Positionssprung. In der Position faellt das
+    // kaum auf - der Glaetter rundet sie -, in ihrer zweiten Ableitung dagegen
+    // steht bei jeder Stufe eine Spitze, und die faehrt als Gas in die
+    // Drehzahl (siehe throttleFactor). Recorded ist glatt, weil die
+    // Wiedergabe zwischen ihren Stuetzpunkten interpoliert.
+    //
+    // Deshalb wird jede Zielaenderung ueber die Zeit ausgerollt, die seit der
+    // vorigen vergangen ist: aus der Treppe wird ein Zug mit gleichmaessigem
+    // Tempo. Der Preis ist eine Rasterperiode Verzug, rund 17 ms - weit unter
+    // der Zeitkonstante jedes Glaetters dahinter.
+    Vec3   targetRampFrom;
+    Vec3   targetRampTo;
+    double targetRampElapsed  = 0.0;
+    double targetRampDuration = 0.0;
+    double targetHoldElapsed  = 0.0;
+
+    // Grenzen der ausgerollten Zeit. Unten, damit zwei Meldungen dicht
+    // hintereinander nicht als Sprung durchgehen; oben, damit eine lange Pause
+    // die naechste Bewegung nicht zaeh macht.
+    static constexpr double targetRampMin = 0.004;
+    static constexpr double targetRampMax = 0.05;
+
     // Der letzte tatsaechlich gefahrene Schritt der Quelle, als Geschwindigkeit.
     // Damit faengt das Auslaufen genau dort an, wo die gezogene Bewegung
     // aufgehoert hat - ohne Knick in f'.
@@ -943,6 +976,13 @@ private:
     // aufgezeichneten Bahn darin untergehen, klein genug, dass ein Gasstoss
     // noch als Gasstoss ankommt.
     static constexpr double accelSpanFactor = 4.0;
+
+    // Feinste Zeitskala, auf der ueberhaupt nach Beschleunigung gesucht wird.
+    // Darunter liegt keine Bewegung mehr, sondern das Raster, in dem sie
+    // hereinkommt: der Bildtakt der Maus (17 ms), die Stuetzpunkte einer
+    // Aufzeichnung, die Blockgrenzen einer Automation. Ohne diese Schwelle
+    // stand jede Rasterstufe als Gasstoss in der Drehzahl.
+    static constexpr double accelInputTau = 0.04;
 
     // Stand der Blende zwischen den beiden Wegen des Wacklers (siehe
     // Params::srcJitterSmooth): 0 = an der Glaettung vorbei, 1 = durch sie

@@ -583,6 +583,10 @@ void DopplerfeldProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     sourceSmoothers.reset (sourceTargetMetres);
     listenerSmoothers.reset (listenerTargetMetres);
 
+    // Die Entrasterung startet auf dem Ziel, sonst rollte der erste Tick den
+    // Weg vom Ursprung dorthin als Bewegung aus.
+    setLiveTargetTo (sourceTargetMetres);
+
     smoothedSourcePos  = sourceTargetMetres;
     listenerState.head = listenerTargetMetres;
     smoothedYawRadians = targetYawRadians;
@@ -707,10 +711,32 @@ double DopplerfeldProcessor::effectiveFlySpeed() const
     return std::min ((double) pp.flySpeed->load(), (double) pp.globalMaxSpeed->load());
 }
 
+void DopplerfeldProcessor::setLiveTargetTo (Vec3 posMetres)
+{
+    targetRampFrom     = posMetres;
+    targetRampTo       = posMetres;
+    targetRampElapsed  = 0.0;
+    targetRampDuration = 0.0;
+    targetHoldElapsed  = 0.0;
+}
+
+Vec3 DopplerfeldProcessor::liveTargetNow() const
+{
+    if (targetRampDuration <= 0.0)
+        return targetRampTo;
+
+    const double part = juce::jmin (1.0, targetRampElapsed / targetRampDuration);
+
+    return targetRampFrom + (targetRampTo - targetRampFrom) * part;
+}
+
 void DopplerfeldProcessor::holdSourceTargetAt (Vec3 posMetres)
 {
     sourceTargetMetres = posMetres;
     sourceTargetHeld   = true;
+
+    // Ein Halt ist keine gezogene Bewegung: er gilt sofort, ohne Ausrollen.
+    setLiveTargetTo (posMetres);
 
     // Der Reglerstand, den dieser Haltezustand meint. Bewegt sich einer davon,
     // ist das ein Benutzereingriff und der Halt ist vorbei (applyParameters).
@@ -1364,6 +1390,7 @@ void DopplerfeldProcessor::handlePendingRequests()
             // im naechsten Tick den Weg dorthin zurueck.
             smoothedSourcePos = cutTargetMetres;
             sourceSmoothers.reset (cutTargetMetres);
+            setLiveTargetTo (sourceTargetMetres);
             wasMotionSlewGuardActive = false;
 
             // Der HOERER springt mit (@dpa 20260828: "der L schaltet beim
@@ -1819,7 +1846,22 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
         const Vec3 prevSourcePos = smoothedSourcePos;
         const Vec3 prevHeadPos   = listenerState.head;
 
-        Vec3 target = sourceTargetMetres;
+        // Live-Ziel entrastern (siehe targetRampFrom im Header): eine neue
+        // Meldung wird ueber die Zeit ausgerollt, die seit der vorigen
+        // vergangen ist, statt in einem Tick anzuspringen.
+        if ((sourceTargetMetres - targetRampTo).length() > 1.0e-9)
+        {
+            targetRampFrom     = liveTargetNow();
+            targetRampTo       = sourceTargetMetres;
+            targetRampDuration = juce::jlimit (targetRampMin, targetRampMax, targetHoldElapsed);
+            targetRampElapsed  = 0.0;
+            targetHoldElapsed  = 0.0;
+        }
+
+        targetHoldElapsed += tickDt;
+        targetRampElapsed += tickDt;
+
+        Vec3 target = liveTargetNow();
         bool bypassSmoothing = false;
 
         // Die Position steht schon fertig fest und geht ohne jede Glaettung
@@ -2262,7 +2304,15 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // gleichmaessigem Anziehen bleibt der langsame genau um
             // a * tauSlow zurueck, das IST die Beschleunigung. Rauschen laeuft
             // dabei durch zwei Tiefpaesse statt durch einen Differenzierer.
-            const double tauSlow   = accelSpanFactor * tau;
+            // Der schnelle Zweig sieht nie schneller hin als accelInputTau:
+            // schneller als das kommt keine Bewegung herein, sondern nur noch
+            // das Raster der Eingabe (Bildtakt der Maus, Stuetzpunkte einer
+            // Aufzeichnung, Blockgrenzen der Automation). Der Regler bleibt
+            // darueber frei - er macht das Gas traeger, nur nicht schaerfer,
+            // als die Bewegung selbst aufgeloest ist.
+            const double tauFast   = std::max (tau, accelInputTau);
+            const double tauSlow   = std::max (accelSpanFactor * tau, 2.0 * tauFast);
+            const double coeffFast = 1.0 - std::exp (-tickDt / tauFast);
             const double coeffSlow = 1.0 - std::exp (-tickDt / tauSlow);
 
             // Der schnelle Zweig ist ZWEIpolig. Eine aufgezeichnete Bahn hat
@@ -2271,8 +2321,8 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
             // Drehzahl im Stuetzpunkttakt zu ruetteln. Zwei Pole draengen es
             // um eine weitere Zehnerpotenz zurueck, ohne dem eigentlichen
             // Gasgeben (Bruchteile von Hertz) etwas zu nehmen.
-            speedFastStage += (speedNow       - speedFastStage) * coeff;
-            speedFast      += (speedFastStage - speedFast)      * coeff;
+            speedFastStage += (speedNow       - speedFastStage) * coeffFast;
+            speedFast      += (speedFastStage - speedFast)      * coeffFast;
             speedSlow      += (speedFast      - speedSlow)      * coeffSlow;
 
             const double accel = (speedFast - speedSlow) / tauSlow;

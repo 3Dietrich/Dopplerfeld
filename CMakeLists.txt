@@ -287,6 +287,21 @@ target_compile_definitions(whip_probe PRIVATE
     DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(whip_probe PRIVATE cxx_std_20)
 
+# Messprogramm zur Live-Bewegung (Tests/live_probe.cpp), kein Test.
+add_executable(live_probe EXCLUDE_FROM_ALL Tests/live_probe.cpp)
+target_link_libraries(live_probe
+    PRIVATE
+        Dopplerfeld
+        juce::juce_recommended_warning_flags
+        juce::juce_recommended_config_flags)
+target_include_directories(live_probe PRIVATE
+    Source
+    $<TARGET_PROPERTY:Dopplerfeld,INCLUDE_DIRECTORIES>)
+target_compile_definitions(live_probe PRIVATE
+    $<TARGET_PROPERTY:Dopplerfeld,COMPILE_DEFINITIONS>
+    DOPPLERFELD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(live_probe PRIVATE cxx_std_20)
+
 # Messprogramm zu springenden Tonhoehen (Tests/pitch_probe.cpp), kein Test.
 add_executable(pitch_probe EXCLUDE_FROM_ALL Tests/pitch_probe.cpp)
 target_link_libraries(pitch_probe
