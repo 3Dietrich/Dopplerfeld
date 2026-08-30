@@ -185,11 +185,24 @@ private:
         double speedOfSoundMps   = 343.2;
         double listenerDistanceM = 0.0;
         double cpuPercent        = 0.0;
+
+        // Der teuerste einzelne Block und die Zahl der Bloecke ueber Budget
+        // (siehe DopplerfeldProcessor::peakLoadPercent). Die Spitze wird
+        // gehalten und verfaellt langsam, sonst waere sie zwischen zwei
+        // Bildern schon wieder weg.
+        double cpuPeakPercent    = 0.0;
+        int    overruns          = 0;
     };
 
     DisplayAverages displayAverages;
 
     // Laufende Summen fuers aktuelle Mittelungsfenster, s. updateDisplayAverages().
+    // Wie lange eine Lastspitze stehen bleibt, bevor sie verfaellt. Kurz genug,
+    // dass die Anzeige den Moment zeigt, lang genug, dass man sie liest.
+    static constexpr double cpuPeakHoldSeconds = 3.0;
+
+    double cpuPeakAgeSeconds = 0.0;
+
     struct DisplayAccumulator
     {
         double speedSum            = 0.0;

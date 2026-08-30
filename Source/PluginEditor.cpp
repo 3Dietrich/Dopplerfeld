@@ -816,6 +816,29 @@ void DopplerfeldEditor::updateDisplayAverages()
     acc.cpuSum               += (double) dopplerfeldProcessor.cpuLoadPercent();
     ++acc.sampleCount;
 
+    // Die Spitze wird bei JEDEM Tick abgeholt - das Ablesen setzt sie im
+    // Processor zurueck, ein Auslassen verloere also Bloecke. Angezeigt wird
+    // die groesste der letzten cpuPeakHoldSeconds, danach faellt sie auf das
+    // zurueck, was gerade gemessen wird.
+    {
+        const double peak = (double) dopplerfeldProcessor.peakLoadPercent();
+
+        if (peak >= displayAverages.cpuPeakPercent)
+        {
+            displayAverages.cpuPeakPercent = peak;
+            cpuPeakAgeSeconds = 0.0;
+        }
+        else
+        {
+            cpuPeakAgeSeconds += 1.0 / 30.0;
+
+            if (cpuPeakAgeSeconds > cpuPeakHoldSeconds)
+                displayAverages.cpuPeakPercent = peak;
+        }
+
+        displayAverages.overruns = dopplerfeldProcessor.overrunCount();
+    }
+
     // 30Hz-Timer = ~33ms zwischen zwei Aufrufen (siehe startTimerHz), fest
     // verdrahtet statt gemessen - reicht fuer ein 0.5s-Mittelungsfenster.
     acc.elapsedMs += 1000.0 / 30.0;
@@ -929,22 +952,27 @@ void DopplerfeldEditor::updateStatusFlashes (double deltaSeconds)
     // kumulativ weiter; "groesser als null" liess den Abschnitt dauerhaft
     // hell stehen, und dann sagt er nichts mehr ueber den Moment.
     const bool deathsGrew = snapshot.branchDeaths > lastBranchDeaths;
+    const auto deathsBefore = lastBranchDeaths;
 
     lastBranchDeaths = snapshot.branchDeaths;
 
     if (deathsGrew)
     {
-        const double loudShare = 100.0 * (double) snapshot.loudBranchDeaths
-                                       / (double) snapshot.branchDeaths;
+        // Im Klartext, nicht als Zahlenreihe: die Zahl allein sagt niemandem,
+        // ob das gerade zu hoeren war (@dpa 20260830: "ist fuer mich (und dem
+        // User wahrscheinlich auch) nichtssagend"). Was zaehlt, ist der Pegel,
+        // bei dem der Weg abgerissen ist - bei vollem Pegel knackt es, nach
+        // dem Ausklingen hoert es niemand.
+        const double level = snapshot.branchDeathEnvMean;
+
+        const juce::String verdict = level >= 0.5 ? Labels::text ("bei vollem Pegel, kann knacken")
+                                   : level >= 0.1 ? Labels::text ("halb ausgeklungen")
+                                                  : Labels::text ("war ausgeklungen, unhörbar");
 
         noteStatusFlash ("deaths",
-                         Labels::text ("Zweig-Abriss") + " "
-                             + juce::String ((int) snapshot.branchDeaths)
-                             + ", " + Labels::text ("Pegel dabei") + " "
-                             + juce::String::formatted ("%.2f", snapshot.branchDeathEnvMean)
-                             + " / max " + juce::String::formatted ("%.2f", snapshot.branchDeathEnvMax)
-                             + ", " + juce::String::formatted ("%.0f", loudShare) + " % "
-                             + Labels::text ("laut"));
+                         Labels::text ("Hörweg abgerissen") + " "
+                             + juce::String ((int) (snapshot.branchDeaths - deathsBefore)) + "x"
+                             + " - " + verdict);
     }
 
     // Was ganz ausgeblendet ist, kann weg.
@@ -1021,8 +1049,14 @@ void DopplerfeldEditor::paint (juce::Graphics& g)
         g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
                                                   11.0f, juce::Font::plain)));
 
-        g.drawText (juce::String::formatted ("CPU %4.0f %%   Klone: %d",
-                                             (double) cpu, dopplerfeldProcessor.realCloneCount()),
+        // Neben dem Mittelwert der teuerste EINZELNE Block und die Zahl der
+        // Bloecke ueber Budget: die Aussetzer sind genau diese Einzelfaelle,
+        // und im Mittelwert sind sie nicht zu sehen.
+        g.drawText (juce::String::formatted ("CPU %4.0f %%  Spitze %4.0f %%  ueber Budget: %d   Klone: %d",
+                                             (double) cpu,
+                                             displayAverages.cpuPeakPercent,
+                                             displayAverages.overruns,
+                                             dopplerfeldProcessor.realCloneCount()),
                     margin, meterTop + cpuMeterBarHeight + 2, fieldWidth, cpuMeterLabelHeight,
                     juce::Justification::centredLeft);
 

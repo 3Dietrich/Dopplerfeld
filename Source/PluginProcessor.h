@@ -260,6 +260,18 @@ public:
     float cpuLoadSourcePercent()  const { return cpuLoadSource.load (std::memory_order_relaxed); }
     float cpuLoadPhysicsPercent() const { return cpuLoadPhysics.load (std::memory_order_relaxed); }
 
+    // Der teuerste EINZELNE Block seit dem letzten Ablesen, und wie oft ein
+    // Block ueberhaupt laenger gebraucht hat, als er Audiozeit lieferte
+    // (@dpa 20260830: "Ich habe hin und wieder Audio Aussetzer durch CPU der
+    // (noch) nicht angezeigt wird").
+    //
+    // Der geglaettete Mittelwert zeigt genau das nicht: ein einzelner Block
+    // ueber Budget ist der Aussetzer, verschwindet im Mittel ueber zehn
+    // Bloecke aber fast vollstaendig. Das Ablesen setzt die Spitze zurueck,
+    // damit sie den Moment zeigt und nicht die Sitzung.
+    float peakLoadPercent() { return cpuLoadPeak.exchange (0.0f, std::memory_order_relaxed); }
+    int   overrunCount() const { return cpuOverruns.load (std::memory_order_relaxed); }
+
     // Maschinenunabhängiges Lastmaß des Lösers für Messläufe (load_check),
     // siehe DopplerEngine::solverEvaluations().
     std::uint64_t solverEvaluations() const { return dopplerEngine.solverEvaluations(); }
@@ -1365,6 +1377,8 @@ private:
     std::atomic<bool>  flyByActive     { false };
     std::atomic<float> outPeakL { 0.0f };
     std::atomic<float> outPeakR { 0.0f };
+    std::atomic<float> cpuLoadPeak    { 0.0f };   // siehe peakLoadPercent()
+    std::atomic<int>   cpuOverruns    { 0 };      // siehe overrunCount()
     std::atomic<float> cpuLoad        { 0.0f };   // siehe cpuLoadPercent()
     std::atomic<float> cpuLoadSource  { 0.0f };   // siehe cpuLoadSourcePercent()
     std::atomic<float> cpuLoadPhysics { 0.0f };   // siehe cpuLoadPhysicsPercent()

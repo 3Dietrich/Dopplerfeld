@@ -2650,6 +2650,8 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             // ihrem letzten Wert von vor dem Abschalten stehen, und die Anzeige
             // behauptete Last, die es nicht mehr gibt.
             cpuLoad.store        (0.0f, std::memory_order_relaxed);
+            cpuLoadPeak.store    (0.0f, std::memory_order_relaxed);
+            cpuOverruns.store    (0,    std::memory_order_relaxed);
             cpuLoadSource.store  (0.0f, std::memory_order_relaxed);
             cpuLoadPhysics.store (0.0f, std::memory_order_relaxed);
             outPeakL.store       (0.0f, std::memory_order_relaxed);
@@ -2838,6 +2840,22 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     // springt block für block stark, das wäre als Zahl kaum ablesbar.
     const float prev = cpuLoad.load (std::memory_order_relaxed);
     cpuLoad.store (prev + 0.1f * ((float) loadPercent - prev), std::memory_order_relaxed);
+
+    // Daneben der ROHE Wert: die hoechste Blocklast seit dem letzten Ablesen
+    // und die Zahl der Bloecke ueber Budget. Genau diese Einzelfaelle sind die
+    // Aussetzer, und genau sie glaettet die Zeile darueber weg.
+    {
+        float peak = cpuLoadPeak.load (std::memory_order_relaxed);
+
+        while (loadPercent > (double) peak
+               && ! cpuLoadPeak.compare_exchange_weak (peak, (float) loadPercent,
+                                                       std::memory_order_relaxed))
+        {
+        }
+
+        if (loadPercent > 100.0)
+            cpuOverruns.fetch_add (1, std::memory_order_relaxed);
+    }
 
     // Aufschlüsselung genauso geglättet, jeweils relativ zum selben Budget.
     const double sourceSeconds  = juce::Time::highResolutionTicksToSeconds ((juce::int64) sourceTicks);
