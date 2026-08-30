@@ -86,8 +86,10 @@ private:
     // Kette: in welchen spaeteren Punkt dieser hier hineingeht, statt direkt
     // auf die Ohren zu gehen (siehe Params::TapPart::chain). Die Nummernreihe
     // zeigt sie mit an - "3›" beim Geber, "›4" beim Empfaenger.
+    //
+    // Ohne eigene Beschriftung: die Zeile traegt sie nicht mehr, und der erste
+    // Eintrag heisst "Kette aus" - damit sagt die Liste selbst, was sie ist.
     juce::ComboBox chainBox;
-    juce::Label    chainLabel;
     std::unique_ptr<ComboAttachment> chainAttachment;
     std::unique_ptr<ComboAttachment> typeAttachment;
 

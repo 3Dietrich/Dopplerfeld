@@ -77,10 +77,6 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
 
     typeBox.onChange = [this] { updateTypeDependentControls(); };
 
-    chainLabel.setText (Labels::text ("Kette"), juce::dontSendNotification);
-    chainLabel.setJustificationType (juce::Justification::centredRight);
-    addAndMakeVisible (chainLabel);
-
     chainBox.setTooltip (Tooltips::text (Tooltips::Key::TapChain));
     addAndMakeVisible (chainBox);
 
@@ -135,7 +131,7 @@ void ReverbPanel::selectTap (int index)
     // den gespeicherten Wert stellt.
     chainAttachment.reset();
     chainBox.clear (juce::dontSendNotification);
-    chainBox.addItem (Labels::text ("aus"), 1);
+    chainBox.addItem (Labels::text ("Kette aus"), 1);
 
     for (int other = selected + 1; other < tapCount; ++other)
         chainBox.addItem (juce::String::fromUTF8 ("→ ") + juce::String (other + 1),
@@ -143,7 +139,6 @@ void ReverbPanel::selectTap (int index)
 
     // Der letzte Punkt hat nichts, in das er gehen koennte.
     chainBox.setEnabled (selected + 1 < tapCount);
-    chainLabel.setEnabled (selected + 1 < tapCount);
 
     chainAttachment = std::make_unique<ComboAttachment> (
         state, Params::tapId (selected, chain), chainBox);
@@ -349,9 +344,8 @@ void ReverbPanel::refreshTooltips()
     // haengt.
     typeBox.changeItemText (4, Labels::text ("Draußen"));
 
-    chainLabel.setText (Labels::text ("Kette"), juce::dontSendNotification);
     chainBox.setTooltip (Tooltips::text (Tooltips::Key::TapChain));
-    chainBox.changeItemText (1, Labels::text ("aus"));
+    chainBox.changeItemText (1, Labels::text ("Kette aus"));
 
     for (auto* k : { &z, &room, &early, &decay, &damp, &phase, &gain, &width, &echoes, &seed, &direct })
     {
@@ -407,20 +401,21 @@ void ReverbPanel::resized()
 
     head.removeFromTop (4);
 
+    // Drei Dinge in einer Zeile - Bauart, Vorlauf, Kette. Die Breiten sind auf
+    // die 352 Pixel gerechnet, die neben dem Direkt-Regler bleiben:
+    // 48 + 4 + 104 + 8 + 84 + 8 + 88 = 344.
     auto typeRow = head.removeFromTop (26);
-    typeLabel.setBounds (typeRow.removeFromLeft (54));
+    typeLabel.setBounds (typeRow.removeFromLeft (48));
     typeRow.removeFromLeft (4);
-    typeBox.setBounds (typeRow.removeFromLeft (128));
+    typeBox.setBounds (typeRow.removeFromLeft (104));
 
     // Der Vorlauf steht hier oben, weil die untere Reihe die vier Hallregler
     // braucht und danach nur noch Platz fuer die zwei Uebertragungsknoepfe hat.
-    typeRow.removeFromLeft (10);
-    predelayButton.setBounds (typeRow.removeFromLeft (96));
+    typeRow.removeFromLeft (8);
+    predelayButton.setBounds (typeRow.removeFromLeft (84));
 
-    typeRow.removeFromLeft (10);
-    chainLabel.setBounds (typeRow.removeFromLeft (44));
-    typeRow.removeFromLeft (2);
-    chainBox.setBounds (typeRow.removeFromLeft (66));
+    typeRow.removeFromLeft (8);
+    chainBox.setBounds (typeRow.removeFromLeft (88));
 
     groupRules.push_back ({ typeRow, typeRow.getX() + 6 });
 

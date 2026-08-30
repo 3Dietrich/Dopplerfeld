@@ -98,6 +98,12 @@ int main()
 
         showPanelRange (*owned, 5, 6);
         shoot (*owned, "editor_panels_raum");     // Reflexionen/Waende, Schwarm/Klone
+
+        // Der Hall allein: seine Kopfzeile traegt Bauart, Vorlauf und Kette in
+        // EINER Reihe, und ob die drei nebeneinander passen, sieht man nur im
+        // Bild.
+        showPanelRange (*owned, 6, 6);
+        shoot (*owned, "editor_panel_hall");
     }
 
     // Das Schwarm-Panel einzeln, in seiner Groesse aus dem Editor
