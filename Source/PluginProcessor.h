@@ -543,6 +543,7 @@ private:
         std::atomic<float>* tapZ[DopplerEngine::maxTaps]        {};
         std::atomic<float>* tapType[DopplerEngine::maxTaps]     {};
         std::atomic<float>* tapChain[DopplerEngine::maxTaps]    {};
+        std::atomic<float>* tapMotion[DopplerEngine::maxTaps]   {};
         std::atomic<float>* tapRoom[DopplerEngine::maxTaps]     {};
         std::atomic<float>* tapDecay[DopplerEngine::maxTaps]    {};
         std::atomic<float>* tapDamp[DopplerEngine::maxTaps]     {};
@@ -1235,6 +1236,9 @@ private:
 
         // Ziel der Kette, -1 = keines (siehe Params::TapPart::chain).
         int    chainTo    = -1;
+
+        // Wandern der Hall-Leitungen, 0..1 (siehe Params::TapPart::motion).
+        double motion     = 0.0;
     };
 
     TapState tapTarget[DopplerEngine::maxTaps];

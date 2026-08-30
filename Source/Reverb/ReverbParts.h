@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstddef>
 #include <vector>
 
@@ -74,6 +75,25 @@ inline double capacityFor (double metres)
 // anders als beim Doppler-Pfad, wo Bruchteile eines Samples den Ton verstimmen.
 // Eine Interpolation waere hier reiner Aufwand und wuerde obendrein Hoehen
 // verschlucken.
+// Ausschlag des Wanderns in Samples, aus dem Regler und der Laenge der Leitung
+// (siehe DelayLine::setMotion).
+//
+// Anteilig zur Laenge, nicht als feste Strecke: eine lange Leitung darf weiter
+// wandern, ohne dass es nach Verstimmung klingt, waehrend dieselbe Strecke eine
+// kurze voellig verbiegen wuerde. Zwei Prozent bei vollem Regler sind rund ein
+// Drittel Halbton Verstimmung, wenn die Bewegung am schnellsten ist - deutlich
+// zu hoeren, aber noch keine Seekrankheit. Nach unten mindestens ein halbes
+// Sample, sonst bewegte sich bei den kuerzesten Leitungen gar nichts.
+inline double motionDepthFor (double amount01, int lengthSamples)
+{
+    const double a = std::clamp (amount01, 0.0, 1.0);
+
+    if (a <= 0.0)
+        return 0.0;
+
+    return std::max (0.5, a * 0.02 * (double) lengthSamples);
+}
+
 class DelayLine
 {
 public:
@@ -89,6 +109,54 @@ public:
     {
         std::fill (buffer.begin(), buffer.end(), 0.0f);
         writePos = 0;
+
+        motionA = 0.0;
+        motionB = 0.0;
+    }
+
+    // Die Leitung wandert: der Lesekopf bewegt sich langsam um seine Ruhelage,
+    // gefuehrt von einem zweipolig tiefpassgefilterten Rauschen. Das bricht die
+    // stehenden Wellen auf, die ein Netz aus festen Leitungen unweigerlich
+    // hat - der Hall wird lebendig statt metallisch, und bei groesserem
+    // Ausschlag hoert man das Wandern als leises Verstimmen.
+    //
+    // amount01 ist der Reglerwert (0 = still), rateHz die Geschwindigkeit des
+    // Rauschens, seed macht jede Leitung unabhaengig - laufen sie im
+    // Gleichtakt, wandert nicht der Raum, sondern die Tonhoehe.
+    //
+    // Uebergeben wird der Regler und nicht der fertige Ausschlag: die Laenge
+    // kennt die Leitung selbst und aendert sie im Betrieb, wenn jemand am
+    // Raum dreht. So bleibt der Ausschlag von allein passend.
+    void setMotion (double amount01, double rateHz, double sampleRate, int seed)
+    {
+        motionAmount = (float) std::clamp (amount01, 0.0, 1.0);
+
+        // Zweimal derselbe Ein-Pol hintereinander: ein einzelner liesse noch
+        // hoerbares Zappeln durch, zwei machen daraus eine weiche Fahrt.
+        const double f = std::clamp (rateHz, 0.01, 50.0);
+        const double c = 1.0 - std::exp (-2.0 * 3.14159265358979323846 * f
+                                         / std::max (1.0, sampleRate));
+
+        motionCoeff = c;
+
+        // Ein Tiefpass, der aus 48000 Werten je Sekunde eine halbe Schwingung
+        // macht, laesst vom Rauschen fast nichts uebrig: hinter zwei solchen
+        // Polen bleibt der Bruchteil c/(2-c), bei einer Fuenftel-Hertz also
+        // ein Hunderttausendstel. Ohne diesen Ausgleich stuende der Regler auf
+        // voll und nichts bewegte sich.
+        //
+        // Gerechnet auf einen Effektivwert von rund einem Drittel: dann liegen
+        // die Spitzen bei eins, und die Begrenzung darunter greift selten
+        // genug, um die Fahrt nicht abzuflachen.
+        const double rms = 0.5773502691896257 * (c / (2.0 - c));
+
+        motionGain = rms > 1.0e-12 ? 0.35 / rms : 0.0;
+
+        if (motionSeed != seed)
+        {
+            motionSeed  = seed;
+            motionState = (std::uint32_t) (seed * 2654435761u + 1u);
+        }
     }
 
     // Laenge in Samples, auf die Kapazitaet begrenzt. Der Puffer wird dabei
@@ -101,13 +169,54 @@ public:
 
     int getLength() const { return length; }
 
-    float read() const
+    // Lesen an der eingestellten Laenge. Wandert die Leitung (siehe
+    // setMotion), sitzt der Kopf zwischen zwei Samples und wird linear
+    // interpoliert - ohne das waere die Bewegung eine Treppe aus ganzen
+    // Samples und knisterte.
+    float read()
     {
-        int p = writePos - length;
-        if (p < 0)
-            p += capacity;
+        if (motionAmount <= 0.0f)
+        {
+            int p = writePos - length;
+            if (p < 0)
+                p += capacity;
 
-        return buffer[(size_t) p];
+            return buffer[(size_t) p];
+        }
+
+        // Weisses Rauschen durch zwei Ein-Pole. Der Ausgang eines solchen
+        // Paares bleibt weit unter eins, deshalb der Ausgleich am Ende - so
+        // steht im Regler wirklich der Ausschlag, den er verspricht.
+        motionState = motionState * 1664525u + 1013904223u;
+
+        const double white = (double) motionState * (2.0 / 4294967296.0) - 1.0;
+
+        // Die Zustaende in doppelter Genauigkeit: bei einer Zeitkonstante von
+        // Sekunden ist der Schritt je Sample so klein, dass er in einfacher
+        // Genauigkeit in der Rundung verschwaende.
+        motionA += (white   - motionA) * motionCoeff;
+        motionB += (motionA - motionB) * motionCoeff;
+
+        const double depth  = motionDepthFor ((double) motionAmount, length);
+        const float  wander = (float) (std::clamp (motionB * motionGain, -1.0, 1.0) * depth);
+
+        // Nie ueber die Kapazitaet und nie unter ein Sample: der Kopf muss
+        // zwischen zwei gueltigen Stellen liegen.
+        const float target = std::clamp ((float) length + wander,
+                                         1.0f, (float) (capacity - 1));
+
+        const int   whole = (int) target;
+        const float frac  = target - (float) whole;
+
+        int p0 = writePos - whole;
+        if (p0 < 0)
+            p0 += capacity;
+
+        int p1 = p0 - 1;
+        if (p1 < 0)
+            p1 += capacity;
+
+        return buffer[(size_t) p0] * (1.0f - frac) + buffer[(size_t) p1] * frac;
     }
 
     // Lesen an einer beliebigen Stelle, unabhaengig von der eingestellten
@@ -135,6 +244,15 @@ private:
     int                capacity = 1;
     int                length   = 1;
     int                writePos = 0;
+
+    // Wandern des Lesekopfes, siehe setMotion.
+    float         motionAmount = 0.0f;
+    double        motionCoeff  = 0.0;
+    double        motionGain   = 0.0;
+    double        motionA      = 0.0;
+    double        motionB      = 0.0;
+    std::uint32_t motionState  = 1u;
+    int           motionSeed   = 0;
 };
 
 // Einpol-Tiefpass im Rueckkopplungsweg. Gleichstromverstaerkung 1, damit die
@@ -265,6 +383,13 @@ public:
     void setLength (int samples)        { line.setLength (samples); }
     void setGain (float g)              { gain = std::clamp (g, -0.95f, 0.95f); }
 
+    void setMotion (double depthSamples, double rateHz, double sampleRate, int seed)
+    {
+        line.setMotion (depthSamples, rateHz, sampleRate, seed);
+    }
+
+    int getLength() const { return line.getLength(); }
+
     float process (float x)
     {
         const float delayed = line.read();
@@ -279,6 +404,13 @@ private:
     DelayLine line;
     float     gain = 0.5f;
 };
+
+// Wandergeschwindigkeit je Leitung, in Hertz. Bewusst nicht ueberall gleich:
+// liefen alle im selben Takt, wanderte nicht der Raum, sondern die Tonhoehe.
+inline double motionRateFor (int index)
+{
+    return 0.19 + 0.061 * (double) (index % 7);
+}
 
 // Zueinander teilerfremde Laengen, damit sich die Umlaeufe nicht auf gemeinsame
 // Vielfache legen. Genau daher kommt der metallische Ton eines schlecht

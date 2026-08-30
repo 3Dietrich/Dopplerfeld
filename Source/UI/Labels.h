@@ -46,6 +46,7 @@ namespace Labels
             { "Aufnahme",                   "Recording"     },
             { "Wiedergabe",                 "Playback"      },
             { "Kette aus",                  "Chain off"     },
+            { "Bewegung",                   "Motion"        },
             { "Hörweg abgerissen",          "Path cut"      },
             { "bei vollem Pegel, kann knacken", "at full level, may click" },
             { "halb ausgeklungen",          "half faded"    },

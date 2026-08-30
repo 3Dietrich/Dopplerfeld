@@ -26,10 +26,17 @@ constexpr int    blockSize  = 512;
 struct Result
 {
     double rms = 0.0;           // Pegel des Hallanteils am Ausgang
+    // Rechenlast in Prozent der Echtzeit: gemessene Rechenzeit gegen die Zeit,
+    // die das gerechnete Audio dauert. Ueber den ganzen Lauf gemittelt und
+    // nicht aus der geglaetteten Anzeige des Plugins - die haengt an den
+    // letzten Bloecken und schwankt von Lauf zu Lauf um Faktoren.
+    double load = 0.0;
     double correlation = 0.0;   // 1 = beide Seiten gleich, 0 = unabhaengig
 };
 
-Result run (bool chained, bool muteSecond = false, double firstWidth = 1.0)
+Result run (bool chained, bool muteSecond = false, double firstWidth = 1.0,
+            double motionAmount = 0.0, int typeOverride = -1,
+            const char* wavName = nullptr)
 {
     DopplerfeldProcessor proc;
     proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
@@ -61,8 +68,11 @@ Result run (bool chained, bool muteSecond = false, double firstWidth = 1.0)
         set (Params::tapId (t, decay), 2.5f);
     }
 
-    set (Params::tapId (2, type), 3.0f);   // Draussen
-    set (Params::tapId (3, type), 0.0f);   // Diffusor
+    set (Params::tapId (2, type), typeOverride >= 0 ? (float) typeOverride : 3.0f);
+    set (Params::tapId (3, type), typeOverride >= 0 ? (float) typeOverride : 0.0f);
+
+    for (int t = 2; t <= 3; ++t)
+        set (Params::tapId (t, motion), (float) motionAmount);
 
     // Kette: Punkt 3 (Index 2) geht in Punkt 4 (Index 3) - der naechste, also
     // Auswahl 1.
@@ -93,14 +103,20 @@ Result run (bool chained, bool muteSecond = false, double firstWidth = 1.0)
         proc.processBlock (buffer, midi);
     }
 
+    juce::AudioBuffer<float> recorded (1, measureBlocks * blockSize);
+    recorded.clear();
+
     double sum = 0.0;
     double sumL = 0.0, sumR = 0.0, sumLR = 0.0;
     long long count = 0;
+
+    const auto startTicks = juce::Time::getHighResolutionTicks();
 
     for (int b = 0; b < measureBlocks; ++b)
     {
         buffer.clear();
         proc.processBlock (buffer, midi);
+        recorded.copyFrom (0, b * blockSize, buffer, 0, 0, blockSize);
 
         for (int i = 0; i < blockSize; ++i)
         {
@@ -114,7 +130,34 @@ Result run (bool chained, bool muteSecond = false, double firstWidth = 1.0)
         }
     }
 
+    if (wavName != nullptr)
+    {
+        const auto out = juce::File (DOPPLERFELD_SOURCE_DIR).getChildFile ("build")
+                             .getChildFile (juce::String (wavName) + ".wav");
+        out.deleteFile();
+
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::FileOutputStream> stream (out.createOutputStream());
+
+        if (stream != nullptr)
+        {
+            std::unique_ptr<juce::AudioFormatWriter> writer (
+                wav.createWriterFor (stream.release(), sampleRate, 1, 32, {}, 0));
+
+            if (writer != nullptr)
+            {
+                writer->writeFromAudioSampleBuffer (recorded, 0, recorded.getNumSamples());
+                writer.reset();
+            }
+        }
+    }
+
+    const double spentSeconds = juce::Time::highResolutionTicksToSeconds (
+                                    juce::Time::getHighResolutionTicks() - startTicks);
+    const double audioSeconds = (double) (measureBlocks * blockSize) / sampleRate;
+
     Result result;
+    result.load = 100.0 * spentSeconds / audioSeconds;
     result.rms = count > 0 ? std::sqrt (sum / (double) count) : 0.0;
     result.correlation = sumLR / std::max (1.0e-18, std::sqrt (sumL * sumR));
 
@@ -154,6 +197,28 @@ int main()
     std::printf ("  Unterschied %+.2f dB, Korrelation %+.3f  <- bei Mono-Weitergabe waere beides null\n",
                  db (chainedWide.rms, chainedNarrow.rms),
                  chainedWide.correlation - chainedNarrow.correlation);
+
+    // Was das Wandern der Leitungen kostet, je Bauart und mit zwei laufenden
+    // Punkten (@dpa 20260830: "wie CPU lastig ist es, die delays zu bewegen?").
+    std::printf ("\nRechenlast mit zwei Abgriffpunkten, Wandern aus gegen voll:\n");
+
+    const char* names[] { "Diffusor", "Schroeder", "FDN", "Draussen" };
+
+    for (int t = 0; t < 4; ++t)
+    {
+        const auto still  = run (false, false, 1.0, 0.0,   t);
+        const auto moving = run (false, false, 1.0, 100.0, t);
+
+        std::printf ("  %-10s still %5.2f %%   wandernd %5.2f %%   (%+.0f %%)"
+                     "   Klang: RMS %.6f -> %.6f, Korrelation %+.3f -> %+.3f\n",
+                     names[t], still.load, moving.load,
+                     still.load > 1.0e-9 ? 100.0 * (moving.load - still.load) / still.load : 0.0,
+                     still.rms, moving.rms, still.correlation, moving.correlation);
+    }
+
+    // Zwei Mitschnitte derselben Bauart zum Nachmessen des Wanderns.
+    run (false, false, 1.0, 0.0,   2, "motion_fdn_still");
+    run (false, false, 1.0, 100.0, 2, "motion_fdn_wandernd");
 
     return 0;
 }

@@ -434,10 +434,10 @@ public:
     static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // Der CPU-Balken sitzt in einer eigenen Zeile am unteren Fensterrand
     // (siehe cpuMeterBlockHeight), nicht in diesem Panel.
-    // Kopfblock (Direktschall neben Punktwahl und Bauart) und zwei
+    // Kopfblock (Direktschall neben Punktwahl und Bauart) und drei
     // Reglerreihen - siehe ReverbPanel::resized().
     static constexpr int reverbContentHeight = 8 + Theme::knobHeight + 6
-                                               + 2 * Theme::knobHeight + 4 + 8;
+                                               + 3 * Theme::knobHeight + 8 + 8;
     static constexpr int swarmContentHeight  = 115;   // eine Reglerreihe plus den Zeigen-Schalter, ohne Leerlauf darunter (s. SwarmPanel::resized())
 
     // Breite der Panelspalte - ebenfalls oeffentlich, aus demselben Grund wie

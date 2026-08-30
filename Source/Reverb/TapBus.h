@@ -366,6 +366,15 @@ public:
         currentGain = targetGain;
     }
 
+    // Wandern der Leitungen, an ALLE Bauarten - wie alle uebrigen Stellwerte
+    // (siehe units()), damit die eben eingeschaltete nicht auf einem alten
+    // Wert steht.
+    void setMotion (double amount01)
+    {
+        for (auto* u : units())
+            u->setMotion (amount01);
+    }
+
     const char* typeName() const { return activeUnit()->name(); }
 
 private:

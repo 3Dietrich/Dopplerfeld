@@ -90,6 +90,20 @@ public:
         updateLengths();
     }
 
+    // Hier sind die Allpaesse der Hall, sie wandern also selbst.
+    void setMotion (double amount01) override
+    {
+        motionAmount = amount01;
+
+        for (int i = 0; i < stages; ++i)
+        {
+            left[i].setMotion (amount01,
+                               reverbparts::motionRateFor (i), sr, i + 1);
+            right[i].setMotion (amount01,
+                                reverbparts::motionRateFor (i + 2), sr, i + 101);
+        }
+    }
+
     void setDamping (double amount01) override
     {
         // Ein Tiefpass am Ausgang, und damit tatsaechlich ein Klangregler und
@@ -144,6 +158,10 @@ private:
     reverbparts::DampingFilter dampL, dampR;
 
     double sr         = 48000.0;
+
+    // Wie stark die Leitungen wandern, siehe setMotion.
+
+    double motionAmount = 0.0;
     double roomMetres = 10.0;
 
     // Groesster Raum, den die Puffer tragen. In prepare() bemessen; darueber

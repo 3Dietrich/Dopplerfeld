@@ -119,6 +119,22 @@ public:
         update();
     }
 
+    // Die Kaemme wandern - dort sitzen die stehenden Wellen. Die Allpaesse
+    // dahinter bleiben stehen: sie verwischen nur noch, was das Kammnetz
+    // liefert.
+    void setMotion (double amount01) override
+    {
+        motionAmount = amount01;
+
+        for (int i = 0; i < combs; ++i)
+        {
+            combL[i].setMotion (amount01,
+                                reverbparts::motionRateFor (i), sr, i + 1);
+            combR[i].setMotion (amount01,
+                                reverbparts::motionRateFor (i + 3), sr, i + 101);
+        }
+    }
+
     void setDamping (double amount01) override
     {
         const double c = reverbparts::dampingCoefficient (amount01, sr);
@@ -181,6 +197,10 @@ private:
     reverbparts::Allpass       apL[allpasses], apR[allpasses];
 
     double sr           = 48000.0;
+
+    // Wie stark die Leitungen wandern, siehe setMotion.
+
+    double motionAmount = 0.0;
     double roomMetres   = 10.0;
 
     // Groesster Raum, den die Puffer tragen. In prepare() bemessen; darueber

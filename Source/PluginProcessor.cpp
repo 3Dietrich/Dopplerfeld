@@ -365,6 +365,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
             pp.tapZ[t]        = raw (Params::tapId (t, z).toRawUTF8());
             pp.tapType[t]     = raw (Params::tapId (t, type).toRawUTF8());
             pp.tapChain[t]    = raw (Params::tapId (t, chain).toRawUTF8());
+            pp.tapMotion[t]   = raw (Params::tapId (t, motion).toRawUTF8());
             pp.tapRoom[t]     = raw (Params::tapId (t, room).toRawUTF8());
             pp.tapDecay[t]    = raw (Params::tapId (t, decay).toRawUTF8());
             pp.tapDamp[t]     = raw (Params::tapId (t, damp).toRawUTF8());
@@ -1202,6 +1203,7 @@ void DopplerfeldProcessor::applyTapParameters()
         target.gainLinear = juce::Decibels::decibelsToGain ((double) pp.tapGain[t]->load());
         target.width      = (double) pp.tapWidth[t]->load();
         target.predelay   = pp.tapPredelay[t]->load() > 0.5f;
+        target.motion     = 0.01 * (double) pp.tapMotion[t]->load();   // Prozent -> 0..1
 
         // Die Auswahl zaehlt ab dem naechsten Punkt: 0 = aus, 1 = der
         // unmittelbar folgende, und so weiter (siehe Params::TapPart::chain).
@@ -2741,6 +2743,7 @@ void DopplerfeldProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
                                         tap.phase, tap.early, tap.gainLinear, tap.width,
                                         tap.predelay, tap.echoes, tap.seed);
             dopplerEngine.setTapChain (t, tap.chainTo);
+            dopplerEngine.setTapMotion (t, tap.motion);
         }
 
         // Verlangt ein Punkt mehr Raum, als seine Puffer tragen, wird er

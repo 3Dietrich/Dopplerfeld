@@ -331,6 +331,9 @@ public:
     // TapState::chainTo). Alles andere wird verworfen.
     void setTapChain (int index, int target);
 
+    // Wandern der Hall-Leitungen dieses Punktes, 0..1.
+    void setTapMotion (int index, double amount01);
+
     void setTapReverb (int index, int type, double roomMetres, double decaySeconds,
                        double damping01, double phase01, double earlyAmount, double gainLinear,
                        double width, bool predelayEnabled, int echoCount, int seed);

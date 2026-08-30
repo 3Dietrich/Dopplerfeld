@@ -53,6 +53,12 @@ public:
     // Zeit bis -60 dB, in Sekunden.
     virtual void setDecaySeconds (double seconds) = 0;
 
+    // Wie stark die Leitungen wandern, 0..1 (siehe
+    // reverbparts::DelayLine::setMotion). Bei 0 stehen sie fest und die Bauart
+    // klingt wie eh und je; aufgedreht bricht das Wandern die stehenden Wellen
+    // auf, die ein Netz aus festen Leitungen unweigerlich hat.
+    virtual void setMotion (double amount01) = 0;
+
     // Hoehenverlust je Umlauf. 0 = keiner, 1 = fast alles oberhalb einiger
     // hundert Hertz ist nach wenigen Umlaeufen weg. Dieselbe Bedeutung wie die
     // Flaechendaempfung in DopplerEngine, damit ein Tal spaeter beide aus

@@ -73,6 +73,7 @@ ReverbPanel::ReverbPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (phase, "Phase",     Tooltips::Key::TapPhase);
     setupKnob (echoes, "Echos",    Tooltips::Key::TapEchoes);
     setupKnob (seed,   "Seed",     Tooltips::Key::TapSeed);
+    setupKnob (motion, "Bewegung", Tooltips::Key::TapMotion);
     setupKnob (direct, "Direkt",   Tooltips::Key::DirectGain);
 
     typeBox.onChange = [this] { updateTypeDependentControls(); };
@@ -114,7 +115,8 @@ void ReverbPanel::selectTap (int index)
     predelayAttachment.reset();
     typeAttachment.reset();
 
-    for (auto* k : { &z, &room, &early, &decay, &damp, &phase, &gain, &width, &echoes, &seed })
+    for (auto* k : { &z, &room, &early, &decay, &damp, &phase, &gain, &width, &echoes, &seed,
+                     &motion })
         k->attachment.reset();
 
     onAttachment = std::make_unique<ButtonAttachment> (
@@ -153,7 +155,8 @@ void ReverbPanel::selectTap (int index)
         { &gain,  Params::TapPart::gain },
         { &width, Params::TapPart::width },
         { &echoes, Params::TapPart::echoes },
-        { &seed,   Params::TapPart::seed }
+        { &seed,   Params::TapPart::seed },
+        { &motion, Params::TapPart::motion }
     };
 
     for (const auto& b : bindings)
@@ -448,6 +451,9 @@ void ReverbPanel::resized()
     area.removeFromTop (4);
 
     placeRow ({ &decay, &damp, &phase, &echoes, &seed });
+    area.removeFromTop (4);
+
+    placeRow ({ &motion });
 }
 
 void ReverbPanel::paint (juce::Graphics& g)

@@ -448,6 +448,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
                                  "Tap " + juce::String (t + 1) + " Type",
                                  { "Diffusor", "Schroeder", "FDN", Text::utf8 ("Draußen") }, 0));
 
+        // Wandern der Hall-Leitungen, in Prozent. Default 0: ein bestehender
+        // Zustand klingt damit unveraendert, und wer es will, dreht es auf.
+        layout.add (floatParam (tapId (t, TapPart::motion).toRawUTF8(),
+                                "Tap " + juce::String (t + 1) + " Motion",
+                                { 0.0f, 100.0f, 0.1f }, 0.0f, "%"));
+
         // Kette: dieser Punkt geht in einen spaeteren hinein (siehe
         // TapPart::chain). Die Liste zeigt nur, was danach kommt - "aus" plus
         // die Punkte mit hoeherer Nummer.

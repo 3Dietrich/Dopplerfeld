@@ -149,6 +149,18 @@ public:
         update();
     }
 
+    // Die acht Leitungen wandern, jede in ihrem eigenen Takt. Die
+    // Eingangsstreuung bleibt stehen: sie sitzt VOR dem Netz und traegt keine
+    // stehenden Wellen, ein Wandern dort waere nur Verstimmung am Eingang.
+    void setMotion (double amount01) override
+    {
+        motionAmount = amount01;
+
+        for (int i = 0; i < lines; ++i)
+            delay[i].setMotion (amount01,
+                                reverbparts::motionRateFor (i), sr, i + 1);
+    }
+
     void setDamping (double amount01) override
     {
         const double c = reverbparts::dampingCoefficient (amount01, sr);
@@ -244,6 +256,8 @@ private:
     float  state[lines] {};
     float  fb[lines]    {};
     double sr           = 48000.0;
+    // Wie stark die Leitungen wandern, siehe setMotion.
+    double motionAmount = 0.0;
     double roomMetres   = 30.0;
 
     // Groesster Raum, den die Puffer tragen. In prepare() bemessen; darueber

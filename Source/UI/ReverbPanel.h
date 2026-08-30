@@ -106,6 +106,11 @@ private:
     // der beim Umschalten verschwindet, laesst das Panel springen.
     Knob echoes, seed;
 
+    // Wandern der Hall-Leitungen (siehe Params::TapPart::motion). Steht in
+    // einer eigenen Reihe, weil die beiden darueber mit je fuenf Reglern voll
+    // sind - und weil es das einzige ist, was den Hall in Bewegung setzt.
+    Knob motion;
+
     void updateTypeDependentControls();
 
     // Direktschall: der einzige Regler hier, der NICHT zum gewaehlten Punkt

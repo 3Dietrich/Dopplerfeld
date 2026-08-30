@@ -745,6 +745,14 @@ void DopplerEngine::setTap (int index, bool enabled, Vec3 posMetres)
     t.pos     = posMetres;
 }
 
+void DopplerEngine::setTapMotion (int index, double amount01)
+{
+    if (index < 0 || index >= maxTaps)
+        return;
+
+    tapBus[(size_t) index].setMotion (amount01);
+}
+
 void DopplerEngine::setTapChain (int index, int target)
 {
     if (index < 0 || index >= maxTaps)

@@ -61,6 +61,11 @@ namespace Params
         // werden, zugleich die Reihenfolge der Kette, und ein Kreis kann gar
         // nicht erst entstehen.
         constexpr const char* chain    = "Chain";
+
+        // Wie stark die Verzoegerungsleitungen des Halls wandern (@dpa
+        // 20260830: "bewegen echter delays? 2pol slow random"). Bei 0 stehen
+        // sie fest.
+        constexpr const char* motion   = "Motion";
     }
 
     inline juce::String tapId (int index, const char* part)

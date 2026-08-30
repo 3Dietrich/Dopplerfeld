@@ -80,6 +80,7 @@ namespace Tooltips
         SrcJitterOn,
         SrcJitterSmooth,
         TapChain,
+        TapMotion,
         EngineSine,
         EngineOscOn,
         ShockDuckRange,
@@ -949,6 +950,17 @@ namespace Tooltips
                           "The same control sits next to \"Spread\" in the swarm panel and "
                           "governs the height of the clones there - one parameter, two "
                           "knobs, always in step.";
+                case Key::TapMotion:
+                    return lang == Language::De
+                        ? "Laesst die Verzoegerungsleitungen des Halls langsam wandern, jede in "
+                          "ihrem eigenen Takt. Das bricht die stehenden Wellen auf, die ein Netz "
+                          "aus festen Leitungen hat: der Hall wird lebendig statt metallisch. "
+                          "Aufgedreht hoert man das Wandern als leises Verstimmen."
+                        : "Slowly moves the reverb's delay lines, each at its own pace. That "
+                          "breaks up the standing waves a network of fixed lines has: the reverb "
+                          "becomes alive instead of metallic. Turned up, the drift becomes audible "
+                          "as a slight detuning.";
+
                 case Key::TapChain:
                     return lang == Language::De
                         ? "Schickt diesen Abgriffpunkt in einen spaeteren, statt ihn direkt auf die "

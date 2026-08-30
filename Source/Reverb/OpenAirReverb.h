@@ -139,6 +139,17 @@ public:
         update();
     }
 
+    // Die Leitungen bilden die Flaeche ab. Wandern sie, atmet die Flaeche
+    // leicht - dieselbe Wirkung wie bewegte Luft ueber einer Wiese.
+    void setMotion (double amount01) override
+    {
+        motionAmount = amount01;
+
+        for (int i = 0; i < maxLines; ++i)
+            line[(size_t) i].setMotion (amount01,
+                                        reverbparts::motionRateFor (i), sr, i + 1);
+    }
+
     void setDamping (double amount01) override
     {
         damping = std::clamp (amount01, 0.0, 1.0);
@@ -324,6 +335,10 @@ private:
     float panR[maxLines]   {};
 
     double sr           = 48000.0;
+
+    // Wie stark die Leitungen wandern, siehe setMotion.
+
+    double motionAmount = 0.0;
     double extentMetres = 60.0;
 
     // Groesster Raum, den die Puffer tragen. In prepare() bemessen; darueber
