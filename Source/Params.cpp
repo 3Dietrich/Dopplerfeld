@@ -817,8 +817,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // kann lauter sein als der Knall am Ohr, und die Entscheidung darueber
     // gehoert nicht in eine Konstante. Die Zeit reicht bis 20 s: ein Ueberflug
     // in grosser Hoehe ueber Bergland rollt so lange.
-    layout.add (floatParam (rumbleGainDb,  "Rumble",      { -60.0f, 24.0f, 0.1f },  -6.0f, "dB"));
+        // Vorgabe deutlich unter der Stossfront. Bezugsgroesse ist ihre
+    // SPITZE, das Rollen laeuft aber durch - gleiche Zahl hiesse also nicht
+    // gleich laut, sondern um Groessenordnungen lauter. Gemessen (load_check,
+    // ein Vorbeiflug) hob es bei -6 dB die Gesamtspitze von 2,93 auf 4,46.
+    layout.add (floatParam (rumbleGainDb,  "Rumble",      { -60.0f, 24.0f, 0.1f }, -24.0f, "dB"));
     layout.add (floatParam (rumbleSeconds, "Rumble Time", {   0.0f, 20.0f, 0.01f },  1.5f, "s"));
+
+    // Kantenrate und Farbe, siehe Params.h. Die Bereiche sind absichtlich weit:
+    // "Kanten von" darf bis unter einen Schlag pro Sekunde herunter (ein
+    // einzelner Rueckwurf aus grosser Entfernung) und bis in den Hoerbereich
+    // hinauf, wenn es gar keine einzelnen Kanten geben soll.
+    layout.add (floatParam (rumbleEdgeLoHz, "Rumble Edge Lo", {  0.2f, 20000.0f, 0.1f },    5.0f, "Hz"));
+    layout.add (floatParam (rumbleEdgeHiHz, "Rumble Edge Hi", {  0.2f, 20000.0f, 0.1f }, 3000.0f, "Hz"));
+    layout.add (floatParam (rumbleToneHz,   "Rumble Tone",    { 20.0f, 20000.0f, 1.0f },  180.0f, "Hz"));
     // OHNE WIRKUNG, nur noch fuer gespeicherte Presets registriert. Die Tiefe
     // steht fest auf 1: waehrend eine Stossfront ueber den Hoerweg laeuft,
     // kommt nichts anderes durch, und alles darunter liess Motorton mitten im

@@ -441,10 +441,29 @@ namespace Params
     // Ueberflug danach nach fernem Donnern.
     constexpr const char* rumbleGainDb = "rumbleGainDb";
 
-    // Wie lange das Rollen braucht, um auszuklingen, in Sekunden. Es wird dabei
-    // dunkler: was spaet ankommt, hat den laengsten Umweg hinter sich und damit
-    // die meiste Luftdaempfung gesehen.
+    // Wie lange das Rollen braucht, um auszuklingen, in Sekunden.
     constexpr const char* rumbleSeconds = "rumbleSeconds";
+
+    // Kantenrate des Rollens, am Anfang und am Ende, in Hertz.
+    //
+    // Das Rollen ist kein Rauschteppich, der einfach dunkler wird, sondern eine
+    // Folge von KANTEN (@dpa 20260831: "es muesste also am besten ein Noise Osc
+    // sein, die z.B. bei 5Hz normal 'laut' ist, und daraus dann 'Bruchkanten
+    // nach oben' sich aufteilen bis eine rot-braune Noise daraus entsteht").
+    //
+    // Am Anfang kommen wenige Rueckwuerfe einzeln an, jeder als eigener Schlag
+    // - bei fuenf in der Sekunde hoert man sie noch als solche. Mit jedem
+    // weiteren Umweg werden es mehr, sie teilen sich auf, und irgendwo
+    // oberhalb sind sie nicht mehr zu trennen: dann ist es Rauschen. Der Weg
+    // dazwischen ist geometrisch, weil sich die Zahl der Wege mit jeder
+    // Reflexionsordnung vervielfacht und nicht aufaddiert.
+    constexpr const char* rumbleEdgeLoHz = "rumbleEdgeLoHz";
+    constexpr const char* rumbleEdgeHiHz = "rumbleEdgeHiHz";
+
+    // Farbe des Rollens: Eckfrequenz des Tiefpasses ueber den Kanten. Tief
+    // eingestellt bleibt von jeder Kante ein Schlag und aus der Folge wird
+    // rot-braunes Rauschen; hoch eingestellt bleiben die Kanten scharf.
+    constexpr const char* rumbleToneHz = "rumbleToneHz";
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber den
     // Hoerweg laeuft (@dpa: "keine Noise vom Motor" waehrend der N-Welle).

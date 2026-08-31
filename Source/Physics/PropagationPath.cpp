@@ -358,7 +358,14 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // laufenden Rollens setzt es neu auf, statt sich dazuzumischen - was
     // zurueckgeworfen wird, ist der letzte Knall.
     rumbleAmp = b.nAmp * rumbleGain;
-    rumbleAge = 0.0;
+
+    // Negativ = die Welle laeuft noch. Erst wenn der Zaehler durch null geht,
+    // faengt das Rollen an - vorher wuerde es der Stossfront nur die Kraft
+    // nehmen.
+    rumbleAge = -b.nDuration;
+
+    rumblePhase = 1.0;   // die erste Kante kommt sofort nach der Welle
+    rumbleHold  = 0.0;
 
     // Fenster fuer die Absenkung des uebrigen Schalls: solange die Stossfront
     // ueber diesen Weg laeuft, kommt nichts anderes durch (siehe
@@ -420,10 +427,14 @@ double PropagationPath::shockDuckAt (double listenerTime) const
 }
 
 
-void PropagationPath::setRumble (double gainLinear, double seconds)
+void PropagationPath::setRumble (double gainLinear, double seconds,
+                                 double edgeLoHz, double edgeHiHz, double toneHz)
 {
     rumbleGain    = std::max (0.0, gainLinear);
     rumbleSeconds = std::max (0.0, seconds);
+    rumbleEdgeLo  = std::clamp (edgeLoHz, 0.05, 20000.0);
+    rumbleEdgeHi  = std::clamp (edgeHiHz, 0.05, 20000.0);
+    rumbleTone    = std::clamp (toneHz,   20.0, 20000.0);
 }
 
 
@@ -1473,33 +1484,49 @@ void PropagationPath::process (const SourceTrajectory&   traj,
         // nicht am Zweig: gestreut wird der Knall, der am Ohr angekommen ist,
         // und der ist einer - egal ueber wieviele Zweige er entstanden ist.
         //
-        // Koeffizienten einmal je Segment statt je Sample. Bei 64 Samples sind
-        // das 1,3 ms, und das Rollen aendert sich ueber Sekunden - feiner zu
-        // rechnen kostet ein exp() und ein pow() pro Sample und Pfad, ohne dass
-        // etwas anders klaenge.
-        if (rumbleAmp > 0.0 && rumbleSeconds > 0.0)
+        // Gebaut als Folge von KANTEN, deren Rate steigt. Am Anfang kommen
+        // wenige Rueckwuerfe einzeln an, jeder als eigener Schlag; mit jeder
+        // weiteren Reflexionsordnung vervielfachen sie sich, bis sie nicht mehr
+        // zu trennen sind. Dann ist es Rauschen - und weil ueber den Kanten ein
+        // tiefer Tiefpass steht, ist es rotes.
+        //
+        // Technisch eine Halteschaltung: zwischen zwei Kanten steht der Wert
+        // fest, an der Kante springt er. Der Sprung IST das Ereignis - genau
+        // deshalb traegt die Sache bei fuenf Kanten in der Sekunde noch, wo ein
+        // Rauschgenerator nur leise waere.
+        if (rumbleAmp > 0.0 && rumbleSeconds > 0.0 && rumbleAge < rumbleSeconds)
         {
-            const double u   = std::min (1.0, rumbleAge / rumbleSeconds);
-            const double fc  = rumbleStartHz * std::pow (rumbleEndHz / rumbleStartHz, u);
-            const double aLp = 1.0 - std::exp (-2.0 * 3.14159265358979323846 * fc / sr);
+            // Koeffizienten je Segment statt je Sample: ueber Sekunden aendert
+            // sich daran nichts, was ein exp() und ein pow() pro Sample und
+            // Pfad wert waere.
+            const double u    = std::clamp (rumbleAge / rumbleSeconds, 0.0, 1.0);
+            const double rate = rumbleEdgeLo * std::pow (rumbleEdgeHi / rumbleEdgeLo, u);
+            const double aLp  = 1.0 - std::exp (-2.0 * 3.14159265358979323846 * rumbleTone / sr);
 
-            // Ein Ein-Pol auf weissem Rauschen nimmt Pegel weg, und zwar umso
-            // mehr, je tiefer er steht. Ohne Ausgleich waere das Rollen am Ende
-            // nicht leise, sondern weg - der Regler wuerde etwas anderes tun als
-            // draufsteht. Der Ausgleich ist der Kehrwert des Effektivwerts eines
-            // so gefilterten Rauschens, sqrt(a / (2 - a)).
+            // Ein Ein-Pol nimmt Pegel weg, und zwar umso mehr, je tiefer er
+            // steht. Ohne Ausgleich waere das Rollen nicht dunkel, sondern
+            // weg - der Regler "Farbe" wuerde dann die Lautstaerke stellen.
             const double norm = 1.0 / std::sqrt (std::max (aLp / (2.0 - aLp), 1.0e-12));
-            const double env  = std::exp (-rumbleDecays * u);
+
+            // Exponentiell, nicht linear: so klingt es aus statt abzureissen.
+            const double env  = (rumbleAge >= 0.0) ? std::exp (-rumbleDecays * u) : 0.0;
+
+            const double step = rate / sr;
 
             for (int i = 0; i < len; ++i)
             {
-                // Weisses Rauschen als Traeger: die gestreuten Ankuenfte liegen
-                // so dicht, dass sie einzeln nicht mehr aufzuloesen sind.
-                rumbleRng = rumbleRng * 1664525u + 1013904223u;
+                rumblePhase += step;
 
-                const double white = 2.0 * ((double) (rumbleRng >> 8) / 16777216.0) - 1.0;
+                if (rumblePhase >= 1.0)
+                {
+                    rumblePhase -= std::floor (rumblePhase);
 
-                rumbleLpZ += aLp * (white - rumbleLpZ);
+                    rumbleRng = rumbleRng * 1664525u + 1013904223u;
+
+                    rumbleHold = 2.0 * ((double) (rumbleRng >> 8) / 16777216.0) - 1.0;
+                }
+
+                rumbleLpZ += aLp * (rumbleHold - rumbleLpZ);
 
                 out[n0 + i] += (float) (rumbleLpZ * norm * rumbleAmp * env * gain);
             }
@@ -1508,8 +1535,9 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
             if (rumbleAge >= rumbleSeconds)
             {
-                rumbleAmp = 0.0;
-                rumbleLpZ = 0.0;
+                rumbleAmp  = 0.0;
+                rumbleLpZ  = 0.0;
+                rumbleHold = 0.0;
             }
         }
 

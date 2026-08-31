@@ -128,6 +128,9 @@ private:
     // weil es der Nachhall genau dieser Stossfront ist und sonst nichts.
     Knob rumbleKnob;
     Knob rumbleTimeKnob;
+    Knob rumbleEdgeLoKnob;
+    Knob rumbleEdgeHiKnob;
+    Knob rumbleToneKnob;
 
     // Kante eines Bewegungssprungs durchlassen statt interpolieren - der
 

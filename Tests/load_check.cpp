@@ -3154,6 +3154,14 @@ int main()
             setParam (proc, Params::boomLimitDb, boomLimit);
             setParam (proc, Params::nWaveSize,   15.0f);
 
+            // Das Rollen hier aus: gezaehlt werden KNALLE, und dafuer muss das
+            // sein, was nach dem Knall kommt, aus dem Weg. Es ist ein
+            // anhaltendes Geraeusch und kein zweiter Schlag - stuende es an,
+            // zaehlte die Pulssuche unten seine Kanten mit und meldete einen
+            // zweiten Knall, wo keiner ist. Dass das Rollen selbst da ist,
+            // steht in seinem eigenen Abschnitt.
+            setParam (proc, Params::rumbleGainDb, -60.0f);
+
             setParam (proc, Params::flyKind,     1.0f);
             setParam (proc, Params::flyStart,    0.0f);
             setParam (proc, Params::flyDistance, 300.0f);

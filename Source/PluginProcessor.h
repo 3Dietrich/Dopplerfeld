@@ -646,8 +646,11 @@ private:
         std::atomic<float>* rocketTone      = nullptr;
         std::atomic<float>* rocketShockSize = nullptr;
         std::atomic<float>* rocketShockRate = nullptr;
-        std::atomic<float>* rumbleGainDb  = nullptr;
-        std::atomic<float>* rumbleSeconds = nullptr;
+        std::atomic<float>* rumbleGainDb   = nullptr;
+        std::atomic<float>* rumbleSeconds  = nullptr;
+        std::atomic<float>* rumbleEdgeLoHz = nullptr;
+        std::atomic<float>* rumbleEdgeHiHz = nullptr;
+        std::atomic<float>* rumbleToneHz   = nullptr;
         std::atomic<float>* shockDuckRange  = nullptr;
         std::atomic<float>* jumpBoom        = nullptr;
         std::atomic<float>* jumpBoomSize    = nullptr;
@@ -1173,6 +1176,9 @@ private:
     // Aenderung angestossen.
     double lastRumbleGainDb  = -1000.0;
     double lastRumbleSeconds = -1.0;
+    double lastRumbleEdgeLo  = -1.0;
+    double lastRumbleEdgeHi  = -1.0;
+    double lastRumbleTone    = -1.0;
     double lastShockDuckRange  = -1.0;
     double lastShockDuckAmount = 1.0;
 

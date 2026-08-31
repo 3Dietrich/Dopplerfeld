@@ -189,9 +189,18 @@ public:
     // nicht gilt, und experimentell nicht nachgewiesen (siehe
     // Params::extraPathGainDb). Sie bleiben deshalb fest unterdrueckt.
     //
+    // Es setzt NACH der Stossfront ein, nicht mit ihr (@dpa 20260831: "Der
+    // N noise nimmst Du die Kraft wenn Du sie mit Rauschen vollpackst!
+    // deswegen war mein Auftrag auch 'nach der N-Wave!'"). Solange die Welle
+    // laeuft, gehoert der Platz ihr allein.
+    //
     //   gainLinear   Pegel gegenueber der Stossfront, die ihn ausloest
     //   seconds      Abklingzeit; 0 schaltet das Rollen ab
-    void setRumble (double gainLinear, double seconds);
+    //   edgeLoHz     Kantenrate am Anfang - einzeln hoerbare Rueckwuerfe
+    //   edgeHiHz     Kantenrate am Ende - so dicht, dass es Rauschen ist
+    //   toneHz       Tiefpass ueber den Kanten; tief = rot-braun
+    void setRumble (double gainLinear, double seconds,
+                    double edgeLoHz, double edgeHiHz, double toneHz);
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber diesen
     // Weg laeuft (@dpa 20260821: "waehrend der N-Wave darf kein zusaetzlicher
@@ -853,17 +862,20 @@ private:
     // Rollen: Stellwerte und laufender Zustand.
     double rumbleGain    = 0.5;      // Pegel gegenueber der Stossfront
     double rumbleSeconds = 1.5;      // Abklingzeit
+    double rumbleEdgeLo  = 5.0;      // Kantenrate am Anfang
+    double rumbleEdgeHi  = 3000.0;   // Kantenrate am Ende
+    double rumbleTone    = 180.0;    // Tiefpass ueber den Kanten
+
     double rumbleAmp     = 0.0;      // Amplitude des laufenden Rollens, 0 = still
-    double rumbleAge     = 0.0;      // Sekunden seit der Stossfront
-    double rumbleLpZ     = 0.0;      // Zustand des wandernden Tiefpasses
+    double rumbleLpZ     = 0.0;      // Zustand des Farbfilters
+    double rumbleHold    = 0.0;      // gehaltener Wert zwischen zwei Kanten
+    double rumblePhase   = 0.0;      // Zaehler bis zur naechsten Kante
     std::uint32_t rumbleRng = 0x9E3779B9u;
 
-    // Eckfrequenz am Anfang des Rollens und an seinem Ende. Der Weg dazwischen
-    // ist geometrisch: jede spaetere Ankunft hat einen laengeren Umweg hinter
-    // sich, und Luftdaempfung wirkt ueber die Strecke exponentiell auf die
-    // Hoehen. Ein linear fallender Tiefpass klaenge deshalb falsch herum.
-    static constexpr double rumbleStartHz = 1400.0;
-    static constexpr double rumbleEndHz   = 70.0;
+    // Sekunden seit der Stossfront. NEGATIV heisst: die Welle laeuft noch, das
+    // Rollen wartet - siehe setRumble(). Es zaehlt trotzdem mit, damit es genau
+    // dann einsetzt, wenn die Welle vorbei ist.
+    double rumbleAge     = 0.0;
 
     // Wieviele Zeitkonstanten das Rollen in seiner eingestellten Dauer
     // durchlaeuft. Fuenf heisst: am Ende steht es bei -43 dB, also unter allem,

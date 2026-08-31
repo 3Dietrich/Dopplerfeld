@@ -286,7 +286,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setAirAbsorptionAmount (airAbsorbAmount);
     setDistanceCurve (distanceCurve);
     setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge, nWavePressure);
-    setRumble (rumbleGain, rumbleSeconds);
+    setRumble (rumbleGain, rumbleSeconds, rumbleEdgeLo, rumbleEdgeHi, rumbleTone);
     setShockDuck (shockDuckAmount, shockDuckRange);
     setJumpBoom (jumpBoom);
     setJumpSize (jumpSizeM);
@@ -400,7 +400,7 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
         p.setAirAbsorptionAmount (airAbsorbAmount);
         p.setDistanceCurve (distanceCurve);
         p.setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge, nWavePressure);
-        p.setRumble (rumbleGain, rumbleSeconds);
+        p.setRumble (rumbleGain, rumbleSeconds, rumbleEdgeLo, rumbleEdgeHi, rumbleTone);
         p.setShockDuck (shockDuckAmount, shockDuckRange);
         p.setJumpBoom (jumpBoom);
         p.setJumpSize (jumpSizeM);
@@ -636,14 +636,18 @@ void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres, double ga
 }
 
 
-void DopplerEngine::setRumble (double gainLinear, double seconds)
+void DopplerEngine::setRumble (double gainLinear, double seconds,
+                               double edgeLoHz, double edgeHiHz, double toneHz)
 {
     rumbleGain    = gainLinear;
     rumbleSeconds = seconds;
+    rumbleEdgeLo  = edgeLoHz;
+    rumbleEdgeHi  = edgeHiHz;
+    rumbleTone    = toneHz;
 
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
-            p.setRumble (gainLinear, seconds);
+            p.setRumble (gainLinear, seconds, edgeLoHz, edgeHiHz, toneHz);
 }
 
 void DopplerEngine::setShockDuck (double amount01, double rangeMetres)

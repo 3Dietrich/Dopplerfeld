@@ -103,6 +103,9 @@ namespace Tooltips
         NWavePressure,
         Rumble,
         RumbleTime,
+        RumbleEdgeLo,
+        RumbleEdgeHi,
+        RumbleTone,
         NWave,
         LimiterOn,
         LevelMeter,
@@ -1061,6 +1064,24 @@ namespace Tooltips
                           "ankommt, hat den längsten Umweg hinter sich."
                         : "How long the rumble takes to fade. It darkens on the way: what "
                           "arrives late took the longest detour.";
+                case Key::RumbleEdgeLo:
+                    return lang == Language::De
+                        ? "Wie viele Rückwürfe am Anfang des Rollens ankommen, pro Sekunde. "
+                          "Niedrig heißt: man hört sie einzeln, als Schläge."
+                        : "How many reflections arrive per second at the start of the rumble. "
+                          "Low means you hear them one by one, as separate hits.";
+                case Key::RumbleEdgeHi:
+                    return lang == Language::De
+                        ? "Wie dicht die Rückwürfe am Ende liegen. Oben sind sie nicht mehr "
+                          "zu trennen - dann ist es Rauschen."
+                        : "How densely the reflections arrive at the end. High up they can no "
+                          "longer be told apart - then it is noise.";
+                case Key::RumbleTone:
+                    return lang == Language::De
+                        ? "Farbe des Rollens. Tief eingestellt bleibt von jeder Kante ein "
+                          "Schlag und die Folge wird rot-braun; hoch bleiben die Kanten scharf."
+                        : "Colour of the rumble. Set low, each edge stays a thud and the "
+                          "sequence turns red-brown; set high, the edges stay sharp.";
                 case Key::NWavePressure:
                     return lang == Language::De
                         ? "Stärke der Druckwelle: der langsamen Auslenkung der Nulllinie "

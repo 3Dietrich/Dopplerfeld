@@ -436,7 +436,7 @@ public:
     // 274 plus eine weitere Reglerzeile (Fahrtwind/Rausch v, siehe
     // MotionPanel::resized).
     static constexpr int motionContentHeight = 274 + 4 + Theme::knobHeight;
-    static constexpr int fieldContentHeight  = 564;   // fuenf Gruppen (Raum/Luft/Boden/Knall/Ausgang) mit zusammen sechs Reglerreihen (s. FieldPanel::resized())
+    static constexpr int fieldContentHeight  = 632;   // fuenf Gruppen (Raum/Luft/Boden/Knall/Ausgang) mit zusammen sieben Reglerreihen (s. FieldPanel::resized())
     static constexpr int wallContentHeight   = 315;   // zwei Waende plus die gemeinsame Reflexionsreihe
     // Der CPU-Balken sitzt in einer eigenen Zeile am unteren Fensterrand
     // (siehe cpuMeterBlockHeight), nicht in diesem Panel.

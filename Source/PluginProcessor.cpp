@@ -299,8 +299,11 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.rocketShockSize = raw (Params::rocketShockSize);
     pp.rocketFarColour = raw (Params::rocketFarColour);
     pp.rocketShockRate = raw (Params::rocketShockRate);
-    pp.rumbleGainDb  = raw (Params::rumbleGainDb);
-    pp.rumbleSeconds = raw (Params::rumbleSeconds);
+    pp.rumbleGainDb   = raw (Params::rumbleGainDb);
+    pp.rumbleSeconds  = raw (Params::rumbleSeconds);
+    pp.rumbleEdgeLoHz = raw (Params::rumbleEdgeLoHz);
+    pp.rumbleEdgeHiHz = raw (Params::rumbleEdgeHiHz);
+    pp.rumbleToneHz   = raw (Params::rumbleToneHz);
     pp.shockDuckRange  = raw (Params::shockDuckRange);
     pp.jumpBoom        = raw (Params::jumpBoom);
     pp.jumpBoomSize    = raw (Params::jumpBoomSize);
@@ -1099,6 +1102,9 @@ void DopplerfeldProcessor::applyNWaveAndShockParameters()
     // alle Pfade beider Geometriesaetze.
     const double rumbleGainDb  = (double) pp.rumbleGainDb->load();
     const double rumbleSeconds = (double) pp.rumbleSeconds->load();
+    const double rumbleEdgeLo  = (double) pp.rumbleEdgeLoHz->load();
+    const double rumbleEdgeHi  = (double) pp.rumbleEdgeHiHz->load();
+    const double rumbleTone    = (double) pp.rumbleToneHz->load();
     // Fest auf voller Tiefe: waehrend eine Stossfront ueber den Hoerweg
     // laeuft, kommt nichts anderes durch (@dpa 20260827: "Front-Duck (=1)
     // kann weg" - er stand ohnehin immer dort).
@@ -1108,11 +1114,19 @@ void DopplerfeldProcessor::applyNWaveAndShockParameters()
 
 
     if (std::abs (rumbleGainDb  - lastRumbleGainDb)  > 1.0e-9
-        || std::abs (rumbleSeconds - lastRumbleSeconds) > 1.0e-9)
+        || std::abs (rumbleSeconds - lastRumbleSeconds) > 1.0e-9
+        || std::abs (rumbleEdgeLo  - lastRumbleEdgeLo)  > 1.0e-9
+        || std::abs (rumbleEdgeHi  - lastRumbleEdgeHi)  > 1.0e-9
+        || std::abs (rumbleTone    - lastRumbleTone)    > 1.0e-9)
     {
         lastRumbleGainDb  = rumbleGainDb;
         lastRumbleSeconds = rumbleSeconds;
-        dopplerEngine.setRumble (juce::Decibels::decibelsToGain (rumbleGainDb), rumbleSeconds);
+        lastRumbleEdgeLo  = rumbleEdgeLo;
+        lastRumbleEdgeHi  = rumbleEdgeHi;
+        lastRumbleTone    = rumbleTone;
+
+        dopplerEngine.setRumble (juce::Decibels::decibelsToGain (rumbleGainDb), rumbleSeconds,
+                                 rumbleEdgeLo, rumbleEdgeHi, rumbleTone);
     }
 
     if (std::abs (shockDuckAmount - lastShockDuckAmount) > 1.0e-9
