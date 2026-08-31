@@ -78,12 +78,12 @@ er auf dem eigenen Rechner grün und auf einem frischen Klon rot (siehe
 
 ## Warum klingt es anders als erwartet
 
-Nach dem Überschallknall wird es schlagartig sehr viel leiser, und ein Teil des
-Klangs läuft zeitverkehrt. Beides ist echte Physik.
-[docs/warum-klingt-es-anders.md](docs/warum-klingt-es-anders.md) erklärt, woher
-das kommt: Kegelgeometrie, Pegel über acht Sekunden und die Hüllkurve, die den
-langen Ausklang trägt.
-Dieselbe Erklärung als gesetzte Seite:
+Nach dem Überschallknall wird es schlagartig sehr viel leiser, und danach hängt
+ein Nachlauf dran - die "Fahne".
+[docs/warum-klingt-es-anders.md](docs/warum-klingt-es-anders.md) erklärt beides:
+Kegelgeometrie, Pegel über acht Sekunden, die Hüllkurve mit dem langen Ausklang
+- und warum die Fahne der offene Punkt ist, der im Grundzustand auf -60 dB
+steht. Dieselbe Erklärung als gesetzte Seite:
 [3dietrich.github.io/Dopplerfeld](https://3dietrich.github.io/Dopplerfeld/).
 
 ## Architektur

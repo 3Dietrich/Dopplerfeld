@@ -691,10 +691,16 @@ hintereinander eintreffen, sind beide gerechnet und beide da; die Sperre
 unterdrückt die zweite trotzdem, weil das Zusammentreffen als Schlag
 unangenehmer ist als der Verlust.
 
-**Der zeitverkehrt gehörte Anteil ist regelbar leiser.** Er ist echte Physik
-(2.8), steht im Modell aber gleich laut neben dem vorwärts laufenden Weg. Real
-geht er darin weitgehend unter - `reverseGain` und `extraPathGainDb` sind die
-Regler dafür, letzterer mit Grundwert −60 dB.
+**Die Fahne steht im Grundzustand aus.** Bei Ueberschall trägt jeder Hörweg
+außer dem jüngsten ältere Emissionen nach; zusammen sind sie der Nachlauf.
+`extraPathGainDb` dämpft sie, Grundwert −60 dB. Rechnerisch gehören sie dahin -
+die Gleichung hat im Kegel mehr als eine Lösung, alle sind gleichberechtigt.
+Nach dem Ohr gehören sie nicht dahin: @dpa dreht die Fahne in jedem Durchgang
+ganz zu. Der Widerspruch ist nicht aufgelöst, es fehlt eine Gegenprobe gegen
+eine echte Aufnahme statt gegen die Formel, aus der das Modell gebaut ist.
+Ausführlich in [warum-klingt-es-anders.md](warum-klingt-es-anders.md).
+Der zeitverkehrt gehörte Anteil (2.8) ist ein Teil der Fahne und nicht ihr
+lautester: der stärkste gemessene Beitrag läuft mit dτ = −0,271 vorwärts.
 
 ### 4.4 Der Hall
 

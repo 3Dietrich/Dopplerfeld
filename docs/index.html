@@ -207,7 +207,7 @@
 <header>
   <div class="eyebrow">dopplerfeld &middot; Überschall</div>
   <h1 class="disp">Nach dem Knall</h1>
-  <p class="standfirst">Was ein Hörer im Mach-Kegel wirklich hört, wenn der Knall vorbei ist &ndash; der steile Abfall, der rückwärts laufende Hörweg und der lange Ausklang danach.</p>
+  <p class="standfirst">Was ein Hörer im Mach-Kegel wirklich hört, wenn der Knall vorbei ist &ndash; der steile Abfall, der Nachlauf aus den zusätzlichen Hörwegen, und warum genau dieser Nachlauf der offene Punkt ist.</p>
 </header>
 
 <section>
@@ -316,7 +316,7 @@
   <p>Zwei Dinge stehen da drin. Erstens fällt der Pegel unmittelbar nach dem Knall <strong>sehr</strong> steil, fast 24 dB in 19 Millisekunden. Das ist echte Physik, das ist die Kaustik, die zusammenbricht. Zweitens geht es danach in einen langen, flachen Ausklang über, rund 20 dB pro Zehnerpotenz Zeit. Nach acht Sekunden ist immer noch etwas da.</p>
 
   <div class="callout">
-    <p>Ein echter Überschallüberflug klingt genau so: Knall, dann schlagartig viel leiser, dann ein anhaltendes Rollen, das minutenlang ausklingen kann. <strong>Nichts bricht ab.</strong></p>
+    <p>Die Tabelle sagt: Knall, dann schlagartig viel leiser, dann ein anhaltendes Rollen, das lange ausklingt, und nichts bricht ab. <strong>Das ist eine Rechnung, keine Beobachtung</strong> &ndash; die Zahlen stehen so in der Amplitudenformel, sie sind aber nie gegen eine echte Aufnahme gehalten worden.</p>
   </div>
 </section>
 
@@ -325,8 +325,8 @@
 
   <div class="verdicts">
     <div class="verdict">
-      <span class="tag ok">Physik</span>
-      <p><strong>Rückwärts.</strong> Weg A läuft wirklich zeitverkehrt. Man hört es nur nicht: zeitumgekehrtes Rauschen klingt wie vorwärts laufendes. Erst bei einem Sample mit erkennbarem Anschlag wird es hörbar, und dann ist es trotzdem richtig.</p>
+      <span class="tag no">offen</span>
+      <p><strong>Die Fahne, und darin der rückwärts laufende Weg.</strong> Bei Überschall trägt jeder Hörweg außer dem jüngsten ältere Emissionen nach; zusammen sind sie der Nachlauf. Rechnerisch gehören sie dahin &ndash; nach dem Ohr nicht. Der Regler &bdquo;Fahne&ldquo; steht im Grundzustand auf &minus;60&nbsp;dB, also praktisch aus. Nicht abgeschlossen, siehe unten.</p>
     </div>
     <div class="verdict">
       <span class="tag ok">Physik</span>
@@ -353,6 +353,16 @@
   <p>Eine Millisekunde reicht dafür nur am <strong>Einsatz</strong>. Ein Zweig, der an der Kaustik stirbt, steht in diesem Moment auf vollem Pegel &ndash; eine Rampe von einer Millisekunde wäre dort kein Ausblenden, sondern ein Schnitt.</p>
   <p>Einsatz und Ende sind deshalb nicht symmetrisch. Der Einsatz bleibt die lineare Rampe: eine Kegelankunft ist eine echte Stoßfront und darf steil sein. Stirbt ein Zweig an der Kaustik, bekommt er dagegen einen exponentiellen <strong>Schattenausläufer</strong> mit <span class="mono">tau = eps / |dM_r/dt|</span> &ndash; der Zeit, in der sich <span class="mono">M_r</span> um genau eine Regularisierungsbreite bewegt. Das ist derselbe Verlauf, den die Amplitudenformel selbst vorgibt, und damit genau der lange Ausklang, den ein echter Überflug hat.</p>
   <p>Gemessen im Szenario <span class="mono">Bremsflug</span> (Mach&nbsp;2,04): vier Zweig-Tode, alle an der Kaustik, Ausklang <span class="mono">tau</span> im Mittel 13,8&nbsp;ms, harte Abbrüche null. Der Unterschall-Gegenlauf mit Mach&nbsp;0,87 fliegt dieselbe Bahn und stirbt dort kein einziges Mal.</p>
+</section>
+
+<section>
+  <h2 class="disp">Die Fahne &ndash; der offene Punkt</h2>
+  <p>Bei Überschall liefert der Löser mehrere Hörwege gleichzeitig. Einer davon ist der jüngste &ndash; über ihn hört man die Quelle dort, wo sie gerade ist. Alle anderen tragen ältere Emissionen nach. Zusammen sind sie der Nachlauf nach dem Vorbeiflug, und im Plugin heißt der die <strong>Fahne</strong>.</p>
+  <p>Der Regler dafür (<span class="mono">extraPathGainDb</span>) dämpft alle Wege außer dem jüngsten. Sein Grundwert steht auf <strong>&minus;60&nbsp;dB</strong>.</p>
+  <p>Die Fahne ist dabei nicht dasselbe wie der rückwärts laufende Anteil. Der ist ein Teil davon, und nicht der lauteste: gemessen kommt der stärkste Beitrag im Kreisflug-Szenario bei <span class="mono">dτ = -0,271</span>, er läuft also <strong>vorwärts</strong>. Der ältere Regler griff nur über <span class="mono">dτ &gt; 1</span> und hat ihn nie erfasst &ndash; auf &minus;60&nbsp;dB gestellt maß das Prüfprogramm immer noch +2,3&nbsp;dB.</p>
+  <p>Die Herleitung sagt, die zusätzlichen Wege gehören dahin: die Retarded-Time-Gleichung hat im Kegel mehr als eine Lösung, alle sind gleichberechtigte Hörwege, also werden sie addiert. Kein Sondercode, keine Annahme.</p>
+  <p><strong>@dpa glaubt das nicht.</strong> Er dreht die Fahne in jedem Durchgang ganz zu, und der Grundwert steht deshalb auf &minus;60&nbsp;dB &ndash; was hier herauskommt, klingt für ihn nicht nach einem Überflug, sondern nach einem Artefakt. Das ist keine Geschmacksfrage, die ein Regler zudeckt, sondern ein Widerspruch zwischen Rechnung und Ohr.</p>
+  <p>Was fehlt, um ihn aufzulösen, ist eine Gegenprobe gegen eine echte Aufnahme &ndash; nicht gegen die Formel, aus der das Modell ohnehin gebaut ist. Solange die aussteht, ist der Abschnitt &bdquo;Wie lange es dauern muss&ldquo; eine Behauptung des Modells über sich selbst. <strong>Dieses Thema hat keinen Abschluss.</strong></p>
 </section>
 
 <footer>
