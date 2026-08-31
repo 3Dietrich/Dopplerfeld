@@ -30,9 +30,10 @@ void PropagationPath::reset()
     rumbleLpZ   = 0.0;
     rumbleFrom  = 0.0;
     rumbleTo    = 0.0;
-    rumblePhase = 1.0;
-    rumbleInc   = 1.0;
-    rumbleRng   = rumbleSeed;
+    rumblePhase     = 1.0;
+    rumbleInc       = 1.0;
+    rumbleRng       = rumbleSeed;
+    rumbleFirstEdge = false;
 
     // ALLE Zeitmarken zurueck, nicht nur die Loeserzeit.
     //
@@ -390,7 +391,25 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     // startet daraufhin dieselbe Folge, und die Differenz ist genau die
     // Laufzeit. Mit je eigenem Zufall waeren es zwei verschiedene Ereignisse
     // gewesen, und das Rollen zerfiele in ein breites Rauschband ohne Ort.
-    rumbleRng = rumbleSeed;
+    //
+    // Je Knall aber eine ANDERE Folge (@dpa 20260831: "Es sind immer die
+    // gleichen 'Brueche' ... eigentlich dachte ich, muessten sie immer random
+    // kommen"). Der Startwert kommt deshalb aus der Ankunftszeit, grob
+    // gerastert: beide Ohren liegen im selben Feld, zwei Knalle nicht.
+    {
+        const auto slot = (std::uint32_t) (std::int64_t)
+                              std::floor (listenerTimeNow / rumbleSeedGrid);
+
+        std::uint32_t h = rumbleSeed ^ (slot * 2654435761u);
+
+        h ^= h >> 15; h *= 2246822519u;
+        h ^= h >> 13; h *= 3266489917u;
+        h ^= h >> 16;
+
+        rumbleRng = h | 1u;
+    }
+
+    rumbleFirstEdge = true;
 
     // Fenster fuer die Absenkung des uebrigen Schalls: solange die Stossfront
     // ueber diesen Weg laeuft, kommt nichts anderes durch (siehe
@@ -1604,7 +1623,18 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
                     // Vorzeichen aus dem einen Bit, Betrag quadratisch aus dem
                     // Rest - viele schwache, wenige starke.
-                    const double mag = r2 * r2;
+                    //
+                    // Die erste Kante nach der Welle wird stark gedaempft: sie
+                    // faellt sonst mit dem Ende der N-Welle zusammen und
+                    // schneidet ihr die letzte Flanke ab. Nahe null heisst, die
+                    // Welle kommt zu Ende und das Rollen setzt danach ein.
+                    double mag = r2 * r2;
+
+                    if (rumbleFirstEdge)
+                    {
+                        mag *= rumbleFirstEdgeScale;
+                        rumbleFirstEdge = false;
+                    }
 
                     rumbleTo = ((rumbleRng & 0x10000u) != 0 ? mag : -mag);
                 }

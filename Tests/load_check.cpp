@@ -7815,12 +7815,18 @@ int main()
         std::printf ("%-22s Rollen nach dem Knall: frisch %.6f | nach Aus/An %.6f\n",
                      "Rollen ueberlebt", fresh, toggled);
 
-        if (fresh <= 1.0e-6)
+        // Verglichen wird ANWESENHEIT, nicht Hoehe: seit der Startwert je Knall
+        // aus der Ankunftszeit kommt, ist die Kantenfolge zweier Laeufe
+        // verschieden, und damit auch ihr Effektivwert. Gleich muessten sie nur
+        // sein, wenn der Zufall fest waere - und genau das soll er nicht.
+        const double floorRms = 1.0e-4;
+
+        if (fresh <= floorRms)
         {
             std::printf ("FEHLGESCHLAGEN: nach dem Knall steht gar kein Rollen\n");
             failed = true;
         }
-        else if (toggled < 0.5 * fresh)
+        else if (toggled <= floorRms)
         {
             std::printf ("FEHLGESCHLAGEN: nach Aus/An fehlt das Rollen "
                          "(%.6f gegen %.6f)\n", toggled, fresh);

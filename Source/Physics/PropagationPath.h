@@ -876,12 +876,23 @@ private:
     double rumbleInc     = 1.0;      // Fortschritt je Sample; aus dem Abstand
     std::uint32_t rumbleRng = rumbleSeed;
 
-    // Gemeinsamer Startwert beider Ohren, siehe triggerNWave(). Fest und nicht
-    // je Knall verschieden: die Folge muss auf beiden Seiten dieselbe sein, und
-    // ein Zaehler, den sich zwei Pfade teilen, waere dafuer der umstaendlichere
-    // Weg. Dass jeder Knall dieselbe Streuung bekommt, faellt an einem
-    // Ereignis, das in Sekunden weg ist, nicht auf.
+    // Grundwert, aus dem der Startwert eines Knalls gemischt wird, siehe
+    // triggerNWave().
     static constexpr std::uint32_t rumbleSeed = 0x9E3779B9u;
+
+    // Zeitraster, in dem beide Ohren denselben Startwert bekommen. Die
+    // Stossfront trifft sie hoechstens eine halbe Millisekunde auseinander,
+    // liegt also praktisch immer im selben Feld; zwei aufeinanderfolgende
+    // Knalle liegen weiter auseinander und bekommen verschiedene.
+    static constexpr double rumbleSeedGrid = 0.25;
+
+    // Der erste Wert nach der Welle wird gedaempft, damit die N-Welle sauber
+    // zu Ende kommt, bevor das Rollen einsetzt (@dpa 20260831: "der erste, der
+    // soll nahe 0 oder nah drueber sein, so dass die N-Wave klar zu ende
+    // kommt").
+    static constexpr double rumbleFirstEdgeScale = 0.06;
+
+    bool rumbleFirstEdge = false;
 
     // Sekunden seit der Stossfront. NEGATIV heisst: die Welle laeuft noch, das
     // Rollen wartet - siehe setRumble(). Es zaehlt trotzdem mit, damit es genau
