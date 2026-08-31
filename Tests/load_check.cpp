@@ -7728,9 +7728,13 @@ int main()
 
             // Der Fall selbst kommt aus dem Zustand "peitschentest" - er ist
             // der, an dem @dpa die Doppelhiebe gehoert hat. Nachgebaut waere
-            // er eine zweite Wahrheit, die auseinanderlaufen kann.
+            // er eine zweite Wahrheit, die auseinanderlaufen kann. Er liegt in
+            // Tests/fixtures und nicht in presets: was ein Test oeffnet,
+            // gehoert dorthin, sonst ist der Lauf hier gruen und auf einem
+            // frischen Klon rot (siehe Tests/fixtures/README.md).
             const juce::File preset = juce::File (DOPPLERFELD_SOURCE_DIR)
-                                          .getChildFile ("presets")
+                                          .getChildFile ("Tests")
+                                          .getChildFile ("fixtures")
                                           .getChildFile ("peitschentest");
 
             juce::MemoryBlock block;

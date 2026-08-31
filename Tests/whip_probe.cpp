@@ -40,7 +40,16 @@ int main (int argc, char** argv)
     // zwischen den Ohren (bis 0,5 ms bei 17 cm Abstand) selbst als Doppelschlag.
     const int channel = 0;
 
-    const juce::File f = juce::File (DOPPLERFELD_SOURCE_DIR).getChildFile ("presets").getChildFile (name);
+    // "peitschentest" ist Test-Fixture (load_check oeffnet denselben Zustand)
+    // und liegt deshalb unter Tests/fixtures statt presets - presets landet im
+    // Nutzer-Zip, und dorthin gehoert kein Testfall (siehe
+    // Tests/fixtures/README.md). Andere Namen bleiben in presets, deshalb der
+    // Fallback statt eines festen Pfades.
+    juce::File f = juce::File (DOPPLERFELD_SOURCE_DIR).getChildFile ("Tests")
+                       .getChildFile ("fixtures").getChildFile (name);
+
+    if (! f.existsAsFile())
+        f = juce::File (DOPPLERFELD_SOURCE_DIR).getChildFile ("presets").getChildFile (name);
 
     juce::MemoryBlock block;
 

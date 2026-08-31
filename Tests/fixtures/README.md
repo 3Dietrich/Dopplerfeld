@@ -14,3 +14,4 @@ Release-Schritt in das Nutzer-Zip kopiert.
 | Datei | gebraucht von |
 | --- | --- |
 | `mach2.5 vorbeiflug` | `load_check`: EIN Vorbeiflug = EIN Knall (der Zweitknall aus @dpas Aufnahme), und der Klappzustand der Panelspalte bei einem Preset ohne Maske |
+| `peitschentest` | `load_check`: die Knall-Sperre nimmt Doppelhiebe weg (@dpa 20260830, die zwei Fronten eines Ueberschall-Wacklers ueber verschiedene Hoerwege); von Hand auch `whip_probe` |
