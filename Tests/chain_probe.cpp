@@ -220,5 +220,97 @@ int main()
     run (false, false, 1.0, 0.0,   2, "motion_fdn_still");
     run (false, false, 1.0, 100.0, 2, "motion_fdn_wandernd");
 
+    // Wirft die Wand auch den HALL zurueck? Gemessen wird derselbe
+    // Abgriffpunkt einmal ohne und einmal mit Wand zwischen ihm und dem
+    // Hoerer - der Direktschall bleibt dabei stumm, am Ausgang steht also nur
+    // sein Hall (@dpa 20260830: "die Waende muessen auch durch die Hall's
+    // reflektieren").
+    {
+        auto wallRun = [] (bool wallOn, bool tapOn) -> double
+        {
+            DopplerfeldProcessor proc;
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            auto set = [&proc] (const juce::String& id, float value)
+            {
+                if (auto* p = proc.apvts.getParameter (id))
+                    p->setValueNotifyingHost (p->convertTo0to1 (value));
+            };
+
+            using namespace Params::TapPart;
+
+            set (Params::srcJitterOn, 0.0f);
+            set (Params::rpm, 2000.0f);
+            set (Params::directGain, -60.0f);
+            set (Params::reverbBypass, 0.0f);
+
+            set (Params::tapId (2, on), tapOn ? 1.0f : 0.0f);
+            set (Params::tapId (2, gain), -6.0f);
+            set (Params::tapId (2, predelay), 1.0f);
+            set (Params::tapId (2, decay), 1.2f);
+
+            // Eine Wand hinter Quelle und Hoerer, also auf derselben Seite -
+            // nur dann wirft sie ueberhaupt etwas zurueck.
+            set (Params::wall1On, wallOn ? 1.0f : 0.0f);
+            set (Params::wall1X, 0.72f);
+            set (Params::wall1Y, 0.5f);
+            set (Params::wall1Angle, 90.0f);
+            set (Params::wall1Damp, 0.1f);
+            set (Params::wall1Gain, 0.0f);
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            juce::MidiBuffer midi;
+
+            const double blockSeconds = (double) blockSize / sampleRate;
+            const int    settle  = (int) (2.0 / blockSeconds);
+            const int    measure = (int) (2.0 / blockSeconds);
+
+            for (int b = 0; b < settle; ++b)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+            }
+
+            double sum = 0.0;
+            long long n = 0;
+
+            for (int b = 0; b < measure; ++b)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                for (int i = 0; i < blockSize; ++i)
+                {
+                    const double l = buffer.getSample (0, i);
+                    const double r = buffer.getSample (1, i);
+                    sum += 0.5 * (l * l + r * r);
+                    ++n;
+                }
+            }
+
+            return n > 0 ? std::sqrt (sum / (double) n) : 0.0;
+        };
+
+        // Die Wand wirft auch den Direktschall zurueck, und der laeuft nicht
+        // ueber den Abgriffpunkt. Gemessen wird deshalb je Fall zweimal - mit
+        // und ohne Punkt - und die Energie des Punktes daraus abgezogen.
+        auto tapEnergy = [&] (bool wallOn)
+        {
+            const double all  = wallRun (wallOn, true);
+            const double rest = wallRun (wallOn, false);
+
+            return std::sqrt (std::max (0.0, all * all - rest * rest));
+        };
+
+        const double without = tapEnergy (false);
+        const double with    = tapEnergy (true);
+
+        std::printf ("\nWirft die Wand den Hall zurueck? (Hall eines Punktes, ohne den Rest)\n");
+        std::printf ("  ohne Wand  RMS %.6f\n", without);
+        std::printf ("  mit Wand   RMS %.6f  (%+.1f dB)\n", with,
+                     20.0 * std::log10 (std::max (1.0e-12, with) / std::max (1.0e-12, without)));
+    }
+
     return 0;
 }

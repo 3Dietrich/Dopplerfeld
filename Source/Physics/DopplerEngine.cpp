@@ -994,6 +994,27 @@ PathTransform DopplerEngine::recipeTransform (const PathRecipe& r) const
     return t;
 }
 
+// Dieselbe weiche Seitenpruefung wie wallSideGain, nur fuer ein beliebiges
+// Paar aus Sender und Empfaenger: der Hall eines Abgriffpunktes geht nicht von
+// der Quelle aus, sondern von diesem Punkt.
+double DopplerEngine::wallSideGainBetween (int wallIndex, Vec3 senderPos, Vec3 receiverPos) const
+{
+    if (wallIndex < 0 || wallIndex >= maxWalls)
+        return 1.0;
+
+    const Surface& s      = surfaces[(size_t) (2 + wallIndex)];
+    const Vec3&    anchor = wallGeometry[(size_t) wallIndex].anchor;
+
+    const double dSend = s.normal.dot (senderPos   - anchor);
+    const double dRecv = s.normal.dot (receiverPos - anchor);
+
+    constexpr double sideFadeMetres = 1.5;
+
+    const double t = 0.5 + 0.5 * (dSend * dRecv) / (sideFadeMetres * sideFadeMetres);
+
+    return std::min (1.0, std::max (0.0, t));
+}
+
 double DopplerEngine::wallSideGain (int wallIndex, Vec3 receiverPos) const
 {
     if (wallIndex < 0 || wallIndex >= maxWalls)
@@ -1525,6 +1546,52 @@ void DopplerEngine::process (juce::AudioBuffer<float>& stereoOut,
 
         tapBus[(size_t) t].setPredelayMetres (back);
         tapBus[(size_t) t].setPanorama (tapPanorama (t));
+
+        // Rueckwege des Halls ueber die Waende (siehe TapBus::setMirrorReturn).
+        // Gespiegelt wird der Abgriffpunkt: was der Hoerer hoert, kommt aus
+        // der Richtung des Spiegelbildes und hat dessen Weg hinter sich.
+        for (int w = 0; w < maxWalls; ++w)
+        {
+            const Surface& wall = surfaces[(size_t) (2 + w)];
+
+            // Ohne Wand, ohne Vorlauf: der Vorlauf IST der gerade Weg, und
+            // ohne ihn gaebe es nichts, wogegen sich der Umweg bemisst.
+            if (! wall.enabled || ! taps[(size_t) t].predelay)
+            {
+                tapBus[(size_t) t].setMirrorReturn (w, 0.0, 0.0, 0.0, 20000.0);
+                continue;
+            }
+
+            const Vec3   mirrored = applyPathTransform (wall.transform, taps[(size_t) t].pos);
+            const Vec3   toMirror = mirrored - listener.head;
+            const double mirrorDistance = toMirror.length();
+            const double directDistance = std::max (1.0e-3, back);
+
+            // Steht der Punkt auf der anderen Seite der Wand als der Hoerer,
+            // wirft sie nichts zurueck - dieselbe Bedingung wie bei den
+            // Spiegelpfaden der Ausbreitung, und aus demselben Grund weich
+            // (siehe wallSideGain).
+            const double side = wallSideGainBetween (w, taps[(size_t) t].pos, listener.head);
+
+            const double gain = wall.transform.gain * side
+                                  * (directDistance / std::max (directDistance, mirrorDistance));
+
+            // Die Hoehendaempfung der Flaeche, in derselben Staerke wie auf den
+            // Spiegelpfaden: voll aufgedreht bleibt nur ihre Eckfrequenz.
+            const double fc = wall.damping <= 0.0
+                                ? 20000.0
+                                : 20000.0 * std::pow (wall.dampFcHz / 20000.0, wall.damping);
+
+            double panorama = 0.0;
+
+            if (mirrorDistance > 1.0e-6)
+                panorama = std::clamp ((toMirror * (1.0 / mirrorDistance)).dot (listenerRight (listener))
+                                           * panoramaAmount(),
+                                       -1.0, 1.0);
+
+            tapBus[(size_t) t].setMirrorReturn (w, mirrorDistance - directDistance,
+                                                gain, panorama, fc);
+        }
 
         // Eingang: das Kettensignal des Vorgaengers (beide Seiten), sonst das,
         // was am Ort dieses Punktes ankommt (ein Ort hoert mono).

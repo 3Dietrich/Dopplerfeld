@@ -59,6 +59,9 @@ public:
         preA.prepare (maxDelay);
         preB.prepare (maxDelay);
 
+        mirrorLineL.prepare (maxDelay);
+        mirrorLineR.prepare (maxDelay);
+
         wetL.assign ((size_t) std::max (1, maxBlock), 0.0f);
         wetR.assign ((size_t) std::max (1, maxBlock), 0.0f);
         dry.assign  ((size_t) std::max (1, maxBlock), 0.0f);
@@ -81,6 +84,15 @@ public:
 
         preA.reset();
         preB.reset();
+
+        mirrorLineL.reset();
+        mirrorLineR.reset();
+
+        for (auto& m : mirrors)
+        {
+            m.dampL.reset();
+            m.dampR.reset();
+        }
 
         // Die Ueberblendung faellt weg, der Vorlauf steht danach aber auf
         // seiner eingestellten Laenge. Ohne das Nachziehen bliebe die Leitung
@@ -359,11 +371,81 @@ public:
             const float gL = std::sqrt (1.0f - t);
             const float gR = std::sqrt (t);
 
-            outL[i] += (mid + side) * gL * 1.41421356f * currentGain;
-            outR[i] += (mid - side) * gR * 1.41421356f * currentGain;
+            const float outLeft  = (mid + side) * gL * 1.41421356f * currentGain;
+            const float outRight = (mid - side) * gR * 1.41421356f * currentGain;
+
+            outL[i] += outLeft;
+            outR[i] += outRight;
+
+            // Dasselbe Signal, das eben ans Ohr ging, wandert in die
+            // Spiegelleitung: von dort holen es die Rueckwege ueber die
+            // Waende, jeder mit seinem Umweg (siehe setMirrorReturn).
+            mirrorLineL.write (outLeft);
+            mirrorLineR.write (outRight);
+
+            for (auto& m : mirrors)
+            {
+                if (m.gain <= 0.0f)
+                    continue;
+
+                const float t  = 0.5f * (1.0f + m.panorama);
+                const float mL = std::sqrt (1.0f - t) * 1.41421356f;
+                const float mR = std::sqrt (t)        * 1.41421356f;
+
+                const float l = m.dampL.process (mirrorLineL.readAt (m.delaySamples));
+                const float r = m.dampR.process (mirrorLineR.readAt (m.delaySamples));
+
+                // Die Reflexion behaelt die Seiten des Halls und wird nur
+                // dorthin geschoben, wo das Spiegelbild steht - eine
+                // Mono-Summe waere hier derselbe Verlust wie in der Kette.
+                outL[i] += l * m.gain * mL;
+                outR[i] += r * m.gain * mR;
+            }
         }
 
         currentGain = targetGain;
+    }
+
+    // Ein Rueckweg des fertigen Halls ueber eine spiegelnde Flaeche
+    // (@dpa 20260830: "die Waende muessen auch durch die Hall's
+    // reflektieren").
+    //
+    // Was der Abgriffpunkt hoert, laeuft schon ueber die Waende - das machen
+    // die Spiegelpfade der Ausbreitung. Sein Hall dagegen ging bisher nur auf
+    // geradem Weg ans Ohr. Eine Wand zwischen Punkt und Hoerer wirft ihn aber
+    // genauso zurueck wie jeden anderen Schall, nur spaeter, leiser und
+    // dumpfer.
+    //
+    // Gerechnet wird das nicht noch einmal durch die Physik - der Hall ist
+    // kein bewegter Punkt mehr, sein Doppler steckt schon im Eingang. Es
+    // bleibt das, was eine Spiegelung an einer ruhenden Flaeche ausmacht:
+    // Umweg, Abstandsverlust, Wanddaempfung und die Richtung, aus der es
+    // kommt.
+    //
+    //   extraMetres  Umweg gegenueber dem geraden Weg
+    //   gainLinear   Pegel gegenueber dem geraden Weg (Wand mal Abstand)
+    //   panorama     Richtung des Spiegelbildes, -1 links bis +1 rechts
+    //   dampFcHz     Eckfrequenz der Hoehendaempfung an der Flaeche
+    void setMirrorReturn (int index, double extraMetres, double gainLinear,
+                          double panorama, double dampFcHz)
+    {
+        if (index < 0 || index >= maxMirrors)
+            return;
+
+        auto& m = mirrors[(size_t) index];
+
+        m.gain     = (float) std::clamp (gainLinear, 0.0, 4.0);
+        m.panorama = (float) std::clamp (panorama, -1.0, 1.0);
+
+        const double metres = std::clamp (extraMetres, 0.0, maxPredelayMetres);
+
+        m.delaySamples = std::max (1, (int) std::lround (metres / reverbparts::soundSpeed * sr));
+
+        const double fc = std::clamp (dampFcHz, 20.0, 20000.0);
+        const double a  = std::exp (-2.0 * 3.14159265358979323846 * fc / std::max (1.0, sr));
+
+        m.dampL.setCoefficient (a);
+        m.dampR.setCoefficient (a);
     }
 
     // Wandern der Leitungen, an ALLE Bauarten - wie alle uebrigen Stellwerte
@@ -407,6 +489,23 @@ private:
     OpenAirReverb   openAir;
 
     reverbparts::DelayLine preA, preB;
+
+    // Rueckwege ueber die spiegelnden Flaechen, siehe setMirrorReturn. Eine
+    // gemeinsame Leitung mit einem Lesekopf je Flaeche - der Umweg ist das
+    // Einzige, worin sie sich in der Zeit unterscheiden.
+    struct Mirror
+    {
+        int   delaySamples = 1;
+        float gain         = 0.0f;
+        float panorama     = 0.0f;
+
+        reverbparts::DampingFilter dampL, dampR;
+    };
+
+    static constexpr int maxMirrors = 2;
+
+    std::array<Mirror, (size_t) maxMirrors> mirrors {};
+    reverbparts::DelayLine mirrorLineL, mirrorLineR;
 
     std::vector<float> wetL, wetR, dry, erL, erR, erSum;
 

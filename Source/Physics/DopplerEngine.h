@@ -565,6 +565,7 @@ private:
     // der Wandebene stehen. Der Empfaenger ist meistens der Hoerer, bei den
     // Wegen zu einem Abgriffpunkt aber dieser Punkt.
     double wallSideGain (int wallIndex, Vec3 receiverPos) const;
+    double wallSideGainBetween (int wallIndex, Vec3 senderPos, Vec3 receiverPos) const;
 
     // Sicherheitsnetz: füllt die Bahn mit der zuletzt geschriebenen Position
     // auf, falls der Aufrufer für diesen Block weniger Punkte geliefert hat
