@@ -2348,10 +2348,10 @@ void DopplerfeldProcessor::advanceMotion (double untilTime)
 
             if (stepLen > 1.0e-9)
             {
-                const Vec3   dir   = step * (1.0 / stepLen);
-                const double coeff = 1.0 - std::exp (-tickDt / propellerHeadingTau);
+                const Vec3   dir          = step * (1.0 / stepLen);
+                const double headingCoeff = 1.0 - std::exp (-tickDt / propellerHeadingTau);
 
-                propellerHeading = propellerHeading + (dir - propellerHeading) * coeff;
+                propellerHeading = propellerHeading + (dir - propellerHeading) * headingCoeff;
 
                 const double headingLen = propellerHeading.length();
 

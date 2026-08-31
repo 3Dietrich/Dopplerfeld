@@ -264,7 +264,7 @@ int main (int argc, char** argv)
             if (std::abs (out[i]) > std::abs (out[loudest]))
                 loudest = i;
 
-        std::printf ("\nForm des lautesten Schlages bei t = %.3f s:\n", loudest / sampleRate);
+        std::printf ("\nForm des lautesten Schlages bei t = %.3f s:\n", (double) loudest / sampleRate);
 
         const int step = (int) (0.0001 * sampleRate);
         const int span = (int) (0.003 * sampleRate);

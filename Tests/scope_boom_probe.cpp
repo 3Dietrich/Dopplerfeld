@@ -34,7 +34,7 @@ std::vector<float> makeSignal (double seconds, double boomEverySeconds, double q
     {
         seed = seed * 1664525u + 1013904223u;
 
-        x[(size_t) n] = quietLevel * (2.0f * ((float) (seed >> 8) / 16777216.0f) - 1.0f);
+        x[(size_t) n] = (float) quietLevel * (2.0f * ((float) (seed >> 8) / 16777216.0f) - 1.0f);
     }
 
     // Die Knalle selbst: eine kurze N-Welle, wie sie das Plugin erzeugt.

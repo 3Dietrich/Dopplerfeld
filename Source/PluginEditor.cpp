@@ -281,8 +281,8 @@ DopplerfeldEditor::DopplerfeldEditor (DopplerfeldProcessor& p)
     tooltipWindow.enabledOnDisplays = false;
     tooltipWindow.isDisplay = [this] (juce::Component& c)
     {
-        for (juce::Component* p = &c; p != nullptr; p = p->getParentComponent())
-            if (p == &field || p == &scope)
+        for (juce::Component* node = &c; node != nullptr; node = node->getParentComponent())
+            if (node == &field || node == &scope)
                 return true;
 
         return false;

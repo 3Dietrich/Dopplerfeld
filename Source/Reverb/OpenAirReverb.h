@@ -196,7 +196,7 @@ private:
     {
         uint32_t s;
 
-        explicit Rng (uint32_t seed) : s (seed * 2654435761u + 1u) {}
+        explicit Rng (uint32_t start) : s (start * 2654435761u + 1u) {}
 
         uint32_t next()
         {

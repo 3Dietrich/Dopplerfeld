@@ -155,7 +155,7 @@ public:
         if (motionSeed != seed)
         {
             motionSeed  = seed;
-            motionState = (std::uint32_t) (seed * 2654435761u + 1u);
+            motionState = (std::uint32_t) seed * 2654435761u + 1u;
         }
     }
 

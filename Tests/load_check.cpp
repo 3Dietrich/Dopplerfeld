@@ -7570,13 +7570,13 @@ int main()
             setParam (proc, Params::noiseSpeedAmount, noiseSpeedPercent);
             setParam (proc, Params::windLevelDb,      windDb);
 
-            juce::AudioBuffer<float> buffer (2, blockSize);
-            juce::MidiBuffer midi;
+            juce::AudioBuffer<float> runBuffer (2, blockSize);
+            juce::MidiBuffer runMidi;
 
             for (int i = 0; i < 8; ++i)
             {
-                buffer.clear();
-                proc.processBlock (buffer, midi);
+                runBuffer.clear();
+                proc.processBlock (runBuffer, runMidi);
             }
 
             proc.triggerFlyBy();
@@ -7588,8 +7588,8 @@ int main()
 
             for (int b = 0; b < blocks; ++b)
             {
-                buffer.clear();
-                proc.processBlock (buffer, midi);
+                runBuffer.clear();
+                proc.processBlock (runBuffer, runMidi);
 
                 // Erst ab der zweiten Sekunde messen: davor ist der Schall der
                 // Quelle noch unterwegs.
@@ -7598,7 +7598,7 @@ int main()
 
                 for (int i = 0; i < blockSize; ++i)
                 {
-                    const double v = buffer.getSample (0, i);
+                    const double v = runBuffer.getSample (0, i);
                     sum += v * v;
                     ++n;
                 }
@@ -7661,13 +7661,13 @@ int main()
             setParam (proc, Params::srcX, 0.45f);
             setParam (proc, Params::srcY, 0.5f);
 
-            juce::AudioBuffer<float> buffer (2, blockSize);
-            juce::MidiBuffer midi;
+            juce::AudioBuffer<float> runBuffer (2, blockSize);
+            juce::MidiBuffer runMidi;
 
             for (int i = 0; i < 40; ++i)
             {
-                buffer.clear();
-                proc.processBlock (buffer, midi);
+                runBuffer.clear();
+                proc.processBlock (runBuffer, runMidi);
             }
 
             // Losfahren: das Ziel rueckt ein Stueck weiter, der Glaetter zieht
@@ -7681,12 +7681,12 @@ int main()
 
             for (int b = 0; b < 60; ++b)
             {
-                buffer.clear();
-                proc.processBlock (buffer, midi);
+                runBuffer.clear();
+                proc.processBlock (runBuffer, runMidi);
 
                 for (int i = 0; i < blockSize; ++i)
                 {
-                    const float v = buffer.getSample (0, i);
+                    const float v = runBuffer.getSample (0, i);
 
                     if ((v >= 0.0f) != (previous >= 0.0f))
                         ++crossings;
@@ -7744,8 +7744,8 @@ int main()
 
             setParam (proc, Params::boomHoldMs, holdMs);
 
-            juce::AudioBuffer<float> buffer (2, blockSize);
-            juce::MidiBuffer midi;
+            juce::AudioBuffer<float> runBuffer (2, blockSize);
+            juce::MidiBuffer runMidi;
 
             // Gezaehlt wird, wie viele Bloecke ueberhaupt einen Schlag
             // enthalten - nicht der Spitzenwert. Die Sperre nimmt Knalle weg,
@@ -7754,13 +7754,13 @@ int main()
 
             for (int b = 0; b < (int) (4.0 * sampleRate / blockSize); ++b)
             {
-                buffer.clear();
-                proc.processBlock (buffer, midi);
+                runBuffer.clear();
+                proc.processBlock (runBuffer, runMidi);
 
                 double peak = 0.0;
 
                 for (int i = 0; i < blockSize; ++i)
-                    peak = std::max (peak, std::abs ((double) buffer.getSample (0, i)));
+                    peak = std::max (peak, std::abs ((double) runBuffer.getSample (0, i)));
 
                 if (peak > 0.25)
                     ++loudBlocks;

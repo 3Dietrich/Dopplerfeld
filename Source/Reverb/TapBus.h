@@ -388,18 +388,18 @@ public:
                 if (m.gain <= 0.0f)
                     continue;
 
-                const float t  = 0.5f * (1.0f + m.panorama);
-                const float mL = std::sqrt (1.0f - t) * 1.41421356f;
-                const float mR = std::sqrt (t)        * 1.41421356f;
+                const float mt = 0.5f * (1.0f + m.panorama);
+                const float mL = std::sqrt (1.0f - mt) * 1.41421356f;
+                const float mR = std::sqrt (mt)        * 1.41421356f;
 
-                const float l = m.dampL.process (mirrorLineL.readAt (m.delaySamples));
-                const float r = m.dampR.process (mirrorLineR.readAt (m.delaySamples));
+                const float ml = m.dampL.process (mirrorLineL.readAt (m.delaySamples));
+                const float mr = m.dampR.process (mirrorLineR.readAt (m.delaySamples));
 
                 // Die Reflexion behaelt die Seiten des Halls und wird nur
                 // dorthin geschoben, wo das Spiegelbild steht - eine
                 // Mono-Summe waere hier derselbe Verlust wie in der Kette.
-                outL[i] += l * m.gain * mL;
-                outR[i] += r * m.gain * mR;
+                outL[i] += ml * m.gain * mL;
+                outR[i] += mr * m.gain * mR;
             }
         }
 
@@ -427,7 +427,7 @@ public:
     //   panorama     Richtung des Spiegelbildes, -1 links bis +1 rechts
     //   dampFcHz     Eckfrequenz der Hoehendaempfung an der Flaeche
     void setMirrorReturn (int index, double extraMetres, double gainLinear,
-                          double panorama, double dampFcHz)
+                          double panoramaIn, double dampFcHz)
     {
         if (index < 0 || index >= maxMirrors)
             return;
@@ -435,7 +435,7 @@ public:
         auto& m = mirrors[(size_t) index];
 
         m.gain     = (float) std::clamp (gainLinear, 0.0, 4.0);
-        m.panorama = (float) std::clamp (panorama, -1.0, 1.0);
+        m.panorama = (float) std::clamp (panoramaIn, -1.0, 1.0);
 
         const double metres = std::clamp (extraMetres, 0.0, maxPredelayMetres);
 
