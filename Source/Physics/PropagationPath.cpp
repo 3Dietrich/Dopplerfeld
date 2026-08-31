@@ -933,7 +933,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
         // ein Wurzelpaar mathematisch entsteht bzw. wieder vergeht: die Falte
         // liegt genau dort, wo F'(t_e) = -c*(1-M_r) durch null geht, also bei
         // M_r = 1 - derselben Stelle, an der weiter oben auch der
-        // Kaustik-Ausklang beim Tod eines Zweigs greift (causticWidths*eps).
+        // Kaustik-Ausklang beim Tod eines Zweigs greift (causticWindow).
         if (nWaveOn && newBornCount == 2)
         {
             Branch& a = branches[newBornSlots[0]];
@@ -944,12 +944,10 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
             // Notwendige Bedingung: es muss wirklich Ueberschall sein.
             //
-            // Die Naehe zu M_r = 1 allein reicht nicht, denn ihr Mass haengt an
-            // eps und damit am Regler "Boom Limit" - der steuert aber nur, wie
-            // stark die Amplitudenformel an der Front geglaettet wird, und hat
-            // mit der Frage, OB ein Kegel eintrifft, nichts zu tun. Bei
-            // Boom Limit 20,8 dB ist causticWidths * eps schon 0,365 breit, es
-            // genuegte also ein M_r von 0,64.
+            // Die Naehe zu M_r = 1 allein reicht nicht. causticWindow ist rund
+            // 0,126 breit, ein M_r von 0,88 laege also schon darin - und ein
+            // Wurzelpaar kann auch unterhalb der Schallgeschwindigkeit
+            // entstehen, etwa an einem Knick der Bahn.
             //
             // Ein Wurzelpaar entsteht an der Falte bei M_r = 1, der eine der
             // beiden Zweige liegt danach darueber. Ist keiner von beiden
@@ -958,7 +956,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const bool trulySupersonic = (a.mach >= 1.0 || b.mach >= 1.0);
 
             if (trulySupersonic
-                && distA < causticWidths * eps && distB < causticWidths * eps)
+                && distA < causticWindow && distB < causticWindow)
             {
                 // Nur EIN Zweig trägt den Puls, sonst würde dieselbe
                 // Kegelankunft doppelt ausgelöst - zwei neue Zweige, aber ein
@@ -1032,7 +1030,7 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // Header) - andernfalls schneidet ein Löserfehler hörbar echtes
                 // Signal weg.
                 const double distanceToCone = std::abs (1.0 - b.mach);
-                const bool   diedAtCaustic  = (distanceToCone < causticWidths * eps);
+                const bool   diedAtCaustic  = (distanceToCone < causticWindow);
 
                 if (diedAtCaustic)
                 {

@@ -29,7 +29,7 @@ int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
 
-    const juce::String name = argc > 1 ? juce::String (argv[1]) : juce::String ("peitschentest");
+    const juce::String name = argc > 1 ? juce::String::fromUTF8 (argv[1]) : juce::String ("peitschentest");
     const double seconds    = argc > 2 ? std::atof (argv[2]) : 5.0;
 
     // Was fuer diesen Lauf abgeschaltet wird, damit sich trennen laesst, WER
@@ -75,6 +75,15 @@ int main (int argc, char** argv)
     // Preset vergleichen laesst.
     if (argc > 5)
         set (Params::boomHoldMs, (float) std::atof (argv[5]));
+
+    // Boom Limit von der Kommandozeile. Ohne diesen Weg laesst sich die Frage
+    // nicht messen, ob der Regler die Kegelerkennung mitzieht (@dpa 20260831:
+    // "wenn es voll aufgedreht ist, kommt kein N-Wave mehr durch").
+    if (argc > 6)
+        set (Params::boomLimitDb, (float) std::atof (argv[6]));
+
+    if (const auto* v = proc.apvts.getRawParameterValue (Params::boomLimitDb))
+        std::printf ("(Parameter boomLimitDb steht auf %.1f dB)\n", (double) v->load());
 
     if (off.contains ("jitter"))   set (Params::srcJitterOn, 0.0f);
     if (off.contains ("nwave"))    set (Params::nWaveOn,     0.0f);

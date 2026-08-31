@@ -703,6 +703,21 @@ private:
     // abgeschnittenen Zweig nur an eine andere Stelle verschieben.
     static constexpr double causticWidths = 4.0;
 
+    // Breite des Fensters um M_r = 1, in dem ein neues Wurzelpaar als
+    // Kegelankunft gilt und ein Zweigtod als Kaustik-Tod.
+    //
+    // Das ist GEOMETRIE und hängt deshalb nicht an eps. eps ist der Regler
+    // "Boom Limit": er glättet die Amplitudenformel an der Front, er
+    // entscheidet nicht, OB ein Kegel eintrifft. Als Fenster benutzt macht er
+    // das Gegenteil dessen, was auf ihm steht - je weiter aufgedreht, desto
+    // schmaler das Fenster, desto seltener wird ein Knall überhaupt erkannt.
+    // Gemessen (whip_probe, peitschentest, 5 s): 39 Kegelankünfte bis 30 dB,
+    // 5 bei 45 dB, 1 bei 60 dB, und die Spitze fiel dabei von 0,835 auf 0,366.
+    //
+    // Der Wert ist der, den die Vorgabe von 30 dB ergab (4,0 · 10^(-30/20)),
+    // damit sich an der Vorgabestellung nichts ändert.
+    static constexpr double causticWindow = 0.12649110640673518;
+
     // --- Form des Schattenausklangs ---
     //
     // Hinter einer Faltungskaustik hoert das Feld nicht auf, es geht gebeugt

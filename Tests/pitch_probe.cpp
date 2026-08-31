@@ -31,7 +31,7 @@ int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
 
-    const juce::String name = argc > 1 ? juce::String (argv[1]) : juce::String ("BugPitchBigbug");
+    const juce::String name = argc > 1 ? juce::String::fromUTF8 (argv[1]) : juce::String ("BugPitchBigbug");
     const double seconds    = argc > 2 ? std::atof (argv[2]) : 6.0;
     const juce::String off  = argc > 3 ? juce::String (argv[3]) : juce::String();
 
