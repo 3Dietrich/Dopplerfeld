@@ -22,6 +22,18 @@ void PropagationPath::reset()
     lastSolveTime = 0.0;
     seeded        = false;
 
+    // Das Rollen muss mit weg. Es haengt nicht am Zweig, sondern am Pfad, und
+    // ueberlebte ein reset() sonst - nach dem Wiedereinschalten liefe der
+    // Nachhall einer Szene weiter, die es nicht mehr gibt.
+    rumbleAmp   = 0.0;
+    rumbleAge   = 0.0;
+    rumbleLpZ   = 0.0;
+    rumbleFrom  = 0.0;
+    rumbleTo    = 0.0;
+    rumblePhase = 1.0;
+    rumbleInc   = 1.0;
+    rumbleRng   = rumbleSeed;
+
     // ALLE Zeitmarken zurueck, nicht nur die Loeserzeit.
     //
     // DopplerEngine::reset() stellt die Hoereruhr auf null (sampleClock = 0).
@@ -367,6 +379,18 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     rumblePhase = 1.0;   // die erste Kante kommt sofort nach der Welle
     rumbleFrom  = 0.0;
     rumbleTo    = 0.0;
+    rumbleInc   = 1.0;
+
+    // Beide Ohren bekommen DIESELBE Kantenfolge, nicht jedes seine eigene.
+    //
+    // Was da streut, ist EIN Schallfeld. Der Unterschied zwischen links und
+    // rechts ist die Laufzeit ueber den Kopf - hoechstens rund 30 cm, also gut
+    // eine halbe Millisekunde -, und die entsteht hier von selbst: die
+    // Stossfront trifft die beiden Ohren zu leicht verschiedenen Zeiten, jedes
+    // startet daraufhin dieselbe Folge, und die Differenz ist genau die
+    // Laufzeit. Mit je eigenem Zufall waeren es zwei verschiedene Ereignisse
+    // gewesen, und das Rollen zerfiele in ein breites Rauschband ohne Ort.
+    rumbleRng = rumbleSeed;
 
     // Fenster fuer die Absenkung des uebrigen Schalls: solange die Stossfront
     // ueber diesen Weg laeuft, kommt nichts anderes durch (siehe
@@ -1514,7 +1538,19 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             // Pfad wert waere.
             const double u    = std::clamp (rumbleAge / rumbleSeconds, 0.0, 1.0);
             const double rate = rumbleEdgeLo * std::pow (rumbleEdgeHi / rumbleEdgeLo, u);
-            const double aLp  = 1.0 - std::exp (-2.0 * 3.14159265358979323846 * rumbleTone / sr);
+
+            // Die Farbe faellt im Lauf des Rollens - sie ist der Startwert,
+            // nicht der feste Wert.
+            //
+            // Der Grund ist Luftdaempfung: was spaet ankommt, hat den laengsten
+            // Umweg hinter sich, und Hoehen verlieren ueber die Strecke mehr als
+            // Tiefen. Bleibt die Ecke stehen, waehrend die Kanten dichter
+            // werden, loest sich mit wachsender Dichte ein Zischen vom Bass ab
+            // (@dpa 20260831: "ich hoere ein Rauschen welches sich 'vom Bass
+            // loest'"). Mit fallender Ecke bleibt es unten, wo es hingehoert.
+            const double fc   = rumbleTone * std::pow (rumbleToneFall, u);
+            const double aLp  = 1.0 - std::exp (-2.0 * 3.14159265358979323846
+                                                * std::max (fc, 10.0) / sr);
 
             // Ein Ein-Pol nimmt Pegel weg, und zwar umso mehr, je tiefer er
             // steht. Ohne Ausgleich waere das Rollen nicht dunkel, sondern
@@ -1524,8 +1560,19 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             const double norm = 2.2360679774997896
                               / std::sqrt (std::max (aLp / (2.0 - aLp), 1.0e-12));
 
-            // Exponentiell, nicht linear: so klingt es aus statt abzureissen.
-            const double env  = (rumbleAge >= 0.0) ? std::exp (-rumbleDecays * u) : 0.0;
+            // Exponentiell im QUADRAT der Zeit, nicht in ihr: der Verlauf ist
+            // damit am Anfang fast flach und faellt erst spaet steil ab.
+            //
+            // Tiefe Anteile verlieren ueber die Strecke weniger Energie als
+            // hohe (@dpa 20260831: "solange sie so sub sind, verlieren sie auch
+            // weniger Energie ... bis zu einer gewissen Env Laenge noch Laut
+            // bleiben"). Ein reiner exponentieller Abfall nimmt dem Rollen
+            // schon nach einem Fuenftel der Zeit die Haelfte; so bleibt es
+            // laenger stehen und ist am Ende trotzdem sicher unter der
+            // Hoerschwelle.
+            const double env  = (rumbleAge >= 0.0)
+                              ? std::exp (-rumbleDecays * u * u)
+                              : 0.0;
 
             // Breite des Uebergangs, als Anteil des Abstands zweier Kanten.
             const double width = rumbleEdgeMinWidth

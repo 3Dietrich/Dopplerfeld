@@ -874,7 +874,14 @@ private:
     double rumbleTo      = 0.0;      // Wert der naechsten
     double rumblePhase   = 0.0;      // 0..1 zwischen den beiden
     double rumbleInc     = 1.0;      // Fortschritt je Sample; aus dem Abstand
-    std::uint32_t rumbleRng = 0x9E3779B9u;
+    std::uint32_t rumbleRng = rumbleSeed;
+
+    // Gemeinsamer Startwert beider Ohren, siehe triggerNWave(). Fest und nicht
+    // je Knall verschieden: die Folge muss auf beiden Seiten dieselbe sein, und
+    // ein Zaehler, den sich zwei Pfade teilen, waere dafuer der umstaendlichere
+    // Weg. Dass jeder Knall dieselbe Streuung bekommt, faellt an einem
+    // Ereignis, das in Sekunden weg ist, nicht auf.
+    static constexpr std::uint32_t rumbleSeed = 0x9E3779B9u;
 
     // Sekunden seit der Stossfront. NEGATIV heisst: die Welle laeuft noch, das
     // Rollen wartet - siehe setRumble(). Es zaehlt trotzdem mit, damit es genau
@@ -885,6 +892,11 @@ private:
     // naechsten. Nicht null: ein echter Sprung von einem Sample auf das
     // naechste ist Energie ueber die ganze Bandbreite und knackt.
     static constexpr double rumbleEdgeMinWidth = 0.02;
+
+    // Um welchen Faktor die Farbe im Lauf des Rollens faellt. Ein Achtel sind
+    // drei Oktaven ueber die ganze Dauer - genug, damit die Dichte nach oben
+    // wandert, ohne dass der Klang mit ihr wandert.
+    static constexpr double rumbleToneFall = 0.125;
 
     // Wieviele Zeitkonstanten das Rollen in seiner eingestellten Dauer
     // durchlaeuft. Fuenf heisst: am Ende steht es bei -43 dB, also unter allem,

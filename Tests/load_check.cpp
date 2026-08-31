@@ -7728,6 +7728,106 @@ int main()
         }
     }
 
+    // Kommt das Rollen nach dem Wiedereinschalten zurueck? (@dpa 20260831:
+    // "nach aus und wieder An schalten gibt's kein Grollen mehr!")
+    //
+    // Beim Wiedereinschalten laeuft DopplerEngine::reset(), und das raeumt bis
+    // heute jeden Zustand ausser dem des Rollens - der haengt am Pfad und nicht
+    // am Zweig. Gemessen wird deshalb dasselbe zweimal: einmal frisch, einmal
+    // nach einem vollstaendigen Aus und An. Beide Male muss nach dem Knall
+    // etwas stehen.
+    {
+        auto rumbleAfter = [] (bool toggleOff)
+        {
+            DopplerfeldProcessor proc;
+
+            proc.setRateAndBufferSizeDetails (sampleRate, blockSize);
+            proc.prepareToPlay (sampleRate, blockSize);
+
+            setParam (proc, Params::masterOn,      1.0f);
+            setParam (proc, Params::nWaveOn,       1.0f);
+            setParam (proc, Params::rumbleGainDb,  0.0f);
+            setParam (proc, Params::rumbleSeconds, 2.0f);
+            setParam (proc, Params::engineKind,    0.0f);
+            setParam (proc, Params::limiterOn,     0.0f);
+
+            setParam (proc, Params::flyKind,     1.0f);
+            setParam (proc, Params::flyDistance, 300.0f);
+            setParam (proc, Params::flyApproach, 1200.0f);
+            setParam (proc, Params::flySpeed,    700.0f);
+
+            juce::AudioBuffer<float> buf (2, blockSize);
+            juce::MidiBuffer         mid;
+
+            auto run = [&] (double seconds, std::vector<float>* keep)
+            {
+                const int blocks = (int) std::ceil (seconds * sampleRate / blockSize);
+
+                for (int b = 0; b < blocks; ++b)
+                {
+                    buf.clear();
+                    proc.processBlock (buf, mid);
+
+                    if (keep != nullptr)
+                        for (int i = 0; i < blockSize; ++i)
+                            keep->push_back (buf.getReadPointer (0)[i]);
+                }
+            };
+
+            run (0.3, nullptr);
+
+            if (toggleOff)
+            {
+                // Aus, ausklingen lassen, wieder an - genau @dpas Handgriff.
+                setParam (proc, Params::masterOn, 0.0f);
+                run (0.5, nullptr);
+                setParam (proc, Params::masterOn, 1.0f);
+                run (0.2, nullptr);
+            }
+
+            proc.triggerFlyBy();
+
+            std::vector<float> out;
+            run (6.0, &out);
+
+            // Spitze suchen (der Knall), danach den Effektivwert eine halbe
+            // Sekunde SPAETER messen - dort steht nur noch das Rollen.
+            int pk = 0;
+
+            for (int i = 0; i < (int) out.size(); ++i)
+                if (std::abs (out[(size_t) i]) > std::abs (out[(size_t) pk]))
+                    pk = i;
+
+            const int a0 = pk + (int) (0.5 * sampleRate);
+            const int a1 = std::min ((int) out.size(), a0 + (int) (0.5 * sampleRate));
+
+            double sum = 0.0;
+
+            for (int i = a0; i < a1; ++i)
+                sum += (double) out[(size_t) i] * (double) out[(size_t) i];
+
+            return (a1 > a0) ? std::sqrt (sum / (a1 - a0)) : 0.0;
+        };
+
+        const double fresh   = rumbleAfter (false);
+        const double toggled = rumbleAfter (true);
+
+        std::printf ("%-22s Rollen nach dem Knall: frisch %.6f | nach Aus/An %.6f\n",
+                     "Rollen ueberlebt", fresh, toggled);
+
+        if (fresh <= 1.0e-6)
+        {
+            std::printf ("FEHLGESCHLAGEN: nach dem Knall steht gar kein Rollen\n");
+            failed = true;
+        }
+        else if (toggled < 0.5 * fresh)
+        {
+            std::printf ("FEHLGESCHLAGEN: nach Aus/An fehlt das Rollen "
+                         "(%.6f gegen %.6f)\n", toggled, fresh);
+            failed = true;
+        }
+    }
+
     // Knall-Sperre (@dpa 20260830). Der Wackler schiebt die Quelle ueber die
     // Schallmauer und gleich zurueck; die zwei Fronten kommen ueber
     // VERSCHIEDENE Hoerwege herein, deshalb liegt die Sperre je Ohr und nicht
