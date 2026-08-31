@@ -1,9 +1,9 @@
 # dopplerfeld - Architektur-Karte
 
 Kurzeinstieg für KI-Sessions (Claude o.ä.), damit man nicht erst den ganzen
-Code oder die komplette Chat-Historie lesen muss. Ausführliche Physik/Design-
-Begründung steht in `dopplerfeld-plan.md` (eine Ebene höher, `../dopplerfeld-
-plan.md`) - hier nur die Landkarte, was wo liegt und wie es zusammenhängt.
+Code oder die komplette Chat-Historie lesen muss - hier nur die Landkarte, was
+wo liegt und wie es zusammenhängt. Die Herleitung der Physik dahinter steht in
+[docs/physik.md](docs/physik.md).
 
 ## Was das Plugin ist
 

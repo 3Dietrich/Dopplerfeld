@@ -89,7 +89,9 @@ Dieselbe Erklärung als gesetzte Seite:
 ## Architektur
 
 Siehe [ARCHITEKTUR.md](ARCHITEKTUR.md) für das Schichtenmodell, Kernklassen
-und den aktuellen Stand.
+und den aktuellen Stand. Die Herleitung der Physik - Retarded-Time-Gleichung,
+Mach-Kegel, Fokussierungsfaktor, Löser-Algorithmus - steht in
+[docs/physik.md](docs/physik.md).
 
 ## Lizenz
 

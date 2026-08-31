@@ -48,7 +48,7 @@ juce_add_plugin(Dopplerfeld
     COPY_PLUGIN_AFTER_BUILD    FALSE)
 
 # Weitere Quellen kommen Häppchen für Häppchen dazu
-# (Physics, Motion, Sources, Util, UI - siehe dopplerfeld-plan.md).
+# (Physics, Motion, Sources, Reverb, Util, UI - siehe ARCHITEKTUR.md).
 target_sources(Dopplerfeld
     PRIVATE
         Source/PluginProcessor.cpp
