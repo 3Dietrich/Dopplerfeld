@@ -14,4 +14,5 @@ Release-Schritt in das Nutzer-Zip kopiert.
 | Datei | gebraucht von |
 | --- | --- |
 | `mach2.5 vorbeiflug` | `load_check`: EIN Vorbeiflug = EIN Knall (der Zweitknall aus @dpas Aufnahme), und der Klappzustand der Panelspalte bei einem Preset ohne Maske |
+| `Düsenjet_test` | von Hand: `whip_probe`, `pitch_probe` - der Fall, an dem die Kopplung von Boom Limit an die Kegelerkennung aufgefallen ist (@dpa 20260831, Regler steht darin auf 60 dB) |
 | `peitschentest` | `load_check`: die Knall-Sperre nimmt Doppelhiebe weg (@dpa 20260830, die zwei Fronten eines Ueberschall-Wacklers ueber verschiedene Hoerwege); von Hand auch `whip_probe` |
