@@ -805,17 +805,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     // Der Grundwert bleibt trotzdem OFFEN, und zwar aus einem gemessenen
     // Grund: bei Mach 1 mit Bodenreflexion traegt einer der zusaetzlichen
     // Hoerwege zeitweise den GANZEN Ton. Zugedreht reisst das ein Loch von
-    // 0,131 s (load_check, "Mach1, Boden an, Fahne zu"). Sein "bricht ab"
-    // und diese Luecke sind vermutlich dieselbe Stelle, von zwei Seiten
-    // gesehen. Ein Grundwert, der ein Loch in den Ton reisst, waere die
-    // falsche Antwort - der Auftrag ist, die zusaetzlichen Hoerwege richtig
-    // klingen zu lassen.
-    // Vorgabe still (@dpa 20260830: "die Fahne klingt fuer mich voellig
-    // unnatuerlich und ich muss sie immer runter (-60dB) drehen"). Gerechnet
-    // wird sie weiterhin richtig, sie ist nur nicht mehr das, was man
-    // ungefragt zu hoeren bekommt. Gespeicherte Zustaende bringen ihren
-    // eigenen Wert mit und aendern sich dadurch nicht.
+    // OHNE WIRKUNG, nur noch fuer gespeicherte Presets registriert - siehe
+    // Params.h. Der Nachlauf aus den zusaetzlichen Hoerwegen ist experimentell
+    // nicht belegt und wird in PropagationPath fest unterdrueckt; an seiner
+    // Stelle steht das Rollen.
     layout.add (floatParam (extraPathGainDb, "Extra Paths", { -60.0f, 12.0f, 0.1f }, -60.0f, "dB"));
+
+    // Rollen nach dem Knall: Pegel gegenueber der Stossfront und Abklingzeit.
+    //
+    // Der Pegel darf ueber 0 dB hinaus - was ein Tal aus einem Knall macht,
+    // kann lauter sein als der Knall am Ohr, und die Entscheidung darueber
+    // gehoert nicht in eine Konstante. Die Zeit reicht bis 20 s: ein Ueberflug
+    // in grosser Hoehe ueber Bergland rollt so lange.
+    layout.add (floatParam (rumbleGainDb,  "Rumble",      { -60.0f, 24.0f, 0.1f },  -6.0f, "dB"));
+    layout.add (floatParam (rumbleSeconds, "Rumble Time", {   0.0f, 20.0f, 0.01f },  1.5f, "s"));
     // OHNE WIRKUNG, nur noch fuer gespeicherte Presets registriert. Die Tiefe
     // steht fest auf 1: waehrend eine Stossfront ueber den Hoerweg laeuft,
     // kommt nichts anderes durch, und alles darunter liess Motorton mitten im

@@ -348,6 +348,18 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     if (! ducksOthers)
         return;
 
+    // Ab hier nur noch echte Stossfronten: Kegelankunft und Mach-Durchgang.
+    // Der Startknall kommt mit ducksOthers = false herein und ist oben schon
+    // heraus - er bildet eine BESCHLEUNIGUNG ab und nicht den Durchgang durch
+    // die Front, also gibt es an ihm auch nichts zu streuen.
+    //
+    // Das Rollen startet mit der Stossfront und traegt ihre Amplitude: es ist
+    // ihr Nachhall, kein eigener Klang. Ein zweiter Knall waehrend eines
+    // laufenden Rollens setzt es neu auf, statt sich dazuzumischen - was
+    // zurueckgeworfen wird, ist der letzte Knall.
+    rumbleAmp = b.nAmp * rumbleGain;
+    rumbleAge = 0.0;
+
     // Fenster fuer die Absenkung des uebrigen Schalls: solange die Stossfront
     // ueber diesen Weg laeuft, kommt nichts anderes durch (siehe
     // setShockDuck). Es wird nur verlaengert, nie verkuerzt - eine zweite,
@@ -408,10 +420,12 @@ double PropagationPath::shockDuckAt (double listenerTime) const
 }
 
 
-void PropagationPath::setExtraPathGain (double gainLinear)
+void PropagationPath::setRumble (double gainLinear, double seconds)
 {
-    extraPathGain = std::max (0.0, gainLinear);
+    rumbleGain    = std::max (0.0, gainLinear);
+    rumbleSeconds = std::max (0.0, seconds);
 }
+
 
 
 
@@ -971,13 +985,24 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
         // Der juengste Hoerweg dieses Segments: der mit der kleinsten
         // Verzoegerung. Ueber ihn hoert man, was die Quelle zuletzt gesendet
-        // hat; alle anderen tragen Aelteres nach und bilden zusammen den
-        // Nachlauf (siehe setExtraPathGain).
+        // hat; alle anderen tragen Aelteres nach (siehe setRumble).
+        //
+        // Mitgefuehrt wird auch, wie LAUT dieser juengste Weg gerade ist. Die
+        // Unterdrueckung der uebrigen Wege gilt naemlich nur, solange es
+        // ueberhaupt einen juengeren gibt, den man hoert. Bei Mach 1 mit
+        // Bodenreflexion traegt zeitweise ein aelterer Weg den GANZEN Ton -
+        // ihn dann mit zu daempfen hiesse, die Quelle verstummen zu lassen,
+        // und das behauptet keine Theorie. Gemessen (load_check, "Mach1, Boden
+        // an") war das ein Loch von 0,125 s im Ton.
         double youngestTau = 1.0e18;
+        double youngestEnv = 0.0;
 
         for (int s = 0; s < maxBranchSlots; ++s)
-            if (branches[s].used)
-                youngestTau = std::min (youngestTau, branches[s].tau);
+            if (branches[s].used && branches[s].tau < youngestTau)
+            {
+                youngestTau = branches[s].tau;
+                youngestEnv = branches[s].env;
+            }
 
         for (int s = 0; s < maxBranchSlots; ++s)
         {
@@ -1339,9 +1364,14 @@ void PropagationPath::process (const SourceTrajectory&   traj,
                 // Verzoegerung, nicht ueber die Laufrichtung: die Fahne kann
                 // vorwaerts laufen, und ein Kriterium nach Laufrichtung faengt
                 // sie dann nicht.
-                const double extraFactor = (b.tau > youngestTau + extraPathMinDelay)
-                                         ? extraPathGain
-                                         : 1.0;
+                // Voll gedaempft nur, wenn der juengste Weg wirklich traegt.
+                // Verstummt er, geht die Daempfung mit ihm zurueck - was uebrig
+                // bleibt, ist dann kein Nachlauf mehr, sondern der einzige Weg
+                // zur Quelle.
+                const double extraFactor =
+                    (b.tau > youngestTau + extraPathMinDelay)
+                        ? extraPathGain + (1.0 - extraPathGain) * (1.0 - youngestEnv)
+                        : 1.0;
 
                 double outSample = y * b.env * extraFactor
                                  * (duck0 + (duck1 - duck0) * u);
@@ -1434,6 +1464,52 @@ void PropagationPath::process (const SourceTrajectory&   traj,
 
                 b.env  = 0.0;
                 b.used = false;
+            }
+        }
+
+        // ---- Rollen nach dem Knall ---------------------------------------
+        //
+        // Der Nachhall der Stossfront, siehe setRumble(). Er haengt am Pfad und
+        // nicht am Zweig: gestreut wird der Knall, der am Ohr angekommen ist,
+        // und der ist einer - egal ueber wieviele Zweige er entstanden ist.
+        //
+        // Koeffizienten einmal je Segment statt je Sample. Bei 64 Samples sind
+        // das 1,3 ms, und das Rollen aendert sich ueber Sekunden - feiner zu
+        // rechnen kostet ein exp() und ein pow() pro Sample und Pfad, ohne dass
+        // etwas anders klaenge.
+        if (rumbleAmp > 0.0 && rumbleSeconds > 0.0)
+        {
+            const double u   = std::min (1.0, rumbleAge / rumbleSeconds);
+            const double fc  = rumbleStartHz * std::pow (rumbleEndHz / rumbleStartHz, u);
+            const double aLp = 1.0 - std::exp (-2.0 * 3.14159265358979323846 * fc / sr);
+
+            // Ein Ein-Pol auf weissem Rauschen nimmt Pegel weg, und zwar umso
+            // mehr, je tiefer er steht. Ohne Ausgleich waere das Rollen am Ende
+            // nicht leise, sondern weg - der Regler wuerde etwas anderes tun als
+            // draufsteht. Der Ausgleich ist der Kehrwert des Effektivwerts eines
+            // so gefilterten Rauschens, sqrt(a / (2 - a)).
+            const double norm = 1.0 / std::sqrt (std::max (aLp / (2.0 - aLp), 1.0e-12));
+            const double env  = std::exp (-rumbleDecays * u);
+
+            for (int i = 0; i < len; ++i)
+            {
+                // Weisses Rauschen als Traeger: die gestreuten Ankuenfte liegen
+                // so dicht, dass sie einzeln nicht mehr aufzuloesen sind.
+                rumbleRng = rumbleRng * 1664525u + 1013904223u;
+
+                const double white = 2.0 * ((double) (rumbleRng >> 8) / 16777216.0) - 1.0;
+
+                rumbleLpZ += aLp * (white - rumbleLpZ);
+
+                out[n0 + i] += (float) (rumbleLpZ * norm * rumbleAmp * env * gain);
+            }
+
+            rumbleAge += (double) len / sr;
+
+            if (rumbleAge >= rumbleSeconds)
+            {
+                rumbleAmp = 0.0;
+                rumbleLpZ = 0.0;
             }
         }
 

@@ -101,7 +101,8 @@ namespace Tooltips
         NWaveGain,
         NWaveEdge,
         NWavePressure,
-        ExtraPaths,
+        Rumble,
+        RumbleTime,
         NWave,
         LimiterOn,
         LevelMeter,
@@ -1045,18 +1046,21 @@ namespace Tooltips
                         : "Loudness of the sonic boom in dB. It may clip - a boom heard from "
                           "close by IS deafening; that is caught by the limiter, not by a "
                           "silent brake inside the calculation.";
-                case Key::ExtraPaths:
+                case Key::Rumble:
                     return lang == Language::De
-                        ? "Pegel der zusätzlichen Hörwege - des Nachlaufs nach einem "
-                          "Überschall-Vorbeiflug. Bei Überschall trifft Schall von mehreren "
-                          "Emissionszeitpunkten gleichzeitig ein; der jüngste Weg trägt, was "
-                          "die Quelle zuletzt gesendet hat, die übrigen tragen Älteres nach. "
-                          "Ganz nach links ist der Nachlauf weg, der Rest bleibt."
-                        : "Level of the additional listening paths - the trail after a "
-                          "supersonic fly-by. In supersonic flight, sound from several emission "
-                          "times arrives at once; the youngest path carries what the source "
-                          "sent last, the others carry older material. Fully left removes the "
-                          "trail and leaves the rest.";
+                        ? "Pegel des Rollens nach dem Knall, gegenüber dem Knall selbst. "
+                          "Turbulenz faltet die Wellenfront, Boden und Gelände werfen "
+                          "zurück - derselbe Knall kommt vielfach an und wird dabei zum "
+                          "Donnern."
+                        : "Level of the rumble after the boom, relative to the boom itself. "
+                          "Turbulence folds the wavefront, ground and terrain reflect it - "
+                          "the same boom arrives many times over and turns into thunder.";
+                case Key::RumbleTime:
+                    return lang == Language::De
+                        ? "Wie lange das Rollen ausklingt. Es wird dabei dunkler: was spät "
+                          "ankommt, hat den längsten Umweg hinter sich."
+                        : "How long the rumble takes to fade. It darkens on the way: what "
+                          "arrives late took the longest detour.";
                 case Key::NWavePressure:
                     return lang == Language::De
                         ? "Stärke der Druckwelle: der langsamen Auslenkung der Nulllinie "

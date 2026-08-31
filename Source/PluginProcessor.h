@@ -646,7 +646,8 @@ private:
         std::atomic<float>* rocketTone      = nullptr;
         std::atomic<float>* rocketShockSize = nullptr;
         std::atomic<float>* rocketShockRate = nullptr;
-        std::atomic<float>* extraPathGainDb = nullptr;
+        std::atomic<float>* rumbleGainDb  = nullptr;
+        std::atomic<float>* rumbleSeconds = nullptr;
         std::atomic<float>* shockDuckRange  = nullptr;
         std::atomic<float>* jumpBoom        = nullptr;
         std::atomic<float>* jumpBoomSize    = nullptr;
@@ -1170,7 +1171,8 @@ private:
     // Dieselbe Wiedervorlage wie bei der N-Welle: die drei Setter laufen ueber
     // alle Pfade beider Geometriesaetze und werden darum nur bei einer echten
     // Aenderung angestossen.
-    double lastExtraPathGainDb = 0.0;
+    double lastRumbleGainDb  = -1000.0;
+    double lastRumbleSeconds = -1.0;
     double lastShockDuckRange  = -1.0;
     double lastShockDuckAmount = 1.0;
 

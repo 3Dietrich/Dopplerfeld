@@ -54,7 +54,8 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (panAmountKnob,   apvts, Params::panAmount,       "Panning",       Tooltips::Key::Panning);
     setupKnob (airTempKnob,     apvts, Params::airTempC,        "Luft °C", Tooltips::Key::AirTemperature);
 
-    setupKnob (extraPathKnob,   apvts, Params::extraPathGainDb, "Fahne",     Tooltips::Key::ExtraPaths);
+    setupKnob (rumbleKnob,      apvts, Params::rumbleGainDb,   "Rollen",    Tooltips::Key::Rumble);
+    setupKnob (rumbleTimeKnob,  apvts, Params::rumbleSeconds,  "Rollen s",  Tooltips::Key::RumbleTime);
     setupKnob (shockDuckRangeKnob, apvts, Params::shockDuckRange, "Duck-Reichw.", Tooltips::Key::ShockDuckRange);
     setupKnob (nWaveEdgeKnob,   apvts, Params::nWaveEdge,       "Knall-Kante", Tooltips::Key::NWaveEdge);
     setupKnob (nWavePressureKnob, apvts, Params::nWavePressure,  "Druckwelle",  Tooltips::Key::NWavePressure);
@@ -82,7 +83,7 @@ void FieldPanel::refreshTooltips()
                       &panAmountKnob, &distanceCurveKnob, &srcZKnob, &lisZKnob,
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
                       &airTempKnob, &airAltitudeKnob,
-                      &nWaveEdgeKnob, &nWavePressureKnob, &extraPathKnob,
+                      &nWaveEdgeKnob, &nWavePressureKnob, &rumbleKnob, &rumbleTimeKnob,
                       &shockDuckRangeKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
@@ -174,7 +175,7 @@ void FieldPanel::resized()
     groupHeader ("Knall", &nWaveButton, 100);
     knobRow ({ &nWaveSizeKnob, &nWaveGainKnob, &nWaveEdgeKnob, &nWavePressureKnob, &boomLimitKnob });
     area.removeFromTop (4);
-    knobRow ({ &extraPathKnob, &shockDuckRangeKnob, &boomHoldKnob });
+    knobRow ({ &rumbleKnob, &rumbleTimeKnob, &shockDuckRangeKnob, &boomHoldKnob });
 
     // Ausgang: was das Plugin am Ende abgibt.
     area.removeFromTop (groupGap);

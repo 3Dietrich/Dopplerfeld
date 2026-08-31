@@ -286,7 +286,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setAirAbsorptionAmount (airAbsorbAmount);
     setDistanceCurve (distanceCurve);
     setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge, nWavePressure);
-    setExtraPathGain (extraPathGain);
+    setRumble (rumbleGain, rumbleSeconds);
     setShockDuck (shockDuckAmount, shockDuckRange);
     setJumpBoom (jumpBoom);
     setJumpSize (jumpSizeM);
@@ -400,7 +400,7 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
         p.setAirAbsorptionAmount (airAbsorbAmount);
         p.setDistanceCurve (distanceCurve);
         p.setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge, nWavePressure);
-        p.setExtraPathGain (extraPathGain);
+        p.setRumble (rumbleGain, rumbleSeconds);
         p.setShockDuck (shockDuckAmount, shockDuckRange);
         p.setJumpBoom (jumpBoom);
         p.setJumpSize (jumpSizeM);
@@ -636,13 +636,14 @@ void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres, double ga
 }
 
 
-void DopplerEngine::setExtraPathGain (double gainLinear)
+void DopplerEngine::setRumble (double gainLinear, double seconds)
 {
-    extraPathGain = gainLinear;
+    rumbleGain    = gainLinear;
+    rumbleSeconds = seconds;
 
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
-            p.setExtraPathGain (gainLinear);
+            p.setRumble (gainLinear, seconds);
 }
 
 void DopplerEngine::setShockDuck (double amount01, double rangeMetres)

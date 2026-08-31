@@ -123,11 +123,11 @@ private:
     Knob nWavePressureKnob;
     Knob shockDuckRangeKnob;
 
-    // Pegel der zusaetzlichen Hoerwege (Params::extraPathGainDb) - der
-    // Nachlauf nach einem Ueberschall-Vorbeiflug, den @dpa "Fahne" nennt.
-    // Steht neben "Rueckwaerts", weil beide dieselbe Frage stellen: wieviel
-    // von dem, was mehrfach ankommt, will man hoeren.
-    Knob extraPathKnob;
+    // Rollen nach dem Knall: Pegel gegenueber der Stossfront und Abklingzeit
+    // (Params::rumbleGainDb, Params::rumbleSeconds). Steht in der Knall-Gruppe,
+    // weil es der Nachhall genau dieser Stossfront ist und sonst nichts.
+    Knob rumbleKnob;
+    Knob rumbleTimeKnob;
 
     // Kante eines Bewegungssprungs durchlassen statt interpolieren - der
 

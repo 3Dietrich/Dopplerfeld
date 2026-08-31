@@ -415,20 +415,36 @@ namespace Params
     // OHNE WIRKUNG - siehe Params.cpp. Ersetzt durch extraPathGainDb.
     constexpr const char* reverseGainDb = "reverseGainDb";
 
-    // Pegel der ZUSAETZLICHEN Hoerwege in dB - der "Fahne" nach dem
-    // Vorbeiflug (@dpa 20260827: "ich will die Fahne weg haben!").
+    // OHNE WIRKUNG - siehe Params.cpp. Der Regler hiess "Fahne" und stellte den
+    // Pegel der zusaetzlichen Hoerwege: bei Ueberschall trifft Schall von
+    // mehreren Emissionszeitpunkten gleichzeitig ein, und alle ausser dem
+    // juengsten trugen Aelteres nach.
     //
-    // Bei Ueberschall trifft Schall von mehreren Emissionszeitpunkten
-    // gleichzeitig ein. Einer davon ist der juengste - der Weg, ueber den man
-    // die Quelle dort hoert, wo sie gerade ist. Die anderen tragen aeltere
-    // Emissionen nach und bilden zusammen den Nachlauf.
+    // Dieser Nachlauf ist experimentell nicht belegt. Er folgt aus der linearen
+    // Strahlentheorie, die an der Kaustik nachweislich nicht gilt; in der
+    // Wirklichkeit verschmelzen diese Beitraege nichtlinear in die Stossfront,
+    // statt hinter ihr herzuziehen. Nachgewiesen wurde die Bildpaar-Natur von
+    // Ueberschallknallen bis heute nicht (Nemiroff, arXiv:1705.05873:
+    // "no detection of discrete images following a projectile pair event have
+    // ever been reported"). @dpa 20260831: "Die Fahne klingt falsch. immer.
+    // voellig."
     //
-    // Warum ein eigener Regler neben reverseGainDb: der dortige greift nur
-    // ueber dTau = 1, also nur bei zeitverkehrt gelesenen Wegen. Gemessen im
-    // Kreisflug-Szenario kommt der lauteste Beitrag der Fahne aber bei
-    // dTau = -0,271 - er laeuft VORWAERTS und wurde von jener Blende nie
-    // erfasst, auch am Anschlag nicht (-60 dB eingestellt, 2,3 dB gemessen).
+    // Was nach dem Knall wirklich kommt, ist der Knall selbst - gestreut und
+    // zurueckgeworfen. Das ist Params::rumbleGainDb.
     constexpr const char* extraPathGainDb = "extraPathGainDb";
+
+    // --- Rollen nach dem Knall ---
+    //
+    // Pegel des Nachhalls DER STOSSFRONT, in dB gegenueber ihr selbst. Turbulenz
+    // faltet die Wellenfront, das Gelaende wirft zurueck: derselbe Knall kommt
+    // vielfach an, jedes Mal etwas spaeter und leiser. Deshalb klingt ein echter
+    // Ueberflug danach nach fernem Donnern.
+    constexpr const char* rumbleGainDb = "rumbleGainDb";
+
+    // Wie lange das Rollen braucht, um auszuklingen, in Sekunden. Es wird dabei
+    // dunkler: was spaet ankommt, hat den laengsten Umweg hinter sich und damit
+    // die meiste Luftdaempfung gesehen.
+    constexpr const char* rumbleSeconds = "rumbleSeconds";
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber den
     // Hoerweg laeuft (@dpa: "keine Noise vom Motor" waehrend der N-Welle).

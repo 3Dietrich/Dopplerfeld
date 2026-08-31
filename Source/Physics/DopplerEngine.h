@@ -147,9 +147,8 @@ public:
                    double edge01, double pressure);
 
 
-    // Pegel der zusaetzlichen Hoerwege, siehe
-    // PropagationPath::setExtraPathGain().
-    void setExtraPathGain (double gainLinear);
+    // Rollen nach dem Knall, siehe PropagationPath::setRumble().
+    void setRumble (double gainLinear, double seconds);
 
     // Absenkung des uebrigen Schalls waehrend einer Stossfront, siehe
     // PropagationPath::setShockDuck().
@@ -714,7 +713,8 @@ private:
     // Staerke der Nulllinien-Auslenkung (siehe Params::nWavePressure).
     double nWavePressure = 1.0;
 
-    double extraPathGain = 1.0;
+    double rumbleGain    = 0.5;
+    double rumbleSeconds = 1.5;
 
     // Siehe setReverseGain() / setShockDuck().
     double shockDuckAmount = 0.0;

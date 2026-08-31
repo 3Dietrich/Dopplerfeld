@@ -175,17 +175,23 @@ public:
                    double edge01, double pressure);
 
 
-    // Pegel der zusaetzlichen Hoerwege, linear (siehe Params::extraPathGainDb).
+    // ---- Rollen nach dem Knall -------------------------------------------
     //
-    // "Zusaetzlich" heisst: alle Zweige ausser dem mit der KLEINSTEN
-    // Verzoegerung. Der juengste Weg traegt, was die Quelle zuletzt gesendet
-    // hat; die uebrigen tragen Aelteres nach. Genau die bilden nach einem
-    // Ueberschall-Vorbeiflug den Nachlauf, den @dpa als "Fahne" hoert.
+    // Was nach einer Stossfront kommt, ist kein zweites Bild der Quelle,
+    // sondern der Knall selbst: Turbulenz faltet die Wellenfront, Boden und
+    // Gelaende werfen zurueck, und jeder dieser Umwege ist laenger als der
+    // direkte Weg. Derselbe Knall trifft dadurch vielfach ein, jedes Mal
+    // spaeter, leiser und dunkler - und genau das ist das anhaltende Rollen,
+    // das ein echter Ueberflug hinter sich herzieht.
     //
-    // Die Unterscheidung laeuft ueber die Verzoegerung und nicht ueber die
-    // Laufrichtung: die Fahne kann vorwaerts laufen (gemessen dTau = -0,271),
-    // ein Kriterium nach Laufrichtung faengt sie deshalb nicht.
-    void setExtraPathGain (double gainLinear);
+    // Die zusaetzlichen Hoerwege der Laufzeitgleichung leisten das NICHT. Sie
+    // sind ein Ergebnis linearer Strahlentheorie an einer Stelle, an der die
+    // nicht gilt, und experimentell nicht nachgewiesen (siehe
+    // Params::extraPathGainDb). Sie bleiben deshalb fest unterdrueckt.
+    //
+    //   gainLinear   Pegel gegenueber der Stossfront, die ihn ausloest
+    //   seconds      Abklingzeit; 0 schaltet das Rollen ab
+    void setRumble (double gainLinear, double seconds);
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber diesen
     // Weg laeuft (@dpa 20260821: "waehrend der N-Wave darf kein zusaetzlicher
@@ -839,7 +845,30 @@ private:
 
 
     // Siehe setExtraPathGain(). 1.0 = unveraendert.
-    double extraPathGain = 1.0;
+    // Fest unterdrueckt statt einstellbar - Begruendung an setRumble() und in
+    // Params.h. Nicht null: ein hart abgeschalteter Zweig waere ein Sprung im
+    // Signal, und die Wege sind ohnehin gerechnet.
+    static constexpr double extraPathGain = 0.001;   // -60 dB
+
+    // Rollen: Stellwerte und laufender Zustand.
+    double rumbleGain    = 0.5;      // Pegel gegenueber der Stossfront
+    double rumbleSeconds = 1.5;      // Abklingzeit
+    double rumbleAmp     = 0.0;      // Amplitude des laufenden Rollens, 0 = still
+    double rumbleAge     = 0.0;      // Sekunden seit der Stossfront
+    double rumbleLpZ     = 0.0;      // Zustand des wandernden Tiefpasses
+    std::uint32_t rumbleRng = 0x9E3779B9u;
+
+    // Eckfrequenz am Anfang des Rollens und an seinem Ende. Der Weg dazwischen
+    // ist geometrisch: jede spaetere Ankunft hat einen laengeren Umweg hinter
+    // sich, und Luftdaempfung wirkt ueber die Strecke exponentiell auf die
+    // Hoehen. Ein linear fallender Tiefpass klaenge deshalb falsch herum.
+    static constexpr double rumbleStartHz = 1400.0;
+    static constexpr double rumbleEndHz   = 70.0;
+
+    // Wieviele Zeitkonstanten das Rollen in seiner eingestellten Dauer
+    // durchlaeuft. Fuenf heisst: am Ende steht es bei -43 dB, also unter allem,
+    // was noch zu hoeren waere - es reisst nicht ab, es ist zu Ende.
+    static constexpr double rumbleDecays = 5.0;
 
     // Wieviel spaeter ein Zweig eintreffen muss, um als ZUSAETZLICHER Weg zu
     // gelten. Zwei Zweige, die praktisch gleichzeitig ankommen, sind derselbe

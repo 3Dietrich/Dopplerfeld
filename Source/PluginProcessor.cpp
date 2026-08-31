@@ -299,7 +299,8 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.rocketShockSize = raw (Params::rocketShockSize);
     pp.rocketFarColour = raw (Params::rocketFarColour);
     pp.rocketShockRate = raw (Params::rocketShockRate);
-    pp.extraPathGainDb = raw (Params::extraPathGainDb);
+    pp.rumbleGainDb  = raw (Params::rumbleGainDb);
+    pp.rumbleSeconds = raw (Params::rumbleSeconds);
     pp.shockDuckRange  = raw (Params::shockDuckRange);
     pp.jumpBoom        = raw (Params::jumpBoom);
     pp.jumpBoomSize    = raw (Params::jumpBoomSize);
@@ -1096,7 +1097,8 @@ void DopplerfeldProcessor::applyNWaveAndShockParameters()
     // Rueckwaerts-Pegel, Stossfront-Absenkung und Schattenausklang: dieselbe
     // Wiedervorlage wie bei der N-Welle, denn auch diese Setter laufen ueber
     // alle Pfade beider Geometriesaetze.
-    const double extraPathGainDb = (double) pp.extraPathGainDb->load();
+    const double rumbleGainDb  = (double) pp.rumbleGainDb->load();
+    const double rumbleSeconds = (double) pp.rumbleSeconds->load();
     // Fest auf voller Tiefe: waehrend eine Stossfront ueber den Hoerweg
     // laeuft, kommt nichts anderes durch (@dpa 20260827: "Front-Duck (=1)
     // kann weg" - er stand ohnehin immer dort).
@@ -1105,10 +1107,12 @@ void DopplerfeldProcessor::applyNWaveAndShockParameters()
     const double jumpBoom        = (double) pp.jumpBoom->load();
 
 
-    if (std::abs (extraPathGainDb - lastExtraPathGainDb) > 1.0e-9)
+    if (std::abs (rumbleGainDb  - lastRumbleGainDb)  > 1.0e-9
+        || std::abs (rumbleSeconds - lastRumbleSeconds) > 1.0e-9)
     {
-        lastExtraPathGainDb = extraPathGainDb;
-        dopplerEngine.setExtraPathGain (juce::Decibels::decibelsToGain (extraPathGainDb));
+        lastRumbleGainDb  = rumbleGainDb;
+        lastRumbleSeconds = rumbleSeconds;
+        dopplerEngine.setRumble (juce::Decibels::decibelsToGain (rumbleGainDb), rumbleSeconds);
     }
 
     if (std::abs (shockDuckAmount - lastShockDuckAmount) > 1.0e-9
