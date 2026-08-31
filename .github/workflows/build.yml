@@ -45,8 +45,11 @@ jobs:
       - name: Bauen (Standalone, VST3, AU)
         run: cmake --build build --config Release --target Dopplerfeld_Standalone Dopplerfeld_VST3 Dopplerfeld_AU -j 4
 
-      - name: Testen (solver_check, load_check)
-        run: cmake --build build --config Release --target solver_check load_check -j 4 && ctest --test-dir build --output-on-failure
+      # Jeder Test, der in ctest steht, muss vorher gebaut sein - sonst
+      # meldet ctest "Unable to find executable" und der Lauf faellt um.
+      # repo_check braucht nichts davon, es ist ein Python-Skript.
+      - name: Testen (solver_check, load_check, reverb_check, scope_boom_probe, repo_check)
+        run: cmake --build build --config Release --target solver_check load_check reverb_check scope_boom_probe -j 4 && ctest --test-dir build --output-on-failure
 
       - name: Artefakte fuer die Freigabe packen
         if: startsWith(github.ref, 'refs/tags/v')
