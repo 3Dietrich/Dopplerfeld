@@ -460,6 +460,20 @@ namespace Params
     constexpr const char* rumbleEdgeLoHz = "rumbleEdgeLoHz";
     constexpr const char* rumbleEdgeHiHz = "rumbleEdgeHiHz";
 
+    // Wie stark sich die Kanten im Lauf der Huellkurve abrunden (@dpa 20260831:
+    // "die 'Bruchkannten' muessen sich auch pro Bruch mehr abrunden, am ende
+    // der Huellkurve soll es eine spline kurve ... in hoeher freq sein").
+    //
+    // Am Anfang springt der Wert an der Kante fast senkrecht - das ist der
+    // einzelne Rueckwurf. Zum Ende hin zieht sich der Uebergang ueber den
+    // ganzen Abstand zur naechsten Kante, und aus der Folge wird eine glatte
+    // Kurve. Gerechnet wird sie als quintische Blende, die an beiden Enden
+    // Steigung UND Kruemmung auf null hat - also f'' stetig, keine hoerbare
+    // Ecke mehr.
+    //
+    // 0 laesst die Kanten hart, 1 rundet sie am Ende vollstaendig.
+    constexpr const char* rumbleRound = "rumbleRound";
+
     // Farbe des Rollens: Eckfrequenz des Tiefpasses ueber den Kanten. Tief
     // eingestellt bleibt von jeder Kante ein Schlag und aus der Folge wird
     // rot-braunes Rauschen; hoch eingestellt bleiben die Kanten scharf.

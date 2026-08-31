@@ -131,6 +131,7 @@ private:
     Knob rumbleEdgeLoKnob;
     Knob rumbleEdgeHiKnob;
     Knob rumbleToneKnob;
+    Knob rumbleRoundKnob;
 
     // Kante eines Bewegungssprungs durchlassen statt interpolieren - der
 

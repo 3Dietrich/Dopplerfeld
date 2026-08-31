@@ -651,6 +651,7 @@ private:
         std::atomic<float>* rumbleEdgeLoHz = nullptr;
         std::atomic<float>* rumbleEdgeHiHz = nullptr;
         std::atomic<float>* rumbleToneHz   = nullptr;
+        std::atomic<float>* rumbleRound    = nullptr;
         std::atomic<float>* shockDuckRange  = nullptr;
         std::atomic<float>* jumpBoom        = nullptr;
         std::atomic<float>* jumpBoomSize    = nullptr;
@@ -1179,6 +1180,7 @@ private:
     double lastRumbleEdgeLo  = -1.0;
     double lastRumbleEdgeHi  = -1.0;
     double lastRumbleTone    = -1.0;
+    double lastRumbleRound   = -1.0;
     double lastShockDuckRange  = -1.0;
     double lastShockDuckAmount = 1.0;
 

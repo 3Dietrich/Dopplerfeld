@@ -106,6 +106,7 @@ namespace Tooltips
         RumbleEdgeLo,
         RumbleEdgeHi,
         RumbleTone,
+        RumbleRound,
         NWave,
         LimiterOn,
         LevelMeter,
@@ -1082,6 +1083,14 @@ namespace Tooltips
                           "Schlag und die Folge wird rot-braun; hoch bleiben die Kanten scharf."
                         : "Colour of the rumble. Set low, each edge stays a thud and the "
                           "sequence turns red-brown; set high, the edges stay sharp.";
+                case Key::RumbleRound:
+                    return lang == Language::De
+                        ? "Wie stark sich die Kanten im Lauf des Rollens abrunden. Am Anfang "
+                          "springt der Wert fast senkrecht, am Ende wird eine glatte Kurve "
+                          "daraus. Ganz links bleiben die Kanten hart."
+                        : "How far the edges round off as the rumble runs on. At the start the "
+                          "value jumps almost vertically; by the end it becomes a smooth curve. "
+                          "Fully left keeps the edges hard.";
                 case Key::NWavePressure:
                     return lang == Language::De
                         ? "Stärke der Druckwelle: der langsamen Auslenkung der Nulllinie "

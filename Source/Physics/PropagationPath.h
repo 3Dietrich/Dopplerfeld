@@ -199,8 +199,9 @@ public:
     //   edgeLoHz     Kantenrate am Anfang - einzeln hoerbare Rueckwuerfe
     //   edgeHiHz     Kantenrate am Ende - so dicht, dass es Rauschen ist
     //   toneHz       Tiefpass ueber den Kanten; tief = rot-braun
+    //   round01      wie stark sich die Kanten zum Ende hin abrunden
     void setRumble (double gainLinear, double seconds,
-                    double edgeLoHz, double edgeHiHz, double toneHz);
+                    double edgeLoHz, double edgeHiHz, double toneHz, double round01);
 
     // Absenkung des uebrigen Schalls, waehrend eine Stossfront ueber diesen
     // Weg laeuft (@dpa 20260821: "waehrend der N-Wave darf kein zusaetzlicher
@@ -865,17 +866,25 @@ private:
     double rumbleEdgeLo  = 5.0;      // Kantenrate am Anfang
     double rumbleEdgeHi  = 3000.0;   // Kantenrate am Ende
     double rumbleTone    = 180.0;    // Tiefpass ueber den Kanten
+    double rumbleRound   = 1.0;      // Abrundung der Kanten am Ende
 
     double rumbleAmp     = 0.0;      // Amplitude des laufenden Rollens, 0 = still
     double rumbleLpZ     = 0.0;      // Zustand des Farbfilters
-    double rumbleHold    = 0.0;      // gehaltener Wert zwischen zwei Kanten
-    double rumblePhase   = 0.0;      // Zaehler bis zur naechsten Kante
+    double rumbleFrom    = 0.0;      // Wert der vorigen Kante
+    double rumbleTo      = 0.0;      // Wert der naechsten
+    double rumblePhase   = 0.0;      // 0..1 zwischen den beiden
+    double rumbleInc     = 1.0;      // Fortschritt je Sample; aus dem Abstand
     std::uint32_t rumbleRng = 0x9E3779B9u;
 
     // Sekunden seit der Stossfront. NEGATIV heisst: die Welle laeuft noch, das
     // Rollen wartet - siehe setRumble(). Es zaehlt trotzdem mit, damit es genau
     // dann einsetzt, wenn die Welle vorbei ist.
     double rumbleAge     = 0.0;
+
+    // Schmalster Uebergang an einer Kante, als Anteil des Abstands zur
+    // naechsten. Nicht null: ein echter Sprung von einem Sample auf das
+    // naechste ist Energie ueber die ganze Bandbreite und knackt.
+    static constexpr double rumbleEdgeMinWidth = 0.02;
 
     // Wieviele Zeitkonstanten das Rollen in seiner eingestellten Dauer
     // durchlaeuft. Fuenf heisst: am Ende steht es bei -43 dB, also unter allem,

@@ -365,7 +365,8 @@ void PropagationPath::triggerNWave (Branch& b, double c, double listenerTimeNow,
     rumbleAge = -b.nDuration;
 
     rumblePhase = 1.0;   // die erste Kante kommt sofort nach der Welle
-    rumbleHold  = 0.0;
+    rumbleFrom  = 0.0;
+    rumbleTo    = 0.0;
 
     // Fenster fuer die Absenkung des uebrigen Schalls: solange die Stossfront
     // ueber diesen Weg laeuft, kommt nichts anderes durch (siehe
@@ -428,8 +429,10 @@ double PropagationPath::shockDuckAt (double listenerTime) const
 
 
 void PropagationPath::setRumble (double gainLinear, double seconds,
-                                 double edgeLoHz, double edgeHiHz, double toneHz)
+                                 double edgeLoHz, double edgeHiHz, double toneHz,
+                                 double round01)
 {
+    rumbleRound   = std::clamp (round01, 0.0, 1.0);
     rumbleGain    = std::max (0.0, gainLinear);
     rumbleSeconds = std::max (0.0, seconds);
     rumbleEdgeLo  = std::clamp (edgeLoHz, 0.05, 20000.0);
@@ -1484,16 +1487,26 @@ void PropagationPath::process (const SourceTrajectory&   traj,
         // nicht am Zweig: gestreut wird der Knall, der am Ohr angekommen ist,
         // und der ist einer - egal ueber wieviele Zweige er entstanden ist.
         //
-        // Gebaut als Folge von KANTEN, deren Rate steigt. Am Anfang kommen
-        // wenige Rueckwuerfe einzeln an, jeder als eigener Schlag; mit jeder
-        // weiteren Reflexionsordnung vervielfachen sie sich, bis sie nicht mehr
-        // zu trennen sind. Dann ist es Rauschen - und weil ueber den Kanten ein
-        // tiefer Tiefpass steht, ist es rotes.
+        // Drei Dinge machen daraus ein Rollen und keinen Ton:
         //
-        // Technisch eine Halteschaltung: zwischen zwei Kanten steht der Wert
-        // fest, an der Kante springt er. Der Sprung IST das Ereignis - genau
-        // deshalb traegt die Sache bei fuenf Kanten in der Sekunde noch, wo ein
-        // Rauschgenerator nur leise waere.
+        // 1. Die Kanten kommen POISSON-verteilt, nicht im Takt. Ein fester
+        //    Abstand ist eine Periode, und eine Periode ist eine Tonhoehe -
+        //    gemessen an @dpas Aufnahme vom 20:15 lag die Autokorrelation im
+        //    Nachlauf bei 0,997, also praktisch ein reiner Ton mit steigender
+        //    Frequenz. Zufaellig gestreute Rueckwuerfe haben exponentiell
+        //    verteilte Abstaende; die Rate steuert nur ihren Mittelwert.
+        //
+        // 2. Die Werte sind nicht gleichverteilt, sondern quadratisch: viele
+        //    schwache Rueckwuerfe, wenige starke. So sieht eine Streuung aus,
+        //    und so klingt sie auch - unregelmaessig statt durchgehend gleich
+        //    laut.
+        //
+        // 3. Die Kante rundet sich im Lauf der Huellkurve ab. Am Anfang steht
+        //    ein fast senkrechter Sprung, am Ende zieht sich der Uebergang
+        //    ueber den ganzen Abstand zur naechsten Kante. Die Blende ist
+        //    quintisch (6p^5 - 15p^4 + 10p^3): an beiden Enden sind Steigung
+        //    UND Kruemmung null, die Kurve ist also f'' stetig und hat keine
+        //    hoerbare Ecke mehr.
         if (rumbleAmp > 0.0 && rumbleSeconds > 0.0 && rumbleAge < rumbleSeconds)
         {
             // Koeffizienten je Segment statt je Sample: ueber Sekunden aendert
@@ -1506,27 +1519,56 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             // Ein Ein-Pol nimmt Pegel weg, und zwar umso mehr, je tiefer er
             // steht. Ohne Ausgleich waere das Rollen nicht dunkel, sondern
             // weg - der Regler "Farbe" wuerde dann die Lautstaerke stellen.
-            const double norm = 1.0 / std::sqrt (std::max (aLp / (2.0 - aLp), 1.0e-12));
+            // Der zweite Faktor gleicht die quadratische Werteverteilung aus
+            // (ihr Effektivwert ist 1/sqrt(5)).
+            const double norm = 2.2360679774997896
+                              / std::sqrt (std::max (aLp / (2.0 - aLp), 1.0e-12));
 
             // Exponentiell, nicht linear: so klingt es aus statt abzureissen.
             const double env  = (rumbleAge >= 0.0) ? std::exp (-rumbleDecays * u) : 0.0;
 
-            const double step = rate / sr;
+            // Breite des Uebergangs, als Anteil des Abstands zweier Kanten.
+            const double width = rumbleEdgeMinWidth
+                               + (1.0 - rumbleEdgeMinWidth) * rumbleRound * u;
+
+            const double meanInterval = sr / std::max (rate, 1.0e-6);
 
             for (int i = 0; i < len; ++i)
             {
-                rumblePhase += step;
+                rumblePhase += rumbleInc;
 
                 if (rumblePhase >= 1.0)
                 {
-                    rumblePhase -= std::floor (rumblePhase);
+                    rumblePhase = 0.0;
+                    rumbleFrom  = rumbleTo;
 
                     rumbleRng = rumbleRng * 1664525u + 1013904223u;
 
-                    rumbleHold = 2.0 * ((double) (rumbleRng >> 8) / 16777216.0) - 1.0;
+                    const double r1 = ((double) (rumbleRng >> 8) + 1.0) / 16777217.0;
+
+                    rumbleRng = rumbleRng * 1664525u + 1013904223u;
+
+                    const double r2 = (double) (rumbleRng >> 8) / 16777216.0;
+
+                    // Exponentiell verteilter Abstand: -ln(u) / Rate.
+                    const double gap = std::max (2.0, -std::log (r1) * meanInterval);
+
+                    rumbleInc = 1.0 / gap;
+
+                    // Vorzeichen aus dem einen Bit, Betrag quadratisch aus dem
+                    // Rest - viele schwache, wenige starke.
+                    const double mag = r2 * r2;
+
+                    rumbleTo = ((rumbleRng & 0x10000u) != 0 ? mag : -mag);
                 }
 
-                rumbleLpZ += aLp * (rumbleHold - rumbleLpZ);
+                // Quintische Blende ueber die Kante.
+                const double p = std::min (1.0, rumblePhase / width);
+                const double sm = p * p * p * (p * (p * 6.0 - 15.0) + 10.0);
+
+                const double value = rumbleFrom + (rumbleTo - rumbleFrom) * sm;
+
+                rumbleLpZ += aLp * (value - rumbleLpZ);
 
                 out[n0 + i] += (float) (rumbleLpZ * norm * rumbleAmp * env * gain);
             }
@@ -1537,7 +1579,8 @@ void PropagationPath::process (const SourceTrajectory&   traj,
             {
                 rumbleAmp  = 0.0;
                 rumbleLpZ  = 0.0;
-                rumbleHold = 0.0;
+                rumbleFrom = 0.0;
+                rumbleTo   = 0.0;
             }
         }
 

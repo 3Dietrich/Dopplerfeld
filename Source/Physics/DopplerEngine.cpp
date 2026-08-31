@@ -286,7 +286,7 @@ void DopplerEngine::prepare (double sampleRate, int maxBlockSize, double maxFiel
     setAirAbsorptionAmount (airAbsorbAmount);
     setDistanceCurve (distanceCurve);
     setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge, nWavePressure);
-    setRumble (rumbleGain, rumbleSeconds, rumbleEdgeLo, rumbleEdgeHi, rumbleTone);
+    setRumble (rumbleGain, rumbleSeconds, rumbleEdgeLo, rumbleEdgeHi, rumbleTone, rumbleRound);
     setShockDuck (shockDuckAmount, shockDuckRange);
     setJumpBoom (jumpBoom);
     setJumpSize (jumpSizeM);
@@ -400,7 +400,7 @@ void DopplerEngine::configureSet (PathSet& s, Vec3 newPos, Vec3 preVelocity)
         p.setAirAbsorptionAmount (airAbsorbAmount);
         p.setDistanceCurve (distanceCurve);
         p.setNWave (nWaveOn, nWaveSizeM, nWaveGain, nWaveEdge, nWavePressure);
-        p.setRumble (rumbleGain, rumbleSeconds, rumbleEdgeLo, rumbleEdgeHi, rumbleTone);
+        p.setRumble (rumbleGain, rumbleSeconds, rumbleEdgeLo, rumbleEdgeHi, rumbleTone, rumbleRound);
         p.setShockDuck (shockDuckAmount, shockDuckRange);
         p.setJumpBoom (jumpBoom);
         p.setJumpSize (jumpSizeM);
@@ -637,8 +637,10 @@ void DopplerEngine::setNWave (bool shouldBeEnabled, double sizeMetres, double ga
 
 
 void DopplerEngine::setRumble (double gainLinear, double seconds,
-                               double edgeLoHz, double edgeHiHz, double toneHz)
+                               double edgeLoHz, double edgeHiHz, double toneHz,
+                               double round01)
 {
+    rumbleRound   = round01;
     rumbleGain    = gainLinear;
     rumbleSeconds = seconds;
     rumbleEdgeLo  = edgeLoHz;
@@ -647,7 +649,7 @@ void DopplerEngine::setRumble (double gainLinear, double seconds,
 
     for (auto* s : { &geometry.active(), &geometry.pending() })
         for (auto& p : s->paths)
-            p.setRumble (gainLinear, seconds, edgeLoHz, edgeHiHz, toneHz);
+            p.setRumble (gainLinear, seconds, edgeLoHz, edgeHiHz, toneHz, round01);
 }
 
 void DopplerEngine::setShockDuck (double amount01, double rangeMetres)

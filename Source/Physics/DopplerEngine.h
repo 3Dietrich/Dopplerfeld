@@ -149,7 +149,7 @@ public:
 
     // Rollen nach dem Knall, siehe PropagationPath::setRumble().
     void setRumble (double gainLinear, double seconds,
-                    double edgeLoHz, double edgeHiHz, double toneHz);
+                    double edgeLoHz, double edgeHiHz, double toneHz, double round01);
 
     // Absenkung des uebrigen Schalls waehrend einer Stossfront, siehe
     // PropagationPath::setShockDuck().
@@ -719,6 +719,7 @@ private:
     double rumbleEdgeLo  = 5.0;
     double rumbleEdgeHi  = 3000.0;
     double rumbleTone    = 180.0;
+    double rumbleRound   = 1.0;
 
     // Siehe setReverseGain() / setShockDuck().
     double shockDuckAmount = 0.0;

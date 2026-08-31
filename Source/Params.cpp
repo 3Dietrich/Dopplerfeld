@@ -831,6 +831,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout Params::createParameterLayou
     layout.add (floatParam (rumbleEdgeLoHz, "Rumble Edge Lo", {  0.2f, 20000.0f, 0.1f },    5.0f, "Hz"));
     layout.add (floatParam (rumbleEdgeHiHz, "Rumble Edge Hi", {  0.2f, 20000.0f, 0.1f }, 3000.0f, "Hz"));
     layout.add (floatParam (rumbleToneHz,   "Rumble Tone",    { 20.0f, 20000.0f, 1.0f },  180.0f, "Hz"));
+    layout.add (floatParam (rumbleRound,    "Rumble Round",   {  0.0f,     1.0f, 0.01f },   1.0f));
     // OHNE WIRKUNG, nur noch fuer gespeicherte Presets registriert. Die Tiefe
     // steht fest auf 1: waehrend eine Stossfront ueber den Hoerweg laeuft,
     // kommt nichts anderes durch, und alles darunter liess Motorton mitten im

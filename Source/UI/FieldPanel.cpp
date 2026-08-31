@@ -59,6 +59,7 @@ FieldPanel::FieldPanel (juce::AudioProcessorValueTreeState& apvts)
     setupKnob (rumbleEdgeLoKnob, apvts, Params::rumbleEdgeLoHz, "Kanten v",  Tooltips::Key::RumbleEdgeLo);
     setupKnob (rumbleEdgeHiKnob, apvts, Params::rumbleEdgeHiHz, "Kanten b",  Tooltips::Key::RumbleEdgeHi);
     setupKnob (rumbleToneKnob,   apvts, Params::rumbleToneHz,   "Farbe",     Tooltips::Key::RumbleTone);
+    setupKnob (rumbleRoundKnob,  apvts, Params::rumbleRound,    "Rundung",   Tooltips::Key::RumbleRound);
     setupKnob (shockDuckRangeKnob, apvts, Params::shockDuckRange, "Duck-Reichw.", Tooltips::Key::ShockDuckRange);
     setupKnob (nWaveEdgeKnob,   apvts, Params::nWaveEdge,       "Knall-Kante", Tooltips::Key::NWaveEdge);
     setupKnob (nWavePressureKnob, apvts, Params::nWavePressure,  "Druckwelle",  Tooltips::Key::NWavePressure);
@@ -87,7 +88,7 @@ void FieldPanel::refreshTooltips()
                       &groundDampKnob, &groundGainKnob, &nWaveSizeKnob, &nWaveGainKnob,
                       &airTempKnob, &airAltitudeKnob,
                       &nWaveEdgeKnob, &nWavePressureKnob, &rumbleKnob, &rumbleTimeKnob, &rumbleEdgeLoKnob,
-                      &rumbleEdgeHiKnob, &rumbleToneKnob,
+                      &rumbleEdgeHiKnob, &rumbleToneKnob, &rumbleRoundKnob,
                       &shockDuckRangeKnob })
     {
         const auto tooltip = Tooltips::text (k->tooltipKey);
@@ -181,7 +182,7 @@ void FieldPanel::resized()
     area.removeFromTop (4);
     knobRow ({ &rumbleKnob, &rumbleTimeKnob, &rumbleEdgeLoKnob, &rumbleEdgeHiKnob, &rumbleToneKnob });
     area.removeFromTop (4);
-    knobRow ({ &shockDuckRangeKnob, &boomHoldKnob });
+    knobRow ({ &rumbleRoundKnob, &shockDuckRangeKnob, &boomHoldKnob });
 
     // Ausgang: was das Plugin am Ende abgibt.
     area.removeFromTop (groupGap);

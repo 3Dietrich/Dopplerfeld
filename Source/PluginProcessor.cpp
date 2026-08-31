@@ -304,6 +304,7 @@ DopplerfeldProcessor::DopplerfeldProcessor()
     pp.rumbleEdgeLoHz = raw (Params::rumbleEdgeLoHz);
     pp.rumbleEdgeHiHz = raw (Params::rumbleEdgeHiHz);
     pp.rumbleToneHz   = raw (Params::rumbleToneHz);
+    pp.rumbleRound    = raw (Params::rumbleRound);
     pp.shockDuckRange  = raw (Params::shockDuckRange);
     pp.jumpBoom        = raw (Params::jumpBoom);
     pp.jumpBoomSize    = raw (Params::jumpBoomSize);
@@ -1105,6 +1106,7 @@ void DopplerfeldProcessor::applyNWaveAndShockParameters()
     const double rumbleEdgeLo  = (double) pp.rumbleEdgeLoHz->load();
     const double rumbleEdgeHi  = (double) pp.rumbleEdgeHiHz->load();
     const double rumbleTone    = (double) pp.rumbleToneHz->load();
+    const double rumbleRound   = (double) pp.rumbleRound->load();
     // Fest auf voller Tiefe: waehrend eine Stossfront ueber den Hoerweg
     // laeuft, kommt nichts anderes durch (@dpa 20260827: "Front-Duck (=1)
     // kann weg" - er stand ohnehin immer dort).
@@ -1117,16 +1119,18 @@ void DopplerfeldProcessor::applyNWaveAndShockParameters()
         || std::abs (rumbleSeconds - lastRumbleSeconds) > 1.0e-9
         || std::abs (rumbleEdgeLo  - lastRumbleEdgeLo)  > 1.0e-9
         || std::abs (rumbleEdgeHi  - lastRumbleEdgeHi)  > 1.0e-9
-        || std::abs (rumbleTone    - lastRumbleTone)    > 1.0e-9)
+        || std::abs (rumbleTone    - lastRumbleTone)    > 1.0e-9
+        || std::abs (rumbleRound   - lastRumbleRound)   > 1.0e-9)
     {
         lastRumbleGainDb  = rumbleGainDb;
         lastRumbleSeconds = rumbleSeconds;
         lastRumbleEdgeLo  = rumbleEdgeLo;
         lastRumbleEdgeHi  = rumbleEdgeHi;
         lastRumbleTone    = rumbleTone;
+        lastRumbleRound   = rumbleRound;
 
         dopplerEngine.setRumble (juce::Decibels::decibelsToGain (rumbleGainDb), rumbleSeconds,
-                                 rumbleEdgeLo, rumbleEdgeHi, rumbleTone);
+                                 rumbleEdgeLo, rumbleEdgeHi, rumbleTone, rumbleRound);
     }
 
     if (std::abs (shockDuckAmount - lastShockDuckAmount) > 1.0e-9

@@ -3361,6 +3361,13 @@ int main()
             {
             proc.setStateInformation (presetData.getData(), (int) presetData.getSize());
 
+            // Das Rollen hier aus: gezaehlt werden KNALLE, und dafuer muss das
+            // sein, was nach dem Knall kommt, aus dem Weg. Es ist ein
+            // anhaltendes Geraeusch und kein zweiter Schlag - stuende es an,
+            // zaehlte die Pulssuche unten seine Kanten mit. Das Preset ist
+            // aelter als das Rollen und braechte sonst den Grundwert mit.
+            setParam (proc, Params::rumbleGainDb, -60.0f);
+
             proc.prepareToPlay (sampleRate, blockSize);
 
             // Repro nach @dpa: Preset laden, dann NUR den Vorbeiflug-Knopf -
