@@ -37,8 +37,14 @@ xattr -dr com.apple.quarantine /Pfad/zur/Dopplerfeld.app
 - Bewegungsaufzeichnung und -wiedergabe, mehrere Glättungsverfahren
 - Bis zu 20 Klone der Quelle ("Schrot"-Schwarm), alle mit voller
   Löserphysik gerechnet, mit CPU-Balken und Notaus
-- Optionale N-Wellen-Synthese für den Überschallknall
+- Optionale N-Wellen-Synthese für den Überschallknall, mit einstellbarer
+  Sperrzeit gegen Doppelschläge
+- Acht Abgriffpunkte im Feld: jeder hört an seiner Stelle - über Direktweg,
+  Boden und beide Wände - und schickt das durch einen eigenen Hall (Diffusor,
+  Schroeder, FDN oder "Draussen"), wahlweise einer in den nächsten verkettet
 - Motor-Generator, Sample-Player und Live-Audioeingang als Klangquelle
+- Motor abschaltbar, Fahrtwind und Rauschband bleiben stehen; die Drehzahl kann
+  der Beschleunigung der Quelle folgen
 - Zustandsstreifen über dem Feld: Presets laden, durchhören und sichern ohne
   Dateidialog; die Klappzustände der Panelspalte reisen im Preset mit
 - Beim allerersten Start lädt ein mitgeliefertes Preset, danach wieder der
@@ -55,8 +61,12 @@ git clone <dieses-repo>
 cd Dopplerfeld
 cmake -B build -DJUCE_DIR=~/Documents/JUCE
 cmake --build build --config Release -j 4
-cd build && ctest --output-on-failure     # solver_check, load_check, repo_check
+cd build && ctest --output-on-failure
 ```
+
+Fünf Tests: `solver_check` (Physik-Löser), `load_check` (Lasttest offline),
+`reverb_check` (Hallbauarten), `scope_boom_probe` (Knall-Ansicht des Scopes)
+und `repo_check`.
 
 `-DJUCE_DIR` zeigt auf einen lokalen JUCE-Checkout (Version 8.0.6 getestet);
 ohne die Angabe wird `~/Documents/JUCE` angenommen.
@@ -68,10 +78,11 @@ er auf dem eigenen Rechner grün und auf einem frischen Klon rot (siehe
 
 ## Warum klingt es anders als erwartet
 
-Überschall-Vorbeiflüge klingen nach dem Knall kurz und wirken, als liefen sie
-rückwärts. Ein Teil davon ist echte Physik, ein Teil ist ein bekannter Fehler.
-[docs/warum-klingt-es-anders.md](docs/warum-klingt-es-anders.md) trennt beides,
-mit Kegelgeometrie, Pegeln über acht Sekunden und dem Stand der Behebung.
+Nach dem Überschallknall wird es schlagartig sehr viel leiser, und ein Teil des
+Klangs läuft zeitverkehrt. Beides ist echte Physik.
+[docs/warum-klingt-es-anders.md](docs/warum-klingt-es-anders.md) erklärt, woher
+das kommt: Kegelgeometrie, Pegel über acht Sekunden und die Hüllkurve, die den
+langen Ausklang trägt.
 Dieselbe Erklärung als gesetzte Seite:
 [3dietrich.github.io/Dopplerfeld](https://3dietrich.github.io/Dopplerfeld/).
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Was im Mach-Kegel nach dem Ueberschallknall wirklich zu hoeren sein muss, und welcher Teil des kurzen Bursts der Fehler ist.">
+<meta name="description" content="Was im Mach-Kegel nach dem Ueberschallknall wirklich zu hoeren ist: der steile Abfall, der rueckwaerts laufende Hoerweg und der lange Ausklang.">
 <title>Nach dem Knall</title>
 <style>
   :root {
@@ -207,12 +207,12 @@
 <header>
   <div class="eyebrow">dopplerfeld &middot; Überschall</div>
   <h1 class="disp">Nach dem Knall</h1>
-  <p class="standfirst">Was ein Hörer im Mach-Kegel wirklich hört, wenn der Knall vorbei ist &ndash; und welcher Teil des kurzen Bursts Physik ist und welcher der Fehler.</p>
+  <p class="standfirst">Was ein Hörer im Mach-Kegel wirklich hört, wenn der Knall vorbei ist &ndash; der steile Abfall, der rückwärts laufende Hörweg und der lange Ausklang danach.</p>
 </header>
 
 <section>
   <h2 class="disp">Die Frage</h2>
-  <p>Beim Vorbeiflug über Mach 1 bleibt der Klang nach dem Knall kurz und wirkt, als liefe er rückwärts. Die Frage ist nicht, warum es knallt. Die Frage ist, was danach kommt und wie lange es dauern muss.</p>
+  <p>Beim Vorbeiflug über Mach 1 wird es nach dem Knall schlagartig sehr viel leiser, und ein Teil des Klangs läuft zeitverkehrt. Die Frage ist nicht, warum es knallt. Die Frage ist, was danach kommt und wie lange es dauern muss.</p>
   <p class="lede">Gerechnet für Mach 2,04 bei 150 m seitlichem Abstand, also ungefähr dein Bremsflug-Fall.</p>
 </section>
 
@@ -333,12 +333,12 @@
       <p><strong>Der steile Abfall unmittelbar nach dem Knall.</strong> Rund 24 dB in 19 ms. Das ist die zusammenbrechende Fokussierung, kein Fehler.</p>
     </div>
     <div class="verdict">
-      <span class="tag no">Fehler</span>
-      <p><strong>Dass danach nichts mehr kommt.</strong> Es müsste ein langer Ausklang folgen, 20 dB pro Zehnerpotenz, über viele Sekunden. Der fehlt.</p>
+      <span class="tag ok">Physik</span>
+      <p><strong>Der lange Ausklang danach.</strong> 20 dB pro Zehnerpotenz Zeit, über viele Sekunden. Er kommt aus dem Schattenausläufer der Hüllkurve.</p>
     </div>
     <div class="verdict">
       <span class="tag no">Fehler</span>
-      <p><strong>Das Zerhacken.</strong> Zweige sterben und werden neu geboren, im schlimmsten Fall über 200 Mal pro Sekunde. Jede Neugeburt setzt Hüllkurve und Filter auf null zurück.</p>
+      <p><strong>Ein Zweig, der ohne Schattenausläufer stirbt.</strong> Wer aus einem anderen Grund als der Kaustik verschwindet, bekommt weiterhin nur die lineare Rampe. Im Überschall kommt das kaum vor, ausgeschlossen ist es nicht.</p>
     </div>
   </div>
 </section>
@@ -350,7 +350,9 @@
 
   <h3 class="disp">Deine Frage: wird mit abgeschalteter N-Welle noch etwas unterdrückt?</h3>
   <p><strong>Ja, alles.</strong> <span class="mono">env</span> multipliziert den kompletten Zweigbeitrag, also genau den Schall, um den es geht. Die N-Welle war nur ein zusätzlicher Passagier auf derselben Multiplikation. Sie abzuschalten ändert an der Hüllkurve nichts.</p>
-  <p>Und darin liegt der Fehler: die Rampe wurde gebaut, um einen Knacks zu verhindern, macht aber genau das Gegenteil. Gemessen stirbt ein Zweig im Überschall mit <span class="mono">env</span> im Mittel bei 0,71 und im Maximum bei 1,000 &ndash; also bei vollem Pegel. Die Rampe schneidet ihn dann in einer Millisekunde ab. Das ist kein sanftes Ausblenden, das ist ein Schnitt.</p>
+  <p>Eine Millisekunde reicht dafür nur am <strong>Einsatz</strong>. Ein Zweig, der an der Kaustik stirbt, steht in diesem Moment auf vollem Pegel &ndash; eine Rampe von einer Millisekunde wäre dort kein Ausblenden, sondern ein Schnitt.</p>
+  <p>Einsatz und Ende sind deshalb nicht symmetrisch. Der Einsatz bleibt die lineare Rampe: eine Kegelankunft ist eine echte Stoßfront und darf steil sein. Stirbt ein Zweig an der Kaustik, bekommt er dagegen einen exponentiellen <strong>Schattenausläufer</strong> mit <span class="mono">tau = eps / |dM_r/dt|</span> &ndash; der Zeit, in der sich <span class="mono">M_r</span> um genau eine Regularisierungsbreite bewegt. Das ist derselbe Verlauf, den die Amplitudenformel selbst vorgibt, und damit genau der lange Ausklang, den ein echter Überflug hat.</p>
+  <p>Gemessen im Szenario <span class="mono">Bremsflug</span> (Mach&nbsp;2,04): vier Zweig-Tode, alle an der Kaustik, Ausklang <span class="mono">tau</span> im Mittel 13,8&nbsp;ms, harte Abbrüche null. Der Unterschall-Gegenlauf mit Mach&nbsp;0,87 fliegt dieselbe Bahn und stirbt dort kein einziges Mal.</p>
 </section>
 
 <footer>

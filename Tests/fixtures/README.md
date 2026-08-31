@@ -5,8 +5,8 @@ im Gegensatz zu `presets/test/`, das Arbeitsmaterial aus Hoerdurchgaengen ist
 und per `.gitignore` lokal bleibt.
 
 Was ein Test oeffnet, gehoert hierher. Sonst ist er auf dem eigenen Rechner
-gruen und auf einem frischen Klon rot - genau daran ist die CI vom 22. bis
-28.08.2026 bei jedem Push gescheitert.
+gruen und auf einem frischen Klon rot - und rot wird er erst draussen, bei
+GitHub, als Mail. Genau das haelt repo_check auf, und zwar vor dem Push.
 
 Unter `Tests/` liegen sie ausserdem ausserhalb von `presets/`, das der
 Release-Schritt in das Nutzer-Zip kopiert.

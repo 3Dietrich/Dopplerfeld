@@ -1,11 +1,13 @@
 # Warum klingt es anders als erwartet
 
 Überschall-Vorbeiflüge klingen in Dopplerfeld anders, als man es erwartet: nach
-dem Knall bleibt der Klang kurz und wirkt, als liefe er rückwärts. Ein Teil
-davon ist echte Physik und gehört so. Ein Teil ist ein Fehler.
+dem Knall wird es schlagartig sehr viel leiser, und ein Teil des Klangs läuft
+zeitverkehrt. Beides ist echte Physik und gehört so.
 
-Dieses Dokument trennt beides, damit man beim Hören weiß, worüber man sich
-wundern soll und worüber nicht.
+Dieses Dokument sagt, woher das kommt, damit man beim Hören weiß, worüber man
+sich wundern soll und worüber nicht. Am Ende steht die Messung, an der die
+einzige Stelle hängt, die wirklich ein Fehler wäre: ein Hörweg, der bei vollem
+Pegel abgeschnitten wird.
 
 Alle Zahlen sind für **Mach 2,04** (700 m/s bei 343 m/s Schallgeschwindigkeit)
 in **150 m** seitlichem Abstand gerechnet.
@@ -90,8 +92,8 @@ leiser, dann ein anhaltendes Rollen, das lange ausklingt. **Nichts bricht ab.**
 | **Physik** | Der rückwärts laufende Weg. Er ist wirklich da und meist unhörbar. |
 | **Physik** | Der steile Abfall direkt nach dem Knall, rund 24 dB in 19 ms. |
 | **Physik** | Der Knall selbst als eigene, additive Druckwellen-Schicht (N-Welle). |
-| **Fehler** | Dass danach nichts mehr kommt. Der lange Ausklang fehlt. |
-| **Fehler** | Das Zerhacken: Zweige sterben und werden neu geboren, im schlimmsten Fall über 200 Mal pro Sekunde. |
+| **Physik** | Der lange Ausklang danach. Er kommt aus dem Schattenausläufer der Hüllkurve, siehe unten. |
+| **Fehler** | Ein Zweig, der aus einem anderen Grund als der Kaustik stirbt, bekommt weiterhin nur die lineare Rampe. Im Überschall kommt das kaum vor, ausgeschlossen ist es nicht. |
 
 ## Die Anti-Klick-Hüllkurve
 
@@ -104,13 +106,26 @@ verschwindet, ist ein Sprung im Ausgangssignal. Ein Sprung ist Energie über die
 gesamte Bandbreite, also ein Knacks. Die Rampe verteilt ihn über eine
 Millisekunde.
 
-Darin liegt aber auch der Fehler. Die Rampe wurde gebaut, um einen Knacks zu
-verhindern, und macht das Gegenteil. Gemessen stirbt ein Zweig im Überschall mit
-`env` im Mittel bei 0,71 und im Maximum bei 1,000, also bei vollem Pegel. Die
-Rampe schneidet ihn dann in einer Millisekunde ab. Das ist kein Ausblenden, das
-ist ein Schnitt.
+Eine Millisekunde reicht dafür nur am **Einsatz**. Ein Zweig, der an der
+Kaustik stirbt, steht in diesem Moment auf vollem Pegel - eine Rampe von einer
+Millisekunde wäre dort kein Ausblenden, sondern ein Schnitt.
 
-Die N-Welle ist von dieser Hüllkurve inzwischen entkoppelt: eine ausgelöste
+Einsatz und Ende sind deshalb nicht symmetrisch. Der Einsatz bleibt die lineare
+Rampe: eine Kegelankunft ist eine echte Stoßfront und darf steil sein. Stirbt
+ein Zweig dagegen an der Kaustik, also weil `|1 - M_r|` unter
+`causticWidths * eps` fällt, bekommt er einen exponentiellen
+**Schattenausläufer** mit
+
+```
+tau = eps / |dM_r/dt|
+```
+
+also der Zeit, in der sich `M_r` um genau eine Regularisierungsbreite bewegt.
+Das ist derselbe Verlauf, den die Amplitudenformel selbst vorgibt, und damit
+genau der lange Ausklang, den ein echter Überflug hat. Tode aus anderen Gründen
+- verlorene Nachführung - behalten die lineare Rampe.
+
+Die N-Welle ist von dieser Hüllkurve entkoppelt: eine ausgelöste
 Stoßfront ist unterwegs, unabhängig davon, ob der Löser danach noch eine Wurzel
 für diesen Hörweg findet.
 
@@ -120,10 +135,10 @@ für diesen Hörweg findet.
 besser geworden ist. Pro Szenario:
 
 ```
-Zweig-Tode      392 (  78.4 /s) | env beim Tod Ø 0.709 max 1.000 | env >= 0,5:  64.3 %
-davon an der Kaustik 124 ( 31.6 %) | Ausklang tau Ø 31.339 ms max 100.000 ms
-HARTE ABBRUECHE 182 von 252 lauten Toden ( 72.2 %)
-Ursachen: Nachfuehrung verloren 4 | neue Identitaet 405 | Wurzeln verworfen 155
+Zweig-Tode        4 (   0.8 /s) | env beim Tod Ø 1.000 max 1.000 | env >= 0,5: 100.0 %
+davon an der Kaustik 4 (100.0 %) | Ausklang tau Ø 13.795 ms max 13.804 ms
+HARTE ABBRUECHE 0 von 4 lauten Toden (  0.0 %)
+Ursachen: Nachfuehrung verloren 4 | neue Identitaet 6 | Wurzeln verworfen 0
 ```
 
 Das Kriterium, an dem der Test hängt:
@@ -131,7 +146,7 @@ Das Kriterium, an dem der Test hängt:
 > Ein Zweig, der mit `env >= 0,5` stirbt, darf nicht in unter 2 ms auf null
 > gehen.
 
-Solange dort etwas anderes als null steht, ist der Abbruch noch da. Das Szenario
+Solange dort etwas anderes als null steht, ist der Abbruch da. Das Szenario
 heißt `Bremsflug` und fliegt dieselbe Bahn zweimal, einmal mit Mach 2,04 und
 einmal mit Mach 0,87, damit der Unterschall-Lauf beweist, dass Bahn und Messung
-selbst keinen Sturz erzeugen.
+selbst keinen Sturz erzeugen. Er stirbt dort kein einziges Mal.

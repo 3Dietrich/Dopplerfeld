@@ -33,6 +33,15 @@ Source/Motion/     - JUCE-frei. Bewegungsglättung (4 Verfahren:
 Source/Sources/    - Klangquellen (Motor-Generator, Sample-Player, Live-
                       Audioeingang) + deren Crossfade. Nutzt JUCE-DSP, aber
                       kein JUCE-Audio-Framework (kein AudioProcessor-Wissen).
+Source/Reverb/     - JUCE-frei wie Physics, und aus demselben Grund: der Hall
+                      lässt sich offline messen und anhören (reverb_check,
+                      reverb_probe). Gemeinsame Bausteine in ReverbParts.h
+                      (Verzögerungsleitung, Dämpfung, Allpass), darauf vier
+                      Bauarten hinter der Schnittstelle ReverbUnit
+                      (AllpassDiffuser, SchroederReverb, FdnReverb,
+                      OpenAirReverb) plus EarlyReflections. TapBus haengt
+                      daran, was ein Abgriffpunkt sonst noch braucht: Vorlauf,
+                      Breite, Pegel, Wand-Rückwege.
 Source/Util/       - Crossfade-Engine (generisch), FieldSnapshot-Datenformat,
                       ScopeRingBuffer (SPSC-Ring für das Oszilloskop),
                       Utf8 (Umlaute sicher an JUCE übergeben).
@@ -43,11 +52,14 @@ Source/UI/         - JUCE-Component-Schicht: Feldanzeige, Regler-Panels,
                       und Reglermaße in Theme.h.
 Source/*.cpp (Wurzel) - PluginProcessor/PluginEditor: Zusammenbau, kennt alle
                       Schichten, enthält selbst möglichst wenig Logik.
-Tests/             - solver_check (Physik-Löser gegen geschlossene Lösung),
-                      load_check (Lasttest inkl. Extremfälle, offline). Beide
-                      sind die einzigen ctest-Tests; daneben liegen hier zwölf
-                      Messprogramme, die bewusst KEIN Test sind (siehe
-                      Build & Test).
+Tests/             - fünf ctest-Tests: solver_check (Physik-Löser gegen
+                      geschlossene Lösung), load_check (Lasttest inkl.
+                      Extremfälle, offline), reverb_check (Hallbauarten),
+                      scope_boom_probe (Knall-Ansicht des Scopes) und
+                      repo_check (Python, ohne Build). Daneben liegen hier
+                      dreiundzwanzig Messprogramme, die bewusst KEIN Test
+                      sind (siehe Build & Test), und in Tests/fixtures die
+                      Dateien, die ein ctest-Test öffnet.
 ```
 
 Prinzip: je tiefer die Schicht, desto weniger weiß sie von JUCE/Audio-Threading
@@ -103,6 +115,27 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   gegeneinander gecrossfadet (`DualPathCrossfader<PathSet>`, Member
   `geometry`). `fillSnapshot()` liefert per Seqlock-Doppelpufferung Anzeige-
   daten an den GUI-Thread.
+  Dazu kommen **acht Abgriffpunkte** (`maxTaps`, `TapState`/`TapBus`):
+  Empfangspunkte im Feld, die nicht zu einem Ohr gehören. Sie kosten je einen
+  Löser statt zweier - ein Punkt hat kein zweites Ohr - und werden über
+  dieselben Flächen beliefert wie die Ohren (Direktweg, Boden, beide Wände,
+  erste Ordnung). Die Pfade rendern sie als zusätzliche **Kanäle** neben den
+  zwei Ohrkanälen, deshalb laufen sie beim Geometrie-Crossfade von selbst mit.
+  Was dort ankommt, geht in den Hall und von dort in den Ausgang; der Rückweg
+  zum Hörer ist ein Vorlauf und keine zweite Ausbreitung. Über `chainTo` geht
+  ein Punkt statt auf die Ohren in einen **späteren** Punkt hinein - nur nach
+  hinten, damit die Rechenreihenfolge zugleich die Kettenreihenfolge ist und
+  ein Kreis nicht entstehen kann.
+- **`TapBus`** (Reverb/) - was an einem Abgriffpunkt hängt: Vorlauf, Hall,
+  Breite, Pegel, dazu die Rückwege über die Wände. Alle vier Bauarten liegen
+  gleichzeitig bereit, damit ein Typwechsel im Audiothread nichts allokiert
+  (und damit automatisierbar bleibt). Wie viel RAM das kostet, entscheidet die
+  Kapazität: die Leitungen sind auf den wirklich gebrauchten Raum bemessen
+  (`reverbparts::capacityFor`), nicht auf den größten einstellbaren. Verlangt
+  der Regler mehr, wird der Raum geklemmt und der Mehrbedarf gemeldet - das
+  Nachbemessen allokiert und gehört deshalb in den Nachrichtenthread
+  (`DopplerfeldProcessor::growTapCapacityIfNeeded`). Mono rein, Stereo raus:
+  die Breite entsteht im Hall selbst, geregelt wird sie danach hier.
 - **`SoundSourceHolder`** (Sources/) - crossfadet beim Wechsel der Klangquelle
   (`SourceKind`: `EngineGenerator`, `SampleSource`, `AudioInSource`), ist
   selbst eine `SoundSource` und von außen nicht als Doppelpfad sichtbar.
@@ -117,11 +150,14 @@ kritischen Teile einzeln testbar (`solver_check`, `ctest`).
   über eine volle Kommandoqueue (bewusste Vereinfachung, siehe Kommentar
   dort).
 - **`DopplerfeldEditor`** (PluginEditor) - `FieldComponent` (700x400) links,
-  rechts in einem Viewport sieben `CollapsiblePanel`, jedes mit genau einer
+  rechts in einem Viewport acht `CollapsiblePanel`, jedes mit genau einer
   Panel-Klasse als Inhalt: `EngineControlPanel` (Motorsteuerung),
   `EnginePanel` (Motor), `SamplePanel` (Sample), `MotionPanel` (Bewegung),
   `FieldPanel` (Feld/Physik/Ausgang), `WallPanel` (Reflexionen/Wände),
-  `SwarmPanel` (Schwarm/Klone). Welche davon offen stehen, gehört zum
+  `ReverbPanel` (Hall/Abgriffpunkte), `SwarmPanel` (Schwarm/Klone).
+  Die Kopfzeile einer Hülle trägt, was man im Vergleich ständig umschaltet und
+  wofür ein Aufklappen zu teuer wäre: der Motor seinen An-Schalter, der Hall
+  seinen Bypass, die Wände "1", "2" und "++". Welche davon offen stehen, gehört zum
   Zustand: eine Bitmaske (`panelsOpen`) reist im Preset mit, ein Preset ohne
   die Property klappt alles zu. Über dem Feld liegt der Zustandsstreifen
   (`PresetBar`): Liste, zwei Pfeile, Sichern/Neu/Ordner - laden und speichern
@@ -164,7 +200,7 @@ mitwachsen lassen. Ein Feldgrößenwechsel verschiebt deshalb x/y, aber nie z.
 ```
 cmake -B build
 cmake --build build --config Release -j 4
-cd build && ctest --output-on-failure     # solver_check + load_check
+cd build && ctest --output-on-failure     # fünf Tests, siehe unten
 ```
 
 Ohne ausdrückliche Angabe baut CMake hier **Release** (`-O3 -DNDEBUG`,
@@ -189,14 +225,33 @@ beschäftigten Rechner um Faktor zwei, ein Test darauf wäre ein Würfelspiel un
 Regressionen verschwänden im Rauschen. Die Wanduhrzahlen werden gedruckt, aber
 nichts scheitert an ihnen.
 
+`reverb_check`: die vier Hallbauarten offline, ohne JUCE und ohne Audiogerät -
+Stabilität, Abklingzeit gegen ihre Vorgabe, Orthogonalität der Mischmatrix,
+kein NaN. Was die Sache kostet, steht bewusst nicht dort, sondern im
+`reverb_probe`: Rechenzeit hängt an der Maschine und hat in einem Test nichts
+verloren, der auch auf einem ausgelasteten CI-Rechner grün sein muss.
+
+`scope_boom_probe`: füttert die `ScopeComponent` so, wie es der Editor-Timer
+tut, und zählt je Zoomstufe, wie viele der eingespeisten Knalle im Bild landen.
+Mit Unter- UND Obergrenze - zu selten ist der eine Fehler, Zappeln auf Rauschen
+der andere.
+
+`repo_check`: Python, braucht keinen Build und läuft in Sekunden. Er liest die
+Quellen der ctest-Tests, sammelt jeden Pfad, den sie über
+`DOPPLERFELD_SOURCE_DIR` öffnen, und vergleicht ihn mit dem, was git wirklich
+führt. Was ein Test öffnet, gehört eingecheckt - sonst ist er auf dem eigenen
+Rechner grün und auf einem frischen Klon rot, und rot wird er erst draußen bei
+GitHub. Der Ort dafür ist `Tests/fixtures` (siehe das README dort), ausdrücklich
+nicht `presets/`, das der Release-Schritt ins Nutzer-Zip kopiert.
+
 Zu bauen ist die komplette Konfiguration, nicht nur die Standalone: die
 Testbinaries hängen an denselben Quellen, `--target Dopplerfeld_Standalone`
 lässt sie stehen und `ctest` liefe danach gegen den alten Stand.
 
-**Messprogramme neben den Tests.** In `Tests/` liegen ausser den beiden
-ctest-Tests zwölf Diagnose-Programme, die absichtlich keine Tests sind: sie
-messen oder zeichnen etwas, statt ein Kriterium zu prüfen, und würden eine
-grüne Testsuite nur verwässern. Zehn davon stehen als
+**Messprogramme neben den Tests.** In `Tests/` liegen außer den fünf
+ctest-Tests dreiundzwanzig Diagnose-Programme, die absichtlich keine Tests sind:
+sie messen oder zeichnen etwas, statt ein Kriterium zu prüfen, und würden eine
+grüne Testsuite nur verwässern. Einundzwanzig davon stehen als
 `EXCLUDE_FROM_ALL`-Targets in `CMakeLists.txt` und werden gezielt gebaut
 (`cmake --build build --target <name>`):
 
@@ -205,13 +260,24 @@ grüne Testsuite nur verwässern. Zehn davon stehen als
 | `loop_peak` | Rundenpunkt einer Wiedergabe |
 | `burst_probe` | lauter Ausbruch nach einem Preset-Wechsel |
 | `swarm_probe` | Klon-Schwarm |
-| `coast_probe` | Nachlauf |
+| `coast_probe` | Nachlauf nach dem Loslassen |
 | `preset_probe` | "manchmal zu leise" nach einem Preset-Wechsel |
 | `grab_probe` | Anfassen von M |
+| `trail_probe` | die "Fahne" hinter dem Überschallknall |
+| `whip_probe` | Doppelhiebe im Peitschentest: wie dicht liegen zwei Auslöser |
+| `live_probe` | Live-Bewegung gegen aufgezeichnete, Fahrtwind und Rauschband |
+| `pitch_probe` | springende Tonhöhen, einzelne Verursacher abschaltbar, dazu die Lastverteilung Quelle gegen Physik |
+| `rpm_glide_probe` | Treppigkeit der Drehzahl beim Reglerzug |
+| `tap_probe` | hört ein Abgriffpunkt wirklich von SEINEM Ort |
+| `tapfeed_probe` | womit ein Abgriffpunkt gespeist wird (Boden, Wände) |
+| `chain_probe` | Hallkette, Stereo-Weitergabe, Wand-Rückwege, Kosten je Bauart |
+| `reverb_probe` | Impulsantwort und Rechenzeit der vier Hallbauarten |
 | `scope_play_probe` | Play-Knopf am Scope |
 | `panel_shot` | Layout-Bilder des Bewegungs-Panels |
-| `field_shot` | Feldanzeige, Randmarke |
-| `editor_shot` | Bilder von Editor und Schwarm-Panel |
+| `reverb_shot` | Layout-Bild des Hall-Panels |
+| `field_shot` | Feldanzeige, Randmarke, Ketten, Spiegelfronten |
+| `tapfield_shot` | Abgriffpunkte in der Feldanzeige |
+| `editor_shot` | Bilder von Editor, Hall- und Schwarm-Panel |
 
 Die restlichen zwei, `Tests/reverse_probe.cpp` (zeitverkehrt gehörter Zweig im
 Überschall) und `Tests/reverse_level_probe.cpp`, stehen gar nicht in CMake -
@@ -228,6 +294,274 @@ gelegt und im Kommentar begründet, nicht projektweit abgeschaltet.
 
 Prüfen lässt sich das am ganzen Bau, nicht am inkrementellen: eine Warnung in
 einer Datei, die make gerade nicht anfasst, taucht im Log nicht auf.
+
+## Stand 2026-08-31 (v0.4.0: Hall an acht Abgriffpunkten, Motor an Luft und Gas)
+
+### Ein Abgriffpunkt ist ein Ohr ohne Kopf
+
+Der Hall hängt nicht am Ausgang, sondern an Punkten im Feld. Ein Abgriffpunkt
+ist ein Empfangspunkt wie ein Ohr, nur ohne zweites: derselbe
+`PropagationPath`, dieselbe Laufzeit, derselbe Abstandsverlust, derselbe
+Doppler - nur dass am Ende kein Trommelfell steht, sondern ein Hall. Acht davon
+gibt es, im Feld sichtbar und mit der Maus ziehbar.
+
+Beliefert wird ein Punkt über dieselben Flächen wie ein Ohr: Direktweg, Boden
+und beide Wände, erste Ordnung. Eine Talwand hört eine tieffliegende Maschine
+zu einem guten Teil über den Boden, und ohne diese Wege hinge der Hall an einer
+Quelle, die es so nicht gibt. Zweite Ordnung bleibt außen vor - sie kostet noch
+einmal dasselbe und trägt an einem Punkt am wenigsten, dessen Signal ohnehin
+durch einen Hall läuft.
+
+Der Preis ist ein Löser je Punkt statt zweier. Zum Vergleich kosten Direktschall
+und Boden zusammen schon vier, weil jeder von beiden für beide Ohren läuft; acht
+Punkte liegen damit in der Größenordnung dessen, was die zweite Reflexionsordnung
+ohnehin verbraucht. Gemessen (`tapfeed_probe`, Budget 10667 µs je Block): acht
+Punkte mit Boden und zwei Wänden kosten 1642 µs im Mittel.
+
+Der Hall selbst läuft **nicht** noch einmal durch die Physik. Das ist der
+Unterschied zwischen bezahlbar und nicht bezahlbar: eine echte Rückausbreitung
+bräuchte je Punkt einen zweiten Signalpuffer und ein zweites Pfadpaar. Der
+Rückweg zum Hörer ist stattdessen ein Vorlauf, sein Panorama kommt aus dem Ort
+des Punktes gegenüber dem Kopf - dieselbe Regel und derselbe Regler wie beim
+Ohr-Panorama.
+
+Rendertechnisch sind die Punkte zusätzliche **Kanäle** neben den zwei
+Ohrkanälen, keine eigenen Puffer. Deshalb laufen sie beim Geometrie-Crossfade
+von selbst mit.
+
+### Vier Bauarten, alle gleichzeitig bereit
+
+`Source/Reverb/` ist JUCE-frei wie die Physik, und aus demselben Grund: der Hall
+lässt sich damit offline messen und anhören, ohne dass ein Plugin gebaut werden
+muss (`reverb_check` als Test, `reverb_probe` als Messwerkzeug).
+
+Die geteilten Bausteine liegen in `ReverbParts.h` - Verzögerungsleitung,
+Dämpfungsfilter, Allpass. Ein neuer Typ beschreibt damit nur noch seine
+Verschaltung und bringt nicht wieder einen eigenen Ringpuffer mit. Darauf sitzen
+vier Bauarten hinter der Schnittstelle `ReverbUnit`:
+
+| Bauart | was sie ist |
+|---|---|
+| Diffusor | Allpass-Ketten, dichte Verwischung ohne eigene Färbung |
+| Schroeder | Kammfiltersätze, die klassische Bauform |
+| FDN | Rückkopplungsnetz mit orthogonaler Mischmatrix |
+| Draussen | eine Fläche im Gelände, abgetastet und untereinander verkoppelt |
+
+"Draussen" ist die, die es sonst nirgends gibt. Ein Abgriffpunkt steht für eine
+Stelle im Gelände - eine Bergflanke, eine Hauswand, einen Waldrand. Was von dort
+zurückkommt, ist EIN Rückwurf, verschmiert über die Ausdehnung der Fläche: ihre
+Mitte antwortet zuerst, ihre Ränder später. Jede Verzögerung hat dafür eine
+eigene Leitung, damit sie sich gegenseitig speisen können, und die Verkopplung
+ist eine zyklisch verschobene Householder-Matrix. Deren Eigenwerte liegen alle
+auf dem Einheitskreis - sie erhält die Energie und lässt alle Moden am Leben,
+während die naheliegendere Form "Durchschnitt aller außer mir selbst" nach
+wenigen Umläufen zu einem einzelnen Kammfilter zusammenfällt.
+
+Vor jeder Bauart stehen die frühen Einzelechos (`EarlyReflections`, eine
+getappte Leitung). Sie sind der Grund, warum ein Knall in einem Tal wuchtig
+klingt und in einem Hallgerät dünn: ein Nachhallnetz verteilt die Energie eines
+Impulses auf tausende winzige Echos, eine reale Talflanke wirft EIN Echo zurück,
+das fast so laut ist wie das Original.
+
+Alle vier liegen gleichzeitig bereit. Das kostet RAM, erlaubt aber einen
+Typwechsel im Audiothread ohne Allokation - und ohne den wäre der Typ nicht
+automatisierbar.
+
+### Wie viel Speicher, entscheidet der Raum
+
+Der Raumregler geht bis 2000 m, leicht logarithmisch. Die Leitungen sind aber
+nicht auf den größten einstellbaren Raum bemessen, sondern auf den wirklich
+gebrauchten: `reverbparts::capacityFor` verdoppelt von 25 m aus, bis es passt.
+
+Gemessen (acht Punkte, 48 kHz, alle Bauarten bereit): 25 m kosten 6,8 MB je
+Punkt, 200 m 16,4 MB, 2000 m 104,6 MB - also 837 MB, wenn wirklich alle acht
+Punkte ganz aufgedreht werden.
+
+Verlangt der Regler mehr, als die Puffer tragen, wird der Raum geklemmt und der
+Mehrbedarf in `roomShortfall` gemeldet. Das Nachbemessen allokiert und gehört
+deshalb in den Nachrichtenthread (`growTapCapacityIfNeeded`). Ein geladener
+Zustand mit großen Räumen setzt die Bemessung vor dem `prepare()`, damit er
+sofort richtig anfängt statt sich hochzuarbeiten - und hart, denn nur so gibt
+ein Zustand mit kleinen Räumen den Speicher wieder her.
+
+### Ketten: ein Punkt geht in einen späteren hinein
+
+`Params::TapPart::chain` schickt einen Abgriffpunkt statt auf die Ohren in den
+Eingang eines anderen. Wer ein Ziel hat, geht dorthin; wer Ziel ist, hört nicht
+mehr das Feld, sondern nur noch seinen Vorgänger - seine Lage im Feld spielt
+dann keine Rolle mehr, und im Feld steht er auch nicht mehr als eigene Marke.
+Der Geber trägt die Kette in seiner Beschriftung: `1›2`, über mehrere Stufen
+`3›4›5`.
+
+Nur nach hinten, also immer in einen Punkt mit höherer Nummer. Damit ist die
+Reihenfolge, in der die Punkte gerechnet werden, zugleich die Reihenfolge der
+Kette, und ein Kreis kann gar nicht erst entstehen. Mehrere Ketten nebeneinander
+gehen (1 in 3 und 2 in 4), jedes Ziel hat dafür einen eigenen Eingangspuffer.
+
+Weitergegeben wird **stereo**. Alle vier Bauarten sind innen ohnehin zweikanalig
+- der Diffusor hat zwei Allpass-Ketten, Schroeder zwei Kammfiltersätze, das
+FDN-Netz zwei senkrecht zueinander stehende Vorzeichenmuster, bei Draussen
+sitzen die Leitungen links und rechts im Panorama. Eine Mono-Summe wäre hier ein
+Verlust: die beiden Seiten einer Bauart sind absichtlich unkorreliert und
+löschen sich in der Summe stellenweise aus. `ReverbUnit::processStereo()` ist
+deshalb die einzige Fassung, die eine Bauart umsetzt; Mono ist ihr Sonderfall
+mit zweimal demselben Zeiger.
+
+In der Kette entfällt der Vorlauf: er bildet den Weg vom Punkt zurück zum Hörer
+ab, und ein Punkt in der Kette hat keinen eigenen Ort mehr - sein Weg steckt im
+Vorgänger.
+
+Gemessen (`chain_probe`, Direktschall stumm): die Breite der ersten Stufe spreizt
+die Seite und lässt die Mitte stehen, sie wirkt also nur bei Stereo-Weitergabe.
+Schmal 0 ergibt L/R-Korrelation +0,123, breit 2 ergibt +0,320.
+
+### Was sich sonst am Hall bewegt
+
+**Wandern.** Der Regler "Bewegung" lässt die Leseköpfe um ihre Ruhelage
+wandern, geführt von weißem Rauschen durch zwei Ein-Pole und zwischen zwei
+Samples linear interpoliert. Gebaut in `reverbparts::DelayLine` selbst, nicht in
+den Bauarten - sie benutzen alle dieselbe Leitung, also wandern alle vier mit
+einem Schlag. Jede Leitung hat ihren eigenen Takt (0,19 bis 0,56 Hz) und ihren
+eigenen Zufall: liefen sie im Gleichtakt, wanderte nicht der Raum, sondern die
+Tonhöhe. Der Ausschlag ist anteilig zur Leitungslänge (zwei Prozent bei vollem
+Regler) und wird aus der aktuellen Länge gerechnet - dreht jemand am Raum,
+bleibt er von allein passend. Kosten: ein halber bis ein Prozentpunkt
+Echtzeitbudget je Punktepaar.
+
+**Wände.** Was ein Abgriffpunkt hört, läuft über die Wände; sein Hall auf dem
+Rückweg zum Hörer ebenso. Der Rückweg läuft nicht noch einmal durch die Physik -
+der Hall ist kein bewegter Punkt mehr, sein Doppler steckt schon im Eingang. Es
+bleibt, was eine Spiegelung an einer ruhenden Fläche ausmacht, und genau das
+rechnet der `TapBus` je Wand: Umweg gegenüber dem geraden Weg, Abstandsverlust,
+Höhendämpfung der Wand und die Richtung, aus der das Spiegelbild kommt. Liegen
+Punkt und Hörer auf verschiedenen Seiten, fällt der Rückweg weg. Der Boden
+bleibt außen vor - ein zweiter Rückweg kostet noch einmal dasselbe.
+
+**Direktschall und Bypass.** "Direkt" regelt, was ohne Abgriffpunkte
+herauskäme, gilt fürs ganze Plugin und schließt den Boden ein. Der Bypass in der
+Kopfzeile ist kein Pegelregler, sondern schaltet die Wege ab, bevor sie gerechnet
+werden; er stellt den Direktschall dabei auf 0 dB und danach zurück, damit ein
+A/B-Vergleich denselben Pegel hat.
+
+**Im Feld.** Jeder Punkt zeigt seine Raumgröße als Kreis im Feldmaßstab.
+Wellenfronten von Spiegelquellen enden an ihrer Wand - hinter der Wand ist
+akustisch nichts, dort gehört auch nichts ins Bild.
+
+### Der Motor hängt an Luft und Gas, nicht nur am Regler
+
+**An/Aus in der Kopfzeile.** Abgeschaltet verstummen Teiltöne, Motorband und die
+gewählte Betriebsart. Stehen bleibt, was die Luft an der fahrenden Quelle macht:
+der Fahrtwind und die geschwindigkeitsabhängigen Geräusche. Die Quelle fährt
+weiter, sie treibt nur nichts mehr an. Geblendet, nicht geschaltet - ein Sprung
+im Pegel wäre ein Knacken.
+
+**Fahrtwind** ist ein eigener Regler in dB, ±36 dB wie die Flächen. Er lebt in
+jeder Betriebsart außer "Frei" - dort würde er alte Snapshots hörbar verändern.
+Ist der Motor aus, fällt dieser Grund weg und er wird auch dort eingeblendet.
+
+**Rausch v** koppelt das Rauschband ans Tempo statt allein an die Drehzahl. Ein
+Leerlaufmotor, der mit 300 km/h vorbeigezogen wird, rauscht sonst wie im Stand.
+Bei 100 % wächst es mit dem Quadrat der Geschwindigkeit, mit demselben Bezug wie
+der Fahrtwind (120 m/s). Der Tempoanteil ist Luft am fahrenden Körper und kein
+Motor: er bleibt stehen, wenn der Motor aus ist.
+
+**Gas aus a** zieht die Drehzahl mit der Längsbeschleunigung der Quelle mit -
+nur der Anteil in Fahrtrichtung, eine Kurve bei gleichbleibendem Tempo ist kein
+Gasgeben. Bezug ist ein g: wer damit anzieht, bekommt bei 100 % die doppelte
+Drehzahl, wer genauso stark bremst, die halbe. Geglättet wird der Faktor und
+nicht die Beschleunigung, deshalb fällt die Drehzahl mit derselben
+Zeitkonstante zurück, mit der sie gestiegen ist.
+
+**Gas-Trägheit** ist die Zeitkonstante dazu, 20 ms bis 3 s. Sie IST der
+Unterschied zwischen elektrisch (folgt sofort) und Verbrenner (hängt nach, fällt
+langsam ab) - ein Regler statt zweier Betriebsarten. Sie ist zugleich das
+Fenster, über das die Beschleunigung gemessen wird: kurz eingestellt kommt auch
+das Zittern der Bewegung als Gas an.
+
+Die Beschleunigung selbst entsteht als **Abstand zweier verschieden träger
+Glätter desselben Tempos** (schneller Zweig zweipolig, langsamer bei vierfacher
+Zeitkonstante), ohne Division durch die Tickdauer. Eine Ableitung Tick für Tick
+teilte durch eine Millisekunde - ein Zentimeter Zappeln steht so als 10 m/s² da,
+und eine aufgezeichnete Bahn hat an jedem Stützpunkt einen Knick. Der schnelle
+Zweig sieht außerdem nie feiner hin als 40 ms; darunter liegt keine Bewegung
+mehr, sondern nur das Raster, in dem sie hereinkommt.
+
+**Die Drehzahl gleitet.** Sie läuft dem Regler je Sample als Ein-Pol hinterher
+(50 ms), und zwar im Logarithmus, damit das Glissando unten wie oben gleich
+schnell ist. Gemessen (`rpm_glide_probe`, 6000→24000 RPM in 0,5 s): die Stufe
+zwischen zwei Rasterwerten des Reglers wäre 76,8 Cent, gehört werden 38,8 Cent
+Maximum bei 23,1 Cent mittlerer Rampe je Periode.
+
+### Live-Bewegung ohne Eingaberaster
+
+Die Oberfläche meldet eine neue Position nur im Bildtakt. In der Position fällt
+das kaum auf, in ihrer zweiten Ableitung steht bei jeder Stufe eine Spitze, und
+die fährt als Gas in die Drehzahl. Jede Zieländerung wird deshalb über die Zeit
+ausgerollt, die seit der vorigen vergangen ist: aus der Treppe wird ein Zug mit
+gleichmäßigem Tempo, zum Preis einer Rasterperiode Verzug (rund 17 ms). Halt und
+Schnitt setzen ohne Ausrollen.
+
+**Der Nachlauf** fährt schnurgerade auf den Loslasspunkt zu, mit dem Tempo vom
+Loslassen; nahe am Punkt wird dieses Tempo auf Abstand/`coastTau` gedrosselt und
+läuft stetig gegen null. Dieser Fahrt folgt die Quelle kritisch gedämpft, gegen
+die Rampengeschwindigkeit gedämpft - damit bleibt kein Rückstand stehen, den
+danach noch jemand aufholen müsste, und es gibt keine zweite Anfahrt. Beim Start
+liegen Quelle und Rampe aufeinander und haben dasselbe Tempo: die Beschleunigung
+beginnt bei null, die Bewegung geht ohne Knick aus dem Ziehen hervor.
+
+Gemessen (`coast_probe`, sieben Fälle): kein Wiederanstieg des Tempos über 5 %,
+alle 100 % am Punkt, die Naht zum Ziehen knickfrei (-1,8 bis +1,5 %).
+
+**Jit glatt** (`srcJitterSmooth`, Default aus) schickt den Wackler wahlweise
+durch die Bewegungsglättung: aus behält er seinen vollen Ausschlag und läuft an
+Glättung und Tempo-Deckel vorbei, an teilt er sich Verfahren, Zeitkonstante und
+Deckel mit Maus, Vorbeiflug und Wiedergabe.
+
+### Knall-Sperre und Knall-Ansicht
+
+Die **Sperrzeit** (0 bis 500 ms, Vorgabe 0) steht in der Knall-Gruppe des
+Feld-Panels: was in dieser Zeit noch einmal auslösen würde, fällt weg. Ihr
+Zustand liegt nicht im einzelnen Hörweg - die zwei Fronten eines
+Wackel-Durchgangs kommen über vier verschiedene Pfadobjekte innerhalb einer
+Millisekunde, von denen jedes seine eigene Sperre hätte. Ganz global darf sie
+auch nicht sein: der Knall trifft das zweite Ohr eine halbe Millisekunde später,
+und das ist die Ortung. Also eine Sperre je Ohr, plus eine für die
+Abgriffpunkte. Gemessen (`whip_probe`, `peitschentest`): ohne Sperre Spitze
+0,835, mit 60 ms 0,425 - der lauteste "Schlag" ist das Zusammentreffen zweier
+Fronten.
+
+Die **Knall-Ansicht des Scopes** führt in jeder Zoomstufe nach. Der
+Hüllkurven-Detektor läuft durch und bekommt nur die wirklich neuen Samples,
+statt in jedem Rohfenster bei null zu starten. Ob ein Fund "derselbe Knall" ist,
+entscheidet eine Refraktärzeit von 3 ms - eine Eigenschaft der Flanke, nicht der
+Zeitbasis. Ein wartender Einsatz bleibt stehen, bis er gezeigt ist. Das
+Rohfenster deckt mindestens eine Achtelsekunde ab. Gemessen
+(`scope_boom_probe`, elf Knalle im Abstand von 500 ms): 11 von 11 bei 128 bis
+8192 Samples Zeitbasis, 9 bei 32768.
+
+### Die Statuszeile sagt, was los ist
+
+Die Abriss-Meldung nennt die Sache beim Namen statt Zahlen aufzureihen: "Hörweg
+abgerissen 2x - bei vollem Pegel, kann knacken", darunter "halb ausgeklungen"
+und "war ausgeklungen, unhörbar". Gezeigt wird, wie viele neu dazugekommen sind,
+nicht der Zählerstand.
+
+Die CPU-Zeile zeigt neben dem Mittelwert den teuersten EINZELNEN Block und die
+Zahl der Blöcke über Budget: "CPU 8 %  Spitze 142 %  über Budget: 3". Genau
+diese Einzelfälle sind die Aussetzer, und genau sie verschwinden in einem
+Ein-Pol über zehn Blöcke. Die Spitze wird drei Sekunden gehalten, der
+Überlaufzähler läuft bis zum Abschalten des Plugins.
+
+### Was ein Test öffnet, gehört ins Repo
+
+`repo_check` liest die Quellen der ctest-Tests, sammelt jeden Pfad, den sie über
+`DOPPLERFELD_SOURCE_DIR` öffnen, und vergleicht ihn mit dem, was git führt. Er
+braucht keinen Build und läuft in Sekunden - der Befund kommt damit nach vorne,
+vor den Push. Die Dateien selbst liegen in `Tests/fixtures`, ausdrücklich nicht
+in `presets/`, das der Release-Schritt ins Nutzer-Zip kopiert.
+
+Dazu zwei weitere ctest-Tests: `reverb_check` (Hallbauarten offline) und
+`scope_boom_probe` (Knall-Ansicht, mit Unter- und Obergrenze).
 
 ## Stand 2026-08-28 (v0.3.0: Zustandsstreifen, Preset ohne Erbe, Farbwelt, Startzustand)
 
@@ -2668,11 +3002,13 @@ Ein-Pol selbst ansetzen und ihm einen eigenen Geschwindigkeitszustand geben.
 
 ## TODO: Kaustik-Lastspitze (bekannt, bewusst offen)
 
-Beim Vorbeiflug nahe Mach 1 kostet der teuerste Block das rund 12-fache des
-Blockschnitts (143994 gegen 12354 Löser-Auswertungen, gemessen bei 358 m/s und
-|M_r| = 0,99). An dieser Stelle setzt der Ton aus. Der Test in
-`Tests/load_check.cpp` misst und meldet das weiterhin, lässt den Lauf aber
-nicht mehr fehlschlagen (@dpa 20260820), damit gepusht werden kann.
+Beim Vorbeiflug nahe Mach 1 kostet der teuerste Block ein Mehrfaches des
+Blockschnitts. Gemessen im Szenario "Realistisch nahe Mach1": 9661 gegen 3416
+Löser-Auswertungen, der teuerste Block 6106 µs gegen 10667 µs Budget. Das
+bleibt unter der Decke, ist aber die Stelle, an der sie zuerst erreicht wird -
+und die Statuszeile zählt seit v0.4.0 mit, wie oft ein einzelner Block wirklich
+darüber geht. Der Test in `Tests/load_check.cpp` misst und meldet das, lässt den
+Lauf aber nicht daran fehlschlagen (@dpa 20260820), damit gepusht werden kann.
 
 Was bereits ausgeschlossen ist: die *Länge* eines einzelnen Suchfensters. Ein
 testweise auf den Beginn der geradlinigen Phase angehobenes Fenster halbierte
