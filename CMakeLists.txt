@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Dopplerfeld VERSION 0.3.0)
+project(Dopplerfeld VERSION 0.4.0)
 
 # Ohne CMAKE_BUILD_TYPE erzeugt CMake bei Makefile-/Ninja-Generatoren einen
 # Bau ganz ohne -O-Schalter. JUCEs juce_recommended_config_flags hängen ihre
